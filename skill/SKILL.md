@@ -446,6 +446,20 @@ If verdict is FAIL or PARTIAL:
 2. Suggest creating remediation tasks (new tasks targeting the gaps)
 3. The user can re-plan just the failed criteria or manually fix and re-verify
 
+### `specclaw pr <change>`
+**Trigger:** "specclaw pr", "create PR", "open pull request", "make a PR"
+
+Create a GitHub PR for a verified change. Requires verify-report.md (build + verify must complete first).
+
+1. **Validate:** Run `bash skill/scripts/validate-change.sh .specclaw <change> pr`. Exits with warning if PR already exists. Fails if verify-report.md is missing.
+2. **Run:** `bash skill/scripts/pr.sh .specclaw <change>`
+   - **First run:** prompts for test policy (`none|unit|e2e|both`), saves to `config.yaml` under `pr.test_policy`. Never prompts again.
+   - **Test enforcement:** if policy is not `none`, verifies `build.test_command` is set and that `verify-report.md` contains test evidence. Fails (strict) or warns (non-strict) if evidence is missing.
+   - **PR creation:** builds title from `proposal.md`, body from `spec.md` + `verify-report.md`, runs `gh pr create --base main`.
+   - **GitHub sync:** if `github.sync: true`, includes `Closes #N` in the PR body.
+   - **Saves URL:** appends `**PR:** <url>` to `status.md`.
+3. Report the PR URL to the user.
+
 ### `specclaw status`
 **Trigger:** "specclaw status", "project status", "what's the progress"
 

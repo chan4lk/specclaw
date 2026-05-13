@@ -1,0 +1,436 @@
+#!/usr/bin/env bash
+# pr.sh — Create a GitHub PR for a specclaw change
+# Enforces: verify-report.md exists, test policy met, then runs gh pr create.
+# Usage: pr.sh <specclaw_dir> <change_name>
+set -euo pipefail
+
+# ─── Help ─────────────────────────────────────────────────────────────────────
+
+usage() {
+  cat <<'EOF'
+Usage: pr.sh <specclaw_dir> <change_name>
+
+Create a GitHub PR for a specclaw change. Requires:
+  - verify-report.md (build + verify must have completed)
+  - test policy configured (prompts on first run, enforced on all runs)
+  - gh CLI installed and authenticated
+
+Arguments:
+  specclaw_dir   Path to the .specclaw directory
+  change_name    Name of the change
+
+Examples:
+  pr.sh .specclaw my-feature
+EOF
+  exit 0
+}
+
+[[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && usage
+
+# ─── Args ─────────────────────────────────────────────────────────────────────
+
+if [[ $# -lt 2 ]]; then
+  echo "ERROR: Expected 2 arguments: <specclaw_dir> <change_name>" >&2
+  echo "Use --help for usage." >&2
+  exit 1
+fi
+
+SPECCLAW_DIR="$1"
+CHANGE_NAME="$2"
+
+[[ -d "$SPECCLAW_DIR" ]] || { echo "ERROR: specclaw directory not found: $SPECCLAW_DIR" >&2; exit 1; }
+
+CHANGE_DIR="$SPECCLAW_DIR/changes/$CHANGE_NAME"
+CONFIG_FILE="$SPECCLAW_DIR/config.yaml"
+
+[[ -d "$CHANGE_DIR" ]] || { echo "ERROR: change directory not found: $CHANGE_DIR" >&2; exit 1; }
+
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+
+die()  { echo "ERROR: $*" >&2; exit 1; }
+warn() { echo "WARNING: $*" >&2; }
+
+FAILURES=()
+fail() { FAILURES+=("$1"); }
+
+# Read a simple yaml value: yaml_val <file> <dotted.key>
+yaml_val() {
+  local file="$1" key="$2"
+  local section field
+  if [[ "$key" == *.* ]]; then
+    section="${key%%.*}"
+    field="${key#*.}"
+  else
+    section=""
+    field="$key"
+  fi
+
+  local in_section=false value=""
+  while IFS= read -r line; do
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ -z "${line// /}" ]] && continue
+
+    if [[ -z "$section" ]]; then
+      if [[ "$line" =~ ^${field}:[[:space:]]*(.*) ]]; then
+        value="${BASH_REMATCH[1]}"
+        break
+      fi
+    else
+      if [[ "$line" =~ ^[a-zA-Z_] ]]; then
+        if [[ "$line" =~ ^${section}: ]]; then
+          in_section=true
+        else
+          in_section=false
+        fi
+        continue
+      fi
+      if $in_section; then
+        if [[ "$line" =~ ^[[:space:]]+${field}:[[:space:]]*(.*) ]]; then
+          value="${BASH_REMATCH[1]}"
+          break
+        fi
+      fi
+    fi
+  done < "$file"
+
+  value="${value#\"}"
+  value="${value%\"}"
+  value="${value#\'}"
+  value="${value%\'}"
+  echo "$value"
+}
+
+# Read strict mode from config (default: true)
+STRICT="true"
+if [[ -f "$CONFIG_FILE" ]]; then
+  _s="$(yaml_val "$CONFIG_FILE" "workflow.strict")"
+  [[ -n "$_s" ]] && STRICT="$_s"
+fi
+
+report_failures() {
+  if [[ ${#FAILURES[@]} -gt 0 ]]; then
+    for msg in "${FAILURES[@]}"; do
+      if [[ "$STRICT" == "true" ]]; then
+        echo "ERROR: $msg" >&2
+      else
+        echo "WARNING: $msg" >&2
+      fi
+    done
+    if [[ "$STRICT" == "true" ]]; then
+      exit 1
+    fi
+  fi
+}
+
+# ─── Phase Validation ─────────────────────────────────────────────────────────
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+validate_phase() {
+  bash "$SCRIPT_DIR/validate-change.sh" "$SPECCLAW_DIR" "$CHANGE_NAME" pr
+}
+
+# ─── Test Policy ──────────────────────────────────────────────────────────────
+
+# Write pr.test_policy to config.yaml.
+# If `pr:` section exists, insert/replace test_policy line under it.
+# Otherwise append the section to the end of the file.
+yaml_set_pr_policy() {
+  local policy="$1"
+
+  if grep -q '^pr:' "$CONFIG_FILE" 2>/dev/null; then
+    # Section exists — check if test_policy line is already there
+    if grep -q '^\s*test_policy:' "$CONFIG_FILE" 2>/dev/null; then
+      # Replace existing line
+      sed -i "s|^\([[:space:]]*\)test_policy:.*|\1test_policy: \"$policy\"|" "$CONFIG_FILE"
+    else
+      # Insert after `pr:` line
+      sed -i "/^pr:/a\\  test_policy: \"$policy\"" "$CONFIG_FILE"
+    fi
+  else
+    # Append new section
+    cat >> "$CONFIG_FILE" <<EOF
+
+# PR creation settings
+pr:
+  test_policy: "$policy"   # none | unit | e2e | both — set on first specclaw pr run
+EOF
+  fi
+}
+
+check_test_policy() {
+  local policy=""
+  if [[ -f "$CONFIG_FILE" ]]; then
+    policy="$(yaml_val "$CONFIG_FILE" "pr.test_policy")"
+  fi
+
+  if [[ -z "$policy" ]]; then
+    # First run — prompt user
+    echo ""
+    echo "SpecClaw: Test Policy Setup"
+    echo "----------------------------"
+    echo "Do you plan to implement automated tests for this project?"
+    echo "This will be enforced on all future 'specclaw pr' runs."
+    echo ""
+    while true; do
+      echo -n "Enter policy [none/unit/e2e/both]: "
+      read -r policy </dev/tty
+      policy="$(echo "$policy" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+      case "$policy" in
+        none|unit|e2e|both)
+          break
+          ;;
+        *)
+          echo "Invalid choice. Enter one of: none, unit, e2e, both"
+          ;;
+      esac
+    done
+
+    yaml_set_pr_policy "$policy"
+    echo "Saved test policy: $policy"
+    echo ""
+  fi
+
+  echo "$policy"
+}
+
+enforce_test_policy() {
+  local policy="$1"
+
+  [[ "$policy" == "none" ]] && return 0
+
+  # Check build.test_command is configured
+  local test_cmd=""
+  if [[ -f "$CONFIG_FILE" ]]; then
+    test_cmd="$(yaml_val "$CONFIG_FILE" "build.test_command")"
+  fi
+  if [[ -z "$test_cmd" ]]; then
+    fail "test_policy is '$policy' but build.test_command is not set in config.yaml"
+  fi
+
+  # Check verify-report.md for test evidence
+  local verify_report="$CHANGE_DIR/verify-report.md"
+  if [[ ! -s "$verify_report" ]]; then
+    fail "verify-report.md is empty — no test evidence found (policy: $policy)"
+    return
+  fi
+
+  local test_keywords="test|passed|failed|coverage|e2e|unit|assert|spec|describe|expect"
+  if ! grep -qiE "$test_keywords" "$verify_report" 2>/dev/null; then
+    fail "No test evidence found in verify-report.md (policy: $policy) — ensure tests ran during verify"
+  fi
+
+  # For e2e or both, specifically check for e2e evidence
+  if [[ "$policy" == "e2e" || "$policy" == "both" ]]; then
+    if ! grep -qiE "e2e|end.to.end|cypress|playwright|selenium|integration" "$verify_report" 2>/dev/null; then
+      fail "No e2e test evidence found in verify-report.md (policy: $policy)"
+    fi
+  fi
+}
+
+# ─── PR Body Builder ──────────────────────────────────────────────────────────
+
+extract_section() {
+  local file="$1" header="$2" max_lines="${3:-40}"
+  local in_section=false count=0 output=""
+
+  while IFS= read -r line; do
+    if [[ "$line" =~ ^##[[:space:]] ]]; then
+      if [[ "$line" =~ $header ]]; then
+        in_section=true
+        continue
+      elif $in_section; then
+        break
+      fi
+    fi
+    if $in_section; then
+      output+="$line"$'\n'
+      ((count++)) || true
+      [[ "$count" -ge "$max_lines" ]] && break
+    fi
+  done < "$file"
+
+  printf '%s' "$output"
+}
+
+build_pr_title() {
+  local proposal_file="$CHANGE_DIR/proposal.md"
+  local summary=""
+
+  if [[ -f "$proposal_file" ]]; then
+    # First non-blank, non-header, non-bold, non-status line
+    while IFS= read -r line; do
+      [[ -z "${line// /}" ]] && continue
+      [[ "$line" =~ ^# ]] && continue
+      [[ "$line" =~ ^\*\* ]] && continue
+      summary="$line"
+      break
+    done < "$proposal_file"
+  fi
+
+  local title
+  if [[ -n "$summary" ]]; then
+    # Strip markdown
+    summary="${summary//\*/}"
+    summary="${summary//\`/}"
+    title="[specclaw] ${CHANGE_NAME}: ${summary}"
+  else
+    title="[specclaw] ${CHANGE_NAME}"
+  fi
+
+  # Truncate to 72 chars
+  if [[ ${#title} -gt 72 ]]; then
+    title="${title:0:69}..."
+  fi
+
+  echo "$title"
+}
+
+build_pr_body() {
+  local policy="$1"
+  local proposal_file="$CHANGE_DIR/proposal.md"
+  local spec_file="$CHANGE_DIR/spec.md"
+  local verify_file="$CHANGE_DIR/verify-report.md"
+
+  # --- Summary ---
+  local summary_text=""
+  if [[ -f "$proposal_file" ]]; then
+    # Try to extract Problem + Proposed Solution sections
+    local problem solution
+    problem="$(extract_section "$proposal_file" "Problem" 10)"
+    solution="$(extract_section "$proposal_file" "Proposed Solution" 10)"
+    if [[ -n "$problem" || -n "$solution" ]]; then
+      summary_text="${problem}${solution}"
+    else
+      # Fallback: first 15 non-header lines
+      local count=0
+      while IFS= read -r line; do
+        [[ "$line" =~ ^# ]] && continue
+        summary_text+="$line"$'\n'
+        ((count++)) || true
+        [[ "$count" -ge 15 ]] && break
+      done < "$proposal_file"
+    fi
+  else
+    summary_text="See change: \`${CHANGE_NAME}\`"
+  fi
+
+  # --- Acceptance Criteria ---
+  local ac_text=""
+  if [[ -f "$spec_file" ]]; then
+    ac_text="$(extract_section "$spec_file" "Acceptance Criteria" 40)"
+    if [[ -z "$ac_text" ]]; then
+      # Fallback: first 40 lines of spec
+      ac_text="$(head -40 "$spec_file")"
+    fi
+  else
+    ac_text="_spec.md not found_"
+  fi
+
+  # --- Verification ---
+  local verdict="unknown"
+  local verify_excerpt=""
+  if [[ -f "$verify_file" ]]; then
+    verdict="$(grep -oiE '\b(PASS|FAIL|PARTIAL)\b' "$verify_file" | head -1)"
+    [[ -z "$verdict" ]] && verdict="unknown"
+    verify_excerpt="$(head -20 "$verify_file")"
+  fi
+
+  # --- Tests ---
+  local test_section=""
+  if [[ "$policy" != "none" && -f "$verify_file" ]]; then
+    local test_lines
+    test_lines="$(grep -iE "test|passed|failed|coverage|e2e|unit|assert" "$verify_file" | head -10)" || true
+    test_section="
+## Tests
+**Policy:** ${policy}
+
+\`\`\`
+${test_lines}
+\`\`\`
+"
+  fi
+
+  # --- GitHub Issue Link ---
+  local closes_line=""
+  local gh_sync=""
+  if [[ -f "$CONFIG_FILE" ]]; then
+    gh_sync="$(yaml_val "$CONFIG_FILE" "github.sync")"
+  fi
+  if [[ "$gh_sync" == "true" && -f "$CHANGE_DIR/status.md" ]]; then
+    local issue_ref
+    issue_ref="$(grep "GitHub Issue" "$CHANGE_DIR/status.md" | grep -o '#[0-9]*' | head -1)" || true
+    if [[ -n "$issue_ref" ]]; then
+      closes_line="Closes ${issue_ref}"
+    fi
+  fi
+
+  cat <<EOF
+## Summary
+${summary_text}
+## Acceptance Criteria
+${ac_text}
+## Verification
+**Verdict:** ${verdict}
+
+${verify_excerpt}
+${test_section}
+---
+${closes_line}
+
+🤖 Generated by SpecClaw
+EOF
+}
+
+# ─── Save PR URL ──────────────────────────────────────────────────────────────
+
+save_pr_url() {
+  local url="$1"
+  local status_file="$CHANGE_DIR/status.md"
+
+  if [[ -f "$status_file" ]]; then
+    echo "**PR:** $url" >> "$status_file"
+  else
+    cat > "$status_file" <<EOF
+# Status: ${CHANGE_NAME}
+
+**PR:** $url
+EOF
+  fi
+}
+
+# ─── Main ─────────────────────────────────────────────────────────────────────
+
+main() {
+  # Step 1: Phase validation (exits 0 with warning if PR already exists)
+  validate_phase
+
+  # Step 2: Test policy
+  local policy
+  policy="$(check_test_policy)"
+
+  # Step 3: Enforce test policy
+  enforce_test_policy "$policy"
+  report_failures
+
+  # Step 4: Check gh CLI
+  command -v gh &>/dev/null || die "gh CLI is required for PR creation (https://cli.github.com)"
+  gh auth status &>/dev/null || die "gh CLI is not authenticated — run: gh auth login"
+
+  # Step 5: Build title and body
+  local title body
+  title="$(build_pr_title)"
+  body="$(build_pr_body "$policy")"
+
+  # Step 6: Create PR
+  echo "Creating PR: $title"
+  local pr_url
+  pr_url="$(gh pr create --base main --title "$title" --body "$body")"
+
+  # Step 7: Save URL
+  save_pr_url "$pr_url"
+
+  echo "✅ PR created: $pr_url"
+}
+
+main

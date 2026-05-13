@@ -63,3 +63,11 @@ automation:
   auto_verify: true                # Run verification after build
   auto_archive: false              # Archive on successful verification
   post_build_review: true          # Run automated review after build completes
+
+# PR creation settings
+pr:
+  test_policy: ""   # Set on first `specclaw pr` run. Options: none | unit | e2e | both
+                    # none  — no test checks before PR creation
+                    # unit  — requires unit test evidence in verify-report + build.test_command set
+                    # e2e   — requires e2e test evidence in verify-report + build.test_command set
+                    # both  — requires unit + e2e evidence

@@ -312,8 +312,21 @@ case "$PHASE" in
     fi
     ;;
 
+  pr)
+    if [[ ! -f "$CHANGE_DIR/verify-report.md" ]]; then
+      fail "Missing verify-report.md — run specclaw verify first"
+    fi
+    # Idempotency: warn and exit 0 if PR already created
+    if [[ -f "$CHANGE_DIR/status.md" ]] && grep -q '^\*\*PR:\*\*' "$CHANGE_DIR/status.md" 2>/dev/null; then
+      local pr_url
+      pr_url="$(grep '^\*\*PR:\*\*' "$CHANGE_DIR/status.md" | sed 's/\*\*PR:\*\* *//' | head -1)"
+      echo "WARNING: PR already created: $pr_url" >&2
+      exit 0
+    fi
+    ;;
+
   *)
-    echo "ERROR: Unknown phase '$PHASE'. Expected: propose, plan, build, verify, archive, github-create, status" >&2
+    echo "ERROR: Unknown phase '$PHASE'. Expected: propose, plan, build, verify, archive, github-create, pr, status" >&2
     exit 1
     ;;
 esac
