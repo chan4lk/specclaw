@@ -71,3 +71,20 @@ pr:
                     # unit  — requires unit test evidence in verify-report + build.test_command set
                     # e2e   — requires e2e test evidence in verify-report + build.test_command set
                     # both  — requires unit + e2e evidence
+
+# Azure DevOps integration (optional)
+# Run `specclaw auth azdo` to configure. Token stored in .specclaw/.env (gitignored).
+azdo:
+  enabled: false
+  org: ""           # Organisation name — part after dev.azure.com/
+  project: ""       # ADO project name
+  repo: ""          # Repository name within the project
+
+# Jira integration (optional)
+# Run `specclaw auth jira` to configure. Token stored in .specclaw/.env (gitignored).
+jira:
+  enabled: false
+  domain: ""        # e.g. mycompany.atlassian.net
+  email: ""         # Atlassian account email
+  project_key: ""   # Project key shown in issue IDs, e.g. PROJ
+  issue_type: "Story"  # Default issue type: Story | Task | Bug | Epic

@@ -460,6 +460,58 @@ Create a GitHub PR for a verified change. Requires verify-report.md (build + ver
    - **Saves URL:** appends `**PR:** <url>` to `status.md`.
 3. Report the PR URL to the user.
 
+### `specclaw auth azdo`
+**Trigger:** "specclaw auth azdo", "set up azure devops", "configure ADO", "azdo auth"
+
+Interactive Azure DevOps authentication setup. Guides the user to create a PAT, validates it, and saves credentials.
+
+1. **Run:** `bash skill/scripts/auth-azdo.sh .specclaw`
+   - Prompts for org name, project name, repo name
+   - Guides user to `https://dev.azure.com/<org>/_usersSettings/tokens` to create a PAT
+   - Required scopes: Code (Read & Write), Work Items (Read & Write)
+   - Validates the token via ADO REST API
+   - Saves org/project/repo to `config.yaml` under `azdo:` section; token to `.specclaw/.env` (gitignored)
+2. Report success and suggest `specclaw pr azdo <change>` as next step.
+
+### `specclaw auth jira`
+**Trigger:** "specclaw auth jira", "set up jira", "configure jira", "jira auth"
+
+Interactive Jira authentication setup. Guides the user to create an Atlassian API token, validates it, and saves credentials.
+
+1. **Run:** `bash skill/scripts/auth-jira.sh .specclaw`
+   - Prompts for domain (e.g. `mycompany.atlassian.net`), email, project key, issue type
+   - Guides user to `https://id.atlassian.com/manage-profile/security/api-tokens`
+   - Validates credentials and project key via Jira REST API
+   - Saves domain/email/project_key/issue_type to `config.yaml` under `jira:` section; token to `.specclaw/.env` (gitignored)
+2. Report success and suggest `specclaw issue <change>` as next step.
+
+### `specclaw pr azdo <change>`
+**Trigger:** "specclaw pr azdo", "create ADO PR", "azure devops pull request", "open PR in ADO"
+
+Create an Azure DevOps pull request for a verified change. Mirrors `specclaw pr` but targets ADO Repos via REST API instead of GitHub.
+
+1. **Validate:** Run `bash skill/scripts/validate-change.sh .specclaw <change> pr`. Fails if verify-report.md is missing.
+2. **Run:** `bash skill/scripts/azdo-pr.sh .specclaw <change>`
+   - Requires `AZDO_TOKEN`, `AZDO_ORG`, `AZDO_PROJECT`, `AZDO_REPO` (set via `specclaw auth azdo`)
+   - **Test policy:** same gate as `specclaw pr` — prompts once, enforces on all runs
+   - **PR creation:** builds title (≤128 chars) from `proposal.md`, description from `spec.md` + `verify-report.md`, calls ADO REST API
+   - **Saves URL:** appends `**ADO PR:** <url>` to `status.md`
+3. Report the ADO PR URL to the user.
+
+### `specclaw issue <change>`
+**Trigger:** "specclaw issue", "create jira issue", "jira ticket", "open jira story"
+
+Create a Jira issue from a specclaw proposal. Requires `proposal.md` (run `specclaw propose` first).
+
+1. **Check:** if Jira issue already exists in `status.md`, warn and skip (idempotent).
+2. **Run:** `bash skill/scripts/jira-issue.sh .specclaw <change>`
+   - Requires `JIRA_TOKEN`, `JIRA_URL`, `JIRA_EMAIL`, `JIRA_PROJECT` (set via `specclaw auth jira`)
+   - Builds summary (≤255 chars) from first non-header line of `proposal.md`
+   - Builds description (ADF format) from `proposal.md` + `spec.md` (if present)
+   - Creates issue via Jira REST API v3
+   - **Saves:** appends `**Jira Issue:** [KEY](url)` to `status.md`
+3. Report the Jira issue key and URL to the user.
+
 ### `specclaw status`
 **Trigger:** "specclaw status", "project status", "what's the progress"
 
