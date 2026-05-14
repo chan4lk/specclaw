@@ -1,0 +1,164 @@
+#!/usr/bin/env bash
+# auth-jira.sh — Interactive Jira auth setup
+# Guides user to API token page, validates credentials, saves to .specclaw/.env + config.yaml
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: auth-jira.sh <specclaw_dir>
+
+Set up Jira authentication for specclaw. Guides you to:
+  1. Enter Jira domain, email, and project key
+  2. Open the Atlassian API token page
+  3. Paste the generated token
+  4. Validates and saves credentials
+
+Arguments:
+  specclaw_dir   Path to the .specclaw directory
+EOF
+  exit 0
+}
+
+[[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && usage
+
+if [[ $# -lt 1 ]]; then
+  echo "ERROR: Expected argument: <specclaw_dir>" >&2
+  exit 1
+fi
+
+SPECCLAW_DIR="$1"
+CONFIG_FILE="$SPECCLAW_DIR/config.yaml"
+AUTH_FILE="$SPECCLAW_DIR/.env"
+
+[[ -d "$SPECCLAW_DIR" ]] || { echo "ERROR: specclaw directory not found: $SPECCLAW_DIR" >&2; exit 1; }
+[[ -f "$CONFIG_FILE" ]]  || { echo "ERROR: config.yaml not found — run: specclaw init" >&2; exit 1; }
+
+die() { echo "ERROR: $*" >&2; exit 1; }
+
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+
+env_set() {
+  local key="$1" val="$2"
+  if [[ -f "$AUTH_FILE" ]] && grep -q "^${key}=" "$AUTH_FILE" 2>/dev/null; then
+    sed -i "s|^${key}=.*|${key}=${val}|" "$AUTH_FILE"
+  else
+    echo "${key}=${val}" >> "$AUTH_FILE"
+  fi
+}
+
+yaml_set_jira() {
+  local key="$1" val="$2"
+  if grep -q '^jira:' "$CONFIG_FILE" 2>/dev/null; then
+    if grep -qE "^[[:space:]]+${key}:" "$CONFIG_FILE" 2>/dev/null; then
+      sed -i "s|^\([[:space:]]*\)${key}:.*|\1${key}: \"${val}\"|" "$CONFIG_FILE"
+    else
+      sed -i "/^jira:/a\\  ${key}: \"${val}\"" "$CONFIG_FILE"
+    fi
+  else
+    printf '\n# Jira integration\njira:\n  enabled: true\n  domain: ""\n  email: ""\n  project_key: ""\n  issue_type: "Story"\n' >> "$CONFIG_FILE"
+    yaml_set_jira "$key" "$val"
+  fi
+}
+
+ensure_gitignored() {
+  local gitignore
+  gitignore="$(cd "$SPECCLAW_DIR/.." && git rev-parse --show-toplevel 2>/dev/null)/.gitignore"
+  if [[ -f "$gitignore" ]] && ! grep -q '\.specclaw/\.env' "$gitignore" 2>/dev/null; then
+    echo ".specclaw/.env" >> "$gitignore"
+  fi
+}
+
+# ─── Main ─────────────────────────────────────────────────────────────────────
+
+main() {
+  echo ""
+  echo "SpecClaw — Jira Auth Setup"
+  echo "==========================="
+  echo ""
+
+  echo -n "Jira domain (e.g. 'mycompany.atlassian.net'): "
+  read -r DOMAIN </dev/tty
+  [[ -n "$DOMAIN" ]] || die "Domain required"
+  DOMAIN="${DOMAIN#https://}"; DOMAIN="${DOMAIN#http://}"; DOMAIN="${DOMAIN%/}"
+
+  echo -n "Atlassian account email: "
+  read -r EMAIL </dev/tty
+  [[ -n "$EMAIL" ]] || die "Email required"
+
+  echo -n "Jira project key (e.g. 'PROJ' — shown in issue IDs like PROJ-123): "
+  read -r PROJECT_KEY </dev/tty
+  [[ -n "$PROJECT_KEY" ]] || die "Project key required"
+  PROJECT_KEY="$(echo "$PROJECT_KEY" | tr '[:lower:]' '[:upper:]')"
+
+  echo -n "Default issue type [Story]: "
+  read -r ISSUE_TYPE </dev/tty
+  ISSUE_TYPE="${ISSUE_TYPE:-Story}"
+
+  echo ""
+  echo "─────────────────────────────────────────────────────────────────"
+  echo "Now create an Atlassian API token:"
+  echo ""
+  echo "  Open → https://id.atlassian.com/manage-profile/security/api-tokens"
+  echo ""
+  echo "  Steps:"
+  echo "    1. Click 'Create API token'"
+  echo "    2. Label: 'specclaw' (or any name)"
+  echo "    3. Click 'Create'"
+  echo "    4. Copy the token — it is shown only once"
+  echo "─────────────────────────────────────────────────────────────────"
+  echo ""
+  echo -n "Paste your API token here (hidden): "
+  read -rs TOKEN </dev/tty
+  echo ""
+  [[ -n "$TOKEN" ]] || die "Token required"
+
+  echo "Validating credentials..."
+  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+    -u "${EMAIL}:${TOKEN}" \
+    -H "Accept: application/json" \
+    "https://${DOMAIN}/rest/api/3/myself") || true
+
+  case "$HTTP_CODE" in
+    200) echo "✅ Credentials valid" ;;
+    401) die "Invalid email or token — check and try again" ;;
+    403) die "Token lacks required permissions" ;;
+    *)   die "Validation failed (HTTP ${HTTP_CODE}) — check domain and credentials" ;;
+  esac
+
+  echo "Checking project '${PROJECT_KEY}'..."
+  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+    -u "${EMAIL}:${TOKEN}" \
+    -H "Accept: application/json" \
+    "https://${DOMAIN}/rest/api/3/project/${PROJECT_KEY}") || true
+
+  case "$HTTP_CODE" in
+    200) echo "✅ Project '${PROJECT_KEY}' confirmed" ;;
+    404) die "Project '${PROJECT_KEY}' not found — check the project key" ;;
+    *)   die "Project check failed (HTTP ${HTTP_CODE})" ;;
+  esac
+
+  yaml_set_jira "enabled"     "true"
+  yaml_set_jira "domain"      "$DOMAIN"
+  yaml_set_jira "email"       "$EMAIL"
+  yaml_set_jira "project_key" "$PROJECT_KEY"
+  yaml_set_jira "issue_type"  "$ISSUE_TYPE"
+
+  env_set "JIRA_TOKEN"   "$TOKEN"
+  env_set "JIRA_URL"     "https://${DOMAIN}"
+  env_set "JIRA_EMAIL"   "$EMAIL"
+  env_set "JIRA_PROJECT" "$PROJECT_KEY"
+
+  ensure_gitignored
+
+  echo ""
+  echo "✅ Jira auth saved."
+  echo "   Domain:      $DOMAIN"
+  echo "   Email:       $EMAIL"
+  echo "   Project:     $PROJECT_KEY"
+  echo "   Issue type:  $ISSUE_TYPE"
+  echo "   Token:       stored in ${AUTH_FILE} (gitignored)"
+  echo ""
+  echo "Next: 'specclaw issue <change>' to create a Jira issue from a proposal."
+}
+
+main
