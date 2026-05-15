@@ -1,0 +1,12 @@
+title: SpecClaw
+description: Spec-driven development for Claude Code. Propose → plan → build → verify → pr, with full traceability.
+theme: jekyll-theme-cayman
+show_downloads: false
+
+repository: chan4lk/specclaw
+
+github:
+  is_project_page: true
+  owner_name: chan4lk
+  repository_name: specclaw
+  repository_url: https://github.com/chan4lk/specclaw
