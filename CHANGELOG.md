@@ -4,6 +4,19 @@ All notable changes to specclaw are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] — 2026-05-15
+
+### Fixed
+- `/specclaw:pr` and `/specclaw:pr-azdo` now auto-stage and commit the
+  `.specclaw/changes/<change>/` directory (proposal, spec, design, tasks,
+  status, verify-report, errors, learnings) before opening the PR.
+  Previously these planning artifacts were never committed by
+  `specclaw-build commit` (which only commits each task's declared files),
+  so PRs landed without the spec/design/verify trail. Reviewers had to
+  read the linked GitHub Issue to see the plan. Now the artifacts ship
+  in the PR diff alongside the code. `.specclaw/.env` is already
+  gitignored and is not touched.
+
 ## [0.3.1] — 2026-05-15
 
 ### Fixed

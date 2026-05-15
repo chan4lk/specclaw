@@ -10,7 +10,7 @@
     {
       "name": "specclaw",
       "source": "./plugins/specclaw",
-      "version": "0.3.1",
+      "version": "0.3.2",
       "description": "Spec-driven development framework for Claude Code. Manages the propose → plan → build → verify → pr lifecycle.",
       "author": {
         "name": "Chandima Ranaweera"

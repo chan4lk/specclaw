@@ -373,6 +373,25 @@ main() {
   payload=$(printf '{"title":%s,"description":%s,"sourceRefName":"refs/heads/%s","targetRefName":"refs/heads/%s"}' \
     "$title_json" "$desc_json" "$source_branch" "$target_branch")
 
+  # Stage and commit planning artifacts (proposal.md, spec.md, design.md,
+  # tasks.md, status.md, verify-report.md, errors.md, learnings.md) so reviewers
+  # see them in the PR. specclaw-build commit only stages each task's declared
+  # files; the planning trail under .specclaw/changes/<change>/ would otherwise
+  # never land in the PR. Skip .specclaw/.env (already gitignored).
+  local change_path="${SPECCLAW_DIR}/changes/${CHANGE_NAME}"
+  if [[ -d "$change_path" ]]; then
+    if ! git diff --quiet HEAD -- "$change_path" 2>/dev/null; then
+      echo "Staging .specclaw/changes/${CHANGE_NAME}/ artifacts for the PR…"
+      git add "$change_path" 2>/dev/null || true
+      if ! git diff --cached --quiet -- "$change_path" 2>/dev/null; then
+        git commit -m "specclaw(${CHANGE_NAME}): include .specclaw/ planning + verify artifacts in PR" \
+          --only -- "$change_path" >/dev/null 2>&1 || true
+      fi
+    fi
+  fi
+  # Push so the ADO branch has them before the PR is opened
+  git push 2>/dev/null || true
+
   echo "Creating ADO PR: $title"
   local response
   response="$(adoapi_post "git/repositories/${AZDO_REPO}/pullrequests?api-version=7.1" "$payload")"

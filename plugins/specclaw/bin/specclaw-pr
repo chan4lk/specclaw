@@ -441,7 +441,26 @@ main() {
   title="$(build_pr_title)"
   body="$(build_pr_body "$policy")"
 
-  # Step 6: Create PR
+  # Step 6a: Stage and commit planning artifacts (proposal.md, spec.md, design.md,
+  # tasks.md, status.md, verify-report.md, errors.md, learnings.md) so reviewers
+  # see them in the PR. specclaw-build commit only stages each task's declared
+  # files; the planning trail under .specclaw/changes/<change>/ would otherwise
+  # never land in the PR. Skip .specclaw/.env (already gitignored).
+  local change_path="${SPECCLAW_DIR}/changes/${CHANGE_NAME}"
+  if [[ -d "$change_path" ]] && git diff --quiet HEAD -- "$change_path" 2>/dev/null; then
+    : # nothing to add (working tree clean for this dir)
+  elif [[ -d "$change_path" ]]; then
+    echo "Staging .specclaw/changes/${CHANGE_NAME}/ artifacts for the PR…"
+    git add "$change_path" 2>/dev/null || true
+    if ! git diff --cached --quiet -- "$change_path" 2>/dev/null; then
+      git commit -m "specclaw(${CHANGE_NAME}): include .specclaw/ planning + verify artifacts in PR" \
+        --only -- "$change_path" >/dev/null 2>&1 || true
+    fi
+  fi
+  # Push any new commits to the remote branch so the PR sees them
+  git push 2>/dev/null || true
+
+  # Step 6b: Create PR
   echo "Creating PR: $title"
   local pr_url
   pr_url="$(gh pr create --base main --title "$title" --body "$body")"
