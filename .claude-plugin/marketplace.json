@@ -1,0 +1,22 @@
+{
+  "name": "chan4lk",
+  "owner": {
+    "name": "Chandima Ranaweera",
+    "email": "chan4lk@gmail.com",
+    "url": "https://github.com/chan4lk"
+  },
+  "description": "Claude Code plugins by chan4lk.",
+  "plugins": [
+    {
+      "name": "specclaw",
+      "source": "./plugins/specclaw",
+      "version": "0.1.0",
+      "description": "Spec-driven development framework for Claude Code. Manages the propose → plan → build → verify → pr lifecycle.",
+      "author": {
+        "name": "Chandima Ranaweera"
+      },
+      "homepage": "https://github.com/chan4lk/specclaw",
+      "license": "MIT"
+    }
+  ]
+}
