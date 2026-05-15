@@ -134,9 +134,11 @@ specclaw/
 
 Scripts resolve plugin-internal resources via `$CLAUDE_PLUGIN_ROOT` and operate on the host repo's current working directory for `.specclaw/` state.
 
-## License
+## License & Privacy
 
 MIT — see [LICENSE](https://github.com/chan4lk/specclaw/blob/main/LICENSE).
+
+The plugin does not collect, store, or transmit user data. See [Privacy Policy](./privacy.html) for details.
 
 ## Contributing
 
