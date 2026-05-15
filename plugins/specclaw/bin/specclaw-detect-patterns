@@ -8,7 +8,7 @@ sed_i() {
   if [[ "$(uname)" == "Darwin" ]]; then
     sed -i '' "$expr" "$@"
   else
-    sed_i "$expr" "$@"
+    sed -i "$expr" "$@"
   fi
 }
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
