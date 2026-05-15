@@ -4,6 +4,14 @@ All notable changes to specclaw are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] — 2026-05-15
+
+### Changed
+- Tightened `/specclaw:propose` skill description to `INVOKE IMMEDIATELY` —
+  Claude now fires the skill on the first turn when the user mentions a
+  proposal/feature idea/change request, instead of gathering details
+  conversationally first. The skill itself asks once for missing details.
+
 ## [0.2.1] — 2026-05-15
 
 ### Added

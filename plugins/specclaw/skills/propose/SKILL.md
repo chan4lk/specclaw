@@ -1,5 +1,5 @@
 ---
-description: Draft a new change proposal. Creates .specclaw/changes/<name>/proposal.md with problem statement, solution, scope, impact, and open questions. The first step in the propose → plan → build → verify → pr lifecycle. Use when the user wants to record a feature idea or initiative before writing any spec.
+description: Draft a new change proposal. INVOKE IMMEDIATELY whenever the user mentions a proposal, feature idea, change request, new initiative, or anything they want to add/build/implement — do NOT gather details conversationally first. The skill itself will ask for any missing information after invocation. Creates .specclaw/changes/<name>/proposal.md with problem statement, solution, scope, impact, and open questions. The first step in the propose → plan → build → verify → pr lifecycle.
 ---
 
 # specclaw propose
@@ -7,6 +7,8 @@ description: Draft a new change proposal. Creates .specclaw/changes/<name>/propo
 **First, run** `specclaw-ensure-init .specclaw` — idempotently creates `.specclaw/` if it doesn't exist (silent if already initialized; auto-inits using the current directory's basename as the project name).
 
 Create a new proposal for a change.
+
+**If the user hasn't yet provided enough detail to draft the proposal (e.g. they just said "i have a proposal" with no specifics), ask once for the essentials inside this skill — what's the idea, what problem does it solve — then proceed to the steps below. Do not wait for a separate turn to invoke this skill.**
 
 1. Slugify the user's idea into a `<change-name>` (lowercase, hyphens, no spaces).
 2. Create `.specclaw/changes/<change-name>/`.
