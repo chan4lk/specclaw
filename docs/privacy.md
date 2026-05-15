@@ -26,7 +26,7 @@ None of this is sent anywhere by the plugin.
 SpecClaw makes outbound network calls **only when you explicitly invoke a lifecycle command that integrates with an external service you have configured**:
 
 - **GitHub** — when you run `/specclaw:pr`, `/specclaw:propose` (with `github.sync: true`), or `/specclaw:archive`, the plugin uses the `gh` CLI (authenticated by you) or a `GITHUB_TOKEN` you supply to create/update issues and pull requests in your own repo.
-- **Azure DevOps** — when you run `/specclaw:auth-azdo`, `/specclaw:pr-azdo`, the plugin calls the ADO REST API using a Personal Access Token you create and supply.
+- **Azure DevOps** — when you run `/specclaw:auth-azdo`, `/specclaw:pr-azdo`, or `/specclaw:azdo-issue` (when `azdo.boards.sync: true`), the plugin calls the ADO REST API (Repos and Work Items / Azure Boards) using a Personal Access Token you create and supply.
 - **Jira** — when you run `/specclaw:auth-jira`, `/specclaw:issue`, the plugin calls the Atlassian REST API using credentials you create and supply.
 
 In every case, the request goes **directly from your machine to the external service**. The plugin author does not operate a proxy or intermediary, does not see your credentials, and does not see your request payloads.

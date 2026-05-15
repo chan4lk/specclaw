@@ -18,3 +18,4 @@ Turn an approved proposal into an executable plan.
 5. Present a plan summary to the user (counts of FRs, ACs, tasks, waves).
 6. Update status: `specclaw-update-status .specclaw`.
 7. **GitHub sync** (if enabled): `specclaw-gh-sync update .specclaw <change>` to attach the task checklist to the GitHub Issue.
+8. **Azure Boards sync** (if `azdo.boards.sync: true`): `specclaw-azdo-issue update .specclaw <change>` to refresh the Work Item description with the rendered task checklist.

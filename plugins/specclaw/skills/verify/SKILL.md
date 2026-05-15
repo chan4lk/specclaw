@@ -49,10 +49,16 @@ specclaw-verify update-status .specclaw <change> <verdict>
 specclaw-update-status .specclaw
 ```
 
-## Step 6 — GitHub sync (if enabled)
+## Step 6 — External tracker sync (if enabled)
 
+GitHub:
 ```bash
 specclaw-gh-sync comment .specclaw <change> "<verdict summary>"
+```
+
+Azure Boards (if `azdo.boards.sync: true`):
+```bash
+specclaw-azdo-issue comment .specclaw <change> "Verify <verdict>: <verdict summary>"
 ```
 
 ## Step 7 — Notify

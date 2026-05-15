@@ -79,6 +79,10 @@ azdo:
   org: ""           # Organisation name — part after dev.azure.com/
   project: ""       # ADO project name
   repo: ""          # Repository name within the project
+  boards:
+    sync: false             # Set true to mirror proposals as Azure Boards Work Items
+    work_item_type: "Feature"  # "Feature" | "User Story" | "Task" | "Bug" | "Epic"
+    tag: "specclaw"         # Comma-separated. Tags help filter specclaw items in Boards queries.
 
 # Jira integration (optional)
 # Run `specclaw auth jira` to configure. Token stored in .specclaw/.env (gitignored).

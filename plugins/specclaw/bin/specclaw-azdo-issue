@@ -1,0 +1,370 @@
+#!/usr/bin/env bash
+# specclaw-azdo-issue — Create and update Azure Boards Work Items for specclaw changes
+#
+# Usage:
+#   specclaw-azdo-issue create   <specclaw_dir> <change>
+#   specclaw-azdo-issue update   <specclaw_dir> <change>
+#   specclaw-azdo-issue comment  <specclaw_dir> <change> "<comment text>"
+#   specclaw-azdo-issue close    <specclaw_dir> <change>
+#   specclaw-azdo-issue link-pr  <specclaw_dir> <change> <project_id> <repo_id> <pr_id>
+#
+# Reads AZDO_TOKEN / AZDO_ORG / AZDO_PROJECT from .specclaw/.env (set by
+# /specclaw:auth-azdo) and azdo.boards.* from config.yaml.
+
+set -euo pipefail
+
+# Portable sed -i for both GNU (Linux) and BSD (macOS) sed.
+sed_i() {
+  local expr="$1"; shift
+  if [[ "$(uname)" == "Darwin" ]]; then
+    sed -i '' "$expr" "$@"
+  else
+    sed -i "$expr" "$@"
+  fi
+}
+
+usage() {
+  sed -n '2,/^$/{ s/^# \?//; p; }' "$0"
+  exit 0
+}
+
+[[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && usage
+
+if [[ $# -lt 3 ]]; then
+  echo "ERROR: Expected at least: <subcommand> <specclaw_dir> <change>" >&2
+  echo "Run with --help for usage." >&2
+  exit 1
+fi
+
+SUBCMD="$1"
+SPECCLAW_DIR="$2"
+CHANGE_NAME="$3"
+
+CONFIG_FILE="$SPECCLAW_DIR/config.yaml"
+AUTH_FILE="$SPECCLAW_DIR/.env"
+CHANGE_DIR="$SPECCLAW_DIR/changes/$CHANGE_NAME"
+STATUS_FILE="$CHANGE_DIR/status.md"
+
+[[ -d "$CHANGE_DIR" ]] || { echo "ERROR: Change not found: $CHANGE_DIR" >&2; exit 1; }
+
+die() { echo "ERROR: $*" >&2; exit 1; }
+warn() { echo "WARNING: $*" >&2; }
+
+# ─── Auth ─────────────────────────────────────────────────────────────────────
+
+# shellcheck disable=SC1090
+[[ -f "$AUTH_FILE" ]] && source "$AUTH_FILE"
+
+AZDO_TOKEN="${AZDO_TOKEN:-}"
+AZDO_ORG="${AZDO_ORG:-}"
+AZDO_PROJECT="${AZDO_PROJECT:-}"
+
+# Minimal YAML reader: supports `section.field` (2-level) and `section.sub.field` (3-level).
+yaml_val() {
+  local file="$1" key="$2"
+  python3 - "$file" "$key" <<'PY' 2>/dev/null || true
+import sys, re
+path, key = sys.argv[1], sys.argv[2]
+parts = key.split('.')
+try:
+    with open(path) as fh:
+        lines = fh.readlines()
+except FileNotFoundError:
+    sys.exit(0)
+# Compute indent of each line, build a stack-aware traversal.
+def strip_quotes(s):
+    s = s.strip()
+    if (s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'")):
+        return s[1:-1]
+    return s
+target_depth = len(parts)
+stack = []  # list of (indent, key)
+for raw in lines:
+    line = raw.rstrip('\n')
+    if not line.strip() or line.lstrip().startswith('#'):
+        continue
+    indent = len(line) - len(line.lstrip(' '))
+    # Pop stack to current indent
+    while stack and stack[-1][0] >= indent:
+        stack.pop()
+    # Parse "key:" or "key: value"
+    m = re.match(r'^([A-Za-z0-9_]+)\s*:\s*(.*)$', line.strip())
+    if not m:
+        continue
+    k, v = m.group(1), m.group(2)
+    stack.append((indent, k))
+    current_path = [s[1] for s in stack]
+    if current_path == parts and v != '':
+        print(strip_quotes(v))
+        sys.exit(0)
+PY
+}
+
+# Fall back to config.yaml for non-secret values
+if [[ -z "$AZDO_ORG" && -f "$CONFIG_FILE" ]]; then
+  AZDO_ORG="$(yaml_val "$CONFIG_FILE" "azdo.org")"
+  AZDO_PROJECT="$(yaml_val "$CONFIG_FILE" "azdo.project")"
+fi
+
+WORK_ITEM_TYPE="$(yaml_val "$CONFIG_FILE" "azdo.boards.work_item_type")"
+WORK_ITEM_TYPE="${WORK_ITEM_TYPE:-Feature}"
+BOARDS_TAG="$(yaml_val "$CONFIG_FILE" "azdo.boards.tag")"
+BOARDS_TAG="${BOARDS_TAG:-specclaw}"
+
+# Validate credentials before any subcommand that hits ADO
+require_creds() {
+  [[ -n "$AZDO_TOKEN" ]]   || die "Azure DevOps credentials missing — run /specclaw:auth-azdo"
+  [[ -n "$AZDO_ORG" ]]     || die "AZDO_ORG missing — run /specclaw:auth-azdo"
+  [[ -n "$AZDO_PROJECT" ]] || die "AZDO_PROJECT missing — run /specclaw:auth-azdo"
+}
+
+# ─── HTTP helpers ─────────────────────────────────────────────────────────────
+
+auth_header() {
+  printf ':%s' "$AZDO_TOKEN" | base64 2>/dev/null | tr -d '\n'
+}
+
+ado_get() {
+  local path="$1"
+  local url="https://dev.azure.com/${AZDO_ORG}/${AZDO_PROJECT}/_apis/${path}"
+  curl -sf --max-time 30 -X GET "$url" \
+    -H "Authorization: Basic $(auth_header)" \
+    -H "Accept: application/json"
+}
+
+ado_post_json() {
+  local path="$1" body="$2" content_type="${3:-application/json}"
+  local url="https://dev.azure.com/${AZDO_ORG}/${AZDO_PROJECT}/_apis/${path}"
+  curl -sf --max-time 30 -X POST "$url" \
+    -H "Authorization: Basic $(auth_header)" \
+    -H "Content-Type: $content_type" \
+    -H "Accept: application/json" \
+    -d "$body"
+}
+
+ado_patch_json() {
+  local path="$1" body="$2"
+  local url="https://dev.azure.com/${AZDO_ORG}/${AZDO_PROJECT}/_apis/${path}"
+  curl -sf --max-time 30 -X PATCH "$url" \
+    -H "Authorization: Basic $(auth_header)" \
+    -H "Content-Type: application/json-patch+json" \
+    -H "Accept: application/json" \
+    -d "$body"
+}
+
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+
+# Idempotency check — extract existing Work Item ID from status.md if present
+existing_wi_id() {
+  [[ -f "$STATUS_FILE" ]] || return 0
+  grep -oE '^\*\*Azure Boards Work Item:\*\* \[#[0-9]+\]' "$STATUS_FILE" 2>/dev/null \
+    | head -1 | sed -E 's/.*\[#([0-9]+)\].*/\1/'
+}
+
+# Extract the Work Item URL line from status.md
+existing_wi_url() {
+  [[ -f "$STATUS_FILE" ]] || return 0
+  grep -oE '\(https://[^)]+\)' "$STATUS_FILE" 2>/dev/null \
+    | grep -m1 '_workitems' | tr -d '()'
+}
+
+# Build description HTML from proposal + tasks
+build_description_html() {
+  local proposal="$CHANGE_DIR/proposal.md" tasks="$CHANGE_DIR/tasks.md"
+  local out=""
+  if [[ -f "$proposal" ]]; then
+    out+="<h3>Proposal</h3><pre>$(sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g' "$proposal" | head -200)</pre>"
+  fi
+  if [[ -f "$tasks" ]]; then
+    out+="<h3>Tasks</h3><pre>$(grep -E '^- \[' "$tasks" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')</pre>"
+  fi
+  printf '%s' "$out"
+}
+
+# Truncate title to 252 chars + ellipsis if longer
+title_from_proposal() {
+  local proposal="$CHANGE_DIR/proposal.md"
+  local title
+  [[ -f "$proposal" ]] || { echo "$CHANGE_NAME"; return; }
+  # Use the H1 line "# Proposal: <title>" if present
+  title="$(grep -m1 '^# Proposal: ' "$proposal" | sed 's/^# Proposal: //' || true)"
+  [[ -z "$title" ]] && title="$CHANGE_NAME"
+  if [[ ${#title} -gt 252 ]]; then
+    title="${title:0:252}…"
+  fi
+  printf '%s' "$title"
+}
+
+# JSON-escape a string for embedding into a body
+json_escape() {
+  python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()), end="")'
+}
+
+# ─── Subcommands ──────────────────────────────────────────────────────────────
+
+cmd_create() {
+  require_creds
+  local existing
+  existing="$(existing_wi_id)"
+  if [[ -n "$existing" ]]; then
+    local url
+    url="$(existing_wi_url)"
+    warn "Work Item already created: #$existing ($url)"
+    exit 0
+  fi
+
+  local title desc body
+  title="$(title_from_proposal)"
+  desc="$(build_description_html)"
+  body="$(python3 - "$title" "$desc" "$BOARDS_TAG" <<'PY'
+import json, sys
+title, desc, tags = sys.argv[1], sys.argv[2], sys.argv[3]
+patch = [
+    {"op":"add","path":"/fields/System.Title","value": title},
+    {"op":"add","path":"/fields/System.Description","value": desc},
+    {"op":"add","path":"/fields/System.Tags","value": tags},
+]
+print(json.dumps(patch))
+PY
+)"
+
+  local response
+  if ! response="$(ado_post_json "wit/workitems/\$${WORK_ITEM_TYPE}?api-version=7.1" "$body" "application/json-patch+json")"; then
+    die "ADO create failed (HTTP error). Check work_item_type '${WORK_ITEM_TYPE}' exists in your project's process template."
+  fi
+
+  local wi_id wi_url
+  wi_id="$(printf '%s' "$response" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+  wi_url="https://dev.azure.com/${AZDO_ORG}/${AZDO_PROJECT}/_workitems/edit/${wi_id}"
+
+  # Save to status.md
+  if grep -q '^\*\*Azure Boards Work Item:\*\*' "$STATUS_FILE" 2>/dev/null; then
+    : # already present, shouldn't happen given idempotency check above
+  else
+    printf '\n**Azure Boards Work Item:** [#%s](%s)\n' "$wi_id" "$wi_url" >> "$STATUS_FILE"
+  fi
+
+  echo "Created Work Item #${wi_id}: ${wi_url}"
+}
+
+cmd_update() {
+  require_creds
+  local wi_id
+  wi_id="$(existing_wi_id)"
+  [[ -n "$wi_id" ]] || die "No Work Item for this change — run specclaw-azdo-issue create first"
+
+  local desc body
+  desc="$(build_description_html)"
+  body="$(python3 - "$desc" <<'PY'
+import json, sys
+desc = sys.argv[1]
+patch = [{"op":"replace","path":"/fields/System.Description","value": desc}]
+print(json.dumps(patch))
+PY
+)"
+
+  ado_patch_json "wit/workitems/${wi_id}?api-version=7.1" "$body" >/dev/null \
+    || die "ADO update failed for Work Item #${wi_id}"
+  echo "Updated Work Item #${wi_id}"
+}
+
+cmd_comment() {
+  require_creds
+  local text="${4:-}"
+  [[ -n "$text" ]] || die "Missing comment text. Usage: specclaw-azdo-issue comment <specclaw_dir> <change> \"<text>\""
+
+  local wi_id
+  wi_id="$(existing_wi_id)"
+  [[ -n "$wi_id" ]] || die "No Work Item for this change — run specclaw-azdo-issue create first"
+
+  local body
+  body="$(printf '%s' "$text" | python3 -c 'import json,sys; print(json.dumps({"text": sys.stdin.read()}))')"
+
+  ado_post_json "wit/workItems/${wi_id}/comments?api-version=7.1-preview.3" "$body" >/dev/null \
+    || die "ADO comment failed for Work Item #${wi_id}"
+  echo "Commented on Work Item #${wi_id}"
+}
+
+cmd_close() {
+  require_creds
+  local wi_id
+  wi_id="$(existing_wi_id)"
+  [[ -n "$wi_id" ]] || die "No Work Item for this change — nothing to close"
+
+  # Read PR URL from status.md if present, include it in the close comment
+  local pr_url=""
+  if [[ -f "$STATUS_FILE" ]]; then
+    pr_url="$(grep -m1 '^\*\*PR:\*\*\|^\*\*ADO PR:\*\*' "$STATUS_FILE" 2>/dev/null | sed -E 's/^\*\*[A-Z ]+:\*\* *//' || true)"
+  fi
+  local msg="Change archived by specclaw."
+  [[ -n "$pr_url" ]] && msg="$msg PR: $pr_url"
+
+  cmd_comment "" "$SPECCLAW_DIR" "$CHANGE_NAME" "$msg"
+
+  # Also add a `closed-by-specclaw` tag (additive — keep existing tags)
+  local current_tags new_tags body
+  current_tags="$(ado_get "wit/workitems/${wi_id}?api-version=7.1" \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin).get("fields",{}).get("System.Tags",""))')"
+  if [[ "$current_tags" == *"closed-by-specclaw"* ]]; then
+    echo "Closed Work Item #${wi_id} (already tagged closed-by-specclaw)"
+    return 0
+  fi
+  if [[ -z "$current_tags" ]]; then
+    new_tags="closed-by-specclaw"
+  else
+    new_tags="${current_tags}; closed-by-specclaw"
+  fi
+  body="$(python3 - "$new_tags" <<'PY'
+import json, sys
+patch = [{"op":"replace","path":"/fields/System.Tags","value": sys.argv[1]}]
+print(json.dumps(patch))
+PY
+)"
+  ado_patch_json "wit/workitems/${wi_id}?api-version=7.1" "$body" >/dev/null \
+    || warn "Failed to add closed-by-specclaw tag — closing comment was still posted"
+  echo "Closed Work Item #${wi_id}"
+}
+
+cmd_link_pr() {
+  require_creds
+  local project_id="${4:-}" repo_id="${5:-}" pr_id="${6:-}"
+  [[ -n "$project_id" && -n "$repo_id" && -n "$pr_id" ]] || \
+    die "Usage: specclaw-azdo-issue link-pr <specclaw_dir> <change> <project_id> <repo_id> <pr_id>"
+
+  local wi_id
+  wi_id="$(existing_wi_id)"
+  [[ -n "$wi_id" ]] || { warn "No Work Item for this change — skipping PR auto-link"; exit 0; }
+
+  local vstfs_url="vstfs:///Git/PullRequestId/${project_id}%2F${repo_id}%2F${pr_id}"
+  local body
+  body="$(python3 - "$vstfs_url" <<'PY'
+import json, sys
+patch = [{
+    "op":"add","path":"/relations/-",
+    "value":{
+        "rel":"ArtifactLink",
+        "url": sys.argv[1],
+        "attributes":{"name":"Pull Request"}
+    }
+}]
+print(json.dumps(patch))
+PY
+)"
+
+  if ado_patch_json "wit/workitems/${wi_id}?api-version=7.1" "$body" >/dev/null 2>&1; then
+    echo "Linked PR #${pr_id} → Work Item #${wi_id}"
+  else
+    warn "Could not link PR #${pr_id} to Work Item #${wi_id} (PR is still created)"
+  fi
+}
+
+# ─── Dispatch ─────────────────────────────────────────────────────────────────
+
+case "$SUBCMD" in
+  create)  cmd_create  "$@" ;;
+  update)  cmd_update  "$@" ;;
+  comment) cmd_comment "$@" ;;
+  close)   cmd_close   "$@" ;;
+  link-pr) cmd_link_pr "$@" ;;
+  *) die "Unknown subcommand: $SUBCMD. Run with --help for usage." ;;
+esac

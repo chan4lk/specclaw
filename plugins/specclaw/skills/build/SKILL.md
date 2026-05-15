@@ -82,8 +82,10 @@ specclaw-update-task-status .specclaw/changes/<change>/tasks.md <TASK_ID> failed
    4. Notify: `❌ Task Failed: <TASK_ID> — <title>`.
    5. Mark dependent tasks in later waves as skipped/failed.
    6. **GitHub sync** (if enabled): `specclaw-gh-sync comment .specclaw <change> "❌ Task <TASK_ID> failed: <summary>"`.
+   7. **Azure Boards sync** (if `azdo.boards.sync: true`): `specclaw-azdo-issue comment .specclaw <change> "❌ Task <TASK_ID> failed: <summary>"`.
 
 **g.** GitHub sync (if enabled): `specclaw-gh-sync update .specclaw <change>` to refresh task checkboxes.
+**g'.** Azure Boards sync (if `azdo.boards.sync: true`): `specclaw-azdo-issue update .specclaw <change>` to refresh the Work Item description with the latest task checklist; optionally `specclaw-azdo-issue comment .specclaw <change> "Wave <N> complete: <X>/<total> tasks done"`.
 
 **h.** Repeat for the next wave.
 

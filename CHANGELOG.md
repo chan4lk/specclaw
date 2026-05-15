@@ -4,6 +4,36 @@ All notable changes to specclaw are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] — 2026-05-15
+
+### Added
+- **Azure Boards integration** for proposal tracking — symmetric to the existing
+  GitHub Issues and Jira integrations. Opt-in via `azdo.boards.sync: true` in
+  `config.yaml`.
+- New `specclaw-azdo-issue` script with subcommands `create`, `update`,
+  `comment`, `close`, `link-pr`. Targets the ADO REST Work Items API.
+  Reuses credentials from `/specclaw:auth-azdo`.
+- New `/specclaw:azdo-issue` skill (model-invokable).
+- Lifecycle hooks: `/specclaw:propose` creates the Work Item, `/specclaw:plan`
+  updates description with the task checklist, `/specclaw:build` comments on
+  task failures and wave-ends, `/specclaw:verify` comments with the verdict,
+  `/specclaw:archive` posts a closing comment and adds a
+  `closed-by-specclaw` tag.
+- `/specclaw:pr-azdo` now **auto-links** the created PR to the Work Item via
+  the ADO REST relations API (`ArtifactLink` of type `Pull Request`) so the
+  PR shows up under the Work Item's "Development" panel. Failure is
+  non-fatal — the PR is independently created.
+- New config keys under `azdo.boards`: `sync` (default `false`),
+  `work_item_type` (default `Feature`), `tag` (default `specclaw`).
+
+### Notes
+- specclaw does **not** auto-transition Work Item state — humans drive ADO
+  state. State machines differ across process templates (Agile / Scrum /
+  Basic / custom), so any auto-transition logic would be wrong somewhere.
+  specclaw writes description, comments, and tags only.
+- Default behavior is unchanged. Users who don't set `azdo.boards.sync: true`
+  see no difference from v0.2.5.
+
 ## [0.2.5] — 2026-05-15
 
 ### Fixed

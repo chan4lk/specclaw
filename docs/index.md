@@ -23,7 +23,7 @@ SpecClaw manages the full lifecycle of a code change inside Claude Code:
 4. **`/specclaw:verify <change>`** — runs the configured test/lint/build commands, evaluates against acceptance criteria, writes `verify-report.md`.
 5. **`/specclaw:pr <change>`** — opens a GitHub PR (or `/specclaw:pr-azdo` for Azure DevOps) using the spec + verify report as the body.
 
-Optional integrations: GitHub Issues sync, Azure DevOps PRs, Jira issues.
+Optional integrations: GitHub Issues sync, Azure DevOps PRs, Azure Boards Work Items, Jira issues.
 
 ## Installation
 
@@ -91,6 +91,7 @@ All commands are namespaced under `/specclaw:`. Most are model-invokable — Cla
 | `/specclaw:auth-azdo` | One-time Azure DevOps credentials setup |
 | `/specclaw:auth-jira` | One-time Jira credentials setup |
 | `/specclaw:issue <change>` | Create a Jira issue from a proposal |
+| `/specclaw:azdo-issue <change>` | Create an Azure Boards Work Item from a proposal |
 | `/specclaw:status` | Show the project dashboard |
 | `/specclaw:archive <change>` | Archive a completed change |
 | `/specclaw:auto` | Advance the queue of active changes autonomously |

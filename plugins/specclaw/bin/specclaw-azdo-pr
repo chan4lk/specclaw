@@ -375,6 +375,32 @@ main() {
   local pr_url="https://dev.azure.com/${AZDO_ORG}/${AZDO_PROJECT}/_git/${AZDO_REPO}/pullrequest/${pr_id}"
   save_pr_url "$pr_url"
   echo "✅ ADO PR created: $pr_url"
+
+  # Auto-link PR → Azure Boards Work Item (if azdo.boards.sync is enabled and a
+  # Work Item exists for this change). Failure is non-fatal — PR is already done.
+  # yaml_val in this script handles 2-level keys; for the 3-level azdo.boards.sync
+  # we read it directly with awk (look for "sync: true" line inside the boards: block).
+  local boards_sync
+  boards_sync="$(awk '
+    /^azdo:/ {in_azdo=1; next}
+    in_azdo && /^[^[:space:]]/ {in_azdo=0}
+    in_azdo && /^[[:space:]]+boards:/ {in_boards=1; next}
+    in_azdo && in_boards && /^[[:space:]]{4}sync:/ {
+      gsub(/.*sync:[[:space:]]*/, ""); gsub(/[[:space:]]*#.*/, ""); print; exit
+    }
+  ' "$CONFIG_FILE" 2>/dev/null || true)"
+  if [[ "$boards_sync" == "true" ]]; then
+    local project_id repo_id
+    project_id="$(echo "$response" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("repository",{}).get("project",{}).get("id",""))' 2>/dev/null || true)"
+    repo_id="$(echo "$response" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("repository",{}).get("id",""))' 2>/dev/null || true)"
+    if [[ -n "$project_id" && -n "$repo_id" ]]; then
+      local self_dir
+      self_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+      "$self_dir/specclaw-azdo-issue" link-pr "$SPECCLAW_DIR" "$CHANGE_NAME" "$project_id" "$repo_id" "$pr_id" || true
+    else
+      echo "  (skipping Work Item auto-link — could not parse project/repo IDs from PR response)" >&2
+    fi
+  fi
 }
 
 main

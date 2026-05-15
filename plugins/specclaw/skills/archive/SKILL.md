@@ -13,4 +13,5 @@ Archive a completed change.
 3. Move to `.specclaw/changes/archive/YYYY-MM-DD-<change>/`.
 4. Update the dashboard: `specclaw-update-status .specclaw`.
 5. **GitHub sync** (if enabled): `specclaw-gh-sync close .specclaw <change>` to close the issue.
-6. Optionally create a git tag for the release.
+6. **Azure Boards sync** (if `azdo.boards.sync: true`): `specclaw-azdo-issue close .specclaw <change>` to post a closing comment and add a `closed-by-specclaw` tag. (Does not transition Work Item state — humans drive state in ADO.)
+7. Optionally create a git tag for the release.

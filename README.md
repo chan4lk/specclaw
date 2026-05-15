@@ -89,6 +89,7 @@ All commands are namespaced under `/specclaw:`. Most are model-invokable — Cla
 | `/specclaw:auth-azdo` | One-time Azure DevOps credentials setup |
 | `/specclaw:auth-jira` | One-time Jira credentials setup |
 | `/specclaw:issue <change>` | Create a Jira issue from a proposal |
+| `/specclaw:azdo-issue <change>` | Create an Azure Boards Work Item from a proposal |
 | `/specclaw:status` | Show the project dashboard |
 | `/specclaw:archive <change>` | Archive a completed change |
 | `/specclaw:auto` | Advance the queue of active changes autonomously |
