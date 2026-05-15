@@ -4,6 +4,16 @@ All notable changes to specclaw are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.4] — 2026-05-15
+
+### Fixed
+- `specclaw-auth-azdo` / `specclaw-auth-jira` no-tty error now prints a
+  copy-paste-ready command with the script's **absolute path** and the
+  resolved absolute path to `.specclaw/`. Previously the message said
+  `cd <your-project>; specclaw-auth-azdo .specclaw`, which didn't work
+  because the plugin lives in Claude Code's cache (not on the user's PATH)
+  and the angle brackets were getting HTML-escaped by Claude Code's UI.
+
 ## [0.2.3] — 2026-05-15
 
 ### Fixed

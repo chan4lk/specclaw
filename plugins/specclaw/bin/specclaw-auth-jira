@@ -30,14 +30,21 @@ fi
 # from a non-tty context (e.g. when Claude Code runs the script for you).
 # You shouldn't paste an API token through an agent anyway.
 if ! { : </dev/tty; } 2>/dev/null; then
-  cat >&2 <<'EOF'
+  SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+  if [[ -d "${1:-}" ]]; then
+    SPECCLAW_ABS="$(cd "${1}" && pwd)"
+  else
+    SPECCLAW_ABS="$(pwd)/${1:-.specclaw}"
+  fi
+  cat >&2 <<EOF
 ERROR: specclaw-auth-jira needs an interactive terminal — /dev/tty is not available here.
 
-This usually means an agent (like Claude Code) tried to run the script for you.
-Open your own terminal and run it directly so you can paste your API token securely:
+The setup prompts for an Atlassian API token; pasting that through an agent
+is unsafe. Open your own terminal and run this exact command (it includes
+the absolute path because the plugin is in Claude Code's cache, not on your
+normal PATH):
 
-  cd <your-project>
-  specclaw-auth-jira .specclaw
+  "${SCRIPT_PATH}" "${SPECCLAW_ABS}"
 
 After it completes, return to your agent session and continue.
 EOF
