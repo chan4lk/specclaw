@@ -87,6 +87,15 @@ yaml_val() {
       fi
     fi
   done < "$file"
+  # Strip inline `#` comments (must come BEFORE quote-stripping because
+  # values like `branch_prefix: "specclaw/"   # comment` would otherwise
+  # carry the comment into the result).
+  if [[ "$value" =~ ([[:space:]]+#) ]]; then
+    value="${value%%"${BASH_REMATCH[1]}"*}"
+  fi
+  if [[ "$value" =~ [[:space:]]+$ ]]; then
+    value="${value%${BASH_REMATCH[0]}}"
+  fi
   value="${value#\"}"; value="${value%\"}"; value="${value#\'}"; value="${value%\'}"
   echo "$value"
 }

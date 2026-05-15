@@ -36,9 +36,13 @@ warn() { echo "WARN: $*" >&2; }
 yaml_val() {
   local file="$1" field="$2"
   local val
+  # Strip "key:" prefix, then inline `# comments`, then trailing whitespace,
+  # then surrounding quotes — in that order.
   val=$(grep -E "^[[:space:]]*${field}:" "$file" 2>/dev/null \
     | head -1 \
-    | sed 's/^[^:]*:[[:space:]]*//' \
+    | sed -E 's/^[^:]*:[[:space:]]*//' \
+    | sed -E 's/[[:space:]]+#.*$//' \
+    | sed -E 's/[[:space:]]+$//' \
     | sed 's/^"//' | sed 's/"$//' \
     | sed "s/^'//" | sed "s/'$//")
   printf '%s' "$val"

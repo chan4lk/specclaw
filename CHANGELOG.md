@@ -4,6 +4,20 @@ All notable changes to specclaw are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] — 2026-05-15
+
+### Fixed
+- `yaml_val` across all 9 scripts (`specclaw-build`, `specclaw-pr`,
+  `specclaw-azdo-pr`, `specclaw-azdo-issue`, `specclaw-jira-issue`,
+  `specclaw-gh-sync`, `specclaw-validate-change`, `specclaw-verify`,
+  `specclaw-verify-context`) now strips inline `#` comments before
+  stripping surrounding quotes. Previously, a config line like
+  `branch_prefix: "specclaw/"   # Prefix for feature branches` would
+  parse to `specclaw/"   # Prefix for feature branches` instead of
+  `specclaw/`, causing `specclaw-build setup` to construct malformed
+  branch names. Caught when another Claude session ran `specclaw build`
+  against a freshly-init'd config.
+
 ## [0.3.0] — 2026-05-15
 
 ### Added

@@ -74,8 +74,19 @@ except FileNotFoundError:
 # Compute indent of each line, build a stack-aware traversal.
 def strip_quotes(s):
     s = s.strip()
-    if (s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'")):
-        return s[1:-1]
+    # Strip inline `# comment` (whitespace + # to EOL) UNLESS the value is
+    # a quoted string whose content includes a literal `#` — in which case
+    # we take the quoted content first.
+    if s.startswith('"'):
+        end = s.find('"', 1)
+        if end != -1:
+            return s[1:end]
+    if s.startswith("'"):
+        end = s.find("'", 1)
+        if end != -1:
+            return s[1:end]
+    # Unquoted — strip inline comment + trailing whitespace
+    s = re.sub(r'\s+#.*$', '', s).rstrip()
     return s
 target_depth = len(parts)
 stack = []  # list of (indent, key)
