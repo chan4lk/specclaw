@@ -4,6 +4,16 @@
 # Usage: specclaw-pr <specclaw_dir> <change_name>
 set -euo pipefail
 
+# Portable sed -i for both GNU (Linux) and BSD (macOS) sed.
+# BSD sed requires an explicit empty string after -i; GNU sed does not.
+sed_i() {
+  local expr="$1"; shift
+  if [[ "$(uname)" == "Darwin" ]]; then
+    sed -i '' "$expr" "$@"
+  else
+    sed_i "$expr" "$@"
+  fi
+}
 # ─── Help ─────────────────────────────────────────────────────────────────────
 
 usage() {
@@ -142,10 +152,10 @@ yaml_set_pr_policy() {
     # Section exists — check if test_policy line is already there
     if grep -q '^\s*test_policy:' "$CONFIG_FILE" 2>/dev/null; then
       # Replace existing line
-      sed -i "s|^\([[:space:]]*\)test_policy:.*|\1test_policy: \"$policy\"|" "$CONFIG_FILE"
+      sed_i "s|^\([[:space:]]*\)test_policy:.*|\1test_policy: \"$policy\"|" "$CONFIG_FILE"
     else
       # Insert after `pr:` line
-      sed -i "/^pr:/a\\  test_policy: \"$policy\"" "$CONFIG_FILE"
+      sed_i "/^pr:/a\\  test_policy: \"$policy\"" "$CONFIG_FILE"
     fi
   else
     # Append new section

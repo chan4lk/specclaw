@@ -4,6 +4,16 @@
 # Usage: specclaw-azdo-pr <specclaw_dir> <change_name>
 set -euo pipefail
 
+# Portable sed -i for both GNU (Linux) and BSD (macOS) sed.
+# BSD sed requires an explicit empty string after -i; GNU sed does not.
+sed_i() {
+  local expr="$1"; shift
+  if [[ "$(uname)" == "Darwin" ]]; then
+    sed -i '' "$expr" "$@"
+  else
+    sed_i "$expr" "$@"
+  fi
+}
 usage() {
   cat <<'EOF'
 Usage: specclaw-azdo-pr <specclaw_dir> <change_name>
@@ -113,9 +123,9 @@ yaml_set_pr_policy() {
   local policy="$1"
   if grep -q '^pr:' "$CONFIG_FILE" 2>/dev/null; then
     if grep -q '^\s*test_policy:' "$CONFIG_FILE" 2>/dev/null; then
-      sed -i "s|^\([[:space:]]*\)test_policy:.*|\1test_policy: \"$policy\"|" "$CONFIG_FILE"
+      sed_i "s|^\([[:space:]]*\)test_policy:.*|\1test_policy: \"$policy\"|" "$CONFIG_FILE"
     else
-      sed -i "/^pr:/a\\  test_policy: \"$policy\"" "$CONFIG_FILE"
+      sed_i "/^pr:/a\\  test_policy: \"$policy\"" "$CONFIG_FILE"
     fi
   else
     printf '\npr:\n  test_policy: "%s"\n' "$policy" >> "$CONFIG_FILE"
