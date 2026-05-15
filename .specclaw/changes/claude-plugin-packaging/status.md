@@ -9,7 +9,7 @@
 - [x] Proposal drafted
 - [x] Proposal approved
 - [x] Spec + design + tasks generated (`specclaw plan`)
-- [ ] Implementation (`specclaw build`)
+- [x] Implementation (`specclaw build`)
 - [ ] Verification (`specclaw verify`)
 - [ ] PR opened (`specclaw pr`)
 **GitHub Issue:** #10

@@ -1,0 +1,19 @@
+---
+description: Generate spec, design, and ordered task list for an approved proposal. Reads proposal.md, analyzes the codebase, then writes spec.md, design.md, and tasks.md. Run after /specclaw:propose has been approved, before /specclaw:build.
+disable-model-invocation: true
+---
+
+# specclaw plan
+
+Turn an approved proposal into an executable plan.
+
+1. **Validate:** run `specclaw-validate-change .specclaw <change> plan`. If it fails, report missing prerequisites and stop.
+2. Read `.specclaw/changes/<change>/proposal.md`.
+3. Analyze the existing codebase (file structure, patterns, dependencies relevant to the change).
+4. Generate three files in `.specclaw/changes/<change>/`:
+   - `spec.md` — functional requirements, non-functional requirements, acceptance criteria, edge cases. Use `$CLAUDE_PLUGIN_ROOT/templates/spec.md` as a starting template.
+   - `design.md` — technical approach, architecture, file changes map, key decisions, risks. Template: `$CLAUDE_PLUGIN_ROOT/templates/design.md`.
+   - `tasks.md` — ordered tasks grouped into waves with dependencies. Template: `$CLAUDE_PLUGIN_ROOT/templates/tasks.md`.
+5. Present a plan summary to the user (counts of FRs, ACs, tasks, waves).
+6. Update status: `specclaw-update-status .specclaw`.
+7. **GitHub sync** (if enabled): `specclaw-gh-sync update .specclaw <change>` to attach the task checklist to the GitHub Issue.

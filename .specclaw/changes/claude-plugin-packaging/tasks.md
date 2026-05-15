@@ -32,25 +32,25 @@ Mechanical reorg of `skill/` into Claude Code plugin layout, plus two new manife
 
 ### Wave 2 — Migration (sequential within tracks, tracks parallel)
 
-- [ ] `T4` — Move `skill/templates/` → `plugins/specclaw/templates/` and `skill/references/` → `plugins/specclaw/references/`
+- [x] `T4` — Move `skill/templates/` → `plugins/specclaw/templates/` and `skill/references/` → `plugins/specclaw/references/`
   - Files: `plugins/specclaw/templates/*`, `plugins/specclaw/references/*`, delete `skill/templates/`, delete `skill/references/`
   - Estimate: small
   - Depends: —
   - Notes: `git mv` to preserve history.
 
-- [ ] `T5` — Move and rename scripts: `skill/scripts/<name>.sh` → `plugins/specclaw/bin/specclaw-<name>`
+- [x] `T5` — Move and rename scripts: `skill/scripts/<name>.sh` → `plugins/specclaw/bin/specclaw-<name>`
   - Files: `plugins/specclaw/bin/specclaw-*` (18 scripts), delete `skill/scripts/`
   - Estimate: medium
   - Depends: —
   - Notes: `git mv` each. Strip `.sh` extension. Prefix `specclaw-`. `chmod +x`. Audit `#!/usr/bin/env bash` shebang on every one.
 
-- [ ] `T6` — Patch scripts to use `$CLAUDE_PLUGIN_ROOT` and rewrite internal invocations
+- [x] `T6` — Patch scripts to use `$CLAUDE_PLUGIN_ROOT` and rewrite internal invocations
   - Files: every file in `plugins/specclaw/bin/`
   - Estimate: medium
   - Depends: T5
   - Notes: Add `PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"` near the top. Replace any `skill/templates/` with `$PLUGIN_ROOT/templates/`, `skill/references/` with `$PLUGIN_ROOT/references/`. Replace any cross-script `bash skill/scripts/X.sh` with the on-PATH form `specclaw-X`. Audit `source` lines.
 
-- [ ] `T7` — Decompose `skill/SKILL.md` into 15 `plugins/specclaw/skills/<verb>/SKILL.md` files
+- [x] `T7` — Decompose `skill/SKILL.md` into 15 `plugins/specclaw/skills/<verb>/SKILL.md` files
   - Files: `plugins/specclaw/skills/{init,propose,plan,build,learn,patterns,verify,pr,pr-azdo,auth-azdo,auth-jira,issue,status,archive,auto}/SKILL.md`
   - Estimate: large
   - Depends: T6 (so script names referenced inside SKILL.md bodies are correct)
@@ -63,7 +63,7 @@ Mechanical reorg of `skill/` into Claude Code plugin layout, plus two new manife
     ```
     Rewrite every `bash skill/scripts/X.sh` to the on-PATH invocation. Verify each description is disjoint from the others (re-read all 15 side by side once written).
 
-- [ ] `T8` — Delete `skill/` directory
+- [x] `T8` — Delete `skill/` directory
   - Files: delete `skill/`
   - Estimate: small
   - Depends: T4, T5, T7
@@ -71,19 +71,19 @@ Mechanical reorg of `skill/` into Claude Code plugin layout, plus two new manife
 
 ### Wave 3 — Documentation & Validation
 
-- [ ] `T9` — Update README with install instructions
+- [x] `T9` — Update README with install instructions
   - Files: `README.md`
   - Estimate: small
   - Depends: T1, T2
   - Notes: Add `## Installation` section with `/plugin marketplace add chan4lk/specclaw` and `/plugin install specclaw@chan4lk`. Add minimum Claude Code version note. Quickstart: `/specclaw:init` then `/specclaw:propose "..."`. Mention future plugins from `chan4lk` will be installable from the same marketplace.
 
-- [ ] `T10` — End-to-end install smoke test
+- [x] `T10` — End-to-end install smoke test
   - Files: (no repo changes; produces `verify-report.md` notes)
   - Estimate: medium
   - Depends: T8, T9
   - Notes: In a sibling temp directory: `claude --plugin-dir <path-to-specclaw-repo>/plugins/specclaw`. Inside, run `/specclaw:init`, confirm `.specclaw/config.yaml` is created in the temp dir (not in plugin repo). Run `specclaw-validate-change .specclaw <a-known-change> plan` against this repo (dogfood). Document results.
 
-- [ ] `T11` — Dogfood validation in this repo
+- [x] `T11` — Dogfood validation in this repo
   - Files: (no changes; verification only)
   - Estimate: small
   - Depends: T8

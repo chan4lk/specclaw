@@ -1,48 +1,54 @@
 # 🦞 SpecClaw
 
-**Spec-driven development for OpenClaw agents.**
+**Spec-driven development for Claude Code.**
 
-SpecClaw is a lightweight framework that brings structured, spec-driven development to OpenClaw. Write specs, let agents build — with full traceability from requirement to implementation.
+SpecClaw is a Claude Code plugin that manages the full lifecycle of a code change: propose → plan → build → verify → pr. It writes structured proposals, specs, designs, and ordered task lists into your project, then drives implementation through the lifecycle with full traceability from requirement to merged PR.
 
 ## Why SpecClaw?
 
-AI coding agents are powerful but lose context fast. Existing SDD frameworks (GSD, OpenSpec, BMAD) work great with IDE-based tools, but none leverage OpenClaw's unique capabilities:
+AI coding agents are powerful but lose context fast. SpecClaw gives every change a paper trail:
 
-- **Subagent orchestration** — spawn parallel coding agents per task
-- **Multi-model routing** — Opus plans, Codex/Claude Code implements, Sonnet reviews
-- **Messaging integration** — Discord/Telegram approvals and status updates
-- **Cron automation** — "build one feature per night" mode
-- **Memory continuity** — cross-session context that survives restarts
+- **`proposal.md`** — why this change matters
+- **`spec.md`** — requirements + acceptance criteria
+- **`design.md`** — technical approach, file map, key decisions, risks
+- **`tasks.md`** — ordered tasks, grouped into parallelizable waves
+- **`verify-report.md`** — evidence the implementation meets the spec
+- **GitHub / Azure DevOps / Jira sync** — keep external trackers up to date
 
-## How It Works
+Each change lives in `.specclaw/changes/<name>/` in your repo. The plugin operates on your project's CWD; nothing is hidden inside the plugin install.
+
+## Installation
+
+Requires [Claude Code](https://claude.com/claude-code) v2.1 or later.
 
 ```
-You: "Add user authentication with OAuth2"
-
-SpecClaw:
-  1. Creates proposal + spec + design + tasks
-  2. You review and approve (chat or Discord buttons)
-  3. Spawns coding agents for each task
-  4. Validates implementation against spec
-  5. Archives completed work, updates dashboard
+/plugin marketplace add chan4lk/specclaw
+/plugin install specclaw@chan4lk
 ```
 
-## Quick Start
+Future plugins by the same owner ship in the same `chan4lk` marketplace — you only register it once.
 
-### As an OpenClaw Skill
+## Quickstart
 
-```bash
-# Install from ClawHub
-clawhub install specclaw
-
-# Initialize in your project
-# (Tell your OpenClaw agent)
-> specclaw init
 ```
+> /specclaw:init
+  Initializes .specclaw/ in the current project, generates config.yaml, creates the dashboard.
 
-### Manual Setup
+> /specclaw:propose "add dark mode support"
+  Drafts .specclaw/changes/add-dark-mode/proposal.md for your review.
 
-Copy the `skill/` directory into your OpenClaw workspace skills folder.
+> /specclaw:plan add-dark-mode
+  Generates spec.md, design.md, tasks.md once the proposal is approved.
+
+> /specclaw:build add-dark-mode
+  Executes tasks wave-by-wave, committing each.
+
+> /specclaw:verify add-dark-mode
+  Runs tests/lint/build, evaluates against acceptance criteria, writes verify-report.md.
+
+> /specclaw:pr add-dark-mode
+  Opens a GitHub PR using the spec + verify report as the description.
+```
 
 ## Project Structure
 
@@ -50,77 +56,42 @@ When initialized in a project, SpecClaw creates:
 
 ```
 .specclaw/
-├── config.yaml          # Project config (models, git strategy, etc.)
-├── STATUS.md            # Overall project dashboard
+├── config.yaml          # Project config (models, git strategy, integrations)
+├── STATUS.md            # Cross-change dashboard
+├── patterns.md          # Recurring pattern registry (cross-change)
 └── changes/
-    └── <feature-name>/
-        ├── proposal.md  # Why + what (human reviews)
-        ├── spec.md      # Requirements + acceptance criteria
-        ├── design.md    # Technical approach
-        ├── tasks.md     # Implementation tasks (ordered, tracked)
-        └── status.md    # Auto-tracked progress per change
+    └── <change-name>/
+        ├── proposal.md      # Problem + solution + scope
+        ├── spec.md          # Requirements + acceptance criteria
+        ├── design.md        # Technical approach + file map
+        ├── tasks.md         # Ordered tasks with status markers
+        ├── status.md        # Per-change progress tracking
+        ├── errors.md        # Build error journal (auto-generated on failures)
+        ├── learnings.md     # Build learnings (spec gaps, patterns, insights)
+        └── verify-report.md # Verification results
 ```
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `specclaw init` | Initialize SpecClaw in a project |
-| `specclaw propose "<idea>"` | Create a new change proposal |
-| `specclaw plan <change>` | Generate spec + design + tasks from proposal |
-| `specclaw build <change>` | Execute tasks via coding agents |
-| `specclaw verify <change>` | Validate implementation against spec |
-| `specclaw status` | Show project dashboard |
-| `specclaw archive <change>` | Archive completed change |
-| `specclaw auto` | Autonomous mode — pick next task and build |
+All commands are namespaced under `/specclaw:` and must be invoked explicitly (skills have `disable-model-invocation: true` — Claude does not trigger them spontaneously).
 
-## Workflow
-
-### 1. Propose
-```
-> specclaw propose "add dark mode support"
-```
-Creates `.specclaw/changes/add-dark-mode/proposal.md` with:
-- Problem statement
-- Proposed solution
-- Scope and impact
-- Open questions
-
-### 2. Plan
-```
-> specclaw plan add-dark-mode
-```
-Generates from the proposal:
-- `spec.md` — Requirements, acceptance criteria, edge cases
-- `design.md` — Technical approach, architecture decisions, file changes
-- `tasks.md` — Ordered implementation tasks with estimates
-
-### 3. Review
-Human reviews artifacts. Edit freely — specs are living documents.
-
-### 4. Build
-```
-> specclaw build add-dark-mode
-```
-- Spawns coding agents (Codex/Claude Code) per task
-- Each agent gets fresh context: spec + design + relevant task
-- Progress tracked in `status.md`
-- Notifications on completion/failure
-
-### 5. Verify
-```
-> specclaw verify add-dark-mode
-```
-- Validates implementation against spec requirements
-- Runs tests if configured
-- Reports gaps and issues
-
-### 6. Archive
-```
-> specclaw archive add-dark-mode
-```
-- Moves to `.specclaw/changes/archive/`
-- Updates `STATUS.md` dashboard
+| Command | Purpose |
+|---------|---------|
+| `/specclaw:init` | Initialize `.specclaw/` in the current project |
+| `/specclaw:propose "<idea>"` | Draft a new change proposal |
+| `/specclaw:plan <change>` | Generate spec + design + tasks |
+| `/specclaw:build <change>` | Execute tasks wave-by-wave |
+| `/specclaw:learn <change> "..."` | Record a spec gap, design miss, or pattern |
+| `/specclaw:patterns` | Inspect the cross-change pattern registry |
+| `/specclaw:verify <change>` | Validate implementation against spec |
+| `/specclaw:pr <change>` | Open a GitHub PR |
+| `/specclaw:pr-azdo <change>` | Open an Azure DevOps PR |
+| `/specclaw:auth-azdo` | One-time Azure DevOps credentials setup |
+| `/specclaw:auth-jira` | One-time Jira credentials setup |
+| `/specclaw:issue <change>` | Create a Jira issue from a proposal |
+| `/specclaw:status` | Show the project dashboard |
+| `/specclaw:archive <change>` | Archive a completed change |
+| `/specclaw:auto` | Advance the queue of active changes autonomously |
 
 ## Configuration
 
@@ -133,42 +104,62 @@ project:
   description: "Short description"
 
 models:
-  planning: "anthropic/claude-opus-4-6"    # For proposals, specs, design
-  coding: "openai/codex-mini"              # For implementation
-  review: "anthropic/claude-sonnet-4-5"    # For verification
+  planning: "anthropic/claude-opus-4-6"
+  coding: "openai/gpt-5.1-codex"
+  review: "anthropic/claude-sonnet-4-5"
 
 git:
-  strategy: "branch-per-change"  # or "direct"
+  strategy: "branch-per-change"   # or "direct", or "worktree-per-change"
   auto_commit: true
   commit_prefix: "specclaw"
 
-notifications:
-  channel: "discord"
-  target: null  # Channel or user ID
+github:
+  sync: true
+  repo: "owner/repo"
+  label: "specclaw"
+
+azdo:                              # set via /specclaw:auth-azdo
+  org: ""
+  project: ""
+  repo: ""
+
+jira:                              # set via /specclaw:auth-jira
+  domain: ""
+  email: ""
+  project_key: ""
 
 automation:
-  auto_mode: false
-  cron: null  # e.g., "0 2 * * *" for nightly builds
+  auto_verify: true
+  auto_archive: false
   max_tasks_per_run: 5
 ```
 
-## OpenClaw Integration
+## Workflow
 
-SpecClaw is built as an OpenClaw skill, leveraging:
+1. **Propose** — draft a proposal, refine it with the user.
+2. **Plan** — once approved, generate spec + design + tasks.
+3. **Build** — execute the tasks, committing each one. Failures log to `errors.md`; insights log to `learnings.md`.
+4. **Verify** — run the configured test/lint/build commands, evaluate against acceptance criteria, write `verify-report.md`.
+5. **PR** — open a GitHub PR (or `/specclaw:pr-azdo` for Azure DevOps) using the spec and verify report as the description.
+6. **Archive** — after merge, move the change to `.specclaw/changes/archive/`.
 
-- **`sessions_spawn`** — Isolated coding agents with fresh context per task
-- **`message`** — Discord/Telegram notifications and approvals
-- **`exec`** — Git operations, test runners, build tools
-- **`memory_search`** — Cross-session continuity for long-running projects
-- **Cron jobs** — Scheduled autonomous building
+## Plugin Architecture
 
-## Philosophy
+This repo is the `chan4lk` plugin marketplace. The specclaw plugin lives at `plugins/specclaw/` and is the marketplace's first plugin:
 
-- **Specs are contracts, not bureaucracy** — just enough structure to keep agents on track
-- **Human in the loop** — approve proposals, review specs, but don't micromanage tasks
-- **Fresh context per task** — each agent gets exactly what it needs, nothing more
-- **Fluid, not rigid** — update any artifact anytime, no phase gates
-- **Observable** — always know what's been built, what's pending, what failed
+```
+specclaw/                            ← chan4lk marketplace root
+├── .claude-plugin/marketplace.json
+└── plugins/
+    └── specclaw/
+        ├── .claude-plugin/plugin.json
+        ├── skills/<verb>/SKILL.md   ← 15 namespaced skills
+        ├── bin/specclaw-*           ← lifecycle scripts on $PATH
+        ├── templates/               ← proposal.md, spec.md, etc.
+        └── references/              ← agent prompts, build engine docs
+```
+
+Scripts resolve plugin-internal resources via `$CLAUDE_PLUGIN_ROOT` and operate on the host repo's current working directory for `.specclaw/` state — nothing is written inside the plugin install.
 
 ## License
 
@@ -176,4 +167,4 @@ MIT
 
 ## Contributing
 
-PRs welcome! This is an early-stage project. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+PRs welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
