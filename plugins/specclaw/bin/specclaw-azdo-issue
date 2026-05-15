@@ -154,18 +154,24 @@ ado_patch_json() {
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
-# Idempotency check — extract existing Work Item ID from status.md if present
+# Idempotency check — extract existing Work Item ID from status.md if present.
+# Uses `|| true` so a no-match doesn't trip set -e / pipefail.
 existing_wi_id() {
-  [[ -f "$STATUS_FILE" ]] || return 0
-  grep -oE '^\*\*Azure Boards Work Item:\*\* \[#[0-9]+\]' "$STATUS_FILE" 2>/dev/null \
-    | head -1 | sed -E 's/.*\[#([0-9]+)\].*/\1/'
+  [[ -f "$STATUS_FILE" ]] || { echo ""; return 0; }
+  local line id=""
+  line="$(grep -oE '^\*\*Azure Boards Work Item:\*\* \[#[0-9]+\]' "$STATUS_FILE" 2>/dev/null | head -1 || true)"
+  if [[ -n "$line" ]]; then
+    id="$(printf '%s' "$line" | sed -E 's/.*\[#([0-9]+)\].*/\1/' || true)"
+  fi
+  printf '%s' "$id"
 }
 
 # Extract the Work Item URL line from status.md
 existing_wi_url() {
-  [[ -f "$STATUS_FILE" ]] || return 0
-  grep -oE '\(https://[^)]+\)' "$STATUS_FILE" 2>/dev/null \
-    | grep -m1 '_workitems' | tr -d '()'
+  [[ -f "$STATUS_FILE" ]] || { echo ""; return 0; }
+  local url
+  url="$(grep -oE '\(https://[^)]+\)' "$STATUS_FILE" 2>/dev/null | grep -m1 '_workitems' | tr -d '()' || true)"
+  printf '%s' "$url"
 }
 
 # Build description HTML from proposal + tasks

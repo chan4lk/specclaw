@@ -14,3 +14,5 @@
 - [ ] PR opened (`specclaw pr`)
 **GitHub Issue:** #11
 | Verify | ✅ Passed |  |
+
+**Azure Boards Work Item:** [#122](https://dev.azure.com/BistecGlobal/Agent-Accelerator/_workitems/edit/122)
