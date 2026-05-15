@@ -1,6 +1,5 @@
 ---
 description: Generate spec, design, and ordered task list for an approved proposal. Reads proposal.md, analyzes the codebase, then writes spec.md, design.md, and tasks.md. Run after /specclaw:propose has been approved, before /specclaw:build.
-disable-model-invocation: true
 ---
 
 # specclaw plan

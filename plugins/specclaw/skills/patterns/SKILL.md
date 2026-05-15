@@ -1,6 +1,5 @@
 ---
 description: Inspect the cross-change pattern registry. Track recurring errors and learnings across changes; promote patterns with 3+ occurrences to prevention rules. Use to see what keeps happening before planning a new change.
-disable-model-invocation: true
 ---
 
 # specclaw patterns

@@ -1,6 +1,5 @@
 ---
 description: Move a completed change to .specclaw/changes/archive/ with a date prefix. Closes the GitHub Issue (if sync is enabled) and optionally creates a git tag. Use after a change is merged — the PR is complete and the change should leave the active list.
-disable-model-invocation: true
 ---
 
 # specclaw archive

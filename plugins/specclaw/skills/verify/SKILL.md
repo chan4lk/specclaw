@@ -1,6 +1,5 @@
 ---
 description: Validate that the implementation satisfies the spec's acceptance criteria. Runs the configured test/lint/build commands, evaluates against spec.md, and produces verify-report.md. Required before /specclaw:pr. Run after all tasks in /specclaw:build are complete.
-disable-model-invocation: true
 ---
 
 # specclaw verify

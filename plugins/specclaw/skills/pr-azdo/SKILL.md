@@ -1,6 +1,5 @@
 ---
 description: Create an Azure DevOps pull request for a verified change. Mirrors /specclaw:pr but targets ADO Repos via REST API instead of GitHub. Requires credentials from /specclaw:auth-azdo. Use when the project uses Azure DevOps instead of GitHub.
-disable-model-invocation: true
 ---
 
 # specclaw pr-azdo

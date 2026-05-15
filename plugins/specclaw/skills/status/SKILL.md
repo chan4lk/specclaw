@@ -1,6 +1,5 @@
 ---
 description: Show the project's specclaw dashboard — active changes, completed changes, pending proposals, blocked work. Reads .specclaw/STATUS.md. Read-only; does not modify state.
-disable-model-invocation: true
 ---
 
 # specclaw status

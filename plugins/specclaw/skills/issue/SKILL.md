@@ -1,6 +1,5 @@
 ---
 description: Create a Jira issue for a proposed change. Mirrors GitHub Issues sync but for Jira-based teams. Builds the issue summary and description from proposal.md and spec.md. Requires credentials from /specclaw:auth-jira. Idempotent — warns if a Jira issue already exists for this change.
-disable-model-invocation: true
 ---
 
 # specclaw issue

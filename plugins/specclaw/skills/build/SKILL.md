@@ -1,6 +1,5 @@
 ---
 description: Implement planned tasks by executing them wave-by-wave, committing each, and logging errors and learnings. Reads tasks.md and drives the build loop. The longest-running phase of the specclaw lifecycle. Run after /specclaw:plan has produced spec.md, design.md, and tasks.md.
-disable-model-invocation: true
 ---
 
 # specclaw build

@@ -1,6 +1,5 @@
 ---
 description: Run the propose → plan → build → verify lifecycle autonomously across the queue of active changes. Advanced — requires automation config in config.yaml. Use when you want specclaw to advance every change to its next phase without prompting; do not use for a single targeted change (use the specific verb instead).
-disable-model-invocation: true
 ---
 
 # specclaw auto

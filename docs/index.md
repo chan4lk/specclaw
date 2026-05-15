@@ -75,7 +75,7 @@ State lives in `.specclaw/` in your project. The plugin operates on your CWD; no
 
 ## Commands
 
-All commands are namespaced under `/specclaw:` and require explicit invocation (`disable-model-invocation: true` — Claude never triggers them spontaneously).
+All commands are namespaced under `/specclaw:`. Most are model-invokable — Claude will route conversationally (e.g. "i have a proposal" fires `/specclaw:propose`). Auth setup commands (`/specclaw:auth-azdo`, `/specclaw:auth-jira`) stay explicit-only because they handle credentials.
 
 | Command | Purpose |
 |---------|---------|

@@ -73,7 +73,7 @@ When initialized in a project, SpecClaw creates:
 
 ## Commands
 
-All commands are namespaced under `/specclaw:` and must be invoked explicitly (skills have `disable-model-invocation: true` — Claude does not trigger them spontaneously).
+All commands are namespaced under `/specclaw:`. Most are model-invokable — Claude will route conversationally (e.g. "i have a proposal" fires `/specclaw:propose`). Auth setup commands (`/specclaw:auth-azdo`, `/specclaw:auth-jira`) are explicit-only because they handle credentials.
 
 | Command | Purpose |
 |---------|---------|

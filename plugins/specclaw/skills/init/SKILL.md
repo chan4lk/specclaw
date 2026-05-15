@@ -1,6 +1,5 @@
 ---
 description: Initialize specclaw in this project. Creates the .specclaw/ directory, generates config.yaml from the template, and sets up the project dashboard. Run once per project before any other specclaw command.
-disable-model-invocation: true
 ---
 
 # specclaw init

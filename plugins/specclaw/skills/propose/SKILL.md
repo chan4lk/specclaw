@@ -1,6 +1,5 @@
 ---
 description: Draft a new change proposal. Creates .specclaw/changes/<name>/proposal.md with problem statement, solution, scope, impact, and open questions. The first step in the propose → plan → build → verify → pr lifecycle. Use when the user wants to record a feature idea or initiative before writing any spec.
-disable-model-invocation: true
 ---
 
 # specclaw propose
