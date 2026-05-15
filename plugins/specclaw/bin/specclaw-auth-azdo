@@ -3,6 +3,16 @@
 # Guides user to PAT creation page, validates token, saves to .specclaw/.env + config.yaml
 set -euo pipefail
 
+# Portable sed -i for both GNU (Linux) and BSD (macOS) sed.
+# BSD sed requires an explicit empty string after -i; GNU sed does not.
+sed_i() {
+  local expr="$1"; shift
+  if [[ "$(uname)" == "Darwin" ]]; then
+    sed -i '' "$expr" "$@"
+  else
+    sed_i "$expr" "$@"
+  fi
+}
 usage() {
   cat <<'EOF'
 Usage: specclaw-auth-azdo <specclaw_dir>
@@ -67,7 +77,7 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 env_set() {
   local key="$1" val="$2"
   if [[ -f "$AUTH_FILE" ]] && grep -q "^${key}=" "$AUTH_FILE" 2>/dev/null; then
-    sed -i "s|^${key}=.*|${key}=${val}|" "$AUTH_FILE"
+    sed_i "s|^${key}=.*|${key}=${val}|" "$AUTH_FILE"
   else
     echo "${key}=${val}" >> "$AUTH_FILE"
   fi
@@ -77,9 +87,9 @@ yaml_set_azdo() {
   local key="$1" val="$2"
   if grep -q '^azdo:' "$CONFIG_FILE" 2>/dev/null; then
     if grep -qE "^[[:space:]]+${key}:" "$CONFIG_FILE" 2>/dev/null; then
-      sed -i "s|^\([[:space:]]*\)${key}:.*|\1${key}: \"${val}\"|" "$CONFIG_FILE"
+      sed_i "s|^\([[:space:]]*\)${key}:.*|\1${key}: \"${val}\"|" "$CONFIG_FILE"
     else
-      sed -i "/^azdo:/a\\  ${key}: \"${val}\"" "$CONFIG_FILE"
+      sed_i "/^azdo:/a\\  ${key}: \"${val}\"" "$CONFIG_FILE"
     fi
   else
     printf '\n# Azure DevOps integration\nazdo:\n  enabled: true\n  org: ""\n  project: ""\n  repo: ""\n' >> "$CONFIG_FILE"

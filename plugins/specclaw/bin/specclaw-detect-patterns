@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Portable sed -i for both GNU (Linux) and BSD (macOS) sed.
+# BSD sed requires an explicit empty string after -i; GNU sed does not.
+sed_i() {
+  local expr="$1"; shift
+  if [[ "$(uname)" == "Darwin" ]]; then
+    sed -i '' "$expr" "$@"
+  else
+    sed_i "$expr" "$@"
+  fi
+}
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 TEMPLATE_DIR="$PLUGIN_ROOT/templates"
@@ -236,10 +246,10 @@ update_pattern() {
   local new_rec=$((cur_rec + 1))
 
   # Update recurrence
-  sed -i "/$pat_id/,/^---$/{s/\*\*Recurrence:\*\* *[0-9]*/\*\*Recurrence:\*\* $new_rec/}" "$patterns_file"
+  sed_i "/$pat_id/,/^---$/{s/\*\*Recurrence:\*\* *[0-9]*/\*\*Recurrence:\*\* $new_rec/}" "$patterns_file"
 
   # Update Last Seen
-  sed -i "/$pat_id/,/^---$/{s/\*\*Last Seen:\*\*.*/\*\*Last Seen:\*\* $today ($change_name)/}" "$patterns_file"
+  sed_i "/$pat_id/,/^---$/{s/\*\*Last Seen:\*\*.*/\*\*Last Seen:\*\* $today ($change_name)/}" "$patterns_file"
 
   # Add occurrence before "### Prevention Rule"
   # Find the line number of Prevention Rule within this pattern block
@@ -256,7 +266,7 @@ update_pattern() {
 
   if [[ -n "$prev_line" ]]; then
     # Insert occurrence before Prevention Rule (with blank line)
-    sed -i "${prev_line}i\\- ${change_name} — ${snippet}" "$patterns_file"
+    sed_i "${prev_line}i\\- ${change_name} — ${snippet}" "$patterns_file"
   else
     # Find Occurrences section and append
     local occ_line
@@ -273,7 +283,7 @@ update_pattern() {
         fi
         n=$((n + 1))
       done < <(tail -n "+$((occ_line + 1))" "$patterns_file")
-      sed -i "${insert_line}a\\- ${change_name} — ${snippet}" "$patterns_file"
+      sed_i "${insert_line}a\\- ${change_name} — ${snippet}" "$patterns_file"
     fi
   fi
 
@@ -518,7 +528,7 @@ do_promote() {
   if sed -n "${start_line},${end_line}p" "$patterns_file" | grep -q '^\*\*Status:\*\* *promoted'; then
     echo "Pattern $pat_id is already promoted."
   else
-    sed -i "${start_line},${end_line}s/\*\*Status:\*\* *active/\*\*Status:\*\* promoted/" "$patterns_file"
+    sed_i "${start_line},${end_line}s/\*\*Status:\*\* *active/\*\*Status:\*\* promoted/" "$patterns_file"
     echo "✅ Pattern $pat_id promoted."
   fi
 

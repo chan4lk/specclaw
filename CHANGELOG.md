@@ -4,6 +4,21 @@ All notable changes to specclaw are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.5] — 2026-05-15
+
+### Fixed
+- Cross-platform `sed -i` portability. GNU sed accepts `sed -i "expr" file`
+  but BSD sed (macOS) treats the expression as the backup-extension argument
+  and the file path as the script — leading to errors like
+  `sed: 1: ".../config.yaml": command c expects \ followed by text`.
+  Added a `sed_i` helper to all 6 scripts that use in-place edits
+  (`specclaw-auth-azdo`, `specclaw-auth-jira`, `specclaw-pr`,
+  `specclaw-azdo-pr`, `specclaw-update-task-status`, `specclaw-detect-patterns`)
+  which uses `sed -i ''` on Darwin and `sed -i` elsewhere.
+- `specclaw-update-task-status --help` no longer errors on BSD sed
+  (`extra characters at the end of p command`). Added a missing
+  semicolon to the brace-group sed script.
+
 ## [0.2.4] — 2026-05-15
 
 ### Fixed
