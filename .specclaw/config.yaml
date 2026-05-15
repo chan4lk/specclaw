@@ -51,3 +51,7 @@ automation:
   max_tasks_per_run: 5
   auto_verify: true                # Run verification after build
   auto_archive: false              # Archive on successful verification
+
+# PR creation settings
+pr:
+  test_policy: "none"   # set non-interactively for plugin packaging change (no app tests apply)
