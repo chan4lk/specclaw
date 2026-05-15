@@ -11,8 +11,9 @@
 - [x] Spec + design + tasks generated (`specclaw plan`)
 - [x] Implementation (`specclaw build`)
 - [x] Verification (`specclaw verify`)
-- [ ] PR opened (`specclaw pr`)
+- [x] PR opened (`specclaw pr`)
 **GitHub Issue:** #11
 | Verify | ✅ Passed |  |
 
 **Azure Boards Work Item:** [#122](https://dev.azure.com/BistecGlobal/Agent-Accelerator/_workitems/edit/122)
+**PR:** https://github.com/chan4lk/specclaw/pull/13
