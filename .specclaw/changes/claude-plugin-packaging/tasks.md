@@ -99,10 +99,9 @@ Mechanical reorg of `skill/` into Claude Code plugin layout, plus two new manife
 - `[!]` Failed
 
 **Task format:**
-```
-- [ ] `T<n>` — <title>
-  - Files: <files to create/modify>
-  - Estimate: small | medium | large
-  - Depends: <task ids> (if any)
-  - Notes: <additional context>
-```
+
+    - [ ] `T<n>` — <title>
+      - Files: <files to create/modify>
+      - Estimate: small | medium | large
+      - Depends: <task ids> (if any)
+      - Notes: <additional context>
