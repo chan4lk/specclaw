@@ -1,11 +1,12 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** specclaw
-**Last Updated:** 2026-05-15 07:39 UTC
+**Last Updated:** 2026-05-15 14:46 UTC
 
 ## Active Changes
 
 
+- ✅ **azure-boards-integration** — 10/10 tasks (100%) | 0 failed
 - ✅ **build-engine** — 6/6 tasks (100%) | 0 failed
 - ✅ **build-error-journal** — 3/3 tasks (100%) | 0 failed
 - ✅ **claude-plugin-packaging** — 11/11 tasks (100%) | 0 failed
@@ -32,6 +33,6 @@ _None._
 
 ## Stats
 
-- **Total changes:** 15
-- **Active:** 15
+- **Total changes:** 16
+- **Active:** 16
 - **Completed:** 0
