@@ -10,7 +10,7 @@ sed_i() {
   if [[ "$(uname)" == "Darwin" ]]; then
     sed -i '' "$expr" "$@"
   else
-    sed_i "$expr" "$@"
+    sed -i "$expr" "$@"
   fi
 }
 usage() {

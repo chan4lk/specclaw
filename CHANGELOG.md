@@ -4,6 +4,21 @@ All notable changes to specclaw are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3] — 2026-05-15
+
+### Fixed
+- **Critical:** `sed_i` helper in 5 scripts (`specclaw-auth-azdo`,
+  `specclaw-auth-jira`, `specclaw-pr`, `specclaw-azdo-pr`,
+  `specclaw-detect-patterns`) had a recursive bug on **Linux only** —
+  the Linux branch called `sed_i` instead of `sed -i`, producing
+  infinite recursion → stack overflow → segmentation fault. Symptom:
+  `specclaw-auth-azdo` segfaulted on Linux immediately after the
+  `✅ Token valid` line, before saving credentials. macOS users were
+  unaffected because the Darwin branch was correct. Root cause:
+  v0.2.5's Python patcher's `re.sub(r'\bsed -i "', 'sed_i "', txt)`
+  also matched inside the helper body and replaced its own fallback
+  call. Fixed by reverting the Linux branch to `sed -i "$expr" "$@"`.
+
 ## [0.3.2] — 2026-05-15
 
 ### Fixed
