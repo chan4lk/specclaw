@@ -9,6 +9,8 @@ disable-model-invocation: true
 
 Interactive Jira authentication setup. Guides the user to create an Atlassian API token, validates it, and saves credentials.
 
+**The user must run this command themselves in a real terminal — `specclaw-auth-jira` refuses to run without `/dev/tty` because it prompts for an API token. If you (the agent) try to invoke it, the script exits with instructions for the user. Just tell the user to open their shell and run `specclaw-auth-jira .specclaw` directly.**
+
 1. **Run:** `specclaw-auth-jira .specclaw`
    - Prompts for domain (e.g. `mycompany.atlassian.net`), email, project key, issue type.
    - Guides the user to `https://id.atlassian.com/manage-profile/security/api-tokens`.

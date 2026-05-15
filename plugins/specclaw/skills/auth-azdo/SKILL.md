@@ -9,6 +9,8 @@ disable-model-invocation: true
 
 Interactive Azure DevOps authentication setup. Guides the user to create a PAT, validates it, and saves credentials.
 
+**The user must run this command themselves in a real terminal — `specclaw-auth-azdo` refuses to run without `/dev/tty` because it prompts for a Personal Access Token. If you (the agent) try to invoke it, the script exits with instructions for the user. Just tell the user to open their shell and run `specclaw-auth-azdo .specclaw` directly.**
+
 1. **Run:** `specclaw-auth-azdo .specclaw`
    - Prompts for org name, project name, repo name.
    - Guides the user to `https://dev.azure.com/<org>/_usersSettings/tokens` to create a PAT.

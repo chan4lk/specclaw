@@ -26,6 +26,24 @@ if [[ $# -lt 1 ]]; then
   exit 1
 fi
 
+# Auth setup needs an interactive terminal — refuses to run if invoked
+# from a non-tty context (e.g. when Claude Code runs the script for you).
+# You shouldn't paste a PAT through an agent anyway.
+if ! { : </dev/tty; } 2>/dev/null; then
+  cat >&2 <<'EOF'
+ERROR: specclaw-auth-azdo needs an interactive terminal — /dev/tty is not available here.
+
+This usually means an agent (like Claude Code) tried to run the script for you.
+Open your own terminal and run it directly so you can paste your PAT securely:
+
+  cd <your-project>
+  specclaw-auth-azdo .specclaw
+
+After it completes, return to your agent session and continue.
+EOF
+  exit 1
+fi
+
 SPECCLAW_DIR="$1"
 CONFIG_FILE="$SPECCLAW_DIR/config.yaml"
 AUTH_FILE="$SPECCLAW_DIR/.env"

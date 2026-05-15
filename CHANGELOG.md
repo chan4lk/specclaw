@@ -4,6 +4,18 @@ All notable changes to specclaw are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] — 2026-05-15
+
+### Fixed
+- `specclaw-auth-azdo` and `specclaw-auth-jira` no longer crash with
+  `/dev/tty: Device not configured` when an agent (like Claude Code)
+  invokes them. They now detect missing `/dev/tty` upfront and exit with
+  clear instructions telling the user to run the command directly from
+  their own terminal (so they can paste their PAT / API token securely
+  without going through an agent).
+- The `auth-azdo` and `auth-jira` skill bodies now explicitly tell Claude
+  to delegate the run to the user rather than invoking it.
+
 ## [0.2.2] — 2026-05-15
 
 ### Changed
