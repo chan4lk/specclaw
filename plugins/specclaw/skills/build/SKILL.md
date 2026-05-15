@@ -4,6 +4,8 @@ description: Implement planned tasks by executing them wave-by-wave, committing 
 
 # specclaw build
 
+**First, run** `specclaw-ensure-init .specclaw` — idempotently creates `.specclaw/` if it doesn't exist (silent if already initialized; auto-inits using the current directory's basename as the project name).
+
 Execute the planned tasks.
 
 ## Step 0 — Validate

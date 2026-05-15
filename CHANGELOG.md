@@ -4,6 +4,15 @@ All notable changes to specclaw are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] — 2026-05-15
+
+### Added
+- `specclaw-ensure-init` helper script that idempotently creates `.specclaw/`
+  if missing, using the current directory's basename as the project name.
+- Every non-init skill now runs `specclaw-ensure-init` as Step 0, so any
+  specclaw command (e.g. `/specclaw:propose`) works in a fresh project
+  without requiring `/specclaw:init` first.
+
 ## [0.2.0] — 2026-05-15
 
 ### Changed

@@ -4,6 +4,8 @@ description: Inspect the cross-change pattern registry. Track recurring errors a
 
 # specclaw patterns
 
+**First, run** `specclaw-ensure-init .specclaw` — idempotently creates `.specclaw/` if it doesn't exist (silent if already initialized; auto-inits using the current directory's basename as the project name).
+
 Track recurring patterns across changes — errors and learnings that repeat become prevention rules.
 
 **Scan a change for patterns:**

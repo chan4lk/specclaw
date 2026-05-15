@@ -4,6 +4,8 @@ description: Create an Azure DevOps pull request for a verified change. Mirrors 
 
 # specclaw pr-azdo
 
+**First, run** `specclaw-ensure-init .specclaw` — idempotently creates `.specclaw/` if it doesn't exist (silent if already initialized; auto-inits using the current directory's basename as the project name).
+
 Create an Azure DevOps PR for a verified change.
 
 1. **Validate:** `specclaw-validate-change .specclaw <change> pr`. Fails if `verify-report.md` is missing.

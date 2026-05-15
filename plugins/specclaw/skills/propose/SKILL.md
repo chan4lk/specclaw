@@ -4,6 +4,8 @@ description: Draft a new change proposal. Creates .specclaw/changes/<name>/propo
 
 # specclaw propose
 
+**First, run** `specclaw-ensure-init .specclaw` — idempotently creates `.specclaw/` if it doesn't exist (silent if already initialized; auto-inits using the current directory's basename as the project name).
+
 Create a new proposal for a change.
 
 1. Slugify the user's idea into a `<change-name>` (lowercase, hyphens, no spaces).

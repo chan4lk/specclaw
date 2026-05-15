@@ -4,6 +4,8 @@ description: Create a Jira issue for a proposed change. Mirrors GitHub Issues sy
 
 # specclaw issue
 
+**First, run** `specclaw-ensure-init .specclaw` — idempotently creates `.specclaw/` if it doesn't exist (silent if already initialized; auto-inits using the current directory's basename as the project name).
+
 Create a Jira issue from a specclaw proposal. Requires `proposal.md` (run `/specclaw:propose` first).
 
 1. **Check idempotency:** if `status.md` already records a Jira issue for this change, warn and skip.

@@ -5,6 +5,8 @@ disable-model-invocation: true
 
 # specclaw auth azdo
 
+**First, run** `specclaw-ensure-init .specclaw` — idempotently creates `.specclaw/` if it doesn't exist (silent if already initialized; auto-inits using the current directory's basename as the project name).
+
 Interactive Azure DevOps authentication setup. Guides the user to create a PAT, validates it, and saves credentials.
 
 1. **Run:** `specclaw-auth-azdo .specclaw`
