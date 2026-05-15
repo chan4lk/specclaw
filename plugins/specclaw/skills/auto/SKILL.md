@@ -4,6 +4,8 @@ description: Run the propose → plan → build → verify lifecycle autonomousl
 
 # specclaw auto
 
+**First, run** `specclaw-ensure-init .specclaw` — idempotently creates `.specclaw/` if it doesn't exist (silent if already initialized; auto-inits using the current directory's basename as the project name).
+
 Run the lifecycle autonomously for the active queue.
 
 1. Read `.specclaw/STATUS.md` for the next actionable item across changes.

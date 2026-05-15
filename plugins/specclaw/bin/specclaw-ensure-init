@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# specclaw ensure-init — Idempotently ensure .specclaw/ exists.
+#
+# Called by every non-init lifecycle skill as Step 0. If .specclaw/ already
+# exists, this exits silently. If not, it runs `specclaw-init` with the
+# current directory's basename as the project name, so the user can run
+# `/specclaw:propose ...` immediately without a separate /specclaw:init.
+#
+# Usage:
+#   specclaw-ensure-init [specclaw_dir]
+#
+# specclaw_dir defaults to .specclaw (in CWD).
+
+set -euo pipefail
+
+SPECCLAW_DIR="${1:-.specclaw}"
+PROJECT_DIR="$(dirname "$(cd "$(dirname "$SPECCLAW_DIR")" && pwd)/$(basename "$SPECCLAW_DIR")")"
+
+if [ -d "$SPECCLAW_DIR" ]; then
+  exit 0
+fi
+
+PROJECT_NAME="$(basename "$PROJECT_DIR")"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+echo "🦞 No .specclaw/ in $PROJECT_DIR — auto-initializing as '$PROJECT_NAME'..." >&2
+"$SCRIPT_DIR/specclaw-init" "$PROJECT_DIR" "$PROJECT_NAME" "" >&2
+echo "" >&2
+echo "  Tip: run \`/specclaw:init\` later if you want to set a custom project name or description." >&2
+echo "" >&2

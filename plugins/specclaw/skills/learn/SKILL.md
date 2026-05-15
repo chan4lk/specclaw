@@ -4,6 +4,8 @@ description: Record a build learning — a spec gap, design miss, recurring patt
 
 # specclaw learn
 
+**First, run** `specclaw-ensure-init .specclaw` — idempotently creates `.specclaw/` if it doesn't exist (silent if already initialized; auto-inits using the current directory's basename as the project name).
+
 Capture build learnings — spec gaps, design misses, and patterns discovered during implementation.
 
 **Log a learning:**

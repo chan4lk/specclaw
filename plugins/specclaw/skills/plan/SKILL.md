@@ -4,6 +4,8 @@ description: Generate spec, design, and ordered task list for an approved propos
 
 # specclaw plan
 
+**First, run** `specclaw-ensure-init .specclaw` — idempotently creates `.specclaw/` if it doesn't exist (silent if already initialized; auto-inits using the current directory's basename as the project name).
+
 Turn an approved proposal into an executable plan.
 
 1. **Validate:** run `specclaw-validate-change .specclaw <change> plan`. If it fails, report missing prerequisites and stop.

@@ -4,6 +4,8 @@ description: Show the project's specclaw dashboard — active changes, completed
 
 # specclaw status
 
+**First, run** `specclaw-ensure-init .specclaw` — idempotently creates `.specclaw/` if it doesn't exist (silent if already initialized; auto-inits using the current directory's basename as the project name).
+
 Show the project dashboard.
 
 1. Refresh: `specclaw-update-status .specclaw`

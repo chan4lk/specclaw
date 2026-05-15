@@ -4,6 +4,8 @@ description: Move a completed change to .specclaw/changes/archive/ with a date p
 
 # specclaw archive
 
+**First, run** `specclaw-ensure-init .specclaw` — idempotently creates `.specclaw/` if it doesn't exist (silent if already initialized; auto-inits using the current directory's basename as the project name).
+
 Archive a completed change.
 
 1. **Validate:** `specclaw-validate-change .specclaw <change> archive`. If it fails, report and stop.

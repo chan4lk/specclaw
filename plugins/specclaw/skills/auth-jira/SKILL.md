@@ -5,6 +5,8 @@ disable-model-invocation: true
 
 # specclaw auth jira
 
+**First, run** `specclaw-ensure-init .specclaw` — idempotently creates `.specclaw/` if it doesn't exist (silent if already initialized; auto-inits using the current directory's basename as the project name).
+
 Interactive Jira authentication setup. Guides the user to create an Atlassian API token, validates it, and saves credentials.
 
 1. **Run:** `specclaw-auth-jira .specclaw`

@@ -4,6 +4,8 @@ description: Create a GitHub pull request for a verified change. Reads verify-re
 
 # specclaw pr
 
+**First, run** `specclaw-ensure-init .specclaw` — idempotently creates `.specclaw/` if it doesn't exist (silent if already initialized; auto-inits using the current directory's basename as the project name).
+
 Create a GitHub PR for a verified change. Requires `verify-report.md` (build + verify must complete first).
 
 1. **Validate:** `specclaw-validate-change .specclaw <change> pr`. Exits with a warning (exit 0) if a PR already exists for this change. Fails if `verify-report.md` is missing.

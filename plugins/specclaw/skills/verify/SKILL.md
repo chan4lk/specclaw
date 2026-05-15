@@ -4,6 +4,8 @@ description: Validate that the implementation satisfies the spec's acceptance cr
 
 # specclaw verify
 
+**First, run** `specclaw-ensure-init .specclaw` — idempotently creates `.specclaw/` if it doesn't exist (silent if already initialized; auto-inits using the current directory's basename as the project name).
+
 Validate that the implementation satisfies the spec.
 
 ## Step 0 — Validate
