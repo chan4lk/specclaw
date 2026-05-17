@@ -24,7 +24,9 @@ export function ScreenshotViewer({ src, alt }: ScreenshotViewerProps) {
           alt={alt}
           width={1280}
           height={720}
-          className="h-auto w-full object-contain"
+          className="h-auto w-full max-w-full object-contain"
+          sizes="(max-width: 768px) 100vw, 896px"
+          style={{ maxWidth: "100%" }}
           unoptimized
         />
         <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition group-hover:bg-black/10">

@@ -19,7 +19,9 @@
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"]
+      "@/*": [
+        "./*"
+      ]
     },
     "plugins": [
       {
@@ -33,7 +35,8 @@
     ".next/dev/dev/types/**/*.ts",
     "**/*.mts",
     "**/*.ts",
-    "**/*.tsx"
+    "**/*.tsx",
+    ".next/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

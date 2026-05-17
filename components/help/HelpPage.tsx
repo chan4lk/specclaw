@@ -32,8 +32,8 @@ export function HelpPage({ howToSections, conceptContents }: HelpPageProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="mx-auto max-w-4xl px-4 py-8">
+    <div className="min-h-screen overflow-x-hidden bg-gray-50">
+      <div className="mx-auto max-w-4xl overflow-x-hidden px-4 py-8">
         {/* Header */}
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
