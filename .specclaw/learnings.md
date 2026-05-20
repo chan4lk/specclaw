@@ -35,3 +35,33 @@ specclaw-azdo-issue create exited silently with exit 1 when grep pipeline in exi
 Always append || true to grep | head | sed pipelines used inside command substitution; consider documenting this pattern in references/agent-prompts.md
 
 ---
+
+## [L3] design_gap — specclaw-validate-change count_incomplete() matches '- [ ...
+
+**When:** 2026-05-20 17:10 UTC
+**Category:** design_gap
+**Priority:** medium
+**Status:** pending
+
+### Detail
+specclaw-validate-change count_incomplete() matches '- [ ]' inside the tasks.md template legend's 'Task format' code fence — false positive blocks verify even when all tasks are complete. Affects the default template at /templates/tasks.md.
+
+### Action
+Either (a) make count_incomplete skip lines inside code fences, or (b) change the legend example to use a non-matching marker (e.g. '* [ ]' or indented inside the fence). Best fixed in a follow-up change.
+
+---
+
+## [L4] design_gap — specclaw-verify-context fails on macOS with 'sed: 1: inva...
+
+**When:** 2026-05-20 17:11 UTC
+**Category:** design_gap
+**Priority:** medium
+**Status:** pending
+
+### Detail
+specclaw-verify-context fails on macOS with 'sed: 1: invalid command code f' — BSD sed incompatibility, blocks the verify pipeline on Darwin.
+
+### Action
+Audit specclaw-verify-context for sed -i / sed -E flag portability, similar to the v0.2.5 cross-platform sed fix. Follow-up change.
+
+---

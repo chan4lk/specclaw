@@ -1,7 +1,7 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** specclaw
-**Last Updated:** 2026-05-15 14:46 UTC
+**Last Updated:** 2026-05-20 17:12 UTC
 
 ## Active Changes
 
@@ -14,6 +14,7 @@
 - ✅ **git-worktrees** — 3/3 tasks (100%) | 0 failed
 - ✅ **github-issues-sync** — 3/3 tasks (100%) | 0 failed
 - ✅ **hr360-structured-feedback-okr** — 10/10 tasks (100%) | 0 failed
+- ✅ **karpathy-build-guardrails** — 6/6 tasks (100%) | 0 failed
 - ✅ **learn-command** — 2/2 tasks (100%) | 0 failed
 - ✅ **mcp-feedback-endpoint** — 2/2 tasks (100%) | 0 failed
 - ✅ **pattern-detection** — 3/3 tasks (100%) | 0 failed
@@ -33,6 +34,6 @@ _None._
 
 ## Stats
 
-- **Total changes:** 16
-- **Active:** 16
+- **Total changes:** 17
+- **Active:** 17
 - **Completed:** 0
