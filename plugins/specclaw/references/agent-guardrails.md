@@ -1,11 +1,7 @@
 # Agent Guardrails
 
 Behavioral rules injected into every coding agent spawned by `/specclaw:build`.
-Adapted **verbatim** from Andrej Karpathy's CLAUDE.md:
-
-- **Source:** https://github.com/multica-ai/andrej-karpathy-skills (`CLAUDE.md`)
-- **Upstream commit:** `2c606141936f1eeef17fa3043a72095b4765b9c2`
-- **License:** MIT
+Adapted **verbatim** from Andrej Karpathy's CLAUDE.md (MIT licensed).
 
 The rules below are unmodified. See the "How specclaw uses this" footer for
 the specclaw-specific framing.
