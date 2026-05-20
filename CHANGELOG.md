@@ -4,6 +4,26 @@ All notable changes to specclaw are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-05-20
+
+### Added
+- **Agent guardrails injected into every coding agent.** Vendored
+  Andrej Karpathy's CLAUDE.md (four behavioral rules: Think Before
+  Coding, Simplicity First, Surgical Changes, Goal-Driven Execution)
+  as `plugins/specclaw/references/agent-guardrails.md` (MIT, upstream
+  `2c60614`). `specclaw-build-context` now prepends the guardrails as
+  the first section of every coding-agent prompt — always-on, no
+  config flag. Goal: reduce diff bloat, scope deviations, and
+  speculative abstractions in agent-produced code.
+- **Skill docs cross-reference the guardrails.** `skills/build`
+  surfaces the auto-injection under Key Principles; `skills/plan`
+  applies rules 1 & 2 to task decomposition; `skills/verify` frames
+  itself as rule 4's goal-check loop against `spec.md` ACs.
+
+### Behavior
+- Missing `references/agent-guardrails.md` at build time emits a
+  stderr warning and continues — packaging bug, not a build-blocker.
+
 ## [0.3.3] — 2026-05-15
 
 ### Fixed
