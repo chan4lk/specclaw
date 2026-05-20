@@ -65,6 +65,10 @@ specclaw-azdo-issue comment .specclaw <change> "Verify <verdict>: <verdict summa
 
 Send verification results via the configured notification channel.
 
+## Verifier guardrails
+
+`/specclaw:verify` is the explicit goal-check loop called out by **Rule 4 (Goal-Driven Execution)** in `references/agent-guardrails.md`: each acceptance criterion in `spec.md` is a success criterion the verify agent loops against. Tests are one form of goal-check, but ACs are the ground truth.
+
 ## Auto-verify
 
 When `automation.auto_verify: true`, `/specclaw:build` automatically triggers verification on success.
