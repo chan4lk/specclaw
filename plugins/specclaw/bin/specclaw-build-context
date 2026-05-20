@@ -206,6 +206,18 @@ else
   DESIGN_CONTENT="*No design document found. Use your best judgment based on the task description.*"
 fi
 
+# --- Agent guardrails ---
+# Behavioral rules prepended to every coding-agent payload.
+GUARDRAILS_FILE="$SCRIPT_DIR/../references/agent-guardrails.md"
+GUARDRAILS_SECTION=""
+if [[ -f "$GUARDRAILS_FILE" ]]; then
+  GUARDRAILS_SECTION="## Agent Guardrails
+$(cat "$GUARDRAILS_FILE")
+"
+else
+  echo "WARNING: agent-guardrails.md not found at $GUARDRAILS_FILE — proceeding without guardrails" >&2
+fi
+
 # --- Existing file contents ---
 build_file_contents() {
   local file_list="$1"
@@ -326,6 +338,7 @@ fi
 cat <<PROMPT
 You are a coding agent implementing a specific task in the project "${PROJECT_NAME}".
 
+${GUARDRAILS_SECTION}
 ## Your Task
 ${TASK_TITLE}
 ${TASK_NOTES}
