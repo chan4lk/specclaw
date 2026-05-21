@@ -4,6 +4,21 @@ All notable changes to specclaw are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] — 2026-05-21
+
+### Added
+- **Per-repo knowledge base.** Promoting a learning or pattern now
+  writes to `.specclaw/knowledge/` in the target repo — never to the
+  plugin. `spec_gap`/`design_gap` learnings go to `spec-guidelines.md`;
+  `pattern`/`best_practice`/`agent_issue` learnings and pattern
+  prevention rules go to `agent-hints.md`. Plugin stays versioned and
+  generic; repos accumulate their own knowledge over time.
+- **Build agent auto-receives repo knowledge.** `specclaw-build-context`
+  injects `.specclaw/knowledge/agent-hints.md` into every coding-agent
+  prompt as a "Repo Knowledge Base" section when the file exists.
+- **Knowledge templates.** `templates/knowledge/agent-hints.md` and
+  `templates/knowledge/spec-guidelines.md` seed new knowledge bases.
+
 ## [0.4.0] — 2026-05-20
 
 ### Added
