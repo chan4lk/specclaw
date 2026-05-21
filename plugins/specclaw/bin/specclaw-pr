@@ -418,6 +418,120 @@ EOF
   fi
 }
 
+# ─── Version Bump ─────────────────────────────────────────────────────────────
+
+# Read plugin.version_files from config.yaml as newline-separated list.
+# Supports a single path or a YAML list under plugin.version_files.
+read_version_files() {
+  [[ -f "$CONFIG_FILE" ]] || return 0
+  local in_section=false in_list=false
+  while IFS= read -r line; do
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    if [[ "$line" =~ ^plugin: ]]; then
+      in_section=true; continue
+    fi
+    if $in_section; then
+      if [[ "$line" =~ ^[a-zA-Z_] && ! "$line" =~ ^plugin: ]]; then
+        break
+      fi
+      # version_file: "path" (single)
+      if [[ "$line" =~ ^[[:space:]]+version_file:[[:space:]]*(.+) ]]; then
+        local v="${BASH_REMATCH[1]}"
+        v="${v#\"}"; v="${v%\"}"
+        echo "$v"
+        return
+      fi
+      # version_files: (list start)
+      if [[ "$line" =~ ^[[:space:]]+version_files:[[:space:]]*$ ]]; then
+        in_list=true; continue
+      fi
+      # list items: "  - path"
+      if $in_list; then
+        if [[ "$line" =~ ^[[:space:]]+-[[:space:]]*(.+) ]]; then
+          local v="${BASH_REMATCH[1]}"
+          v="${v#\"}"; v="${v%\"}"
+          echo "$v"
+        elif [[ "$line" =~ ^[[:space:]]+[a-zA-Z_] ]]; then
+          break
+        fi
+      fi
+    fi
+  done < "$CONFIG_FILE"
+}
+
+# Bump patch version in a JSON file that has "version": "X.Y.Z"
+bump_patch_json() {
+  local file="$1"
+  local cur
+  cur="$(grep -oE '"version":[[:space:]]*"[0-9]+\.[0-9]+\.[0-9]+"' "$file" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')"
+  if [[ -z "$cur" ]]; then
+    warn "Could not find version in $file — skipping bump"
+    return 1
+  fi
+  local major minor patch
+  IFS='.' read -r major minor patch <<< "$cur"
+  patch=$((patch + 1))
+  local new_ver="${major}.${minor}.${patch}"
+  sed_i "s/\"version\":[[:space:]]*\"${cur}\"/\"version\": \"${new_ver}\"/" "$file"
+  echo "$new_ver"
+}
+
+ensure_version_bumped() {
+  local project_root
+  project_root="$(cd "$SPECCLAW_DIR/.." && pwd)"
+
+  # Collect configured version files
+  local version_files=()
+  while IFS= read -r f; do
+    [[ -n "$f" ]] && version_files+=("$f")
+  done < <(read_version_files)
+
+  [[ ${#version_files[@]} -eq 0 ]] && return 0
+
+  local base_branch
+  base_branch="$(git -C "$project_root" rev-parse --abbrev-ref origin/HEAD 2>/dev/null | sed 's|origin/||')"
+  base_branch="${base_branch:-main}"
+
+  local bumped=false
+  local files_changed=()
+
+  for rel_path in "${version_files[@]}"; do
+    local abs_path="$project_root/$rel_path"
+    [[ -f "$abs_path" ]] || { warn "version file not found: $abs_path — skipping"; continue; }
+
+    # Get version on base branch
+    local base_ver
+    base_ver="$(git -C "$project_root" show "origin/${base_branch}:${rel_path}" 2>/dev/null \
+      | grep -oE '"version":[[:space:]]*"[0-9]+\.[0-9]+\.[0-9]+"' \
+      | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)" || true
+
+    # Get current version
+    local cur_ver
+    cur_ver="$(grep -oE '"version":[[:space:]]*"[0-9]+\.[0-9]+\.[0-9]+"' "$abs_path" \
+      | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)" || true
+
+    if [[ -n "$base_ver" && "$cur_ver" == "$base_ver" ]]; then
+      echo "Version unchanged in $rel_path (${cur_ver}) — bumping patch..."
+      local new_ver
+      new_ver="$(bump_patch_json "$abs_path")"
+      echo "  bumped: ${cur_ver} → ${new_ver}"
+      files_changed+=("$abs_path")
+      bumped=true
+    elif [[ -z "$base_ver" ]]; then
+      echo "Version in $rel_path: ${cur_ver} (no base branch reference — assuming OK)"
+    else
+      echo "Version already bumped in $rel_path: ${base_ver} → ${cur_ver}"
+    fi
+  done
+
+  if [[ ${#files_changed[@]} -gt 0 ]]; then
+    git -C "$project_root" add "${files_changed[@]}"
+    git -C "$project_root" commit -m "chore: bump plugin version before PR (${CHANGE_NAME})" \
+      -- "${files_changed[@]}" >/dev/null 2>&1 || true
+    echo "Version bump committed."
+  fi
+}
+
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 main() {
@@ -432,16 +546,19 @@ main() {
   enforce_test_policy "$policy"
   report_failures
 
-  # Step 4: Check gh CLI
+  # Step 4: Version bump (if plugin.version_files configured)
+  ensure_version_bumped
+
+  # Step 5: Check gh CLI
   command -v gh &>/dev/null || die "gh CLI is required for PR creation (https://cli.github.com)"
   gh auth status &>/dev/null || die "gh CLI is not authenticated — run: gh auth login"
 
-  # Step 5: Build title and body
+  # Step 6: Build title and body
   local title body
   title="$(build_pr_title)"
   body="$(build_pr_body "$policy")"
 
-  # Step 6a: Stage and commit planning artifacts (proposal.md, spec.md, design.md,
+  # Step 7a: Stage and commit planning artifacts (proposal.md, spec.md, design.md,
   # tasks.md, status.md, verify-report.md, errors.md, learnings.md) so reviewers
   # see them in the PR. specclaw-build commit only stages each task's declared
   # files; the planning trail under .specclaw/changes/<change>/ would otherwise
@@ -460,7 +577,7 @@ main() {
   # Push any new commits to the remote branch so the PR sees them
   git push 2>/dev/null || true
 
-  # Step 6b: Create PR
+  # Step 7b: Create PR
   echo "Creating PR: $title"
   local pr_url
   pr_url="$(gh pr create --base main --title "$title" --body "$body")"

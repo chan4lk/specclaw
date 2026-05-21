@@ -55,3 +55,9 @@ automation:
 # PR creation settings
 pr:
   test_policy: "none"   # set non-interactively for plugin packaging change (no app tests apply)
+
+# Plugin version files — specclaw-pr will auto-bump patch if version unchanged vs base branch
+plugin:
+  version_files:
+    - "plugins/specclaw/.claude-plugin/plugin.json"
+    - ".claude-plugin/marketplace.json"
