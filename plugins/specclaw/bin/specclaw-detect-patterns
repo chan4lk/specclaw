@@ -499,6 +499,38 @@ do_list() {
   fi
 }
 
+# Write a promoted pattern's prevention rule to the repo-local knowledge base
+write_pattern_to_knowledge() {
+  local specclaw_dir="$1" pat_id="$2" category="$3" prevention_rule="$4" keywords="$5"
+  local knowledge_dir="$specclaw_dir/knowledge"
+  local hints_file="$knowledge_dir/agent-hints.md"
+  local timestamp
+  timestamp=$(date -u +"%Y-%m-%d %H:%M UTC")
+
+  mkdir -p "$knowledge_dir"
+  if [[ ! -f "$hints_file" ]]; then
+    if [[ -f "$TEMPLATE_DIR/knowledge/agent-hints.md" ]]; then
+      cp "$TEMPLATE_DIR/knowledge/agent-hints.md" "$hints_file"
+    else
+      printf "# Agent Hints\n\nAccumulated patterns and prevention rules for this repo.\n\n---\n" > "$hints_file"
+    fi
+  fi
+
+  cat >> "$hints_file" <<EOF
+
+## [$pat_id] $category
+
+**Promoted:** $timestamp
+**Keywords:** $keywords
+
+### Prevention Rule
+$prevention_rule
+---
+EOF
+
+  echo "Written to $hints_file"
+}
+
 # ---- PROMOTE MODE ----
 do_promote() {
   local specclaw_dir="$1"
@@ -517,7 +549,7 @@ do_promote() {
     exit 1
   fi
 
-  # Check if already promoted
+  # Locate the pattern block
   local start_line end_line
   start_line=$(grep -n "^## \[$pat_id\]" "$patterns_file" | head -1 | cut -d: -f1)
   end_line=$(awk "NR>$start_line && /^---$/{print NR; exit}" "$patterns_file")
@@ -527,17 +559,28 @@ do_promote() {
 
   if sed -n "${start_line},${end_line}p" "$patterns_file" | grep -q '^\*\*Status:\*\* *promoted'; then
     echo "Pattern $pat_id is already promoted."
-  else
-    sed_i "${start_line},${end_line}s/\*\*Status:\*\* *active/\*\*Status:\*\* promoted/" "$patterns_file"
-    echo "✅ Pattern $pat_id promoted."
+    return
   fi
 
-  # Output the Prevention Rule
-  echo ""
-  echo "Prevention Rule for $pat_id:"
+  sed_i "${start_line},${end_line}s/\*\*Status:\*\* *active/\*\*Status:\*\* promoted/" "$patterns_file"
+  echo "✅ Pattern $pat_id promoted."
+
+  # Extract prevention rule, keywords, category from the block
   local in_rule=0
+  local prevention_rule=""
+  local pat_category=""
+  local pat_keywords=""
+  local kw_next=false
+
   while IFS= read -r line; do
-    if [[ "$line" == "### Prevention Rule" ]]; then
+    if [[ "$line" =~ ^##\ \[$pat_id\]\ ([a-z_]+)\ — ]]; then
+      pat_category="${BASH_REMATCH[1]}"
+    elif [[ "$line" == "### Keywords" ]]; then
+      kw_next=true
+    elif $kw_next && [[ -n "$line" && ! "$line" =~ ^### ]]; then
+      pat_keywords="$line"
+      kw_next=false
+    elif [[ "$line" == "### Prevention Rule" ]]; then
       in_rule=1
       continue
     fi
@@ -545,9 +588,19 @@ do_promote() {
       if [[ "$line" =~ ^### || "$line" == "---" || "$line" =~ ^##\  ]]; then
         break
       fi
-      [[ -n "$line" ]] && echo "$line"
+      if [[ -n "$line" ]]; then
+        prevention_rule+="$line"$'\n'
+      fi
     fi
   done < <(sed -n "${start_line},${end_line}p" "$patterns_file")
+
+  prevention_rule="${prevention_rule:-"(No prevention rule defined yet — add one with: specclaw-detect-patterns $specclaw_dir promote $pat_id)"}"
+
+  echo ""
+  echo "Prevention Rule for $pat_id:"
+  echo "$prevention_rule"
+
+  write_pattern_to_knowledge "$specclaw_dir" "$pat_id" "$pat_category" "$prevention_rule" "$pat_keywords"
 }
 
 # ---- MAIN ----

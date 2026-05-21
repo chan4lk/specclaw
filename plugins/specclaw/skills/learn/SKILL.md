@@ -21,10 +21,16 @@ Priorities: `low` | `medium` | `high`
 specclaw-log-learning .specclaw <change> --list
 ```
 
-**Promote a learning** (mark for elevation to agent prompts or this SKILL):
+**Promote a learning** to the repo-local knowledge base:
 ```bash
 specclaw-log-learning .specclaw <change> --promote <id>
 ```
+
+Promote writes to `.specclaw/knowledge/` — **never to the plugin itself**:
+- `spec_gap`, `design_gap` → `.specclaw/knowledge/spec-guidelines.md`
+- `pattern`, `best_practice`, `agent_issue` → `.specclaw/knowledge/agent-hints.md`
+
+The build agent receives `agent-hints.md` as context automatically on every task.
 
 **When to log:**
 - A build revealed a spec gap (requirements unclear or missing)

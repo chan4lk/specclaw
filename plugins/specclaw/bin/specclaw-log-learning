@@ -14,10 +14,15 @@ Usage:
 Modes:
   log (default)   Append a new learning entry
   --list          Show summary table of all learnings
-  --promote <id>  Promote a learning (e.g. L1) from pending to promoted
+  --promote <id>  Promote a learning to the repo knowledge base
 
 Categories: spec_gap, design_gap, pattern, best_practice, agent_issue
 Priorities: low, medium, high
+
+Promote writes to the repo-local knowledge base (never the plugin):
+  spec_gap, design_gap    -> .specclaw/knowledge/spec-guidelines.md
+  pattern, best_practice,
+  agent_issue             -> .specclaw/knowledge/agent-hints.md
 EOF
   exit 0
 }
@@ -38,6 +43,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 TEMPLATE_DIR="$PLUGIN_ROOT/templates"
 LEARNINGS_FILE="$SPECCLAW_DIR/learnings.md"
+KNOWLEDGE_DIR="$SPECCLAW_DIR/knowledge"
 
 # Ensure learnings.md exists, create from template if missing
 ensure_learnings() {
@@ -55,6 +61,62 @@ next_id() {
   local count
   count=$(grep -c '^## \[L' "$LEARNINGS_FILE" 2>/dev/null || true)
   echo "L$(( count + 1 ))"
+}
+
+# Route a learning category to the appropriate knowledge file
+knowledge_file_for() {
+  local category="$1"
+  case "$category" in
+    spec_gap|design_gap)
+      echo "$KNOWLEDGE_DIR/spec-guidelines.md"
+      ;;
+    *)
+      echo "$KNOWLEDGE_DIR/agent-hints.md"
+      ;;
+  esac
+}
+
+# Write a promoted learning to the repo-local knowledge base
+write_to_knowledge() {
+  local learning_id="$1" category="$2" priority="$3" detail="$4" action="$5"
+  local kfile
+  kfile=$(knowledge_file_for "$category")
+  local tpl_name
+  tpl_name="$(basename "$kfile")"
+
+  mkdir -p "$KNOWLEDGE_DIR"
+  if [[ ! -f "$kfile" ]]; then
+    if [[ -f "$TEMPLATE_DIR/knowledge/$tpl_name" ]]; then
+      cp "$TEMPLATE_DIR/knowledge/$tpl_name" "$kfile"
+    else
+      printf "# %s\n\n---\n" "$(basename "$kfile" .md | tr '-' ' ' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2); print}')" > "$kfile"
+    fi
+  fi
+
+  local timestamp
+  timestamp=$(date -u +"%Y-%m-%d %H:%M UTC")
+  local short_detail
+  short_detail="$(echo "$detail" | cut -c1-70)"
+
+  cat >> "$kfile" <<EOF
+
+## [$learning_id from $CHANGE_NAME] $category — $short_detail
+
+**Promoted:** $timestamp
+**Category:** $category
+**Priority:** $priority
+**Source change:** $CHANGE_NAME
+
+### Insight
+$detail
+
+### Recommended Action
+${action:-No action specified}
+
+---
+EOF
+
+  echo "Written to $kfile"
 }
 
 # --- List mode ---
@@ -100,29 +162,55 @@ if [[ "$3" == "--promote" ]]; then
     exit 1
   fi
 
-  # Replace status for the target entry
-  # We need to find the entry and change its status
+  # Extract entry fields before rewriting
+  entry_category=""
+  entry_priority=""
+  entry_detail=""
+  entry_action=""
+  in_target=false
+  in_detail=false
+  in_action=false
+
+  while IFS= read -r line; do
+    if [[ "$line" =~ ^##\ \[${TARGET_ID}\]\ ([a-z_]+)\ — ]]; then
+      in_target=true
+      entry_category="${BASH_REMATCH[1]}"
+    elif $in_target && [[ "$line" =~ ^##\ \[L ]]; then
+      break
+    elif $in_target; then
+      if [[ "$line" =~ ^\*\*Priority:\*\*\ (.+)$ ]]; then
+        entry_priority="${BASH_REMATCH[1]}"
+      elif [[ "$line" == "### Detail" ]]; then
+        in_detail=true; in_action=false
+      elif [[ "$line" == "### Action" ]]; then
+        in_detail=false; in_action=true
+      elif [[ "$line" =~ ^###|^--- ]]; then
+        in_detail=false; in_action=false
+      elif $in_detail && [[ -n "$line" ]]; then
+        entry_detail="$line"; in_detail=false
+      elif $in_action && [[ -n "$line" ]]; then
+        entry_action="$line"; in_action=false
+      fi
+    fi
+  done < "$LEARNINGS_FILE"
+
+  # Rewrite learnings.md with status → promoted
   in_target=false
   promoted=false
   tmp_file="${LEARNINGS_FILE}.tmp"
-  entry_lines=""
 
   while IFS= read -r line; do
     if [[ "$line" =~ ^##\ \[${TARGET_ID}\] ]]; then
       in_target=true
-      entry_lines="$line"$'\n'
       echo "$line" >> "$tmp_file"
     elif $in_target && [[ "$line" =~ ^##\ \[L ]]; then
-      # Next entry starts, stop capturing
       in_target=false
       echo "$line" >> "$tmp_file"
     elif $in_target && [[ "$line" == "**Status:** pending" ]]; then
       echo "**Status:** promoted" >> "$tmp_file"
-      entry_lines+="**Status:** promoted"$'\n'
       promoted=true
     elif $in_target; then
       echo "$line" >> "$tmp_file"
-      entry_lines+="$line"$'\n'
     else
       echo "$line" >> "$tmp_file"
     fi
@@ -131,18 +219,8 @@ if [[ "$3" == "--promote" ]]; then
   mv "$tmp_file" "$LEARNINGS_FILE"
 
   if $promoted; then
-    # Print the full entry
-    in_target=false
-    while IFS= read -r line; do
-      if [[ "$line" =~ ^##\ \[${TARGET_ID}\] ]]; then
-        in_target=true
-        echo "$line"
-      elif $in_target && [[ "$line" =~ ^##\ \[L ]]; then
-        break
-      elif $in_target; then
-        echo "$line"
-      fi
-    done < "$LEARNINGS_FILE"
+    echo "Promoted $TARGET_ID in learnings.md"
+    write_to_knowledge "$TARGET_ID" "$entry_category" "$entry_priority" "$entry_detail" "$entry_action"
   else
     echo "Warning: $TARGET_ID status was not 'pending', no change made." >&2
   fi

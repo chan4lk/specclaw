@@ -218,6 +218,16 @@ else
   echo "WARNING: agent-guardrails.md not found at $GUARDRAILS_FILE — proceeding without guardrails" >&2
 fi
 
+# --- Repo knowledge base ---
+# Accumulated hints from promoted learnings and patterns — repo-local, never plugin.
+KNOWLEDGE_HINTS_FILE="$SPECCLAW_DIR/knowledge/agent-hints.md"
+KNOWLEDGE_SECTION=""
+if [[ -f "$KNOWLEDGE_HINTS_FILE" ]]; then
+  KNOWLEDGE_SECTION="## Repo Knowledge Base
+$(cat "$KNOWLEDGE_HINTS_FILE")
+"
+fi
+
 # --- Existing file contents ---
 build_file_contents() {
   local file_list="$1"
@@ -338,7 +348,7 @@ fi
 cat <<PROMPT
 You are a coding agent implementing a specific task in the project "${PROJECT_NAME}".
 
-${GUARDRAILS_SECTION}
+${GUARDRAILS_SECTION}${KNOWLEDGE_SECTION}
 ## Your Task
 ${TASK_TITLE}
 ${TASK_NOTES}
