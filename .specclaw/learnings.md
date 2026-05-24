@@ -65,3 +65,18 @@ specclaw-verify-context fails on macOS with 'sed: 1: invalid command code f' —
 Audit specclaw-verify-context for sed -i / sed -E flag portability, similar to the v0.2.5 cross-platform sed fix. Follow-up change.
 
 ---
+
+## [L5] design_gap — Spec did not specify behavior when spec.md already exists...
+
+**When:** 2026-05-24 14:24 UTC
+**Category:** design_gap
+**Priority:** medium
+**Status:** pending
+
+### Detail
+Spec did not specify behavior when spec.md already exists and /specclaw:plan is run without the flag (EC6 implied 'don't overwrite' but FR7 said 'behaves exactly as today')
+
+### Action
+Resolved in T3 by adding explicit 'if spec.md exists, skip spec step' branch in plan/SKILL.md; should be backported into spec.md FR7 wording on a future iteration
+
+---

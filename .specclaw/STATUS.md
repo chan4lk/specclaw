@@ -1,7 +1,7 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** specclaw
-**Last Updated:** 2026-05-20 17:12 UTC
+**Last Updated:** 2026-05-24 14:24 UTC
 
 ## Active Changes
 
@@ -22,6 +22,7 @@
 - ✅ **post-build-review** — 1/1 tasks (100%) | 0 failed
 - ✅ **pr-command** — 7/7 tasks (100%) | 0 failed
 - 🔨 **service-layer-extraction** — 4/11 tasks (36%) | 0 failed
+- 🔨 **spec-author-agent** — 4/5 tasks (80%) | 0 failed
 - ✅ **verification-engine** — 4/4 tasks (100%) | 0 failed
 
 ## Pending Proposals
@@ -34,6 +35,6 @@ _None._
 
 ## Stats
 
-- **Total changes:** 17
-- **Active:** 17
+- **Total changes:** 18
+- **Active:** 18
 - **Completed:** 0
