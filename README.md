@@ -39,6 +39,7 @@ Future plugins by the same owner ship in the same `chan4lk` marketplace — you 
 
 > /specclaw:plan add-dark-mode
   Generates spec.md, design.md, tasks.md once the proposal is approved.
+  Append --author-spec to author spec.md interactively via the spec-author subagent, with an approval gate before design.md / tasks.md.
 
 > /specclaw:build add-dark-mode
   Executes tasks wave-by-wave, committing each.
@@ -79,7 +80,8 @@ All commands are namespaced under `/specclaw:`. Most are model-invokable — Cla
 |---------|---------|
 | `/specclaw:init` | Initialize `.specclaw/` in the current project |
 | `/specclaw:propose "<idea>"` | Draft a new change proposal |
-| `/specclaw:plan <change>` | Generate spec + design + tasks |
+| `/specclaw:plan <change>` | Generate spec + design + tasks (append `--author-spec` for interactive spec authoring with an approval gate) |
+| `/specclaw:author-spec <change>` | Author `spec.md` interactively via the `spec-author` subagent (5 Whys, JTBD, Inversion, Pre-mortem, MoSCoW) |
 | `/specclaw:build <change>` | Execute tasks wave-by-wave |
 | `/specclaw:learn <change> "..."` | Record a spec gap, design miss, or pattern |
 | `/specclaw:patterns` | Inspect the cross-change pattern registry |
