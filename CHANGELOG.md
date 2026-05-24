@@ -4,6 +4,17 @@ All notable changes to specclaw are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] — 2026-05-24
+
+### Fixed
+- **`specclaw-detect-patterns` path doubling.** Script formed `patterns.md`
+  and `changes/` paths as `$specclaw_dir/.specclaw/...` while every sibling
+  bin script (and `/specclaw:build`) treats `$specclaw_dir` as already being
+  `.specclaw`. Result: `scan` looked for `.specclaw/.specclaw/changes/<name>`
+  (not found) and `ensure_patterns_file` created a stray
+  `.specclaw/.specclaw/patterns.md` stub on every build. Fixed the four
+  affected lines to use `$specclaw_dir/...` directly.
+
 ## [0.4.1] — 2026-05-21
 
 ### Added

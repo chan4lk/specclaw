@@ -86,7 +86,7 @@ get_next_pat_id() {
 
 ensure_patterns_file() {
   local specclaw_dir="$1"
-  local patterns_file="$specclaw_dir/.specclaw/patterns.md"
+  local patterns_file="$specclaw_dir/patterns.md"
   if [[ ! -f "$patterns_file" ]]; then
     mkdir -p "$(dirname "$patterns_file")"
     cp "$TEMPLATE_DIR/patterns.md" "$patterns_file"
@@ -334,7 +334,7 @@ EOF
 do_scan() {
   local specclaw_dir="$1"
   local change_name="$2"
-  local changes_dir="$specclaw_dir/.specclaw/changes/$change_name"
+  local changes_dir="$specclaw_dir/changes/$change_name"
   local patterns_file
   patterns_file=$(ensure_patterns_file "$specclaw_dir")
   local today
@@ -444,7 +444,7 @@ do_list() {
     esac
   done
 
-  local patterns_file="$specclaw_dir/.specclaw/patterns.md"
+  local patterns_file="$specclaw_dir/patterns.md"
   if [[ ! -f "$patterns_file" ]]; then
     echo "No patterns recorded."
     return
@@ -535,7 +535,7 @@ EOF
 do_promote() {
   local specclaw_dir="$1"
   local pat_id="$2"
-  local patterns_file="$specclaw_dir/.specclaw/patterns.md"
+  local patterns_file="$specclaw_dir/patterns.md"
 
   pat_id=$(echo "$pat_id" | tr '[:lower:]' '[:upper:]')
 
