@@ -3,6 +3,17 @@
 # Part of the specclaw skill. Bash + coreutils only (jq optional).
 set -euo pipefail
 
+# Portable sed -i for both GNU (Linux) and BSD (macOS) sed.
+# BSD sed requires an explicit empty string after -i; GNU sed does not.
+sed_i() {
+  local expr="$1"; shift
+  if [[ "$(uname)" == "Darwin" ]]; then
+    sed -i '' "$expr" "$@"
+  else
+    sed -i "$expr" "$@"
+  fi
+}
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -221,15 +232,35 @@ awk '
   found { print }
 ' "$PROMPTS_FILE" > "$TEMPLATE_FILE"
 
-# Strip leading/trailing blank lines
-sed -i '/./,$!d' "$TEMPLATE_FILE"
-# Remove trailing blank lines
-sed -i -e :a -e '/^\s*$/{ $d; N; ba; }' "$TEMPLATE_FILE"
+# Strip leading and trailing blank lines (portable; avoids GNU-only sed addressing).
+# Buffer all lines, then emit from the first non-blank line through the last
+# non-blank line.
+TRIM_FILE=$(mktemp)
+awk '
+  { lines[NR] = $0 }
+  /[^[:space:]]/ { if (!first) first = NR; last = NR }
+  END {
+    if (first) for (i = first; i <= last; i++) print lines[i]
+  }
+' "$TEMPLATE_FILE" > "$TRIM_FILE"
+mv "$TRIM_FILE" "$TEMPLATE_FILE"
 
-# If the template is wrapped in a code fence, strip first and last fence lines
+# If the template is wrapped in a code fence, strip first and last fence lines.
 if head -1 "$TEMPLATE_FILE" | grep -qE '^\s*```'; then
-  sed -i '1d' "$TEMPLATE_FILE"
-  sed -i '${ /^```/d }' "$TEMPLATE_FILE"
+  # Drop the opening fence (line 1) via the portable sed wrapper.
+  sed_i '1d' "$TEMPLATE_FILE"
+  # Drop the closing fence (last line, only if it is a fence) via awk: the
+  # GNU "${ /^```/d }" block form is not portable to BSD sed.
+  FENCE_FILE=$(mktemp)
+  awk '
+    { lines[NR] = $0 }
+    END {
+      end = NR
+      if (lines[NR] ~ /^```/) end = NR - 1
+      for (i = 1; i <= end; i++) print lines[i]
+    }
+  ' "$TEMPLATE_FILE" > "$FENCE_FILE"
+  mv "$FENCE_FILE" "$TEMPLATE_FILE"
 fi
 
 [ -s "$TEMPLATE_FILE" ] || die "Could not extract Verify Agent template from agent-prompts.md"
