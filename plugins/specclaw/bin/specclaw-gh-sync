@@ -194,6 +194,32 @@ detect_repo() {
   REPO="${REPO%.git}"
 }
 
+# ─── Issues-enabled Detection ──────────────────────────────────────────────────
+# Echoes "true" if the repo has GitHub Issues enabled, "false" if disabled,
+# "" if the state could not be determined. Requires REPO + auth already set.
+repo_has_issues() {
+  if [[ "$AUTH_METHOD" == "gh" ]]; then
+    gh repo view "$REPO" --json hasIssuesEnabled -q '.hasIssuesEnabled' 2>/dev/null || true
+  else
+    local tmp http_code
+    tmp="$(mktemp)"
+    http_code="$(curl -s -w '%{http_code}' -o "$tmp" \
+      "https://api.github.com/repos/$REPO" \
+      -H "Authorization: token $TOKEN" \
+      -H "Accept: application/vnd.github.v3+json")"
+    if [[ "$http_code" -ge 400 ]]; then
+      rm -f "$tmp"; echo ""; return
+    fi
+    if grep -q '"has_issues"[[:space:]]*:[[:space:]]*true' "$tmp"; then
+      rm -f "$tmp"; echo "true"
+    elif grep -q '"has_issues"[[:space:]]*:[[:space:]]*false' "$tmp"; then
+      rm -f "$tmp"; echo "false"
+    else
+      rm -f "$tmp"; echo ""
+    fi
+  fi
+}
+
 # ─── Config ───────────────────────────────────────────────────────────────────
 
 find_config() {
@@ -275,7 +301,16 @@ api_create_issue() {
   esc_label="$(json_escape "$label")"
 
   if [[ "$AUTH_METHOD" == "gh" ]]; then
-    gh issue create --repo "$REPO" --title "$title" --body "$body" --label "$label" 2>&1
+    # Capture output AND exit code: on failure gh writes an error to stderr that
+    # must NOT be returned as a "response" (the caller scrapes /issues/<n> from
+    # it and would fabricate a bogus issue number — e.g. when Issues are
+    # disabled). Fail loudly instead.
+    local out rc=0
+    out="$(gh issue create --repo "$REPO" --title "$title" --body "$body" --label "$label" 2>&1)" || rc=$?
+    if [[ $rc -ne 0 ]]; then
+      die "gh issue create failed: $out"
+    fi
+    echo "$out"
   else
     api_curl POST "https://api.github.com/repos/$REPO/issues" \
       "{\"title\":\"$esc_title\",\"body\":\"$esc_body\",\"labels\":[\"$esc_label\"]}"
@@ -603,6 +638,16 @@ cmd_create() {
 
   detect_auth "$config_file"
   detect_repo "$config_file"
+
+  # Don't attempt creation if the repo has Issues disabled — gh/curl would fail
+  # and we'd otherwise risk recording a fabricated issue number. Skip gracefully
+  # (sync is best-effort; the lifecycle continues without a tracking issue).
+  local has_issues
+  has_issues="$(repo_has_issues)"
+  if [[ "$has_issues" == "false" ]]; then
+    warn "GitHub Issues are disabled for $REPO — skipping issue creation (no tracking issue recorded)."
+    exit 0
+  fi
 
   local label
   label="$(get_label "$config_file")"
