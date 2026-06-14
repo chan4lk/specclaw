@@ -5,7 +5,7 @@ version: 1
 project:
   name: "specclaw"
   description: "Spec-driven development framework for OpenClaw agents"
-  repo: "chanbistec/specclaw"
+  repo: "chan4lk/specclaw"
 
 # Model routing — use the best model for each phase
 models:
@@ -40,7 +40,7 @@ notifications:
 # GitHub Issues integration
 github:
   sync: true
-  repo: "chanbistec/specclaw"
+  repo: "chan4lk/specclaw"
   token: ""
   label: "specclaw"
 
