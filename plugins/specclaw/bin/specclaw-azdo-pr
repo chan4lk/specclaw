@@ -212,16 +212,21 @@ build_pr_title() {
   local proposal_file="$CHANGE_DIR/proposal.md"
   local summary=""
   if [[ -f "$proposal_file" ]]; then
+    # Derive the title from the proposal H1: "# Proposal: <real title>"
     while IFS= read -r line; do
-      [[ -z "${line// /}" ]] && continue
-      [[ "$line" =~ ^# ]]    && continue
-      [[ "$line" =~ ^\*\* ]] && continue
-      summary="$line"; break
+      if [[ "$line" =~ ^#[[:space:]]*Proposal: ]]; then
+        summary="${line#*Proposal:}"
+        # trim leading/trailing whitespace
+        summary="${summary#"${summary%%[![:space:]]*}"}"
+        summary="${summary%"${summary##*[![:space:]]}"}"
+        break
+      fi
     done < "$proposal_file"
   fi
   local title
   if [[ -n "$summary" ]]; then
     summary="${summary//\*/}"; summary="${summary//\`/}"
+    summary="${summary//$'\r'/}"; summary="${summary//$'\n'/ }"
     title="[specclaw] ${CHANGE_NAME}: ${summary}"
   else
     title="[specclaw] ${CHANGE_NAME}"
@@ -305,10 +310,22 @@ adoapi_post() {
   local url="https://dev.azure.com/${AZDO_ORG}/${AZDO_PROJECT}/_apis/${path}"
   local auth
   auth="$(printf ':%s' "$AZDO_TOKEN" | base64 -w0 2>/dev/null || printf ':%s' "$AZDO_TOKEN" | base64)"
-  curl -sf -X POST "$url" \
+  # No -f: with --fail curl exits 22 and discards the body, losing ADO error
+  # diagnostics (e.g. TF401179, HTTP 409). Capture body + status via -w and split.
+  local raw code body
+  raw="$(curl -s -X POST "$url" \
     -H "Authorization: Basic ${auth}" \
     -H "Content-Type: application/json" \
-    -d "$data"
+    -d "$data" \
+    -w $'\n%{http_code}')"
+  code="${raw##*$'\n'}"
+  body="${raw%$'\n'*}"
+  if [[ "$code" =~ ^2[0-9][0-9]$ ]]; then
+    printf '%s' "$body"
+  else
+    echo "ADO HTTP ${code}: ${body}" >&2
+    return 1
+  fi
 }
 
 adoapi_get() {

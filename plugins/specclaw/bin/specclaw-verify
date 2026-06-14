@@ -96,13 +96,18 @@ cmd_collect() {
   [ -f "$tasks_file" ] || die "tasks.md not found at ${tasks_file}"
 
   # 1. Extract acceptance criteria
+  # Tolerant match: optional "- [ ] " or "- "/"* " bullet, optional "**bold**",
+  # then "AC" + optional "-" + a digit. Accepts e.g.
+  #   - [ ] **AC-1:** text      - **AC1** — text      - [ ] AC-2 text
   local ac_lines=()
   while IFS= read -r line; do
-    # Strip the checkbox prefix and bold markers to get clean AC text
+    # Strip optional bullet/checkbox prefix and bold markers to get clean AC text
     local clean
-    clean=$(printf '%s' "$line" | sed 's/^[[:space:]]*- \[ \] \*\*//' | sed 's/^[[:space:]]*- \[ \] //' | sed 's/\*\*$//' | sed 's/\*\*//')
+    clean=$(printf '%s' "$line" \
+      | sed -E 's/^[[:space:]]*([-*][[:space:]]+)?(\[ \][[:space:]]+)?//' \
+      | sed 's/\*\*//g')
     ac_lines+=("$clean")
-  done < <(grep -E '^\s*- \[ \] (\*\*)?AC-' "$spec_file" || true)
+  done < <(grep -E '^[[:space:]]*([-*][[:space:]]+)?(\[ \][[:space:]]+)?(\*\*)?AC-?[0-9]' "$spec_file" || true)
 
   # 2. Collect file paths from tasks.md Files: fields
   local file_paths=()
@@ -123,7 +128,7 @@ cmd_collect() {
         [ -n "$p" ] && file_paths+=("$p")
       done
     fi
-  done < <(grep -iE '^\s*\*?\*?Files\*?\*?\s*:' "$tasks_file" || true)
+  done < <(grep -iE '^[[:space:]]*([-*][[:space:]]+)?\*?\*?Files\*?\*?[[:space:]]*:' "$tasks_file" || true)
 
   # Deduplicate file paths
   local unique_paths=()
@@ -293,7 +298,25 @@ cmd_update_status() {
   local change_dir="${specclaw_dir}/changes/${change_name}"
   local status_file="${change_dir}/status.md"
 
-  [ -f "$status_file" ] || die "status.md not found at ${status_file}"
+  # Self-heal: if status.md is absent, create it from the template so the
+  # Verify-row update below can proceed.
+  if [ ! -f "$status_file" ]; then
+    local template_file="$(cd "$(dirname "$0")/.." && pwd)/templates/status.md"
+    if [ -f "$template_file" ]; then
+      mkdir -p "$change_dir"
+      local today
+      today=$(date +%Y-%m-%d)
+      sed -e "s/{{title}}/${change_name}/g" \
+          -e "s/{{change_name}}/${change_name}/g" \
+          -e "s/{{date}}/${today}/g" \
+          -e "s/{{updated}}/${today}/g" \
+          -e "s/{{[a-zA-Z_]*}}/-/g" \
+          "$template_file" > "$status_file"
+      warn "status.md not found; created from template at ${status_file}"
+    else
+      die "status.md not found at ${status_file} and template missing at ${template_file}"
+    fi
+  fi
 
   # Determine status emoji
   local status_text

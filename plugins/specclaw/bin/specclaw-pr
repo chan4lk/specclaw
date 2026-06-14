@@ -277,21 +277,27 @@ build_pr_title() {
   local summary=""
 
   if [[ -f "$proposal_file" ]]; then
-    # First non-blank, non-header, non-bold, non-status line
+    # Derive summary from the proposal title: "# Proposal: <title>"
     while IFS= read -r line; do
-      [[ -z "${line// /}" ]] && continue
-      [[ "$line" =~ ^# ]] && continue
-      [[ "$line" =~ ^\*\* ]] && continue
-      summary="$line"
-      break
+      if [[ "$line" =~ ^#[[:space:]]*Proposal: ]]; then
+        # Strip leading "#" and "Proposal:" prefix, then trim whitespace
+        summary="${line#\#}"
+        summary="${summary#"${summary%%[![:space:]]*}"}"   # ltrim
+        summary="${summary#Proposal:}"
+        summary="${summary#"${summary%%[![:space:]]*}"}"   # ltrim
+        summary="${summary%"${summary##*[![:space:]]}"}"   # rtrim
+        break
+      fi
     done < "$proposal_file"
   fi
 
   local title
   if [[ -n "$summary" ]]; then
-    # Strip markdown
+    # Strip markdown and guard against stray CR/newline
     summary="${summary//\*/}"
     summary="${summary//\`/}"
+    summary="${summary//$'\r'/}"
+    summary="${summary//$'\n'/}"
     title="[specclaw] ${CHANGE_NAME}: ${summary}"
   else
     title="[specclaw] ${CHANGE_NAME}"
