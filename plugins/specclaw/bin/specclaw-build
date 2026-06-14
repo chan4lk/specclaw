@@ -341,7 +341,9 @@ cmd_finalize() {
 
     if [[ "$current_branch" == "$branch_name" ]]; then
       # Switch to main and merge
-      if git checkout "$main_branch" 2>/dev/null; then
+      local checkout_err checkout_rc=0
+      checkout_err="$(git checkout "$main_branch" 2>&1 >/dev/null)" || checkout_rc=$?
+      if [[ $checkout_rc -eq 0 ]]; then
         if git merge --no-ff "$branch_name" -m "Merge $branch_name" 2>&1; then
           merged=true
           # Clean up feature branch
@@ -353,7 +355,7 @@ cmd_finalize() {
           errors+=("Merge conflict merging $branch_name into $main_branch — manual resolution required")
         fi
       else
-        errors+=("Failed to checkout $main_branch for merge")
+        errors+=("Failed to checkout $main_branch for merge: $checkout_err")
       fi
     else
       warn "Not on feature branch ($current_branch != $branch_name) — skipping merge"
