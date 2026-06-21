@@ -54,6 +54,8 @@ github:
 # Workflow enforcement
 workflow:
   strict: true                     # Enforce phase prerequisites (disable for rapid prototyping)
+  code_review: false               # Spawn code-reviewer agent during /specclaw:verify
+  code_review_block: false         # Block /specclaw:pr if code review verdict is CHANGES_REQUESTED
 
 # Automation
 automation:

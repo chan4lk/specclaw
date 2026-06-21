@@ -36,9 +36,21 @@ Constructs the verification agent's context payload from the evidence and the Ve
 
 Spawn a verification agent using the context payload from Step 2. Use the model from `config.yaml` `models.review` (default: `anthropic/claude-sonnet-4-5`). Wait for completion.
 
+## Step 3.5 — Code review (conditional)
+
+Read `workflow.code_review` from `.specclaw/config.yaml`. If `false` or not set, skip this step entirely (no output, no error).
+
+If `true`:
+1. Read `.specclaw/changes/<change>/design.md` — use empty string if absent.
+2. Read `.specclaw/changes/<change>/tasks.md` — use empty string if absent.
+3. Spawn the `code-reviewer` agent using the model from `config.yaml` `models.review` (default: `anthropic/claude-sonnet-4-6`). Pass: changed files content (from Step 1), spec content, design content, tasks content, change name.
+4. Write the agent's output to `.specclaw/changes/<change>/review-report.md` (overwrite if exists).
+5. Extract the verdict line from `review-report.md` and append a one-line summary to the verify-report that will be written in Step 4:
+   `**Code Review:** <verdict> — <N findings: X BLOCK, Y WARN, Z NOTE>`
+
 ## Step 4 — Save report
 
-Save the agent's output as `.specclaw/changes/<change>/verify-report.md`.
+Save the agent's output as `.specclaw/changes/<change>/verify-report.md`. If Step 3.5 ran, append the code review summary line from Step 3.5 to the end of this report.
 
 ## Step 5 — Update status
 

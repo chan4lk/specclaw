@@ -12,7 +12,7 @@ Five tasks in two waves. Wave 1 creates the agent and prompt template (independe
 
 ### Wave 1 — Create agent and prompt template
 
-- [ ] `T1` — Create `code-reviewer` subagent
+- [x] `T1` — Create `code-reviewer` subagent
   - Files: `plugins/specclaw/agents/code-reviewer.md` (new)
   - Estimate: medium
   - Depends: —
@@ -27,7 +27,7 @@ Five tasks in two waves. Wave 1 creates the agent and prompt template (independe
     (g) Output format — exact review-report.md template from design.md
     (h) Guardrails — reference `references/agent-guardrails.md` Rules 2 and 3
 
-- [ ] `T2` — Add Code Reviewer Agent prompt template to `agent-prompts.md`
+- [x] `T2` — Add Code Reviewer Agent prompt template to `agent-prompts.md`
   - Files: `plugins/specclaw/references/agent-prompts.md` (edit)
   - Estimate: small
   - Depends: —
@@ -38,7 +38,7 @@ Five tasks in two waves. Wave 1 creates the agent and prompt template (independe
 
 ### Wave 2 — Wire into verify/pr, config, docs
 
-- [ ] `T3` — Add Step 3.5 to `/specclaw:verify` SKILL.md
+- [x] `T3` — Add Step 3.5 to `/specclaw:verify` SKILL.md
   - Files: `plugins/specclaw/skills/verify/SKILL.md` (edit)
   - Estimate: small
   - Depends: T1
@@ -48,7 +48,7 @@ Five tasks in two waves. Wave 1 creates the agent and prompt template (independe
     write output to `review-report.md`, extract verdict line and append one-line summary to verify-report.md.
     Format of appended line: `**Code Review:** <verdict> — <N findings: X BLOCK, Y WARN, Z NOTE>`
 
-- [ ] `T4` — Add code_review_block pre-flight check to `/specclaw:pr` SKILL.md
+- [x] `T4` — Add code_review_block pre-flight check to `/specclaw:pr` SKILL.md
   - Files: `plugins/specclaw/skills/pr/SKILL.md` (edit)
   - Estimate: small
   - Depends: T1
@@ -56,7 +56,7 @@ Five tasks in two waves. Wave 1 creates the agent and prompt template (independe
     If `workflow.code_review_block: true`: read review-report.md; if verdict is CHANGES_REQUESTED abort with BLOCK findings list;
     if review-report.md missing, warn and continue (don't hard-block for missing file — that would be too aggressive).
 
-- [ ] `T5` — Add config flags and update README
+- [x] `T5` — Add config flags and update README
   - Files: `plugins/specclaw/templates/config.yaml` (edit), `README.md` (edit)
   - Estimate: small
   - Depends: —

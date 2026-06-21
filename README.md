@@ -135,7 +135,18 @@ automation:
   auto_verify: true
   auto_archive: false
   max_tasks_per_run: 5
+
+workflow:
+  strict: true
+  code_review: false               # Spawn code-reviewer agent on /specclaw:verify
+  code_review_block: false         # Block /specclaw:pr if code review finds BLOCK issues
 ```
+
+### Code Review
+
+Set `workflow.code_review: true` to enable an automated code review step inside `/specclaw:verify`. After the acceptance-criteria check, a `code-reviewer` agent reviews changed files across 10 dimensions (correctness, security, YAGNI, one-liner opportunities, naming, complexity, test quality, design adherence, scope creep, dead code) and writes `review-report.md` with `APPROVED`, `CHANGES_REQUESTED`, or `APPROVED_WITH_NOTES`.
+
+Set `workflow.code_review_block: true` to hard-block `/specclaw:pr` when the review verdict is `CHANGES_REQUESTED`. Defaults to `false` so existing projects are unaffected.
 
 ## Workflow
 

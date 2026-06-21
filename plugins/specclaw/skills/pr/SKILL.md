@@ -8,7 +8,10 @@ description: Create a GitHub pull request for a verified change. Reads verify-re
 
 Create a GitHub PR for a verified change. Requires `verify-report.md` (build + verify must complete first).
 
-1. **Validate:** `specclaw-validate-change .specclaw <change> pr`. Exits with a warning (exit 0) if a PR already exists for this change. Fails if `verify-report.md` is missing.
+1. **Code review block (conditional):** Read `workflow.code_review_block` from `.specclaw/config.yaml`. If `true`:
+   - Check if `.specclaw/changes/<change>/review-report.md` exists. If it does not exist, warn: "code_review_block is enabled but no review-report.md found — run /specclaw:verify first" and continue.
+   - If `review-report.md` exists and verdict is `CHANGES_REQUESTED`, **abort** with: "PR blocked: code review verdict is CHANGES_REQUESTED. Fix BLOCK findings in review-report.md then re-run /specclaw:verify." List all BLOCK findings from the report before aborting.
+2. **Validate:** `specclaw-validate-change .specclaw <change> pr`. Exits with a warning (exit 0) if a PR already exists for this change. Fails if `verify-report.md` is missing.
 2. **Run:** `specclaw-pr .specclaw <change>`
    - **First run:** prompts for test policy (`none|unit|e2e|both`), saves it to `config.yaml` under `pr.test_policy`. Never prompts again.
    - **Test enforcement:** if policy is not `none`, verifies `build.test_command` is set and that `verify-report.md` contains test evidence. Fails (strict) or warns (non-strict) if evidence is missing.
