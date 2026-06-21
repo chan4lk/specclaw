@@ -12,6 +12,16 @@ You can use Bash freely (auto permission mode). Useful binaries on PATH: git, gh
 - Open a pull request with `gh pr create --base main --title "..." --body "..."`. Reply in Discord with the PR URL.
 - For small fixes, request review in the PR body or `@mention` the operator.
 
+# Version bump rule
+
+**Always bump the plugin version before opening a PR.** This applies to every PR — features, fixes, and chores alike.
+
+Version files to bump (patch increment `X.Y.Z → X.Y.Z+1`):
+- `plugins/specclaw/.claude-plugin/plugin.json` — `"version"` field
+- `.claude-plugin/marketplace.json` — `"version"` field inside the `"plugins"` array entry for `"specclaw"`
+
+Both files must stay in sync. Commit the bump as a separate commit (`chore: bump version to X.Y.Z`) before or as part of the PR branch. `specclaw-pr` will auto-bump via `ensure_version_bumped()` if `plugin.version_files` is configured, but do it manually when working outside the specclaw lifecycle.
+
 # Cloning additional repos
 
 If you need to look at another repo: `git clone <url>` into a sibling directory under `~/.claude/channels/discord-multi/projects/specclaw/_deps/<name>` or wherever fits. Don't pollute this working tree with unrelated code.
