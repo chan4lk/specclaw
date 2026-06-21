@@ -412,15 +412,44 @@ EOF
 save_pr_url() {
   local url="$1"
   local status_file="$CHANGE_DIR/status.md"
+  local today
+  today="$(date +%Y-%m-%d)"
 
-  if [[ -f "$status_file" ]]; then
-    echo "**PR:** $url" >> "$status_file"
-  else
+  if [[ ! -f "$status_file" ]]; then
     cat > "$status_file" <<EOF
 # Status: ${CHANGE_NAME}
 
+**Status:** pr-raised
 **PR:** $url
+**Last Updated:** $today
 EOF
+    return
+  fi
+
+  # Update **Last Updated:** if present, otherwise append it
+  if grep -q '^\*\*Last Updated:\*\*' "$status_file"; then
+    sed_i "s|^\*\*Last Updated:\*\*.*|**Last Updated:** $today|" "$status_file"
+  fi
+
+  # Update **Status:** field (simple format) to pr-raised if present
+  if grep -q '^\*\*Status:\*\*' "$status_file"; then
+    sed_i "s|^\*\*Status:\*\*.*|**Status:** pr-raised|" "$status_file"
+  fi
+
+  # Update PR row in the progress table if present; add it after Verify row if absent
+  if grep -qE '^\|[[:space:]]*PR[[:space:]]*\|' "$status_file"; then
+    sed_i "s|^\(| *PR *|\).*|\1 ✅ Raised | $url |" "$status_file"
+  elif grep -qE '^\|[[:space:]]*Verify[[:space:]]*\|' "$status_file"; then
+    # Insert PR row after the Verify row
+    sed_i "/^\|[[:space:]]*Verify[[:space:]]*\|/a\| PR     | ✅ Raised | $url |" "$status_file"
+  else
+    # Neither table row nor Status field — just append PR line
+    echo "**PR:** $url" >> "$status_file"
+  fi
+
+  # If PR URL line doesn't exist yet (non-table simple format), ensure it's present
+  if ! grep -q '^\*\*PR:\*\*' "$status_file" && ! grep -qE '^\|[[:space:]]*PR[[:space:]]*\|' "$status_file"; then
+    echo "**PR:** $url" >> "$status_file"
   fi
 }
 
@@ -569,9 +598,11 @@ main() {
   # see them in the PR. specclaw-build commit only stages each task's declared
   # files; the planning trail under .specclaw/changes/<change>/ would otherwise
   # never land in the PR. Skip .specclaw/.env (already gitignored).
+  # Use `git status --porcelain` (not `git diff HEAD`) so untracked new files
+  # are detected — `git diff HEAD` only shows changes to already-tracked files.
   local change_path="${SPECCLAW_DIR}/changes/${CHANGE_NAME}"
-  if [[ -d "$change_path" ]] && git diff --quiet HEAD -- "$change_path" 2>/dev/null; then
-    : # nothing to add (working tree clean for this dir)
+  if [[ -d "$change_path" ]] && [[ -z "$(git status --porcelain "$change_path" 2>/dev/null)" ]]; then
+    : # nothing to add (working tree clean for this dir — no modified or untracked files)
   elif [[ -d "$change_path" ]]; then
     echo "Staging .specclaw/changes/${CHANGE_NAME}/ artifacts for the PR…"
     git add "$change_path" 2>/dev/null || true
