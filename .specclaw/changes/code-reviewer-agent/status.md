@@ -1,4 +1,4 @@
 # Status: code-reviewer-agent
 
-**Status:** draft
+**Status:** approved
 **GitHub Issue:** —
