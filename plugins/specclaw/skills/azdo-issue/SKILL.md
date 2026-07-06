@@ -1,5 +1,5 @@
 ---
-description: Create or update an Azure Boards Work Item that mirrors this proposal. Targets Azure DevOps Boards (Features / User Stories / Tasks / Bugs / Epics) using the credentials from /specclaw:auth-azdo. Mirrors /specclaw:issue (Jira) and the GitHub Issues sync but for ADO Boards. Requires `azdo.boards.sync: true` in config.yaml.
+description: "Create or update an Azure Boards Work Item that mirrors this proposal. Targets Azure DevOps Boards (Features / User Stories / Tasks / Bugs / Epics) using the credentials from /specclaw:auth-azdo. Mirrors /specclaw:issue (Jira) and the GitHub Issues sync but for ADO Boards. Requires `azdo.boards.sync: true` in config.yaml."
 ---
 
 # specclaw azdo-issue
