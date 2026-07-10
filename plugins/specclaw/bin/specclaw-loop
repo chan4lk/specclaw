@@ -1,0 +1,339 @@
+#!/usr/bin/env bash
+# specclaw-loop — Autonomous build→verify→review loop controller for specclaw
+# Part of the specclaw skill. Bash + git + coreutils only (no jq dependency).
+# The controller owns all mechanical loop logic: gate evaluation, signature
+# computation, progress/regression/oscillation detection, halt decisions, and
+# state/log persistence. The /specclaw:loop skill orchestrates the LLM steps.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+
+usage() {
+  cat <<'EOF'
+Usage: specclaw-loop <subcommand> [options]
+
+Subcommands (implemented):
+  init          <specclaw_dir> <change_name>
+                Seed loop-state.json and loop-log.md for a change. Idempotent.
+
+  gates         <specclaw_dir> <change_name>
+                Evaluate the four local gates over the whole change and emit a
+                single JSON object to stdout:
+                  {all_green, passing_count, gates:[{name,green,errors,files}]}
+
+  done          <specclaw_dir> <change_name>
+                Print the final PASS summary block for an operator notification.
+
+Subcommands (planned — not yet implemented):
+  decide        Check caps / no-progress / regression / oscillation → continue|halt.
+  guard-tests   Reject a fix turn that touched test files (reward-hack guard).
+  log-turn      Append a turn entry to loop-log.md and update loop-state.json.
+  escalate      Commit partial work, keep worktree, emit halt notification.
+  ci-poll       Poll remote CI checks (gh / az) for the opt-in outer loop.
+
+Options:
+  -h, --help    Show this help message
+EOF
+}
+
+die() { echo "ERROR: $*" >&2; exit 1; }
+warn() { echo "WARN: $*" >&2; }
+
+# JSON-escape a string: backslashes, quotes, newlines, tabs, carriage returns
+json_escape() {
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  s="${s//$'\n'/\\n}"
+  s="${s//$'\r'/\\r}"
+  s="${s//$'\t'/\\t}"
+  printf '%s' "$s"
+}
+
+# Read a YAML value (simple single-line scalar) from config.yaml
+# Usage: yaml_val <file> <dotted.key>
+# e.g. yaml_val config.yaml build.test_command
+yaml_val() {
+  local file="$1" key="$2"
+  local field="${key##*.}"
+  local val
+  # Match line, strip "key:" prefix, strip inline comment (everything from
+  # whitespace+# to EOL), strip trailing whitespace, then strip surrounding quotes.
+  val=$(grep -E "^[[:space:]]*${field}:" "$file" 2>/dev/null | head -1 \
+        | sed -E 's/^[^:]*:[[:space:]]*//' \
+        | sed -E 's/[[:space:]]+#.*$//' \
+        | sed -E 's/[[:space:]]+$//' \
+        | sed 's/^"//' | sed 's/"$//' | sed "s/^'//" | sed "s/'$//")
+  printf '%s' "$val"
+}
+
+# Run a command, capture output (capped at 100 lines), return exit code.
+# Usage: run_capped <varname_output> <command_string>
+# Sets: <varname_output> to captured output, returns command exit code.
+run_capped() {
+  local -n _out_ref="$1"
+  local cmd="$2"
+  local tmpfile
+  tmpfile=$(mktemp)
+  local rc=0
+  eval "$cmd" >"$tmpfile" 2>&1 || rc=$?
+  _out_ref=$(head -100 "$tmpfile")
+  local total
+  total=$(wc -l < "$tmpfile")
+  if [ "$total" -gt 100 ]; then
+    _out_ref="${_out_ref}
+... (truncated, ${total} total lines)"
+  fi
+  rm -f "$tmpfile"
+  return "$rc"
+}
+
+# ─── Subcommand: init ──────────────────────────────────────────────────────────
+
+cmd_init() {
+  local specclaw_dir="$1"
+  local change_name="$2"
+  local change_dir="${specclaw_dir}/changes/${change_name}"
+  local state_file="${change_dir}/loop-state.json"
+  local log_file="${change_dir}/loop-log.md"
+
+  mkdir -p "$change_dir"
+
+  # loop-state.json — do not clobber an existing state file.
+  if [ -f "$state_file" ]; then
+    echo "loop-state.json already exists at ${state_file} (not clobbered)"
+  else
+    printf '{"turn": 0, "passing_count": 0, "sig_history": [], "ci_turn": 0}\n' > "$state_file"
+    echo "Seeded ${state_file}"
+  fi
+
+  # loop-log.md — do not clobber an existing log.
+  if [ -f "$log_file" ]; then
+    echo "loop-log.md already exists at ${log_file} (not clobbered)"
+  else
+    local now
+    now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    {
+      printf '# Loop Log: %s\n\n' "$change_name"
+      printf '_Created: %s_\n' "$now"
+    } > "$log_file"
+    echo "Seeded ${log_file}"
+  fi
+}
+
+# ─── Subcommand: gates ─────────────────────────────────────────────────────────
+
+# Extract a normalized PASS/FAIL/PARTIAL verdict token from a report file.
+# Prints the token (PASS|FAIL|PARTIAL|UNKNOWN) to stdout.
+extract_verdict() {
+  local file="$1"
+  local raw
+  raw=$(grep -ioE '\b(PASS|FAIL|PARTIAL)\b' "$file" 2>/dev/null | head -1 | tr '[:lower:]' '[:upper:]') || true
+  [ -z "$raw" ] && raw="UNKNOWN"
+  printf '%s' "$raw"
+}
+
+cmd_gates() {
+  local specclaw_dir="$1"
+  local change_name="$2"
+  local change_dir="${specclaw_dir}/changes/${change_name}"
+  local config_file="${specclaw_dir}/config.yaml"
+  local tasks_file="${change_dir}/tasks.md"
+  local verify_file="${change_dir}/verify-report.md"
+  local review_file="${change_dir}/review-report.md"
+
+  local parse_tasks="${SCRIPT_DIR}/specclaw-parse-tasks"
+
+  # ── Gate 1: tasks-complete ──────────────────────────────────────────────────
+  # Green iff zero pending AND zero failed tasks in tasks.md.
+  local g1_green=true g1_errors="" g1_files=""
+  if [ ! -f "$tasks_file" ]; then
+    g1_green=false
+    g1_errors="tasks.md not found at ${tasks_file}"
+  else
+    # Collect incomplete task ids (pending + failed). We capture output and exit
+    # codes explicitly so set -e does not abort on a nonzero parse result.
+    local pending_json="" failed_json="" rc=0
+    pending_json=$("$parse_tasks" --status pending "$tasks_file" 2>/dev/null) || rc=$?
+    failed_json=$("$parse_tasks" --status failed "$tasks_file" 2>/dev/null) || rc=$?
+
+    # Extract "id":"Tn" tokens from both filtered arrays.
+    local ids=""
+    ids=$(printf '%s\n%s\n' "$pending_json" "$failed_json" \
+          | grep -oE '"id"[[:space:]]*:[[:space:]]*"[^"]+"' \
+          | sed -E 's/.*"id"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/' \
+          | sort -u | tr '\n' ' ' | sed -E 's/[[:space:]]+$//') || true
+
+    if [ -n "$ids" ]; then
+      g1_green=false
+      g1_errors="incomplete tasks: ${ids}"
+    fi
+  fi
+
+  # ── Gate 2: tests ───────────────────────────────────────────────────────────
+  # Run build.{test,lint,build}_command from config.yaml. Unset → skipped
+  # (trivially green). Green iff every set command exits 0. Run from repo root.
+  local g2_green=true g2_errors="" g2_files=""
+  local test_cmd="" lint_cmd="" build_cmd=""
+  if [ -f "$config_file" ]; then
+    test_cmd=$(yaml_val "$config_file" "build.test_command")
+    lint_cmd=$(yaml_val "$config_file" "build.lint_command")
+    build_cmd=$(yaml_val "$config_file" "build.build_command")
+  fi
+
+  # Resolve the repo root to run commands from; fall back to cwd.
+  local repo_root
+  repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || repo_root="$(pwd)"
+
+  local cmd_name cmd
+  for pair in "test:${test_cmd}" "lint:${lint_cmd}" "build:${build_cmd}"; do
+    cmd_name="${pair%%:*}"
+    cmd="${pair#*:}"
+    [ -z "$cmd" ] && continue   # unset → skipped, trivially green
+    local out="" rc=0
+    ( cd "$repo_root" && eval "$cmd" ) >/tmp/_specclaw_loop_gate_$$ 2>&1 || rc=$?
+    out=$(head -40 /tmp/_specclaw_loop_gate_$$)
+    rm -f /tmp/_specclaw_loop_gate_$$
+    if [ "$rc" -ne 0 ]; then
+      g2_green=false
+      local snippet
+      snippet=$(printf '%s' "$out" | tail -20)
+      if [ -n "$g2_errors" ]; then
+        g2_errors="${g2_errors}
+${cmd_name}_command failed (exit ${rc}): ${snippet}"
+      else
+        g2_errors="${cmd_name}_command failed (exit ${rc}): ${snippet}"
+      fi
+    fi
+  done
+
+  # ── Gate 3: verify ──────────────────────────────────────────────────────────
+  # Read verify-report.md; green iff verdict = PASS. Absent → not green.
+  local g3_green=false g3_errors="" g3_files="$verify_file"
+  if [ ! -f "$verify_file" ]; then
+    g3_green=false
+    g3_errors="no verify-report.md yet"
+  else
+    local verdict
+    verdict=$(extract_verdict "$verify_file")
+    if [ "$verdict" = "PASS" ]; then
+      g3_green=true
+    else
+      g3_green=false
+      g3_errors="verify verdict: ${verdict}"
+    fi
+  fi
+
+  # ── Gate 4: review ──────────────────────────────────────────────────────────
+  # Read review-report.md; green iff zero BLOCK findings. Absent → green iff
+  # workflow.code_review is false (review not required), else not green.
+  local g4_green=true g4_errors="" g4_files="$review_file"
+  local code_review=""
+  [ -f "$config_file" ] && code_review=$(yaml_val "$config_file" "workflow.code_review")
+  if [ ! -f "$review_file" ]; then
+    if [ "$code_review" = "true" ]; then
+      g4_green=false
+      g4_errors="no review-report.md yet"
+    else
+      g4_green=true
+    fi
+  else
+    local block_count
+    block_count=$(grep -oE '\bBLOCK\b' "$review_file" 2>/dev/null | wc -l | tr -d ' ') || true
+    [ -z "$block_count" ] && block_count=0
+    if [ "$block_count" -eq 0 ]; then
+      g4_green=true
+    else
+      g4_green=false
+      g4_errors="${block_count} BLOCK-severity finding(s)"
+    fi
+  fi
+
+  # ── Aggregate ───────────────────────────────────────────────────────────────
+  local passing_count=0
+  $g1_green && passing_count=$((passing_count + 1))
+  $g2_green && passing_count=$((passing_count + 1))
+  $g3_green && passing_count=$((passing_count + 1))
+  $g4_green && passing_count=$((passing_count + 1))
+
+  local all_green=false
+  if $g1_green && $g2_green && $g3_green && $g4_green; then
+    all_green=true
+  fi
+
+  # ── Emit JSON ───────────────────────────────────────────────────────────────
+  local output
+  output=$(cat <<ENDJSON
+{
+  "all_green": ${all_green},
+  "passing_count": ${passing_count},
+  "gates": [
+    {"name": "tasks-complete", "green": ${g1_green}, "errors": "$(json_escape "$g1_errors")", "files": "$(json_escape "$g1_files")"},
+    {"name": "tests", "green": ${g2_green}, "errors": "$(json_escape "$g2_errors")", "files": "$(json_escape "$g2_files")"},
+    {"name": "verify", "green": ${g3_green}, "errors": "$(json_escape "$g3_errors")", "files": "$(json_escape "$g3_files")"},
+    {"name": "review", "green": ${g4_green}, "errors": "$(json_escape "$g4_errors")", "files": "$(json_escape "$g4_files")"}
+  ]
+}
+ENDJSON
+)
+
+  printf '%s\n' "$output"
+}
+
+# ─── Subcommand: done ──────────────────────────────────────────────────────────
+
+cmd_done() {
+  local specclaw_dir="$1"
+  local change_name="$2"
+  local change_dir="${specclaw_dir}/changes/${change_name}"
+  local state_file="${change_dir}/loop-state.json"
+
+  # Read turn count from loop-state.json (grep, no jq).
+  local turn="unknown"
+  if [ -f "$state_file" ]; then
+    local t
+    t=$(grep -oE '"turn"[[:space:]]*:[[:space:]]*[0-9]+' "$state_file" 2>/dev/null \
+        | head -1 | grep -oE '[0-9]+' || true)
+    [ -n "$t" ] && turn="$t"
+  fi
+
+  cat <<EOF
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ LOOP COMPLETE — ${change_name}
+All gates green (tasks-complete · tests · verify · review).
+Turns: ${turn}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EOF
+}
+
+# ─── Main ─────────────────────────────────────────────────────────────────────
+
+case "${1:-}" in
+  -h|--help)
+    usage
+    exit 0
+    ;;
+  init)
+    [ $# -ge 3 ] || die "Usage: specclaw-loop init <specclaw_dir> <change_name>"
+    cmd_init "$2" "$3"
+    ;;
+  gates)
+    [ $# -ge 3 ] || die "Usage: specclaw-loop gates <specclaw_dir> <change_name>"
+    cmd_gates "$2" "$3"
+    ;;
+  done)
+    [ $# -ge 3 ] || die "Usage: specclaw-loop done <specclaw_dir> <change_name>"
+    cmd_done "$2" "$3"
+    ;;
+  "")
+    usage
+    exit 2
+    ;;
+  *)
+    warn "Unknown subcommand: $1"
+    usage
+    exit 2
+    ;;
+esac

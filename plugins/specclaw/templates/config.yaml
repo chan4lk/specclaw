@@ -57,6 +57,18 @@ workflow:
   code_review: false               # Spawn code-reviewer agent during /specclaw:verify
   code_review_block: false         # Block /specclaw:pr if code review verdict is CHANGES_REQUESTED
 
+# Autonomous build→verify→review loop (loop engineering)
+# When enabled, build/verify/review iterate until all gates are green or a guardrail halts.
+loop:
+  enabled: true            # default-on; set false for single-pass build/verify
+  max_iterations: 5        # local inner loop cap
+  no_progress_limit: 2     # consecutive identical/empty turns → halt
+  guard_action: "revert-tests"   # reward-hack guard: revert-tests | revert-turn
+  test_paths: []           # globs identifying test files (reward-hack guard)
+  ci_gate: false           # opt-in outer CI loop (GitHub Actions / Azure Pipelines)
+  ci_max_iterations: 3     # CI outer loop cap
+  ci_timeout_seconds: 1200 # per-cycle CI wall-clock before halt
+
 # Automation
 automation:
   auto_mode: false
