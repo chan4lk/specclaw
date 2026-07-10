@@ -31,3 +31,5 @@ Create a GitHub PR for a verified change. Requires `verify-report.md` (build + v
    - If `context.md` changed, commit it: `git add .specclaw/context.md && git commit -m "docs(context): update project context after <change>"` and push.
    - Errors here are non-blocking — warn and continue.
 4. Report the PR URL to the user.
+
+**CI outer loop (if `loop.ci_gate: true`):** once the PR branch is pushed, the CI tier of `/specclaw:loop` (Step 3 / `specclaw-loop ci-poll`) polls GitHub Actions checks and iterates fixes until they are green, or `loop.ci_max_iterations` / `loop.ci_timeout_seconds` halts and escalates. This is a cross-reference only — PR creation above is unchanged, and nothing extra runs when `loop.ci_gate` is false.

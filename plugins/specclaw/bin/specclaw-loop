@@ -1,0 +1,1359 @@
+#!/usr/bin/env bash
+# specclaw-loop — Autonomous build→verify→review loop controller for specclaw
+# Part of the specclaw skill. Bash + git + coreutils only (no jq dependency).
+# The controller owns all mechanical loop logic: gate evaluation, signature
+# computation, progress/regression/oscillation detection, halt decisions, and
+# state/log persistence. The /specclaw:loop skill orchestrates the LLM steps.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+
+usage() {
+  cat <<'EOF'
+Usage: specclaw-loop <subcommand> [options]
+
+Subcommands (implemented):
+  init          <specclaw_dir> <change_name>
+                Seed loop-state.json and loop-log.md for a change. Idempotent.
+
+  gates         <specclaw_dir> <change_name>
+                Evaluate the four local gates over the whole change and emit a
+                single JSON object to stdout:
+                  {all_green, passing_count, gates:[{name,green,errors,files}]}
+
+  done          <specclaw_dir> <change_name>
+                Print the final PASS summary block for an operator notification.
+
+  signature     <specclaw_dir> <change_name>
+                Compute the failure signature (sha1 of sorted red-gate names +
+                normalized error fingerprint) from a fresh gates evaluation.
+                Emits the hex sha1 to stdout, or empty string if all gates green.
+
+  decide        <specclaw_dir> <change_name> <passing_count> <failure_sig>
+                Check caps / regression / no-progress / oscillation and emit
+                JSON {action:"continue"|"halt", reason:"..."}.
+
+  log-turn      <specclaw_dir> <change_name> <passing_count> <failure_sig> \
+                <action> "<reflection>" "<gates_summary>"
+                Append a turn entry to loop-log.md and update loop-state.json.
+
+  guard-tests   <specclaw_dir> <change_name>
+                Reward-hack guard: run AFTER a fix agent, BEFORE committing the
+                fix turn. Intersect working-tree changes (git diff HEAD) with the
+                configured/built-in test globs. If the fix agent touched a test
+                file, revert it (per loop.guard_action: revert-tests|revert-turn)
+                and emit JSON {tripped, test_files:[...], action, message}. Exits
+                0 (clean, tripped=false) or 3 (guard tripped → turn rejected).
+
+  escalate      <specclaw_dir> <change_name> "<reason>"
+                Controlled halt. Commit partial work (git.commit_prefix), preserve
+                state per git.strategy (worktree/branch kept; direct → warn), append
+                an ## Escalation section to loop-log.md with a fresh gate snapshot,
+                and print an operator notification block to stdout. Exit 0.
+
+  ci-poll       <specclaw_dir> <change_name>
+                Opt-in outer CI loop primitive (only meaningful when
+                loop.ci_gate == true). Runs ONE poll cycle for the PR on the
+                current branch: blocks up to loop.ci_timeout_seconds (default
+                1200), sleeping between checks, until CI concludes or the
+                wall-clock is exceeded. The orchestrator skill owns the
+                multi-iteration loop + the fix cycle between polls; this
+                subcommand is a pure observation primitive. Provider is
+                auto-detected (GitHub preferred over Azure). Emits ONE JSON
+                object: {status, provider, failed_log, pr}. status is one of
+                green | red | timeout | no-checks | disabled | none. Exit 0.
+
+Options:
+  -h, --help    Show this help message
+EOF
+}
+
+die() { echo "ERROR: $*" >&2; exit 1; }
+warn() { echo "WARN: $*" >&2; }
+
+# JSON-escape a string: backslashes, quotes, newlines, tabs, carriage returns
+json_escape() {
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  s="${s//$'\n'/\\n}"
+  s="${s//$'\r'/\\r}"
+  s="${s//$'\t'/\\t}"
+  printf '%s' "$s"
+}
+
+# Read a YAML value (simple single-line scalar) from config.yaml
+# Usage: yaml_val <file> <dotted.key>
+# e.g. yaml_val config.yaml build.test_command
+yaml_val() {
+  local file="$1" key="$2"
+  local field="${key##*.}"
+  local val
+  # Match line, strip "key:" prefix, strip inline comment (everything from
+  # whitespace+# to EOL), strip trailing whitespace, then strip surrounding quotes.
+  val=$(grep -E "^[[:space:]]*${field}:" "$file" 2>/dev/null | head -1 \
+        | sed -E 's/^[^:]*:[[:space:]]*//' \
+        | sed -E 's/[[:space:]]+#.*$//' \
+        | sed -E 's/[[:space:]]+$//' \
+        | sed 's/^"//' | sed 's/"$//' | sed "s/^'//" | sed "s/'$//")
+  printf '%s' "$val"
+}
+
+# Run a command, capture output (capped at 100 lines), return exit code.
+# Usage: run_capped <varname_output> <command_string>
+# Sets: <varname_output> to captured output, returns command exit code.
+run_capped() {
+  local -n _out_ref="$1"
+  local cmd="$2"
+  local tmpfile
+  tmpfile=$(mktemp)
+  local rc=0
+  eval "$cmd" >"$tmpfile" 2>&1 || rc=$?
+  _out_ref=$(head -100 "$tmpfile")
+  local total
+  total=$(wc -l < "$tmpfile")
+  if [ "$total" -gt 100 ]; then
+    _out_ref="${_out_ref}
+... (truncated, ${total} total lines)"
+  fi
+  rm -f "$tmpfile"
+  return "$rc"
+}
+
+# ─── Subcommand: init ──────────────────────────────────────────────────────────
+
+cmd_init() {
+  local specclaw_dir="$1"
+  local change_name="$2"
+  local change_dir="${specclaw_dir}/changes/${change_name}"
+  local state_file="${change_dir}/loop-state.json"
+  local log_file="${change_dir}/loop-log.md"
+
+  mkdir -p "$change_dir"
+
+  # loop-state.json — do not clobber an existing state file.
+  if [ -f "$state_file" ]; then
+    echo "loop-state.json already exists at ${state_file} (not clobbered)"
+  else
+    printf '{"turn": 0, "passing_count": 0, "sig_history": [], "ci_turn": 0}\n' > "$state_file"
+    echo "Seeded ${state_file}"
+  fi
+
+  # loop-log.md — do not clobber an existing log.
+  if [ -f "$log_file" ]; then
+    echo "loop-log.md already exists at ${log_file} (not clobbered)"
+  else
+    local now
+    now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    {
+      printf '# Loop Log: %s\n\n' "$change_name"
+      printf '_Created: %s_\n' "$now"
+    } > "$log_file"
+    echo "Seeded ${log_file}"
+  fi
+}
+
+# ─── Subcommand: gates ─────────────────────────────────────────────────────────
+
+# Extract a normalized PASS/FAIL/PARTIAL verdict token from a report file.
+# Prints the token (PASS|FAIL|PARTIAL|UNKNOWN) to stdout.
+extract_verdict() {
+  local file="$1"
+  local raw
+  raw=$(grep -ioE '\b(PASS|FAIL|PARTIAL)\b' "$file" 2>/dev/null | head -1 | tr '[:lower:]' '[:upper:]') || true
+  [ -z "$raw" ] && raw="UNKNOWN"
+  printf '%s' "$raw"
+}
+
+cmd_gates() {
+  local specclaw_dir="$1"
+  local change_name="$2"
+  local change_dir="${specclaw_dir}/changes/${change_name}"
+  local config_file="${specclaw_dir}/config.yaml"
+  local tasks_file="${change_dir}/tasks.md"
+  local verify_file="${change_dir}/verify-report.md"
+  local review_file="${change_dir}/review-report.md"
+
+  local parse_tasks="${SCRIPT_DIR}/specclaw-parse-tasks"
+
+  # ── Gate 1: tasks-complete ──────────────────────────────────────────────────
+  # Green iff zero pending AND zero failed tasks in tasks.md.
+  local g1_green=true g1_errors="" g1_files=""
+  if [ ! -f "$tasks_file" ]; then
+    g1_green=false
+    g1_errors="tasks.md not found at ${tasks_file}"
+  else
+    # Collect incomplete task ids (pending + failed). We capture output and exit
+    # codes explicitly so set -e does not abort on a nonzero parse result.
+    local pending_json="" failed_json="" rc=0
+    pending_json=$("$parse_tasks" --status pending "$tasks_file" 2>/dev/null) || rc=$?
+    failed_json=$("$parse_tasks" --status failed "$tasks_file" 2>/dev/null) || rc=$?
+
+    # Extract "id":"Tn" tokens from both filtered arrays.
+    local ids=""
+    ids=$(printf '%s\n%s\n' "$pending_json" "$failed_json" \
+          | grep -oE '"id"[[:space:]]*:[[:space:]]*"[^"]+"' \
+          | sed -E 's/.*"id"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/' \
+          | sort -u | tr '\n' ' ' | sed -E 's/[[:space:]]+$//') || true
+
+    if [ -n "$ids" ]; then
+      g1_green=false
+      g1_errors="incomplete tasks: ${ids}"
+    fi
+  fi
+
+  # ── Gate 2: tests ───────────────────────────────────────────────────────────
+  # Run build.{test,lint,build}_command from config.yaml. Unset → skipped
+  # (trivially green). Green iff every set command exits 0. Run from repo root.
+  local g2_green=true g2_errors="" g2_files=""
+  local test_cmd="" lint_cmd="" build_cmd=""
+  if [ -f "$config_file" ]; then
+    test_cmd=$(yaml_val "$config_file" "build.test_command")
+    lint_cmd=$(yaml_val "$config_file" "build.lint_command")
+    build_cmd=$(yaml_val "$config_file" "build.build_command")
+  fi
+
+  # Resolve the repo root to run commands from; fall back to cwd.
+  local repo_root
+  repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || repo_root="$(pwd)"
+
+  local cmd_name cmd
+  for pair in "test:${test_cmd}" "lint:${lint_cmd}" "build:${build_cmd}"; do
+    cmd_name="${pair%%:*}"
+    cmd="${pair#*:}"
+    [ -z "$cmd" ] && continue   # unset → skipped, trivially green
+    local out="" rc=0
+    ( cd "$repo_root" && eval "$cmd" ) >/tmp/_specclaw_loop_gate_$$ 2>&1 || rc=$?
+    out=$(head -40 /tmp/_specclaw_loop_gate_$$)
+    rm -f /tmp/_specclaw_loop_gate_$$
+    if [ "$rc" -ne 0 ]; then
+      g2_green=false
+      local snippet
+      snippet=$(printf '%s' "$out" | tail -20)
+      if [ -n "$g2_errors" ]; then
+        g2_errors="${g2_errors}
+${cmd_name}_command failed (exit ${rc}): ${snippet}"
+      else
+        g2_errors="${cmd_name}_command failed (exit ${rc}): ${snippet}"
+      fi
+    fi
+  done
+
+  # ── Gate 3: verify ──────────────────────────────────────────────────────────
+  # Read verify-report.md; green iff verdict = PASS. Absent → not green.
+  local g3_green=false g3_errors="" g3_files="$verify_file"
+  if [ ! -f "$verify_file" ]; then
+    g3_green=false
+    g3_errors="no verify-report.md yet"
+  else
+    local verdict
+    verdict=$(extract_verdict "$verify_file")
+    if [ "$verdict" = "PASS" ]; then
+      g3_green=true
+    else
+      g3_green=false
+      g3_errors="verify verdict: ${verdict}"
+    fi
+  fi
+
+  # ── Gate 4: review ──────────────────────────────────────────────────────────
+  # Read review-report.md; green iff zero BLOCK findings. Absent → green iff
+  # workflow.code_review is false (review not required), else not green.
+  local g4_green=true g4_errors="" g4_files="$review_file"
+  local code_review=""
+  [ -f "$config_file" ] && code_review=$(yaml_val "$config_file" "workflow.code_review")
+  if [ ! -f "$review_file" ]; then
+    if [ "$code_review" = "true" ]; then
+      g4_green=false
+      g4_errors="no review-report.md yet"
+    else
+      g4_green=true
+    fi
+  else
+    local block_count
+    block_count=$(grep -oE '\bBLOCK\b' "$review_file" 2>/dev/null | wc -l | tr -d ' ') || true
+    [ -z "$block_count" ] && block_count=0
+    if [ "$block_count" -eq 0 ]; then
+      g4_green=true
+    else
+      g4_green=false
+      g4_errors="${block_count} BLOCK-severity finding(s)"
+    fi
+  fi
+
+  # ── Aggregate ───────────────────────────────────────────────────────────────
+  local passing_count=0
+  $g1_green && passing_count=$((passing_count + 1))
+  $g2_green && passing_count=$((passing_count + 1))
+  $g3_green && passing_count=$((passing_count + 1))
+  $g4_green && passing_count=$((passing_count + 1))
+
+  local all_green=false
+  if $g1_green && $g2_green && $g3_green && $g4_green; then
+    all_green=true
+  fi
+
+  # ── Emit JSON ───────────────────────────────────────────────────────────────
+  local output
+  output=$(cat <<ENDJSON
+{
+  "all_green": ${all_green},
+  "passing_count": ${passing_count},
+  "gates": [
+    {"name": "tasks-complete", "green": ${g1_green}, "errors": "$(json_escape "$g1_errors")", "files": "$(json_escape "$g1_files")"},
+    {"name": "tests", "green": ${g2_green}, "errors": "$(json_escape "$g2_errors")", "files": "$(json_escape "$g2_files")"},
+    {"name": "verify", "green": ${g3_green}, "errors": "$(json_escape "$g3_errors")", "files": "$(json_escape "$g3_files")"},
+    {"name": "review", "green": ${g4_green}, "errors": "$(json_escape "$g4_errors")", "files": "$(json_escape "$g4_files")"}
+  ]
+}
+ENDJSON
+)
+
+  printf '%s\n' "$output"
+}
+
+# ─── Subcommand: done ──────────────────────────────────────────────────────────
+
+cmd_done() {
+  local specclaw_dir="$1"
+  local change_name="$2"
+  local change_dir="${specclaw_dir}/changes/${change_name}"
+  local state_file="${change_dir}/loop-state.json"
+
+  # Read turn count from loop-state.json (grep, no jq).
+  local turn="unknown"
+  if [ -f "$state_file" ]; then
+    local t
+    t=$(grep -oE '"turn"[[:space:]]*:[[:space:]]*[0-9]+' "$state_file" 2>/dev/null \
+        | head -1 | grep -oE '[0-9]+' || true)
+    [ -n "$t" ] && turn="$t"
+  fi
+
+  cat <<EOF
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ LOOP COMPLETE — ${change_name}
+All gates green (tasks-complete · tests · verify · review).
+Turns: ${turn}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EOF
+}
+
+# ─── Subcommand: signature ───────────────────────────────────────────────────
+#
+# failure_sig = sha1( sorted(red_gate_names) + normalized_error_fingerprint )
+#
+# Runs a fresh `gates` evaluation, extracts the names + errors of every red
+# gate, normalizes the errors so "same error, different run" collapses to one
+# signature (strip line numbers, hex addresses, ISO-8601 timestamps), and emits
+# the hex sha1 to stdout. If all gates are green, emits an empty string.
+cmd_signature() {
+  local specclaw_dir="$1"
+  local change_name="$2"
+
+  # Fresh gate evaluation. Guard against nonzero so set -e never aborts here.
+  local gates_json=""
+  gates_json=$(cmd_gates "$specclaw_dir" "$change_name" 2>/dev/null) || true
+
+  # If all gates green → no failure → empty signature.
+  local all_green=""
+  all_green=$(printf '%s' "$gates_json" \
+    | grep -oE '"all_green"[[:space:]]*:[[:space:]]*(true|false)' \
+    | head -1 | grep -oE '(true|false)' || true)
+  if [ "$all_green" = "true" ]; then
+    printf ''
+    return 0
+  fi
+
+  # Extract the red gates: walk each gate object, pull name + green + errors.
+  # Each gate is one line in the emitted JSON, so a per-line grep is reliable.
+  local red_names="" red_errors=""
+  local line name green errors
+  while IFS= read -r line; do
+    case "$line" in
+      *'"name":'*'"green":'*) : ;;   # a gate line
+      *) continue ;;
+    esac
+    name=$(printf '%s' "$line" \
+      | sed -E 's/.*"name"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/') || true
+    green=$(printf '%s' "$line" \
+      | grep -oE '"green"[[:space:]]*:[[:space:]]*(true|false)' \
+      | grep -oE '(true|false)' || true)
+    [ "$green" = "false" ] || continue
+    errors=$(printf '%s' "$line" \
+      | sed -E 's/.*"errors"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/') || true
+    red_names="${red_names}${name}
+"
+    red_errors="${red_errors}${errors}
+"
+  done <<< "$gates_json"
+
+  # Sorted red-gate names.
+  local sorted_names=""
+  sorted_names=$(printf '%s' "$red_names" | grep -v '^$' | sort | tr '\n' ' ' \
+    | sed -E 's/[[:space:]]+$//') || true
+
+  # Normalized error fingerprint: strip line-number noise, hex addresses, and
+  # ISO-8601 timestamps so the same failure across runs collapses to one sig.
+  local norm_errors=""
+  norm_errors=$(printf '%s' "$red_errors" \
+    | sed -E 's/0x[0-9a-fA-F]+/0xADDR/g' \
+    | sed -E 's/[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}:[0-9]{2}([.,][0-9]+)?(Z|[+-][0-9]{2}:?[0-9]{2})?/TIMESTAMP/g' \
+    | sed -E 's/:[0-9]+:[0-9]+/:LINE:COL/g' \
+    | sed -E 's/:[0-9]+\b/:LINE/g' \
+    | sed -E 's/\bline[[:space:]]+[0-9]+/line N/gi' \
+    | sed -E 's/[0-9]+/N/g') || true
+
+  # Compute sha1 of the combined fingerprint.
+  local fingerprint sig
+  fingerprint="${sorted_names}
+${norm_errors}"
+  sig=$(printf '%s' "$fingerprint" | sha1sum | cut -d' ' -f1) || true
+  printf '%s' "$sig"
+}
+
+# ─── Subcommand: decide ────────────────────────────────────────────────────────
+#
+# Read loop-state.json + config, apply halt precedence, emit
+# {"action":"continue"|"halt","reason":"..."}.
+#
+# Halt precedence (checked in this exact order):
+#   1. CAP         — next turn > loop.max_iterations
+#   2. REGRESSION  — passing_count < prev_passing (prev set/>0)
+#   3. NO-PROGRESS — last no_progress_limit sigs (incl. this one) identical+nonempty
+#   4. OSCILLATION — A→B→A flip (sig == sig_history[-2]) OR sig occurs >= limit times
+#   5. continue
+cmd_decide() {
+  local specclaw_dir="$1"
+  local change_name="$2"
+  local passing_count="$3"
+  local failure_sig="$4"
+  local change_dir="${specclaw_dir}/changes/${change_name}"
+  local state_file="${change_dir}/loop-state.json"
+  local config_file="${specclaw_dir}/config.yaml"
+
+  # ── Read state (flat JSON this script writes itself → tolerant grep/sed) ──────
+  local turn=0 prev_passing=0 sig_hist_raw=""
+  if [ -f "$state_file" ]; then
+    local t p
+    t=$(grep -oE '"turn"[[:space:]]*:[[:space:]]*[0-9]+' "$state_file" 2>/dev/null \
+        | head -1 | grep -oE '[0-9]+' || true)
+    [ -n "$t" ] && turn="$t"
+    p=$(grep -oE '"passing_count"[[:space:]]*:[[:space:]]*[0-9]+' "$state_file" 2>/dev/null \
+        | head -1 | grep -oE '[0-9]+' || true)
+    [ -n "$p" ] && prev_passing="$p"
+    # sig_history array contents (between the [ ]).
+    sig_hist_raw=$(grep -oE '"sig_history"[[:space:]]*:[[:space:]]*\[[^]]*\]' "$state_file" 2>/dev/null \
+        | head -1 | sed -E 's/.*\[([^]]*)\].*/\1/' || true)
+  fi
+
+  # sig_history as a newline-delimited list (order preserved).
+  local sig_list=""
+  if [ -n "$sig_hist_raw" ]; then
+    sig_list=$(printf '%s' "$sig_hist_raw" \
+      | grep -oE '"[^"]*"' | sed -E 's/^"//; s/"$//') || true
+  fi
+
+  # ── Read config caps (defaults 5 / 2) ────────────────────────────────────────
+  local max_iterations="" no_progress_limit=""
+  if [ -f "$config_file" ]; then
+    max_iterations=$(yaml_val "$config_file" "loop.max_iterations")
+    no_progress_limit=$(yaml_val "$config_file" "loop.no_progress_limit")
+  fi
+  [ -z "$max_iterations" ] && max_iterations=5
+  [ -z "$no_progress_limit" ] && no_progress_limit=2
+
+  local next_turn=$((turn + 1))
+
+  emit_decision() {
+    printf '{"action": "%s", "reason": "%s"}\n' "$1" "$(json_escape "$2")"
+  }
+
+  # ── 1. CAP ────────────────────────────────────────────────────────────────────
+  if [ "$next_turn" -gt "$max_iterations" ]; then
+    emit_decision "halt" "iteration cap ${max_iterations} reached"
+    return 0
+  fi
+
+  # ── 2. REGRESSION ─────────────────────────────────────────────────────────────
+  if [ "$prev_passing" -gt 0 ] && [ "$passing_count" -lt "$prev_passing" ]; then
+    emit_decision "halt" "regression: passing gates dropped ${prev_passing}→${passing_count}"
+    return 0
+  fi
+
+  # ── 3. NO-PROGRESS ──────────────────────────────────────────────────────────
+  # The last (no_progress_limit) signatures — this turn's plus the tail of
+  # history — all identical and non-empty → no progress.
+  if [ -n "$failure_sig" ]; then
+    # Build the candidate window: history tail + this turn's sig.
+    local window=""
+    window=$(printf '%s\n%s' "$sig_list" "$failure_sig" | grep -v '^$' || true)
+    local window_count
+    window_count=$(printf '%s\n' "$window" | grep -c '^' || true)
+    [ -z "$window_count" ] && window_count=0
+    if [ "$window_count" -ge "$no_progress_limit" ]; then
+      # Take the last no_progress_limit entries and check they are all == failure_sig.
+      local tail_win uniq_count
+      tail_win=$(printf '%s\n' "$window" | tail -n "$no_progress_limit") || true
+      uniq_count=$(printf '%s\n' "$tail_win" | sort -u | grep -c '^' || true)
+      local all_match=""
+      all_match=$(printf '%s\n' "$tail_win" | grep -v -x -F "$failure_sig" || true)
+      if [ "$uniq_count" = "1" ] && [ -z "$all_match" ]; then
+        emit_decision "halt" "no progress: identical failure signature ${no_progress_limit} turns"
+        return 0
+      fi
+    fi
+  fi
+
+  # ── 4. OSCILLATION ────────────────────────────────────────────────────────────
+  # A→B→A: this sig equals the second-to-last history entry.
+  # OR the same sig has occurred >= no_progress_limit times across history.
+  if [ -n "$failure_sig" ]; then
+    local hist_count
+    hist_count=$(printf '%s\n' "$sig_list" | grep -v '^$' | grep -c '^' || true)
+    [ -z "$hist_count" ] && hist_count=0
+
+    # sig_history[-2] : the entry before the last.
+    local second_last=""
+    if [ "$hist_count" -ge 2 ]; then
+      second_last=$(printf '%s\n' "$sig_list" | grep -v '^$' | tail -n 2 | head -n 1) || true
+    fi
+
+    # Total occurrences of this sig in history (history already contains prior
+    # turns; if we also count this turn, an equal or exceeding limit trips).
+    local occ
+    occ=$(printf '%s\n' "$sig_list" | grep -v '^$' | grep -c -x -F "$failure_sig" || true)
+    [ -z "$occ" ] && occ=0
+    local occ_incl=$((occ + 1))
+
+    if [ "$second_last" = "$failure_sig" ] || [ "$occ_incl" -ge "$no_progress_limit" ]; then
+      emit_decision "halt" "oscillation detected"
+      return 0
+    fi
+  fi
+
+  # ── 5. continue ───────────────────────────────────────────────────────────────
+  emit_decision "continue" "gates red but progress possible (turn ${next_turn}/${max_iterations})"
+}
+
+# ─── Subcommand: log-turn ──────────────────────────────────────────────────────
+#
+# Append a `## Turn N` section to loop-log.md and rewrite loop-state.json.
+#
+# sig_history tracking: empty-string signatures (all-green turns) are NOT
+# appended to sig_history — only real failure signatures are tracked, so
+# no-progress / oscillation math never trips on green turns. An empty-diff turn
+# is surfaced by the caller passing the same (repeated) signature, which the
+# `decide` no-progress rule catches.
+cmd_log_turn() {
+  local specclaw_dir="$1"
+  local change_name="$2"
+  local passing_count="$3"
+  local failure_sig="$4"
+  local action="$5"
+  local reflection="$6"
+  local gates_summary="$7"
+  local change_dir="${specclaw_dir}/changes/${change_name}"
+  local state_file="${change_dir}/loop-state.json"
+  local log_file="${change_dir}/loop-log.md"
+
+  mkdir -p "$change_dir"
+
+  # ── Read current state ────────────────────────────────────────────────────────
+  local turn=0 ci_turn=0 sig_hist_raw=""
+  if [ -f "$state_file" ]; then
+    local t c
+    t=$(grep -oE '"turn"[[:space:]]*:[[:space:]]*[0-9]+' "$state_file" 2>/dev/null \
+        | head -1 | grep -oE '[0-9]+' || true)
+    [ -n "$t" ] && turn="$t"
+    c=$(grep -oE '"ci_turn"[[:space:]]*:[[:space:]]*[0-9]+' "$state_file" 2>/dev/null \
+        | head -1 | grep -oE '[0-9]+' || true)
+    [ -n "$c" ] && ci_turn="$c"
+    sig_hist_raw=$(grep -oE '"sig_history"[[:space:]]*:[[:space:]]*\[[^]]*\]' "$state_file" 2>/dev/null \
+        | head -1 | sed -E 's/.*\[([^]]*)\].*/\1/' || true)
+  fi
+
+  local new_turn=$((turn + 1))
+
+  # ── Existing sig_history entries (preserve order) ─────────────────────────────
+  local sig_list=""
+  if [ -n "$sig_hist_raw" ]; then
+    sig_list=$(printf '%s' "$sig_hist_raw" \
+      | grep -oE '"[^"]*"' | sed -E 's/^"//; s/"$//') || true
+  fi
+
+  # Append this turn's failure_sig only if non-empty (green turns leave history
+  # untouched — see the tracking note above).
+  local new_sig_list=""
+  if [ -n "$sig_list" ] && [ -n "$failure_sig" ]; then
+    new_sig_list=$(printf '%s\n%s' "$sig_list" "$failure_sig")
+  elif [ -n "$sig_list" ]; then
+    new_sig_list="$sig_list"
+  elif [ -n "$failure_sig" ]; then
+    new_sig_list="$failure_sig"
+  fi
+
+  # Build the JSON array body: ["a","b",...]
+  local arr_body=""
+  if [ -n "$new_sig_list" ]; then
+    local s
+    while IFS= read -r s; do
+      [ -z "$s" ] && continue
+      if [ -n "$arr_body" ]; then
+        arr_body="${arr_body}, \"$(json_escape "$s")\""
+      else
+        arr_body="\"$(json_escape "$s")\""
+      fi
+    done <<< "$new_sig_list"
+  fi
+
+  # ── Append the turn section to loop-log.md ────────────────────────────────────
+  local now
+  now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  local sig_display="$failure_sig"
+  [ -z "$sig_display" ] && sig_display="(none — all gates green)"
+  # Note: printf format strings must not begin with a literal '-' (parsed as a
+  # flag), so every line's format starts with '%s' carrying the leading text.
+  {
+    printf '%s%s\n\n' $'\n## Turn ' "$new_turn"
+    printf '%s%s\n' '- **Timestamp:** ' "$now"
+    printf '%s%s\n' '- **Passing gates:** ' "${passing_count} / 4"
+    printf '%s%s%s\n' '- **Failure signature:** `' "$sig_display" '`'
+    printf '%s%s\n\n' '- **Decision:** ' "$action"
+    printf '%s%s\n\n' $'### Gate summary\n\n' "$gates_summary"
+    printf '%s%s\n' $'### Reflection\n\n' "$reflection"
+  } >> "$log_file"
+
+  # ── Rewrite loop-state.json (valid flat JSON via printf) ──────────────────────
+  printf '{"turn": %s, "passing_count": %s, "sig_history": [%s], "ci_turn": %s}\n' \
+    "$new_turn" "$passing_count" "$arr_body" "$ci_turn" > "$state_file"
+
+  echo "Logged turn ${new_turn} (passing ${passing_count}/4, action ${action})"
+}
+
+# ─── Subcommand: guard-tests ─────────────────────────────────────────────────
+#
+# Reward-hacking guard. Run AFTER a fix agent has edited the working tree but
+# BEFORE the fix turn is committed. Reward hacking = the fix agent games the
+# harness by editing test files instead of fixing the source. This detects it.
+#
+# Mechanism:
+#   1. Read loop.test_paths (a YAML list of globs) + loop.guard_action from
+#      config.yaml. yaml_val only reads single-line scalars, so test_paths is
+#      parsed here directly — tolerant of both inline `[a, b]` and block `- item`
+#      forms. If test_paths is empty, fall back to built-in test globs.
+#   2. Changed files this turn = `git diff --name-only HEAD` — every working-tree
+#      edit (staged + unstaged) since the last commit. Since the loop commits
+#      each turn, HEAD is the last good state, so diffing working-tree-vs-HEAD is
+#      exactly "what the fix agent changed this turn".
+#   3. Intersect changed files with the test globs.
+#        empty     → {"tripped":false,...}, exit 0.
+#        non-empty → revert per guard_action, {"tripped":true,...}, exit 3.
+#
+# guard_action (default "revert-tests"):
+#   revert-tests : revert ONLY the matched test files (git checkout -- <files>),
+#                  leaving the source edits intact so the agent keeps progress.
+#   revert-turn  : revert ALL working-tree changes this turn (git checkout -- .),
+#                  dropping the entire (poisoned) turn.
+#
+# SAFETY:
+#   - Operates only inside the repo working tree (all paths are git-tracked,
+#     repo-relative). It never touches anything outside the working tree.
+#   - Revert reverts working-tree-vs-HEAD only. HEAD is the last committed good
+#     state (the loop commits each turn), so this drops the current uncommitted
+#     fix and nothing else — committed work is untouched. revert-turn uses
+#     `git checkout -- .` (working-tree restore), NOT `git reset --hard`, so no
+#     commit history is disturbed.
+#   - git revert operations have their exit codes checked (die on failure);
+#     only grep/glob classification uses `|| true`.
+#
+# Built-in fallback test globs (used when loop.test_paths is empty):
+#   *_test.*  *.test.*  *_spec.*  *.spec.*  test_*.*  spec_*.*
+#   and any path containing a test directory segment:
+#   /tests/  /test/  /__tests__/  /spec/  (also matched at path start).
+GUARD_FALLBACK_GLOBS='*_test.* *.test.* *_spec.* *.spec.* test_*.* spec_*.*'
+
+# Does path $1 match test-glob classification given the space-separated glob
+# list $2? Uses shell `case` glob matching on the basename AND full path, plus a
+# built-in directory-segment check. Returns 0 (match) / 1 (no match).
+guard_is_test_file() {
+  local path="$1" globs="$2"
+  local base="${path##*/}"
+  local g rc=1
+  # Split the glob list on whitespace regardless of the caller's IFS (callers
+  # iterate with `while IFS= read`, which would otherwise leave IFS empty and
+  # collapse $globs into a single word). Disable pathname expansion too: an
+  # unquoted `for g in $globs` would expand each glob (e.g. test_*.*) against the
+  # CURRENT dir and replace the literal pattern with matching filenames,
+  # corrupting the per-file `case` match. noglob keeps patterns literal.
+  local IFS=$' \t\n'
+  set -f
+  for g in $globs; do
+    # Match against the basename and the full repo-relative path.
+    case "$base" in $g) rc=0; break ;; esac
+    case "$path" in $g) rc=0; break ;; esac
+    # A bare directory-ish glob like "tests/*" or "**/foo" — try a loose
+    # trailing form too so operator-supplied dir globs work intuitively.
+    case "/$path" in */$g) rc=0; break ;; esac
+  done
+  set +f
+  [ "$rc" -eq 0 ] && return 0
+  # Built-in directory-segment check (always applied — reward-hack safety net).
+  case "/$path/" in
+    */tests/*|*/test/*|*/__tests__/*|*/spec/*) return 0 ;;
+  esac
+  return 1
+}
+
+cmd_guard_tests() {
+  local specclaw_dir="$1"
+  local change_name="$2"
+  local change_dir="${specclaw_dir}/changes/${change_name}"
+  local config_file="${specclaw_dir}/config.yaml"
+  local log_file="${change_dir}/loop-log.md"
+
+  # ── Read guard_action (single-line scalar → yaml_val is fine) ────────────────
+  local guard_action=""
+  [ -f "$config_file" ] && guard_action=$(yaml_val "$config_file" "loop.guard_action")
+  [ -z "$guard_action" ] && guard_action="revert-tests"
+
+  # ── Parse loop.test_paths (a YAML list) tolerantly ───────────────────────────
+  # yaml_val reads single-line scalars only, so parse the list by hand. Support:
+  #   inline flow form:   test_paths: [ "a/*", b/**, 'c' ]
+  #   block sequence:     test_paths:
+  #                         - "a/*"
+  #                         - b/**
+  local test_globs=""
+  if [ -f "$config_file" ]; then
+    # Grab the value on the test_paths: line itself (inline form, if any).
+    local tp_inline=""
+    tp_inline=$(grep -E '^[[:space:]]*test_paths:' "$config_file" 2>/dev/null | head -1 \
+                | sed -E 's/^[[:space:]]*test_paths:[[:space:]]*//' \
+                | sed -E 's/[[:space:]]+#.*$//') || true
+    # Inline flow list: strip [ ] and split on commas.
+    case "$tp_inline" in
+      \[*\]*)
+        local body="${tp_inline#*[}"; body="${body%]*}"
+        local IFS=','
+        local item
+        for item in $body; do
+          # trim whitespace + surrounding quotes.
+          item=$(printf '%s' "$item" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//; s/^"//; s/"$//; s/^'"'"'//; s/'"'"'$//')
+          [ -n "$item" ] && test_globs="${test_globs}${item} "
+        done
+        ;;
+    esac
+    # Block sequence: `- item` lines following the test_paths: line, up to the
+    # next non-indented / differently-keyed line. Extract with awk (state machine).
+    local block=""
+    block=$(awk '
+      /^[[:space:]]*test_paths:[[:space:]]*$/ { inblk=1; next }
+      inblk==1 {
+        if ($0 ~ /^[[:space:]]*-[[:space:]]*/) { print; next }
+        if ($0 ~ /^[[:space:]]*#/) { next }         # skip comment lines
+        if ($0 ~ /^[[:space:]]*$/) { next }          # skip blank lines
+        inblk=0                                       # any other line ends block
+      }
+    ' "$config_file" 2>/dev/null) || true
+    if [ -n "$block" ]; then
+      local line item
+      while IFS= read -r line; do
+        item=$(printf '%s' "$line" | sed -E 's/^[[:space:]]*-[[:space:]]*//; s/[[:space:]]+#.*$//; s/[[:space:]]+$//; s/^"//; s/"$//; s/^'"'"'//; s/'"'"'$//')
+        [ -n "$item" ] && test_globs="${test_globs}${item} "
+      done <<< "$block"
+    fi
+  fi
+  # Trim trailing whitespace.
+  test_globs=$(printf '%s' "$test_globs" | sed -E 's/[[:space:]]+$//')
+
+  # Fallback to built-in globs when no configured test_paths.
+  local using_fallback=false
+  if [ -z "$test_globs" ]; then
+    test_globs="$GUARD_FALLBACK_GLOBS"
+    using_fallback=true
+  fi
+
+  # ── Compute changed files this turn (working tree vs HEAD) ───────────────────
+  # Staged + unstaged edits since the last commit. Run from the repo root so the
+  # emitted paths are repo-relative and glob matching is consistent.
+  local repo_root
+  repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || repo_root="$(pwd)"
+
+  local changed=""
+  changed=$( ( cd "$repo_root" && git diff --name-only HEAD 2>/dev/null ) || true )
+
+  # ── Intersect changed files with the test globs ──────────────────────────────
+  local matched=""
+  if [ -n "$changed" ]; then
+    local f
+    while IFS= read -r f; do
+      [ -z "$f" ] && continue
+      if guard_is_test_file "$f" "$test_globs"; then
+        matched="${matched}${f}
+"
+      fi
+    done <<< "$changed"
+  fi
+  matched=$(printf '%s' "$matched" | grep -v '^$' || true)
+
+  # Build the JSON array of matched test files.
+  local files_json=""
+  if [ -n "$matched" ]; then
+    local mf
+    while IFS= read -r mf; do
+      [ -z "$mf" ] && continue
+      if [ -n "$files_json" ]; then
+        files_json="${files_json}, \"$(json_escape "$mf")\""
+      else
+        files_json="\"$(json_escape "$mf")\""
+      fi
+    done <<< "$matched"
+  fi
+
+  # ── Not tripped: no test files touched ───────────────────────────────────────
+  if [ -z "$matched" ]; then
+    printf '{"tripped": false, "test_files": [], "action": "none"}\n'
+    return 0
+  fi
+
+  # ── Tripped: revert per guard_action ─────────────────────────────────────────
+  local revert_rc=0
+  if [ "$guard_action" = "revert-turn" ]; then
+    # Drop ALL working-tree changes this turn (working-tree restore vs HEAD).
+    # NOT git reset --hard — history/commits are untouched.
+    ( cd "$repo_root" && git checkout -- . ) || revert_rc=$?
+  else
+    # revert-tests (default): revert ONLY the matched test files, leaving source
+    # edits intact. Feed matched paths via xargs (NUL-safe on newline list).
+    guard_action="revert-tests"
+    while IFS= read -r mf; do
+      [ -z "$mf" ] && continue
+      ( cd "$repo_root" && git checkout -- "$mf" ) || revert_rc=$?
+    done <<< "$matched"
+  fi
+  [ "$revert_rc" -eq 0 ] || die "guard-tests: git revert failed (exit ${revert_rc}) for action ${guard_action}"
+
+  local message="reward-hack guard: fix agent modified test files; reverted per ${guard_action}"
+
+  # ── Append a trip note to loop-log.md if it exists ───────────────────────────
+  if [ -f "$log_file" ]; then
+    local now files_flat
+    now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    files_flat=$(printf '%s' "$matched" | tr '\n' ' ' | sed -E 's/[[:space:]]+$//')
+    {
+      printf '%s%s%s%s\n' '- **reward_hack_guard tripped** (' "$now" '): action=' "$guard_action"
+      printf '%s%s\n' '  - reverted test files: ' "$files_flat"
+      $using_fallback && printf '%s\n' '  - (matched via built-in fallback test globs)'
+    } >> "$log_file"
+  fi
+
+  # ── Emit JSON + exit nonzero (turn rejected, non-progress failure) ───────────
+  printf '{"tripped": true, "test_files": [%s], "action": "%s", "message": "%s"}\n' \
+    "$files_json" "$guard_action" "$(json_escape "$message")"
+  return 3
+}
+
+# ─── Subcommand: escalate ────────────────────────────────────────────────────
+#
+# Called when a halt condition fires (cap / regression / no-progress /
+# oscillation). This is a CONTROLLED stop, not a script error — exit 0.
+#
+# Steps:
+#   1. Commit partial work with the configured git.commit_prefix. If there is
+#      nothing to commit, skip (do not error).
+#   2. Preserve state per git.strategy:
+#        worktree-per-change → worktree stays; note its path.
+#        branch-per-change   → branch is preserved; note the branch.
+#        direct              → WARN no isolated worktree; work is on current branch.
+#   3. Finalize loop-log.md: append an ## Escalation section with timestamp,
+#      the reason, and a fresh gate-status snapshot (reuses cmd_gates).
+#   4. Emit an operator notification block to stdout (Discord-pasteable).
+#
+# Reuses: cmd_gates (snapshot), yaml_val (config), json_escape (n/a here),
+# and the same loop-log append style as cmd_log_turn / cmd_guard_tests.
+
+# Render a fresh gate snapshot as a one-line-per-gate human summary.
+# Sets (nameref) the summary text; echoes nothing. Parses the JSON cmd_gates
+# emits (one gate per line) with the same per-line grep approach as
+# cmd_signature, so no jq is needed.
+escalate_gate_summary() {
+  local -n _sum_ref="$1"
+  local gates_json="$2"
+  local out="" line name green errors
+  while IFS= read -r line; do
+    case "$line" in
+      *'"name":'*'"green":'*) : ;;
+      *) continue ;;
+    esac
+    name=$(printf '%s' "$line" \
+      | sed -E 's/.*"name"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/') || true
+    green=$(printf '%s' "$line" \
+      | grep -oE '"green"[[:space:]]*:[[:space:]]*(true|false)' \
+      | grep -oE '(true|false)' || true)
+    errors=$(printf '%s' "$line" \
+      | sed -E 's/.*"errors"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/') || true
+    local mark="RED" ; [ "$green" = "true" ] && mark="GREEN"
+    local suffix=""
+    if [ "$green" != "true" ] && [ -n "$errors" ]; then
+      suffix=" — ${errors}"
+    fi
+    out="${out}  - ${name}: ${mark}${suffix}
+"
+  done <<< "$gates_json"
+  _sum_ref=$(printf '%s' "$out" | sed -E 's/[[:space:]]+$//')
+}
+
+cmd_escalate() {
+  local specclaw_dir="$1"
+  local change_name="$2"
+  local reason="$3"
+  local change_dir="${specclaw_dir}/changes/${change_name}"
+  local config_file="${specclaw_dir}/config.yaml"
+  local log_file="${change_dir}/loop-log.md"
+
+  local now
+  now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+  # ── Read config: commit_prefix (default "specclaw") + strategy ───────────────
+  local commit_prefix="" strategy="" worktree_dir=""
+  if [ -f "$config_file" ]; then
+    commit_prefix=$(yaml_val "$config_file" "git.commit_prefix")
+    strategy=$(yaml_val "$config_file" "git.strategy")
+    worktree_dir=$(yaml_val "$config_file" "git.worktree_dir")
+  fi
+  [ -z "$commit_prefix" ] && commit_prefix="specclaw"
+  [ -z "$strategy" ] && strategy="branch-per-change"
+
+  # ── Resolve repo root (run git from there so relative paths are consistent) ──
+  local repo_root
+  repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || repo_root="$(pwd)"
+
+  # ── 1. Commit partial work (tolerate "nothing to commit") ────────────────────
+  # Stage all working-tree changes, then commit only if the staged index differs
+  # from HEAD. `git diff --cached --quiet` exits 1 when there is something staged.
+  local commit_note="" commit_msg="${commit_prefix}(${change_name}): loop escalation — partial work preserved"
+  ( cd "$repo_root" && git add -A ) 2>/dev/null || warn "git add -A failed (continuing)"
+  local staged_dirty=0
+  ( cd "$repo_root" && git diff --cached --quiet ) || staged_dirty=$?
+  if [ "$staged_dirty" -ne 0 ]; then
+    if ( cd "$repo_root" && git commit -m "$commit_msg" ) >/dev/null 2>&1; then
+      local sha
+      sha=$( ( cd "$repo_root" && git rev-parse --short HEAD ) 2>/dev/null || true )
+      commit_note="committed partial work (${sha}): ${commit_msg}"
+    else
+      commit_note="commit attempted but failed (see git output); work left in working tree"
+      warn "escalate: git commit failed"
+    fi
+  else
+    commit_note="nothing to commit — working tree already clean"
+  fi
+
+  # ── 2. State preservation per git.strategy ───────────────────────────────────
+  local branch
+  branch=$( ( cd "$repo_root" && git rev-parse --abbrev-ref HEAD ) 2>/dev/null || echo "unknown" )
+  local location_note=""
+  case "$strategy" in
+    worktree-per-change)
+      # The worktree stays — nothing destructive. Note its path (best effort).
+      local wt_path=""
+      [ -n "$worktree_dir" ] && wt_path="${worktree_dir}/${change_name}"
+      if [ -n "$wt_path" ]; then
+        location_note="worktree preserved at ${wt_path} (branch ${branch})"
+      else
+        location_note="worktree preserved (branch ${branch})"
+      fi
+      ;;
+    direct)
+      warn "escalate: git.strategy=direct — no isolated worktree; work committed to current branch ${branch}"
+      location_note="no isolated worktree (git.strategy=direct); work committed to current branch ${branch}"
+      ;;
+    branch-per-change|*)
+      location_note="branch ${branch} preserved"
+      ;;
+  esac
+
+  # ── 3. Fresh gate snapshot ───────────────────────────────────────────────────
+  local gates_json=""
+  gates_json=$(cmd_gates "$specclaw_dir" "$change_name" 2>/dev/null) || true
+  local all_green=""
+  all_green=$(printf '%s' "$gates_json" \
+    | grep -oE '"all_green"[[:space:]]*:[[:space:]]*(true|false)' \
+    | head -1 | grep -oE '(true|false)' || true)
+  local passing_count=""
+  passing_count=$(printf '%s' "$gates_json" \
+    | grep -oE '"passing_count"[[:space:]]*:[[:space:]]*[0-9]+' \
+    | head -1 | grep -oE '[0-9]+' || true)
+  [ -z "$passing_count" ] && passing_count="?"
+  local gate_summary=""
+  escalate_gate_summary gate_summary "$gates_json"
+  [ -z "$gate_summary" ] && gate_summary="  - (no gate snapshot available)"
+
+  # ── 4. Finalize loop-log.md (append ## Escalation) ───────────────────────────
+  if [ -d "$change_dir" ] || mkdir -p "$change_dir" 2>/dev/null; then
+    {
+      printf '%s\n\n' $'\n## Escalation'
+      printf '%s%s\n' '- **Timestamp:** ' "$now"
+      printf '%s%s\n' '- **Reason:** ' "$reason"
+      printf '%s%s\n' '- **State:** ' "$commit_note"
+      printf '%s%s\n' '- **Location:** ' "$location_note"
+      printf '%s%s\n\n' '- **Passing gates:** ' "${passing_count} / 4"
+      printf '%s\n' '### Gate status snapshot'
+      printf '%s\n' ''
+      printf '%s\n' "$gate_summary"
+    } >> "$log_file"
+  fi
+
+  # ── Operator notification (stdout, Discord-pasteable) ────────────────────────
+  cat <<EOF
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🛑 LOOP HALTED — ${change_name}
+Reason: ${reason}
+Passing gates: ${passing_count} / 4
+
+Gate status:
+${gate_summary}
+
+State: ${commit_note}
+Where: ${location_note}
+Log: ${log_file}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EOF
+
+  return 0
+}
+
+# ─── Subcommand: ci-poll ─────────────────────────────────────────────────────
+#
+# Opt-in outer CI loop primitive. Poll the remote CI checks for the PR on the
+# CURRENT branch ONCE — i.e. this invocation blocks (in-session) up to
+# loop.ci_timeout_seconds, sleeping between checks, until CI concludes (green /
+# red) or the wall-clock is exceeded. The orchestrator skill owns the
+# multi-iteration loop (ci_turn 1..ci_max_iterations) and the fix cycle between
+# polls; this subcommand stays a pure decision/observation primitive.
+#
+# Provider detection + precedence:
+#   GitHub  — if `gh` CLI is available AND (github.sync true OR github.repo set
+#             OR an origin remote points at github.com). Preferred if both
+#             providers look viable.
+#   Azure   — else if azdo.enabled is true AND `az` CLI is available.
+#   none    — if neither the needed CLI nor config is present. Emits
+#             {"status":"none","provider":"none",...} + a warn, exit 0 (never
+#             hard-fail on a missing CLI).
+#
+# Status values (exactly one emitted):
+#   green      — checks concluded successfully.
+#   red        — checks concluded with a failure; failed_log carries the tail
+#                of the failed-run log.
+#   no-checks  — after a short grace period (CI_GRACE_SECONDS) NO checks are
+#                reported for the PR. Per the "no pipeline attached → treat as
+#                green after grace" edge case: distinctly labeled so the skill
+#                logs a warning and proceeds.
+#   timeout    — wall-clock exceeded ci_timeout_seconds before checks concluded
+#                (hung pipeline).
+#   disabled   — loop.ci_gate is not true (feature off). Exit 0 immediately.
+#   none       — required CLI / provider config missing.
+#
+# All gh/az/grep calls are `|| true`-guarded so a CLI error never aborts the
+# script — every path resolves to one JSON status object. failed_log is
+# json_escaped. pr is the PR number (GitHub) or the branch name (fallback).
+
+# Poll/grace/sleep knobs (wall-clock in seconds).
+CI_SLEEP_SECONDS=20      # interval between poll iterations
+CI_GRACE_SECONDS=60      # window to wait for any check to appear before "no-checks"
+
+# Emit the single ci-poll JSON result. Args: status provider failed_log pr
+ci_emit() {
+  local status="$1" provider="$2" failed_log="$3" pr="$4"
+  printf '{"status": "%s", "provider": "%s", "failed_log": "%s", "pr": "%s"}\n' \
+    "$status" "$provider" "$(json_escape "$failed_log")" "$(json_escape "$pr")"
+}
+
+cmd_ci_poll() {
+  local specclaw_dir="$1"
+  local change_name="$2"
+  local config_file="${specclaw_dir}/config.yaml"
+
+  # ── Gate: only meaningful when loop.ci_gate == true ──────────────────────────
+  local ci_gate=""
+  [ -f "$config_file" ] && ci_gate=$(yaml_val "$config_file" "loop.ci_gate")
+  if [ "$ci_gate" != "true" ]; then
+    ci_emit "disabled" "none" "" ""
+    return 0
+  fi
+
+  # ── Read caps / knobs (defaults 3 / 1200) ────────────────────────────────────
+  local ci_max_iterations="" ci_timeout_seconds=""
+  if [ -f "$config_file" ]; then
+    ci_max_iterations=$(yaml_val "$config_file" "loop.ci_max_iterations")
+    ci_timeout_seconds=$(yaml_val "$config_file" "loop.ci_timeout_seconds")
+  fi
+  [ -z "$ci_max_iterations" ] && ci_max_iterations=3
+  [ -z "$ci_timeout_seconds" ] && ci_timeout_seconds=1200
+  # ci_max_iterations is owned by the orchestrator skill (multi-poll loop); read
+  # here only so a bad value never surprises the operator. Not used for control.
+  : "$ci_max_iterations"
+
+  # ── Current branch (source of the PR under test) ─────────────────────────────
+  local branch=""
+  branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) || true
+  [ -z "$branch" ] && branch="HEAD"
+
+  # ── Provider detection (GitHub preferred over Azure) ─────────────────────────
+  # GitHub is viable if gh is installed AND we have a github signal:
+  #   github.sync true | github.repo set | origin remote is github.com.
+  local gh_ok=false az_ok=false
+  local github_sync="" github_repo="" azdo_enabled=""
+  if [ -f "$config_file" ]; then
+    github_sync=$(yaml_val "$config_file" "github.sync")
+    github_repo=$(yaml_val "$config_file" "github.repo")
+    azdo_enabled=$(yaml_val "$config_file" "azdo.enabled")
+  fi
+  local origin_url=""
+  origin_url=$(git remote get-url origin 2>/dev/null) || true
+
+  if command -v gh >/dev/null 2>&1; then
+    if [ "$github_sync" = "true" ] || [ -n "$github_repo" ] \
+       || printf '%s' "$origin_url" | grep -qi 'github\.com'; then
+      gh_ok=true
+    fi
+  fi
+  if [ "$azdo_enabled" = "true" ] && command -v az >/dev/null 2>&1; then
+    az_ok=true
+  fi
+
+  local provider="none"
+  if $gh_ok; then
+    provider="github"
+  elif $az_ok; then
+    provider="azure"
+  fi
+
+  # ── No provider / missing CLI → non-fatal none ───────────────────────────────
+  if [ "$provider" = "none" ]; then
+    warn "ci-poll: no CI provider available (gh/az missing or github.*/azdo.enabled unset) — treating as none"
+    ci_emit "none" "none" "" "$branch"
+    return 0
+  fi
+
+  # ── Wall-clock setup ─────────────────────────────────────────────────────────
+  local start_ts now_ts elapsed
+  start_ts=$(date +%s)
+
+  if [ "$provider" = "github" ]; then
+    ci_poll_github "$branch" "$start_ts" "$ci_timeout_seconds"
+    return 0
+  else
+    ci_poll_azure "$branch" "$start_ts" "$ci_timeout_seconds"
+    return 0
+  fi
+}
+
+# GitHub poll cycle. Args: branch start_ts timeout_seconds
+# Resolves the PR from the current branch, polls `gh pr checks`, and on a red
+# conclusion pulls `gh run view --log-failed`. Emits ONE JSON status.
+ci_poll_github() {
+  local branch="$1" start_ts="$2" timeout_seconds="$3"
+
+  # Resolve the PR number for the current branch (best-effort).
+  local pr_num=""
+  pr_num=$(gh pr view --json number --jq '.number' 2>/dev/null) || true
+  [ -z "$pr_num" ] && pr_num=$(gh pr view "$branch" --json number --jq '.number' 2>/dev/null) || true
+  local pr_ref="$pr_num"
+  [ -z "$pr_ref" ] && pr_ref="$branch"
+
+  local now_ts elapsed
+  while :; do
+    # `gh pr checks` exit codes: 0 = all passed, 8 = pending, nonzero (e.g. 1) =
+    # failure, and it errors when NO checks exist. Capture output + rc; guard rc.
+    local checks_out="" checks_rc=0
+    checks_out=$(gh pr checks "$pr_ref" 2>&1) || checks_rc=$?
+
+    now_ts=$(date +%s)
+    elapsed=$((now_ts - start_ts))
+
+    # No checks reported for the PR. `gh pr checks` prints a "no checks reported"
+    # message and exits nonzero. After the grace window → treat as no-checks.
+    if printf '%s' "$checks_out" | grep -qiE 'no checks reported|no check runs'; then
+      if [ "$elapsed" -ge "$CI_GRACE_SECONDS" ]; then
+        warn "ci-poll(github): no checks reported for PR ${pr_ref} after grace — treating as no-checks (green-ish)"
+        ci_emit "no-checks" "github" "" "$pr_ref"
+        return 0
+      fi
+      # still inside grace → fall through to sleep/timeout handling below.
+    else
+      # Parse the per-check states. `gh pr checks` prints TSV rows with a state
+      # column (pass|fail|pending|skipping|...). Determine aggregate outcome.
+      local n_pending n_fail n_total
+      n_total=$(printf '%s\n' "$checks_out" | grep -ciE 'pass|fail|pending|skipping|neutral|cancel' || true)
+      n_pending=$(printf '%s\n' "$checks_out" | grep -ciE '\bpending\b|in_progress|queued' || true)
+      n_fail=$(printf '%s\n' "$checks_out" | grep -ciE '\bfail\b|failing|error|cancel' || true)
+      [ -z "$n_total" ] && n_total=0
+      [ -z "$n_pending" ] && n_pending=0
+      [ -z "$n_fail" ] && n_fail=0
+
+      # Prefer gh's own exit code when it is decisive (0 pass / 8 pending),
+      # falling back to the parsed row states.
+      if [ "$checks_rc" -eq 0 ] && [ "$n_total" -gt 0 ] && [ "$n_pending" -eq 0 ] && [ "$n_fail" -eq 0 ]; then
+        ci_emit "green" "github" "" "$pr_ref"
+        return 0
+      fi
+      if [ "$n_pending" -eq 0 ] && [ "$n_total" -gt 0 ]; then
+        if [ "$n_fail" -gt 0 ]; then
+          # Concluded red → pull failed-run logs (tail only).
+          local failed_log=""
+          failed_log=$(gh run view --log-failed 2>/dev/null | tail -100) || true
+          [ -z "$failed_log" ] && failed_log=$(printf '%s' "$checks_out" | tail -40)
+          ci_emit "red" "github" "$failed_log" "$pr_ref"
+          return 0
+        fi
+        # No pending, no fail, but rc nonzero — treat as green (all resolved).
+        ci_emit "green" "github" "" "$pr_ref"
+        return 0
+      fi
+      # else: still pending → fall through to sleep/timeout.
+    fi
+
+    # ── Wall-clock timeout (hung pipeline) ─────────────────────────────────────
+    now_ts=$(date +%s)
+    elapsed=$((now_ts - start_ts))
+    if [ "$elapsed" -ge "$timeout_seconds" ]; then
+      local tail_log=""
+      tail_log=$(printf '%s' "$checks_out" | tail -40)
+      warn "ci-poll(github): wall-clock timeout (${timeout_seconds}s) before checks concluded"
+      ci_emit "timeout" "github" "$tail_log" "$pr_ref"
+      return 0
+    fi
+
+    sleep "$CI_SLEEP_SECONDS"
+  done
+}
+
+# Azure poll cycle. Args: branch start_ts timeout_seconds
+# Uses `az pipelines runs list` filtered to the branch, then `az pipelines runs
+# show` for status/result. Emits ONE JSON status.
+ci_poll_azure() {
+  local branch="$1" start_ts="$2" timeout_seconds="$3"
+  local pr_ref="$branch"
+  local branch_ref="refs/heads/${branch}"
+
+  local now_ts elapsed
+  while :; do
+    # Latest run for this branch. `--query` pulls id/status/result of the newest.
+    # az emits JSON; parse with grep/sed (no jq dependency in this controller).
+    local runs_out="" runs_rc=0
+    runs_out=$(az pipelines runs list --branch "$branch_ref" --top 1 --output json 2>/dev/null) || runs_rc=$?
+
+    now_ts=$(date +%s)
+    elapsed=$((now_ts - start_ts))
+
+    # No run found for the branch → within grace, keep polling; after grace,
+    # treat as no-checks (no pipeline attached).
+    if [ -z "$runs_out" ] || printf '%s' "$runs_out" | grep -qE '^\[\s*\]\s*$'; then
+      if [ "$elapsed" -ge "$CI_GRACE_SECONDS" ]; then
+        warn "ci-poll(azure): no pipeline run for branch ${branch} after grace — treating as no-checks (green-ish)"
+        ci_emit "no-checks" "azure" "" "$pr_ref"
+        return 0
+      fi
+    else
+      # status: notStarted|inProgress|completed ; result: succeeded|failed|canceled|partiallySucceeded
+      local status="" result=""
+      status=$(printf '%s' "$runs_out" | grep -oE '"status"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 \
+               | sed -E 's/.*"status"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/') || true
+      result=$(printf '%s' "$runs_out" | grep -oE '"result"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 \
+               | sed -E 's/.*"result"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/') || true
+
+      if [ "$status" = "completed" ]; then
+        case "$result" in
+          succeeded)
+            ci_emit "green" "azure" "" "$pr_ref"
+            return 0
+            ;;
+          failed|canceled|partiallySucceeded)
+            # Pull a failing log summary from the run (best-effort).
+            local run_id="" failed_log=""
+            run_id=$(printf '%s' "$runs_out" | grep -oE '"id"[[:space:]]*:[[:space:]]*[0-9]+' | head -1 \
+                     | grep -oE '[0-9]+') || true
+            if [ -n "$run_id" ]; then
+              failed_log=$(az pipelines runs show --id "$run_id" --output json 2>/dev/null | tail -100) || true
+            fi
+            [ -z "$failed_log" ] && failed_log="azure pipeline run ${run_id:-?} result=${result}"
+            ci_emit "red" "azure" "$failed_log" "$pr_ref"
+            return 0
+            ;;
+          *)
+            # Completed but unknown result → treat as green-ish resolved.
+            ci_emit "green" "azure" "" "$pr_ref"
+            return 0
+            ;;
+        esac
+      fi
+      # else: notStarted / inProgress → still running, fall through to timeout.
+    fi
+
+    # ── Wall-clock timeout (hung pipeline) ─────────────────────────────────────
+    now_ts=$(date +%s)
+    elapsed=$((now_ts - start_ts))
+    if [ "$elapsed" -ge "$timeout_seconds" ]; then
+      warn "ci-poll(azure): wall-clock timeout (${timeout_seconds}s) before pipeline concluded"
+      ci_emit "timeout" "azure" "" "$pr_ref"
+      return 0
+    fi
+
+    sleep "$CI_SLEEP_SECONDS"
+  done
+}
+
+# ─── Main ─────────────────────────────────────────────────────────────────────
+
+case "${1:-}" in
+  -h|--help)
+    usage
+    exit 0
+    ;;
+  init)
+    [ $# -ge 3 ] || die "Usage: specclaw-loop init <specclaw_dir> <change_name>"
+    cmd_init "$2" "$3"
+    ;;
+  gates)
+    [ $# -ge 3 ] || die "Usage: specclaw-loop gates <specclaw_dir> <change_name>"
+    cmd_gates "$2" "$3"
+    ;;
+  done)
+    [ $# -ge 3 ] || die "Usage: specclaw-loop done <specclaw_dir> <change_name>"
+    cmd_done "$2" "$3"
+    ;;
+  signature)
+    [ $# -ge 3 ] || die "Usage: specclaw-loop signature <specclaw_dir> <change_name>"
+    cmd_signature "$2" "$3"
+    ;;
+  decide)
+    [ $# -ge 5 ] || die "Usage: specclaw-loop decide <specclaw_dir> <change_name> <passing_count> <failure_sig>"
+    cmd_decide "$2" "$3" "$4" "$5"
+    ;;
+  log-turn)
+    [ $# -ge 8 ] || die "Usage: specclaw-loop log-turn <specclaw_dir> <change_name> <passing_count> <failure_sig> <action> <reflection> <gates_summary>"
+    cmd_log_turn "$2" "$3" "$4" "$5" "$6" "$7" "$8"
+    ;;
+  guard-tests)
+    [ $# -ge 3 ] || die "Usage: specclaw-loop guard-tests <specclaw_dir> <change_name>"
+    cmd_guard_tests "$2" "$3"
+    ;;
+  escalate)
+    [ $# -ge 4 ] || die "Usage: specclaw-loop escalate <specclaw_dir> <change_name> <reason>"
+    cmd_escalate "$2" "$3" "$4"
+    ;;
+  ci-poll)
+    [ $# -ge 3 ] || die "Usage: specclaw-loop ci-poll <specclaw_dir> <change_name>"
+    cmd_ci_poll "$2" "$3"
+    ;;
+  "")
+    usage
+    exit 2
+    ;;
+  *)
+    warn "Unknown subcommand: $1"
+    usage
+    exit 2
+    ;;
+esac

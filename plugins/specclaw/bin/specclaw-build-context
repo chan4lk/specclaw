@@ -15,7 +15,7 @@ MAX_FILE_LINES=500
 # --- Help ---
 usage() {
   cat <<'EOF'
-Usage: specclaw-build-context <specclaw_dir> <change_name> <task_id>
+Usage: specclaw-build-context <specclaw_dir> <change_name> <task_id> [options]
 
 Build a context payload for a coding agent to implement a specific task.
 
@@ -24,18 +24,61 @@ Arguments:
   change_name    Name of the current change (subdirectory under changes/)
   task_id        Task ID to build context for (e.g. T1, T4)
 
+Options:
+  --failure-record <file>   Structured failure record from a failing gate (loop turn).
+  --reflection <file>       Compact reflection text on the failure (loop turn).
+
+When --failure-record or --reflection is given, a "Remediation Context (Loop Turn)"
+section is appended to the payload instructing the smallest diff to turn the failing
+gate(s) green. Omitting both leaves the payload byte-identical to the base behavior.
+
 The script reads spec.md, design.md, task details, and existing file contents,
 then outputs a formatted prompt to stdout.
 
 Examples:
   specclaw-build-context .specclaw my-feature T3
   specclaw-build-context /project/.specclaw auth-system T1
+  specclaw-build-context .specclaw my-feature T3 --failure-record fail.json --reflection reflect.md
 EOF
   exit 0
 }
 
 # --- Argument parsing ---
-[[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && usage
+# Positionals: <specclaw_dir> <change_name> <task_id>
+# Optional flags (positional-agnostic): --failure-record <file>, --reflection <file>
+FAILURE_RECORD_FILE=""
+REFLECTION_FILE=""
+POSITIONAL=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      usage
+      ;;
+    --failure-record)
+      FAILURE_RECORD_FILE="${2:-}"
+      shift 2
+      ;;
+    --failure-record=*)
+      FAILURE_RECORD_FILE="${1#*=}"
+      shift
+      ;;
+    --reflection)
+      REFLECTION_FILE="${2:-}"
+      shift 2
+      ;;
+    --reflection=*)
+      REFLECTION_FILE="${1#*=}"
+      shift
+      ;;
+    *)
+      POSITIONAL+=("$1")
+      shift
+      ;;
+  esac
+done
+
+set -- "${POSITIONAL[@]}"
 
 if [[ $# -lt 3 ]]; then
   echo "ERROR: Expected 3 arguments: <specclaw_dir> <change_name> <task_id>" >&2
@@ -362,6 +405,55 @@ ${TASK_ERRORS}"
   fi
 fi
 
+# --- Remediation context (loop turn) ---
+# When --failure-record or --reflection is provided, append a delimited section
+# instructing the smallest diff to turn the failing gate(s) green.
+# Missing/unreadable files warn to stderr and are treated as not provided.
+REMEDIATION_SECTION=""
+
+REFLECTION_CONTENT=""
+if [[ -n "$REFLECTION_FILE" ]]; then
+  if [[ -f "$REFLECTION_FILE" && -r "$REFLECTION_FILE" ]]; then
+    REFLECTION_CONTENT="$(cat "$REFLECTION_FILE")"
+  else
+    echo "WARNING: reflection file not found or unreadable: $REFLECTION_FILE — ignoring" >&2
+  fi
+fi
+
+FAILURE_RECORD_CONTENT=""
+if [[ -n "$FAILURE_RECORD_FILE" ]]; then
+  if [[ -f "$FAILURE_RECORD_FILE" && -r "$FAILURE_RECORD_FILE" ]]; then
+    FAILURE_RECORD_CONTENT="$(cat "$FAILURE_RECORD_FILE")"
+  else
+    echo "WARNING: failure record file not found or unreadable: $FAILURE_RECORD_FILE — ignoring" >&2
+  fi
+fi
+
+if [[ -n "$REFLECTION_CONTENT" || -n "$FAILURE_RECORD_CONTENT" ]]; then
+  REMEDIATION_SECTION="## Remediation Context (Loop Turn)
+
+A previous attempt at this task left one or more gates failing. Use the context
+below to fix it.
+"
+  if [[ -n "$REFLECTION_CONTENT" ]]; then
+    REMEDIATION_SECTION+="
+### Reflection
+${REFLECTION_CONTENT}
+"
+  fi
+  if [[ -n "$FAILURE_RECORD_CONTENT" ]]; then
+    REMEDIATION_SECTION+="
+### Failure Record
+\`\`\`
+${FAILURE_RECORD_CONTENT}
+\`\`\`
+"
+  fi
+  REMEDIATION_SECTION+="
+Make the SMALLEST diff that turns the failing gate(s) green. Do not touch unrelated code. Do not modify test files to force a pass.
+"
+fi
+
 # --- Build the prompt ---
 cat <<PROMPT
 You are a coding agent implementing a specific task in the project "${PROJECT_NAME}".
@@ -383,7 +475,7 @@ ${DESIGN_CONTENT}
 ## Existing Code
 ${EXISTING_CODE}
 
-${ERROR_HISTORY}
+${ERROR_HISTORY}${REMEDIATION_SECTION}
 ## Constraints
 1. ONLY modify/create the files listed above
 2. Follow existing code style and patterns

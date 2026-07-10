@@ -89,7 +89,9 @@ When `automation.auto_verify: true`, `/specclaw:build` automatically triggers ve
 
 ## Remediation
 
-If verdict is FAIL or PARTIAL:
+When `loop.enabled: true` (the default), remediation is automated by `/specclaw:loop`: the failed gates are fed back as a structured failure record, a fix agent makes the smallest diff to turn them green, and the whole change is re-verified — repeating until PASS or a guardrail (cap / no-progress / regression / oscillation) halts and escalates.
+
+When `loop.enabled: false`, remediation is manual. If verdict is FAIL or PARTIAL:
 1. List the failed acceptance criteria.
 2. Suggest creating remediation tasks targeting the gaps.
 3. The user can re-plan just the failed criteria or manually fix and re-verify.
