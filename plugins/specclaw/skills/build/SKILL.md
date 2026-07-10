@@ -148,3 +148,4 @@ Send a final **build summary**:
 - **Parallel within waves, sequential across waves.**
 - **Fail-fast on dependencies** — if a task fails, all dependents are immediately marked failed.
 - **Agent guardrails** — every coding agent is auto-prepended four behavioral rules (Think Before Coding, Simplicity First, Surgical Changes, Goal-Driven Execution), vendored verbatim from Andrej Karpathy's CLAUDE.md. See `references/agent-guardrails.md`. Injection happens inside `specclaw-build-context`; no config flag.
+- **Loop-aware** — when `loop.enabled: true` (the default), this build is one turn of the autonomous loop driven by `/specclaw:loop`, which re-runs verify+review and fixes the smallest diff until every gate is green or a guardrail halts. Build produces the first implementation; the loop remediates it. When `loop.enabled: false`, build behaves single-pass exactly as documented above — no loop, no extra files.
