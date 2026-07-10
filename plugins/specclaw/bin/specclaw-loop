@@ -39,8 +39,15 @@ Subcommands (implemented):
                 <action> "<reflection>" "<gates_summary>"
                 Append a turn entry to loop-log.md and update loop-state.json.
 
+  guard-tests   <specclaw_dir> <change_name>
+                Reward-hack guard: run AFTER a fix agent, BEFORE committing the
+                fix turn. Intersect working-tree changes (git diff HEAD) with the
+                configured/built-in test globs. If the fix agent touched a test
+                file, revert it (per loop.guard_action: revert-tests|revert-turn)
+                and emit JSON {tripped, test_files:[...], action, message}. Exits
+                0 (clean, tripped=false) or 3 (guard tripped → turn rejected).
+
 Subcommands (planned — not yet implemented):
-  guard-tests   Reject a fix turn that touched test files (reward-hack guard).
   escalate      Commit partial work, keep worktree, emit halt notification.
   ci-poll       Poll remote CI checks (gh / az) for the opt-in outer loop.
 
@@ -611,6 +618,228 @@ cmd_log_turn() {
   echo "Logged turn ${new_turn} (passing ${passing_count}/4, action ${action})"
 }
 
+# ─── Subcommand: guard-tests ─────────────────────────────────────────────────
+#
+# Reward-hacking guard. Run AFTER a fix agent has edited the working tree but
+# BEFORE the fix turn is committed. Reward hacking = the fix agent games the
+# harness by editing test files instead of fixing the source. This detects it.
+#
+# Mechanism:
+#   1. Read loop.test_paths (a YAML list of globs) + loop.guard_action from
+#      config.yaml. yaml_val only reads single-line scalars, so test_paths is
+#      parsed here directly — tolerant of both inline `[a, b]` and block `- item`
+#      forms. If test_paths is empty, fall back to built-in test globs.
+#   2. Changed files this turn = `git diff --name-only HEAD` — every working-tree
+#      edit (staged + unstaged) since the last commit. Since the loop commits
+#      each turn, HEAD is the last good state, so diffing working-tree-vs-HEAD is
+#      exactly "what the fix agent changed this turn".
+#   3. Intersect changed files with the test globs.
+#        empty     → {"tripped":false,...}, exit 0.
+#        non-empty → revert per guard_action, {"tripped":true,...}, exit 3.
+#
+# guard_action (default "revert-tests"):
+#   revert-tests : revert ONLY the matched test files (git checkout -- <files>),
+#                  leaving the source edits intact so the agent keeps progress.
+#   revert-turn  : revert ALL working-tree changes this turn (git checkout -- .),
+#                  dropping the entire (poisoned) turn.
+#
+# SAFETY:
+#   - Operates only inside the repo working tree (all paths are git-tracked,
+#     repo-relative). It never touches anything outside the working tree.
+#   - Revert reverts working-tree-vs-HEAD only. HEAD is the last committed good
+#     state (the loop commits each turn), so this drops the current uncommitted
+#     fix and nothing else — committed work is untouched. revert-turn uses
+#     `git checkout -- .` (working-tree restore), NOT `git reset --hard`, so no
+#     commit history is disturbed.
+#   - git revert operations have their exit codes checked (die on failure);
+#     only grep/glob classification uses `|| true`.
+#
+# Built-in fallback test globs (used when loop.test_paths is empty):
+#   *_test.*  *.test.*  *_spec.*  *.spec.*  test_*.*  spec_*.*
+#   and any path containing a test directory segment:
+#   /tests/  /test/  /__tests__/  /spec/  (also matched at path start).
+GUARD_FALLBACK_GLOBS='*_test.* *.test.* *_spec.* *.spec.* test_*.* spec_*.*'
+
+# Does path $1 match test-glob classification given the space-separated glob
+# list $2? Uses shell `case` glob matching on the basename AND full path, plus a
+# built-in directory-segment check. Returns 0 (match) / 1 (no match).
+guard_is_test_file() {
+  local path="$1" globs="$2"
+  local base="${path##*/}"
+  local g rc=1
+  # Split the glob list on whitespace regardless of the caller's IFS (callers
+  # iterate with `while IFS= read`, which would otherwise leave IFS empty and
+  # collapse $globs into a single word). Disable pathname expansion too: an
+  # unquoted `for g in $globs` would expand each glob (e.g. test_*.*) against the
+  # CURRENT dir and replace the literal pattern with matching filenames,
+  # corrupting the per-file `case` match. noglob keeps patterns literal.
+  local IFS=$' \t\n'
+  set -f
+  for g in $globs; do
+    # Match against the basename and the full repo-relative path.
+    case "$base" in $g) rc=0; break ;; esac
+    case "$path" in $g) rc=0; break ;; esac
+    # A bare directory-ish glob like "tests/*" or "**/foo" — try a loose
+    # trailing form too so operator-supplied dir globs work intuitively.
+    case "/$path" in */$g) rc=0; break ;; esac
+  done
+  set +f
+  [ "$rc" -eq 0 ] && return 0
+  # Built-in directory-segment check (always applied — reward-hack safety net).
+  case "/$path/" in
+    */tests/*|*/test/*|*/__tests__/*|*/spec/*) return 0 ;;
+  esac
+  return 1
+}
+
+cmd_guard_tests() {
+  local specclaw_dir="$1"
+  local change_name="$2"
+  local change_dir="${specclaw_dir}/changes/${change_name}"
+  local config_file="${specclaw_dir}/config.yaml"
+  local log_file="${change_dir}/loop-log.md"
+
+  # ── Read guard_action (single-line scalar → yaml_val is fine) ────────────────
+  local guard_action=""
+  [ -f "$config_file" ] && guard_action=$(yaml_val "$config_file" "loop.guard_action")
+  [ -z "$guard_action" ] && guard_action="revert-tests"
+
+  # ── Parse loop.test_paths (a YAML list) tolerantly ───────────────────────────
+  # yaml_val reads single-line scalars only, so parse the list by hand. Support:
+  #   inline flow form:   test_paths: [ "a/*", b/**, 'c' ]
+  #   block sequence:     test_paths:
+  #                         - "a/*"
+  #                         - b/**
+  local test_globs=""
+  if [ -f "$config_file" ]; then
+    # Grab the value on the test_paths: line itself (inline form, if any).
+    local tp_inline=""
+    tp_inline=$(grep -E '^[[:space:]]*test_paths:' "$config_file" 2>/dev/null | head -1 \
+                | sed -E 's/^[[:space:]]*test_paths:[[:space:]]*//' \
+                | sed -E 's/[[:space:]]+#.*$//') || true
+    # Inline flow list: strip [ ] and split on commas.
+    case "$tp_inline" in
+      \[*\]*)
+        local body="${tp_inline#*[}"; body="${body%]*}"
+        local IFS=','
+        local item
+        for item in $body; do
+          # trim whitespace + surrounding quotes.
+          item=$(printf '%s' "$item" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//; s/^"//; s/"$//; s/^'"'"'//; s/'"'"'$//')
+          [ -n "$item" ] && test_globs="${test_globs}${item} "
+        done
+        ;;
+    esac
+    # Block sequence: `- item` lines following the test_paths: line, up to the
+    # next non-indented / differently-keyed line. Extract with awk (state machine).
+    local block=""
+    block=$(awk '
+      /^[[:space:]]*test_paths:[[:space:]]*$/ { inblk=1; next }
+      inblk==1 {
+        if ($0 ~ /^[[:space:]]*-[[:space:]]*/) { print; next }
+        if ($0 ~ /^[[:space:]]*#/) { next }         # skip comment lines
+        if ($0 ~ /^[[:space:]]*$/) { next }          # skip blank lines
+        inblk=0                                       # any other line ends block
+      }
+    ' "$config_file" 2>/dev/null) || true
+    if [ -n "$block" ]; then
+      local line item
+      while IFS= read -r line; do
+        item=$(printf '%s' "$line" | sed -E 's/^[[:space:]]*-[[:space:]]*//; s/[[:space:]]+#.*$//; s/[[:space:]]+$//; s/^"//; s/"$//; s/^'"'"'//; s/'"'"'$//')
+        [ -n "$item" ] && test_globs="${test_globs}${item} "
+      done <<< "$block"
+    fi
+  fi
+  # Trim trailing whitespace.
+  test_globs=$(printf '%s' "$test_globs" | sed -E 's/[[:space:]]+$//')
+
+  # Fallback to built-in globs when no configured test_paths.
+  local using_fallback=false
+  if [ -z "$test_globs" ]; then
+    test_globs="$GUARD_FALLBACK_GLOBS"
+    using_fallback=true
+  fi
+
+  # ── Compute changed files this turn (working tree vs HEAD) ───────────────────
+  # Staged + unstaged edits since the last commit. Run from the repo root so the
+  # emitted paths are repo-relative and glob matching is consistent.
+  local repo_root
+  repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || repo_root="$(pwd)"
+
+  local changed=""
+  changed=$( ( cd "$repo_root" && git diff --name-only HEAD 2>/dev/null ) || true )
+
+  # ── Intersect changed files with the test globs ──────────────────────────────
+  local matched=""
+  if [ -n "$changed" ]; then
+    local f
+    while IFS= read -r f; do
+      [ -z "$f" ] && continue
+      if guard_is_test_file "$f" "$test_globs"; then
+        matched="${matched}${f}
+"
+      fi
+    done <<< "$changed"
+  fi
+  matched=$(printf '%s' "$matched" | grep -v '^$' || true)
+
+  # Build the JSON array of matched test files.
+  local files_json=""
+  if [ -n "$matched" ]; then
+    local mf
+    while IFS= read -r mf; do
+      [ -z "$mf" ] && continue
+      if [ -n "$files_json" ]; then
+        files_json="${files_json}, \"$(json_escape "$mf")\""
+      else
+        files_json="\"$(json_escape "$mf")\""
+      fi
+    done <<< "$matched"
+  fi
+
+  # ── Not tripped: no test files touched ───────────────────────────────────────
+  if [ -z "$matched" ]; then
+    printf '{"tripped": false, "test_files": [], "action": "none"}\n'
+    return 0
+  fi
+
+  # ── Tripped: revert per guard_action ─────────────────────────────────────────
+  local revert_rc=0
+  if [ "$guard_action" = "revert-turn" ]; then
+    # Drop ALL working-tree changes this turn (working-tree restore vs HEAD).
+    # NOT git reset --hard — history/commits are untouched.
+    ( cd "$repo_root" && git checkout -- . ) || revert_rc=$?
+  else
+    # revert-tests (default): revert ONLY the matched test files, leaving source
+    # edits intact. Feed matched paths via xargs (NUL-safe on newline list).
+    guard_action="revert-tests"
+    while IFS= read -r mf; do
+      [ -z "$mf" ] && continue
+      ( cd "$repo_root" && git checkout -- "$mf" ) || revert_rc=$?
+    done <<< "$matched"
+  fi
+  [ "$revert_rc" -eq 0 ] || die "guard-tests: git revert failed (exit ${revert_rc}) for action ${guard_action}"
+
+  local message="reward-hack guard: fix agent modified test files; reverted per ${guard_action}"
+
+  # ── Append a trip note to loop-log.md if it exists ───────────────────────────
+  if [ -f "$log_file" ]; then
+    local now files_flat
+    now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    files_flat=$(printf '%s' "$matched" | tr '\n' ' ' | sed -E 's/[[:space:]]+$//')
+    {
+      printf '%s%s%s%s\n' '- **reward_hack_guard tripped** (' "$now" '): action=' "$guard_action"
+      printf '%s%s\n' '  - reverted test files: ' "$files_flat"
+      $using_fallback && printf '%s\n' '  - (matched via built-in fallback test globs)'
+    } >> "$log_file"
+  fi
+
+  # ── Emit JSON + exit nonzero (turn rejected, non-progress failure) ───────────
+  printf '{"tripped": true, "test_files": [%s], "action": "%s", "message": "%s"}\n' \
+    "$files_json" "$guard_action" "$(json_escape "$message")"
+  return 3
+}
+
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 case "${1:-}" in
@@ -641,6 +870,10 @@ case "${1:-}" in
   log-turn)
     [ $# -ge 8 ] || die "Usage: specclaw-loop log-turn <specclaw_dir> <change_name> <passing_count> <failure_sig> <action> <reflection> <gates_summary>"
     cmd_log_turn "$2" "$3" "$4" "$5" "$6" "$7" "$8"
+    ;;
+  guard-tests)
+    [ $# -ge 3 ] || die "Usage: specclaw-loop guard-tests <specclaw_dir> <change_name>"
+    cmd_guard_tests "$2" "$3"
     ;;
   "")
     usage
