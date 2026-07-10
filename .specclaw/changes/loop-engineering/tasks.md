@@ -70,7 +70,7 @@ Build the `specclaw-loop` controller (gates, guardrails, state/log, CI poll), a 
 
 ### Wave 4 — Docs + version bump
 
-- [ ] `T10` — Document loop + bump version
+- [x] `T10` — Document loop + bump version
   - Files: `plugins/specclaw/CLAUDE.md`, `plugins/specclaw/.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`
   - Estimate: small
   - Depends: T8, T9
