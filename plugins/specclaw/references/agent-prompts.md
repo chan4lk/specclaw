@@ -55,6 +55,15 @@ Write a spec.md with:
 6. **Dependencies** — External libraries, APIs, services needed
 
 Every requirement must be verifiable. No vague statements like "should be fast" — specify "response time < 200ms".
+
+<examples>
+<example type="strong acceptance criterion">
+- [ ] **AC3** — GIVEN a signed-in user with an expired session token WHEN they submit the checkout form THEN the API responds 401 and the client redirects to /login preserving the cart contents.
+</example>
+<example type="weak acceptance criterion — do NOT produce">
+- [ ] **AC3** — Session handling should work correctly and be secure.
+</example>
+</examples>
 ```
 
 ---
@@ -134,6 +143,12 @@ Aim for 3-8 tasks per change. If more, the change scope is too large — flag it
 
 ## Build Agent (per task)
 
+> **Assembly order note:** `specclaw-build-context` assembles the live payload
+> with longform context (spec, design, existing code) in the middle and the
+> task + constraints LAST — queries at the end of long prompts measurably
+> improve response quality. The template below lists the content blocks; the
+> script owns the final ordering.
+
 ```
 You are a coding agent implementing a specific task in the project "{{project_name}}".
 
@@ -199,11 +214,12 @@ You are a strict QA engineer validating an implementation against its specificat
 ## Your Task
 
 For EACH acceptance criterion listed above:
-1. Carefully check if the implementation satisfies it by reading the changed files
-2. Mark as ✅ PASS with brief evidence of what satisfies it, or ❌ FAIL with what's missing/wrong
-3. Note any edge cases the criterion implies that are not handled
+1. **Extract quotes first:** pull the exact AC line, the code line(s) that satisfy or violate it, and the relevant test/lint/build output line(s) into a Quotes block for that criterion
+2. Carefully check if the implementation satisfies it by reading the changed files
+3. Mark as ✅ PASS with the quoted evidence that satisfies it, or ❌ FAIL with the quote showing what's missing/wrong
+4. Note any edge cases the criterion implies that are not handled
 
-After checking all criteria, review test/lint/build output for additional problems.
+A verdict line you cannot back with a quote from the material above is not evidence — omit it or mark it explicitly as an assumption. After checking all criteria, review test/lint/build output for additional problems.
 
 ## Verdict Rules
 - **PASS** — ALL acceptance criteria pass AND no blocking issues in test/lint/build output
@@ -293,6 +309,20 @@ Review the changed files across these 10 dimensions. Produce zero or more findin
 | 8 | **Design adherence** | Implementation diverges from design.md without justification (skip if design_content is empty) |
 | 9 | **Scope creep** | Files changed outside declared files: lists in tasks.md (skip if no files: present) |
 | 10 | **Dead code** | Added functions/vars/imports never referenced |
+
+Every finding must quote the exact line(s) it flags. A finding you cannot anchor to quoted code is not a finding — drop it.
+
+<examples>
+<example type="good finding">
+### [BLOCK] src/auth/session.ts:42 — Correctness
+**Problem:** Token expiry uses `<` so a token expiring exactly now passes: `if (token.exp < Date.now())`.
+**Fix:** Use `<=`: `if (token.exp <= Date.now())`.
+</example>
+<example type="bad finding — do NOT produce">
+### [WARN] src/auth — Correctness
+**Problem:** The session handling looks like it might have timing issues somewhere.
+</example>
+</examples>
 
 ## Severity Rules
 - `🔴 BLOCK` — security vulnerabilities, correctness bugs, design breaches
