@@ -44,11 +44,11 @@ Five independent text surfaces harden in parallel (Wave 1 — different files, n
 
 ### Wave 2 — Release plumbing
 
-- [x] `T6` — README, CHANGELOG, version 0.5.2
+- [x] `T6` — README, CHANGELOG, version 0.5.1
   - Files: README.md, CHANGELOG.md, plugins/specclaw/.claude-plugin/plugin.json, .claude-plugin/marketplace.json
   - Estimate: small
   - Depends: T1, T2, T3, T4, T5
-  - Notes: README: short "Evidence-grounded agent payloads" note under the workflow/architecture docs. CHANGELOG 0.5.2 entry citing the hardening blocks. Version 0.5.2 both files, in sync.
+  - Notes: README: short "Evidence-grounded agent payloads" note under the workflow/architecture docs. CHANGELOG 0.5.2 entry citing the hardening blocks. Version 0.5.1 both files, in sync.
 
 ---
 
