@@ -119,6 +119,32 @@ yaml_val() {
   echo "$value"
 }
 
+# Resolve the base branch: config override > origin/HEAD > gh default > main/master.
+# Single source of truth for both the version-bump comparison and `gh pr create --base`.
+detect_base_branch() {
+  local root cfg head_ref gh_def
+  root="$(cd "$SPECCLAW_DIR/.." && pwd)"
+  if [[ -f "$CONFIG_FILE" ]]; then
+    cfg="$(yaml_val "$CONFIG_FILE" "git.base_branch")"
+    if [[ -n "$cfg" ]]; then echo "$cfg"; return; fi
+  fi
+  head_ref="$(git -C "$root" rev-parse --abbrev-ref origin/HEAD 2>/dev/null)"
+  if [[ -z "$head_ref" || "$head_ref" == "origin/HEAD" ]]; then
+    git -C "$root" remote set-head origin --auto >/dev/null 2>&1
+    head_ref="$(git -C "$root" rev-parse --abbrev-ref origin/HEAD 2>/dev/null)"
+  fi
+  if [[ -n "$head_ref" && "$head_ref" != "origin/HEAD" ]]; then
+    echo "${head_ref#origin/}"; return
+  fi
+  if command -v gh >/dev/null 2>&1; then
+    gh_def="$(cd "$root" && gh repo view --json defaultBranchRef -q .defaultBranchRef.name 2>/dev/null)"
+    if [[ -n "$gh_def" ]]; then echo "$gh_def"; return; fi
+  fi
+  if git -C "$root" rev-parse --verify -q main >/dev/null 2>&1; then echo "main"
+  elif git -C "$root" rev-parse --verify -q master >/dev/null 2>&1; then echo "master"
+  else echo "main"; fi
+}
+
 # Read strict mode from config (default: true)
 STRICT="true"
 if [[ -f "$CONFIG_FILE" ]]; then
@@ -524,8 +550,7 @@ ensure_version_bumped() {
   [[ ${#version_files[@]} -eq 0 ]] && return 0
 
   local base_branch
-  base_branch="$(git -C "$project_root" rev-parse --abbrev-ref origin/HEAD 2>/dev/null | sed 's|origin/||')"
-  base_branch="${base_branch:-main}"
+  base_branch="$(detect_base_branch)"
 
   local bumped=false
   local files_changed=()
@@ -619,10 +644,12 @@ main() {
   # Push any new commits to the remote branch so the PR sees them
   git push 2>/dev/null || true
 
-  # Step 7b: Create PR
-  echo "Creating PR: $title"
+  # Step 7b: Create PR — target the detected base branch, never a hardcoded main
+  local pr_base
+  pr_base="$(detect_base_branch)"
+  echo "Creating PR: $title (base: $pr_base)"
   local pr_url
-  pr_url="$(gh pr create --base main --title "$title" --body "$body")"
+  pr_url="$(gh pr create --base "$pr_base" --title "$title" --body "$body")"
 
   # Step 7: Save URL
   save_pr_url "$pr_url"
