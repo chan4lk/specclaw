@@ -4,6 +4,32 @@ All notable changes to specclaw are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] — 2026-07-16
+
+### Added
+- **Grounded context discovery.** New `specclaw-discover-context` script
+  auto-discovers project documentation repo-wide (`git ls-files` with a
+  `find` fallback) and injects a budget-capped digest into plan, build,
+  and verify payloads. Ranking honors a root `llms.txt`/`llms-full.txt`
+  index first, then canonical root docs, doc directories, nested
+  READMEs, and other markdown. Changelogs, licenses, code-of-conduct
+  files, `archive`/`deprecated`/`i18n` content, dependency directories,
+  and `.specclaw/` itself are excluded by default. Configured via a new
+  `context:` block (`discovery`, `max_lines`, `folders`, `pin`,
+  `exclude`) with Context7-style precedence: exclude → folders →
+  include; `pin` bypasses both. Every over-budget file is named in the
+  digest footer — nothing is dropped silently. `context.discovery:
+  false` restores the exact previous behavior.
+- **Plan phase grounding.** `/specclaw:plan` now builds a structured
+  codebase survey, reads the discovered-docs digest, applies promoted
+  `.specclaw/knowledge/spec-guidelines.md` (previously written by
+  `learn --promote` but never read), and records the docs it used in a
+  "Grounding sources" section of `design.md`.
+- **Discovery regression tests.** Case 6 in `run-parser-tests.sh` — 11
+  jq-free assertions over a static fixture tree covering ranking,
+  llms.txt priority, default exclusions, filter precedence, pattern
+  forms, budget accounting, the off switch, and git-tree enumeration.
+
 ## [0.4.2] — 2026-05-24
 
 ### Fixed

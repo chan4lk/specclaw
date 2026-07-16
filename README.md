@@ -140,7 +140,22 @@ workflow:
   strict: true
   code_review: false               # Spawn code-reviewer agent on /specclaw:verify
   code_review_block: false         # Block /specclaw:pr if code review finds BLOCK issues
+
+context:
+  discovery: true                  # Auto-discover project docs for phase payloads
+  max_lines: 3000                  # Line budget for injected docs
+  folders: []                      # Restrict discovery (empty = whole repo)
+  pin: []                          # Always-include paths
+  exclude: []                      # Patterns to skip
 ```
+
+### Grounded Context Discovery
+
+SpecClaw grounds its planning and review in the documentation your project already has. With `context.discovery: true` (the default), `specclaw-discover-context` scans the repo (`git ls-files`, so `.gitignore` is respected) and injects a budget-capped digest of your docs into the plan, build, and verify payloads — after the curated `.specclaw/context.md` and knowledge base, which always take priority.
+
+Candidates are ranked: files listed in a root **`llms.txt`** / `llms-full.txt` index first, then root canonical docs (`CLAUDE.md`, `AGENTS.md`, `README.md`, `CONTRIBUTING.md`, `ARCHITECTURE.md`, `CODE-CONVENTIONS.md`, `SECURITY.md`), then doc directories (`docs/`, `doc/`, `.github/`, `wiki/`), then nested `README.md`/`CLAUDE.md`, then other markdown. Changelogs, licenses, code-of-conduct files, `archive/`/`deprecated/`/`i18n/` content, dependency directories, and `.specclaw/` itself are excluded by default.
+
+Filter precedence per file: `exclude` match → out; `folders` non-empty and file outside → out; otherwise in. `pin` entries bypass filtering and ranking. Exclude patterns support simple names (`node_modules`), root-relative paths (`./x`), and globs (`*.gen.md`, `**/dist`). Over-budget files are never dropped silently — every casualty is named in the digest footer. `/specclaw:plan` records the docs it used in a "Grounding sources" section of `design.md`. Set `context.discovery: false` for the exact pre-discovery behavior.
 
 ### Code Review
 

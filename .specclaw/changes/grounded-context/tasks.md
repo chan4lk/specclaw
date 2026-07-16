@@ -48,7 +48,7 @@ Build the discovery script first (T1 — everything depends on it), then fan out
 
 ### Wave 4 — Release plumbing
 
-- [ ] `T6` — README, CHANGELOG, version bump
+- [x] `T6` — README, CHANGELOG, version bump
   - Files: README.md, CHANGELOG.md, plugins/specclaw/.claude-plugin/plugin.json, .claude-plugin/marketplace.json
   - Estimate: small
   - Depends: T2, T3, T4, T5
