@@ -307,19 +307,21 @@ EOF_PATTERNS
 }
 
 outside_folders() {
-  local path="$1" folder ok=1
+  # Returns 0 (outside -> exclude) only when folders is non-empty and the
+  # path is under none of them.
+  local path="$1" folder inside=1
   [[ -z "$CFG_FOLDERS" ]] && return 1
   while IFS= read -r folder; do
     [[ -z "$folder" ]] && continue
     folder="${folder#./}"
     folder="${folder%/}"
     case "$path" in
-      "$folder"/*|"$folder") ok=0 ;;
+      "$folder"/*|"$folder") inside=0 ;;
     esac
   done <<EOF_FOLDERS
 $CFG_FOLDERS
 EOF_FOLDERS
-  return $ok
+  return $((1 - inside))
 }
 
 is_pinned() {

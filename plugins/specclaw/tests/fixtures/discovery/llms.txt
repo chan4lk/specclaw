@@ -1,0 +1,3 @@
+# Docs index
+- [Guide](docs/guide.md)
+- [Missing](docs/nope.md)

@@ -168,6 +168,89 @@ fi
 echo
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Case 6 — grounded-context: specclaw-discover-context ranking, filtering,
+# budget, and off-switch (all jq-free; runs in a non-git temp tree, which also
+# exercises the find fallback).
+# ─────────────────────────────────────────────────────────────────────────────
+echo "--- Case 6: discover-context ranking / filtering / budget ---"
+DISCOVER="$BIN_DIR/specclaw-discover-context"
+if [[ ! -f "$DISCOVER" ]]; then
+  fail "discover-context script missing at $DISCOVER"
+else
+  # Fixture project: copy the static tree, add a .specclaw dir per sub-case.
+  DPROJ="$WORK/discovery-proj"
+  mkdir -p "$DPROJ/.specclaw"
+  cp -R "$FIXTURES_DIR/discovery/." "$DPROJ/"
+  printf 'context:\n  discovery: true\n' > "$DPROJ/.specclaw/config.yaml"
+
+  # 6a (AC1/AC2) — ranking: llms.txt-listed guide.md first (tier 1), root
+  # canonical CLAUDE/README (tier 2), nested src/README (tier 4).
+  paths="$(bash "$DISCOVER" "$DPROJ/.specclaw" list 2>/dev/null | cut -f3 | tr '\n' ',')"
+  assert_eq "6a ranked order" "docs/guide.md,CLAUDE.md,README.md,docs/skip.md,src/README.md," "$paths"
+
+  # 6b (AC2) — missing llms.txt entry warns but does not fail.
+  if bash "$DISCOVER" "$DPROJ/.specclaw" list 2>&1 >/dev/null | grep -q "docs/nope.md"; then
+    pass "6b llms.txt missing entry warned"
+  else
+    fail "6b llms.txt missing entry warned"
+  fi
+
+  # 6c (AC3) — defaults exclude CHANGELOG.md and archive/.
+  listed="$(bash "$DISCOVER" "$DPROJ/.specclaw" list 2>/dev/null | cut -f3)"
+  if grep -q "CHANGELOG.md" <<<"$listed" || grep -q "archive/old.md" <<<"$listed"; then
+    fail "6c default exclusions (CHANGELOG/archive leaked)"
+  else
+    pass "6c default exclusions"
+  fi
+
+  # 6d (AC4) — precedence: folders includes docs/, exclude still beats it;
+  # root-relative pattern excludes root README.
+  printf 'context:\n  discovery: true\n  folders:\n    - "docs"\n  exclude:\n    - "docs/skip.md"\n' > "$DPROJ/.specclaw/config.yaml"
+  paths="$(bash "$DISCOVER" "$DPROJ/.specclaw" list 2>/dev/null | cut -f3 | tr '\n' ',')"
+  assert_eq "6d exclude beats folders" "docs/guide.md," "$paths"
+  printf 'context:\n  discovery: true\n  exclude:\n    - "./README.md"\n    - "src"\n' > "$DPROJ/.specclaw/config.yaml"
+  paths="$(bash "$DISCOVER" "$DPROJ/.specclaw" list 2>/dev/null | cut -f3 | tr '\n' ',')"
+  assert_eq "6d root-relative + segment excludes" "docs/guide.md,CLAUDE.md,docs/skip.md," "$paths"
+
+  # 6e (AC5) — budget: emit stays within budget and names every casualty.
+  printf 'context:\n  discovery: true\n' > "$DPROJ/.specclaw/config.yaml"
+  out="$(bash "$DISCOVER" "$DPROJ/.specclaw" emit --budget 4 2>/dev/null)"
+  if grep -q '^<!-- dropped (over 4-line budget):' <<<"$out"; then
+    pass "6e budget footer present"
+  else
+    fail "6e budget footer present"
+  fi
+  # Budget 4: guide.md (2) + CLAUDE.md (2) fit exactly; the rest must be
+  # named as dropped. " README.md" (leading space) avoids matching src/README.md.
+  for casualty in " README.md" "docs/skip.md" "src/README.md"; do
+    if grep "^<!-- dropped" <<<"$out" | grep -q "$casualty"; then
+      pass "6e names dropped:$casualty"
+    else
+      fail "6e names dropped:$casualty"
+    fi
+  done
+
+  # 6f (AC6) — discovery off: zero output, exit 0.
+  printf 'context:\n  discovery: false\n' > "$DPROJ/.specclaw/config.yaml"
+  out="$(bash "$DISCOVER" "$DPROJ/.specclaw" emit 2>/dev/null)"; rc=$?
+  if [[ -z "$out" && "$rc" -eq 0 ]]; then
+    pass "6f discovery off = empty output, exit 0"
+  else
+    fail "6f discovery off = empty output, exit 0 (rc=$rc, ${#out} bytes)"
+  fi
+
+  # 6g — git enumeration path: run against the real repo, expect README.md
+  # (tier 2) present and .specclaw/ absent.
+  real_list="$(bash "$DISCOVER" "$REPO_ROOT/.specclaw" list 2>/dev/null | cut -f3)"
+  if grep -qx "README.md" <<<"$real_list" && ! grep -q "^\.specclaw/" <<<"$real_list"; then
+    pass "6g git-tree enumeration on real repo"
+  else
+    fail "6g git-tree enumeration on real repo"
+  fi
+fi
+echo
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Summary
 # ─────────────────────────────────────────────────────────────────────────────
 echo "=================================================="
