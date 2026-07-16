@@ -20,19 +20,19 @@ Build the discovery script first (T1 — everything depends on it), then fan out
 
 ### Wave 2 — Parallel wiring
 
-- [ ] `T2` — Discovery test cases + fixtures
+- [x] `T2` — Discovery test cases + fixtures
   - Files: plugins/specclaw/tests/run-parser-tests.sh, plugins/specclaw/tests/fixtures/discovery/
   - Estimate: medium
   - Depends: T1
   - Notes: Fixture tree: root README.md + CLAUDE.md, docs/guide.md, src/README.md, CHANGELOG.md, archive/old.md, llms.txt referencing docs/guide.md + one missing path. Cases: AC1 ranking, AC2 llms.txt priority + missing-path warning, AC3 default exclusions, AC4 precedence + glob/root-relative patterns, AC5 budget drop/truncate footer, AC6 discovery-off empty output, non-git fallback (run fixture outside git via temp dir). Follow existing plain-bash test style (mktemp -d workspace, pass/fail counters).
 
-- [ ] `T3` — `context:` config block in template
+- [x] `T3` — `context:` config block in template
   - Files: plugins/specclaw/templates/config.yaml
   - Estimate: small
   - Depends: T1
   - Notes: Add commented block (discovery/max_lines/folders/pin/exclude) with defaults per spec FR7. Comment each field incl. pattern syntax summary and precedence rule. Additive only — existing keys untouched.
 
-- [ ] `T4` — Plan skill grounding steps
+- [x] `T4` — Plan skill grounding steps
   - Files: plugins/specclaw/skills/plan/SKILL.md
   - Estimate: medium
   - Depends: T1
