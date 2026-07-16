@@ -32,6 +32,10 @@ Review changed files across these 10 dimensions. For each dimension produce zero
 | 9 | **Scope creep** | Files modified that do not appear in any `files:` list in `tasks.md` (skip if tasks content is empty or has no `files:` entries — note "No files: declared, skipping D9") |
 | 10 | **Dead code** | Functions, variables, or imports added by this change that are never referenced |
 
+# Evidence Discipline
+
+Every finding must quote the exact line(s) of code it flags — path, line number, and the quoted text. A finding you cannot anchor to quoted code from the changed files is not a finding: drop it rather than report a vague suspicion. Never attribute behavior to code you have not read in the provided context.
+
 # Severity
 
 Tag every finding with one severity level:
