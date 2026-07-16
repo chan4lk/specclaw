@@ -12,7 +12,7 @@ Script first (everything depends on it), then tests + config in parallel, wiring
 
 ### Wave 1 — Core script
 
-- [ ] `T1` — Implement `specclaw-check-update`
+- [x] `T1` — Implement `specclaw-check-update`
   - Files: plugins/specclaw/bin/specclaw-check-update
   - Estimate: medium
   - Depends: —
@@ -20,13 +20,13 @@ Script first (everything depends on it), then tests + config in parallel, wiring
 
 ### Wave 2 — Tests + config
 
-- [ ] `T2` — Offline test cases
+- [x] `T2` — Offline test cases
   - Files: plugins/specclaw/tests/run-parser-tests.sh
   - Estimate: small
   - Depends: T1
   - Notes: Case 8: AC1 newer --remote-version prints one line (contains both versions + '/plugin update specclaw'); AC2 equal + older silent; AC3 update_check:false beats newer hook; AC4 unreachable repository URL (https://invalid.invalid/x/y) silent exit 0; AC5 cache: seed fresh cache with newer version + unreachable repo → notification from cache without network; corrupt cache ignored. All offline.
 
-- [ ] `T3` — Config template key
+- [x] `T3` — Config template key
   - Files: plugins/specclaw/templates/config.yaml
   - Estimate: small
   - Depends: T1
@@ -34,7 +34,7 @@ Script first (everything depends on it), then tests + config in parallel, wiring
 
 ### Wave 3 — Wiring + release
 
-- [ ] `T4` — Status wiring, README, CHANGELOG, version
+- [x] `T4` — Status wiring, README, CHANGELOG, version
   - Files: plugins/specclaw/skills/status/SKILL.md, README.md, CHANGELOG.md, plugins/specclaw/.claude-plugin/plugin.json, .claude-plugin/marketplace.json
   - Estimate: small
   - Depends: T1, T2, T3
