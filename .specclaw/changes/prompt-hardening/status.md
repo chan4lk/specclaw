@@ -12,8 +12,8 @@
 | Spec | ✅ Complete | 10 FRs, 3 NFRs, 11 ACs |
 | Design | ✅ Complete | text-only, 7 surfaces |
 | Tasks | ✅ Complete | 6 tasks, 2 waves |
-| Build | ⚪ Pending | |
-| Verify | ⚪ Pending | |
+| Build | ✅ Complete | 6/6 tasks |
+| Verify | ✅ PASS | 11/11 ACs, suite 13/13 |
 
 ## Task Progress
 

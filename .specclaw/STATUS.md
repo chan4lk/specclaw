@@ -1,7 +1,7 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** specclaw
-**Last Updated:** 2026-07-16 09:44 UTC
+**Last Updated:** 2026-07-16 09:49 UTC
 
 ## Active Changes
 
@@ -21,7 +21,7 @@
 - ✅ **phase-validation** — 2/2 tasks (100%) | 0 failed
 - ✅ **post-build-review** — 1/1 tasks (100%) | 0 failed
 - ✅ **pr-command** — 7/7 tasks (100%) | 0 failed
-- 🔨 **prompt-hardening** — 0/6 tasks (0%) | 0 failed
+- ✅ **prompt-hardening** — 6/6 tasks (100%) | 0 failed
 - 🔨 **spec-author-agent** — 4/5 tasks (80%) | 0 failed
 - ✅ **verification-engine** — 4/4 tasks (100%) | 0 failed
 
