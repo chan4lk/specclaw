@@ -12,8 +12,8 @@
 | Spec | ✅ Complete | 11 FRs, 4 NFRs, 11 ACs |
 | Design | ✅ Complete | 2-mode script + 3 integration points |
 | Tasks | ✅ Complete | 6 tasks, 4 waves |
-| Build | ⚪ Pending | |
-| Verify | ⚪ Pending | |
+| Build | ✅ Complete | 6/6 tasks, per-task commits |
+| Verify | ✅ PASS | 11/11 ACs, suite 24/24 |
 
 ## Task Progress
 

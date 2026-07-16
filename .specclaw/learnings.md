@@ -95,3 +95,18 @@ specclaw-gh-sync create detects Issues disabled on the target repo and exits 0 w
 validate-change should detect the issues-disabled condition, or gh-sync should record 'GitHub Issue: disabled' in status.md, so gates warn instead of block.
 
 ---
+
+## [L7] design_gap — yaml_get in specclaw-build-context does not strip inline ...
+
+**When:** 2026-07-16 09:22 UTC
+**Category:** design_gap
+**Priority:** low
+**Status:** pending
+
+### Detail
+yaml_get in specclaw-build-context does not strip inline YAML comments — commit_prefix renders as '"specclaw"       # Prefix for auto-commits' inside coding-agent payload commit instructions. yaml_val in validate-change already handles this; yaml_get predates it.
+
+### Action
+Port yaml_val's comment-stripping into yaml_get (or reuse yaml_val) in a lifecycle-bug-fixes follow-up change.
+
+---

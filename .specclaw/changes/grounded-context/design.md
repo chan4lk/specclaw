@@ -85,6 +85,16 @@ Exit 0 always when discovery is off or nothing found (empty stdout); nonzero onl
 5. **Digest after context.md and knowledge base** — curated sources outrank discovered ones in both order and budget priority (spec FR8/FR9, proposal Q2 resolution).
 6. **Two-mode script** — `list` keeps plan-time reasoning cheap; `emit` keeps payload builders one-call simple.
 
+## Grounding sources
+
+Docs consulted while designing this change (recorded per the convention this change introduces):
+
+- `CLAUDE.md` — repo git workflow + version-bump rule applied to task ordering (T6 last)
+- `plugins/specclaw/CLAUDE.md` — lifecycle + context.md model; discovery ordered after curated sources
+- `CONTRIBUTING.md` — plugin structure and test expectations
+- `plugins/specclaw/references/build-engine.md` — payload builder architecture the injection follows
+- `.specclaw/learnings.md` (L1–L5) — portability constraints (BSD sed, grep pipelines, fenced-checkbox parsing)
+
 ## Risks & Mitigations
 
 - **Payload bloat on doc-heavy repos** → hard `max_lines` budget, truncation footer, curated-first ordering; default 3000 lines ≈ safe for all current model contexts.
