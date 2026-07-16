@@ -280,6 +280,11 @@ if [[ -f "$SCRIPT_DIR/specclaw-discover-context" ]]; then
   DISCOVERED_DOCS="$(bash "$SCRIPT_DIR/specclaw-discover-context" "$SPECCLAW_DIR" emit 2>/dev/null)"
   if [[ -n "$DISCOVERED_DOCS" ]]; then
     DISCOVERED_SECTION="## Discovered Project Docs
+The following documentation was auto-discovered from this repository. When you
+rely on any of it for a decision, cite the exact source: name the doc path and
+quote the relevant line(s). Never attribute a claim to a doc without a quote —
+if you cannot point to the text, do not present it as documented fact.
+
 $DISCOVERED_DOCS
 "
   fi

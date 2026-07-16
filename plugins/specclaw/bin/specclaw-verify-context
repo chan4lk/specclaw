@@ -344,6 +344,11 @@ cat "$TEMPLATE_FILE"
 if [ -f "$SCRIPT_DIR/specclaw-discover-context" ]; then
   DISCOVERED_DOCS="$(bash "$SCRIPT_DIR/specclaw-discover-context" "$SPECCLAW_DIR" emit 2>/dev/null || true)"
   if [ -n "$DISCOVERED_DOCS" ]; then
-    printf '\n## Discovered Project Docs\n%s\n' "$DISCOVERED_DOCS"
+    printf '\n## Discovered Project Docs\n'
+    printf 'The following documentation was auto-discovered from this repository. When\n'
+    printf 'your verdict or a finding relies on any of it, cite the exact source: name\n'
+    printf 'the doc path and quote the relevant line(s). Never attribute a claim to a\n'
+    printf 'doc without a quote — unquoted attributions are not evidence.\n\n'
+    printf '%s\n' "$DISCOVERED_DOCS"
   fi
 fi

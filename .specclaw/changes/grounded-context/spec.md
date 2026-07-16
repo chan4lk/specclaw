@@ -23,6 +23,7 @@ SpecClaw phases (plan, build, verify/review) currently ignore documentation the 
 - **FR9 — Build integration.** `specclaw-build-context` includes the discovered-docs digest in coding-agent payloads, after `context.md` and the knowledge base, within the remaining budget.
 - **FR10 — Verify/review integration.** `specclaw-verify-context` includes the digest so the verify and code-review agents see project conventions.
 - **FR11 — Documentation.** README documents the `context:` block, discovery ranking, `llms.txt` support, and exclusion rules; stale adjacent sections (config examples, project structure) are refreshed. CHANGELOG entry added.
+- **FR12 — Evidence citation.** Agents consuming discovered docs must ground claims in evidence: the injected "Discovered Project Docs" section carries an explicit instruction to cite the doc path and quote the relevant line(s) when relying on any doc, and never to attribute a claim to a doc without a quote. The plan skill requires "Grounding sources" entries in `design.md` to cite path plus the specific convention/quote applied.
 
 ### Non-Functional Requirements
 
@@ -46,6 +47,7 @@ Each criterion must pass for the change to be considered complete.
 - [ ] **AC9** — When `.specclaw/knowledge/spec-guidelines.md` exists, the plan payload includes it (closing the currently-dead promote path).
 - [ ] **AC10** — `bash plugins/specclaw/tests/run-parser-tests.sh` passes: all pre-existing cases plus new discovery cases (ranking, exclusion, precedence, budget, non-git fallback).
 - [ ] **AC11** — README documents the `context:` block and discovery behavior; CHANGELOG has an entry; plugin version bumped in both version files.
+- [ ] **AC12** — Build and verify payloads containing discovered docs include the citation instruction (cite path + quote, no unquoted attributions); plan skill requires cited "Grounding sources" entries.
 
 ## Edge Cases
 

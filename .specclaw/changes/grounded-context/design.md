@@ -89,11 +89,11 @@ Exit 0 always when discovery is off or nothing found (empty stdout); nonzero onl
 
 Docs consulted while designing this change (recorded per the convention this change introduces):
 
-- `CLAUDE.md` — repo git workflow + version-bump rule applied to task ordering (T6 last)
-- `plugins/specclaw/CLAUDE.md` — lifecycle + context.md model; discovery ordered after curated sources
-- `CONTRIBUTING.md` — plugin structure and test expectations
-- `plugins/specclaw/references/build-engine.md` — payload builder architecture the injection follows
-- `.specclaw/learnings.md` (L1–L5) — portability constraints (BSD sed, grep pipelines, fenced-checkbox parsing)
+- `CLAUDE.md` — version-bump rule drove task ordering (T6 last): "Always bump the plugin version before opening a PR."
+- `plugins/specclaw/CLAUDE.md` — curated-doc priority (design decision 5) rests on: "`context.md` is always current. It is not an append log."
+- `CONTRIBUTING.md` — test expectation: "Testing — Real-world project testing across different stacks" → jq-free Case 6 suite.
+- `plugins/specclaw/references/build-engine.md` — injection mirrors the documented payload-section architecture (Repo Knowledge Base pattern).
+- `.specclaw/learnings.md` — NFR1 portability bar from L2: "BSD-sed portability" and L3: "`set -e`/pipefail silent-exit in grep pipelines."
 
 ## Risks & Mitigations
 

@@ -13,7 +13,7 @@
 | Design | ✅ Complete | 2-mode script + 3 integration points |
 | Tasks | ✅ Complete | 6 tasks, 4 waves |
 | Build | ✅ Complete | 6/6 tasks, per-task commits |
-| Verify | ✅ PASS | 11/11 ACs, suite 24/24 |
+| Verify | ✅ PASS | 12/12 ACs, suite 24/24 |
 
 ## Task Progress
 

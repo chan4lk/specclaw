@@ -17,6 +17,7 @@
 - ✅ **AC9 — spec-guidelines.md injection.** Plan skill step 3 reads `.specclaw/knowledge/spec-guidelines.md` when present (previously written by `learn --promote`, read by nothing). PASS.
 - ✅ **AC10 — Test suite.** `bash plugins/specclaw/tests/run-parser-tests.sh` → **24 passed, 0 failed** (13 pre-existing + 11 new Case 6 assertions), with jq installed. PASS.
 - ✅ **AC11 — Docs + version.** README "Grounded Context Discovery" section + config example updated; CHANGELOG 0.5.1 entry; version 0.5.1 in `plugin.json` and `marketplace.json` (in sync). PASS.
+- ✅ **AC12 — Evidence citation.** Live build payload shows the citation instruction inside "## Discovered Project Docs" ("cite the exact source: name the doc path and quote the relevant line(s)"); verify-context carries the equivalent instruction; plan skill requires quoted citations in spec/design decisions and cited "Grounding sources" entries (this change's design.md upgraded to quoted citations as the exemplar). Suite re-run after the change: 24/24. PASS.
 
 ## Test Results
 
@@ -40,6 +41,6 @@ No project `build.test_command` is configured; the suite above is the repo's tes
 
 ## Summary
 
-**Passed:** 11/11 criteria
-**Failed:** 0/11 criteria
+**Passed:** 12/12 criteria
+**Failed:** 0/12 criteria
 **Verdict:** PASS
