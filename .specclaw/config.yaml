@@ -39,7 +39,7 @@ notifications:
 
 # GitHub Issues integration
 github:
-  sync: true
+  sync: false   # Issues disabled on chan4lk/specclaw — validate-change would block every gate (see grounded-context L6)
   repo: "chan4lk/specclaw"
   token: ""
   label: "specclaw"
