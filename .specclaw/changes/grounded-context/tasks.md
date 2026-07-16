@@ -12,7 +12,7 @@ Build the discovery script first (T1 — everything depends on it), then fan out
 
 ### Wave 1 — Core discovery script
 
-- [ ] `T1` — Implement `specclaw-discover-context` (list + emit modes)
+- [x] `T1` — Implement `specclaw-discover-context` (list + emit modes)
   - Files: plugins/specclaw/bin/specclaw-discover-context
   - Estimate: large
   - Depends: —

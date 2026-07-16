@@ -1,0 +1,499 @@
+#!/usr/bin/env bash
+# specclaw-discover-context — auto-discover project documentation for phase payloads.
+#
+# Usage:
+#   specclaw-discover-context <specclaw_dir> list
+#   specclaw-discover-context <specclaw_dir> emit [--budget N]
+#
+# Modes:
+#   list  Print ranked candidates, one per line: "<rank>\t<lines>\t<path>"
+#   emit  Print a concatenated digest of candidate contents in rank order,
+#         capped at the line budget (--budget N overrides context.max_lines).
+#         Every dropped or truncated file is named in an HTML-comment footer —
+#         nothing is omitted silently.
+#
+# Ranking tiers (lower = higher priority; alphabetical within a tier):
+#   0  pinned via context.pin (bypasses ranking)
+#   1  listed in root llms.txt / llms-full.txt (existing repo paths only)
+#   2  root canonical docs (CLAUDE.md, AGENTS.md, README.md, CONTRIBUTING.md,
+#      ARCHITECTURE.md, CODE-CONVENTIONS.md, SECURITY.md, docs/index.md)
+#   3  files under doc directories (docs/, doc/, .github/, wiki/)
+#   4  nested README.md / CLAUDE.md
+#   5  any other *.md
+#
+# Filtering precedence per file (first match wins):
+#   1. context.exclude pattern match          -> excluded
+#   2. default exclusions                     -> excluded
+#   3. context.folders non-empty + outside    -> excluded
+#   4. otherwise                              -> included
+# context.pin entries bypass all filtering and ranking.
+#
+# Exclude pattern forms: simple name ("node_modules" — matches that path
+# segment anywhere), root-relative ("./x" — repo-root prefix), and glob
+# ("*.gen.md", "**/dist" — ** and * both cross directory boundaries).
+#
+# Config (.specclaw/config.yaml, all optional — absent block = these defaults):
+#   context:
+#     discovery: true
+#     max_lines: 3000
+#     folders: []
+#     pin: []
+#     exclude: []
+#
+# With discovery: false, or when nothing is found, both modes print nothing
+# and exit 0 — callers can append output unconditionally without emitting
+# empty section headers.
+#
+# Plain bash + coreutils. No jq. BSD/GNU sed safe. Paths with spaces are
+# handled; paths containing newlines or tabs are not supported (line-based
+# ranking pipeline) and are skipped with a warning.
+
+set -u
+
+# --- Args ---
+if [[ $# -lt 2 ]]; then
+  echo "Usage: specclaw-discover-context <specclaw_dir> <list|emit> [--budget N]" >&2
+  exit 1
+fi
+
+SPECCLAW_DIR="$1"
+MODE="$2"
+shift 2
+
+BUDGET_OVERRIDE=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --budget)
+      BUDGET_OVERRIDE="${2:-}"
+      shift 2 || { echo "ERROR: --budget requires a value" >&2; exit 1; }
+      ;;
+    *)
+      echo "ERROR: Unknown argument '$1'" >&2
+      exit 1
+      ;;
+  esac
+done
+
+case "$MODE" in
+  list|emit) ;;
+  *) echo "ERROR: Mode must be 'list' or 'emit', got '$MODE'" >&2; exit 1 ;;
+esac
+
+if [[ ! -d "$SPECCLAW_DIR" ]]; then
+  echo "ERROR: specclaw dir not found: $SPECCLAW_DIR" >&2
+  exit 1
+fi
+
+PROJECT_ROOT="$(cd "$SPECCLAW_DIR/.." && pwd)"
+CONFIG_FILE="$SPECCLAW_DIR/config.yaml"
+
+# --- Config helpers ---
+
+# Scalar value under an optional section: yaml_val file section.field
+yaml_val() {
+  local file="$1" key="$2"
+  local section field
+  if [[ "$key" == *.* ]]; then
+    section="${key%%.*}"
+    field="${key#*.}"
+  else
+    section=""
+    field="$key"
+  fi
+
+  local in_section=false value=""
+  while IFS= read -r line; do
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ -z "${line// /}" ]] && continue
+
+    if [[ -z "$section" ]]; then
+      if [[ "$line" =~ ^${field}:[[:space:]]*(.*) ]]; then
+        value="${BASH_REMATCH[1]}"
+        break
+      fi
+    else
+      if [[ "$line" =~ ^[a-zA-Z_] ]]; then
+        if [[ "$line" =~ ^${section}: ]]; then
+          in_section=true
+        else
+          in_section=false
+        fi
+        continue
+      fi
+      if $in_section; then
+        if [[ "$line" =~ ^[[:space:]]+${field}:[[:space:]]*(.*) ]]; then
+          value="${BASH_REMATCH[1]}"
+          break
+        fi
+      fi
+    fi
+  done < "$file"
+
+  if [[ "$value" =~ ([[:space:]]+#) ]]; then
+    value="${value%%"${BASH_REMATCH[1]}"*}"
+  fi
+  if [[ "$value" =~ [[:space:]]+$ ]]; then
+    value="${value%${BASH_REMATCH[0]}}"
+  fi
+  value="${value#\"}"
+  value="${value%\"}"
+  value="${value#\'}"
+  value="${value%\'}"
+  echo "$value"
+}
+
+# List items under section.field — supports inline "[a, b]" and block
+# "- item" forms. Prints one item per line (empty for [] or absent).
+yaml_list() {
+  local file="$1" key="$2"
+  local section="${key%%.*}" field="${key#*.}"
+  local in_section=false in_list=false line item inline
+
+  [[ -f "$file" ]] || return 0
+
+  while IFS= read -r line; do
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+
+    if [[ "$line" =~ ^[a-zA-Z_] ]]; then
+      in_list=false
+      if [[ "$line" =~ ^${section}: ]]; then
+        in_section=true
+      else
+        in_section=false
+      fi
+      continue
+    fi
+    $in_section || continue
+
+    if [[ "$line" =~ ^[[:space:]]+${field}:[[:space:]]*(.*) ]]; then
+      inline="${BASH_REMATCH[1]}"
+      # Strip trailing comment
+      if [[ "$inline" =~ ([[:space:]]+#) ]]; then
+        inline="${inline%%"${BASH_REMATCH[1]}"*}"
+      fi
+      if [[ "$inline" == "["*"]" ]]; then
+        # Inline list: [a, "b", c]
+        inline="${inline#\[}"
+        inline="${inline%\]}"
+        local IFS=','
+        for item in $inline; do
+          item="${item#"${item%%[![:space:]]*}"}"   # ltrim
+          item="${item%"${item##*[![:space:]]}"}"   # rtrim
+          item="${item#\"}"; item="${item%\"}"
+          item="${item#\'}"; item="${item%\'}"
+          [[ -n "$item" ]] && printf '%s\n' "$item"
+        done
+        in_list=false
+      elif [[ -z "$inline" ]]; then
+        in_list=true
+      else
+        in_list=false
+      fi
+      continue
+    fi
+
+    if $in_list; then
+      if [[ "$line" =~ ^[[:space:]]+-[[:space:]]*(.*) ]]; then
+        item="${BASH_REMATCH[1]}"
+        if [[ "$item" =~ ([[:space:]]+#) ]]; then
+          item="${item%%"${BASH_REMATCH[1]}"*}"
+        fi
+        item="${item%"${item##*[![:space:]]}"}"
+        item="${item#\"}"; item="${item%\"}"
+        item="${item#\'}"; item="${item%\'}"
+        [[ -n "$item" ]] && printf '%s\n' "$item"
+      elif [[ "$line" =~ ^[[:space:]]+[a-zA-Z_] ]]; then
+        in_list=false
+      fi
+    fi
+  done < "$file"
+}
+
+DISCOVERY="true"
+MAX_LINES="3000"
+if [[ -f "$CONFIG_FILE" ]]; then
+  v="$(yaml_val "$CONFIG_FILE" "context.discovery")"; [[ -n "$v" ]] && DISCOVERY="$v"
+  v="$(yaml_val "$CONFIG_FILE" "context.max_lines")"; [[ -n "$v" ]] && MAX_LINES="$v"
+fi
+case "$MAX_LINES" in ''|*[!0-9]*) MAX_LINES=3000 ;; esac
+
+BUDGET="$MAX_LINES"
+if [[ -n "$BUDGET_OVERRIDE" ]]; then
+  case "$BUDGET_OVERRIDE" in
+    *[!0-9]*|'') echo "ERROR: --budget must be a positive integer" >&2; exit 1 ;;
+    *) BUDGET="$BUDGET_OVERRIDE" ;;
+  esac
+fi
+
+if [[ "$DISCOVERY" != "true" ]]; then
+  exit 0
+fi
+
+# Config lists (newline-separated strings; bash-3.2 friendly, no arrays needed)
+CFG_FOLDERS="$(yaml_list "$CONFIG_FILE" "context.folders")"
+CFG_PIN="$(yaml_list "$CONFIG_FILE" "context.pin")"
+CFG_EXCLUDE="$(yaml_list "$CONFIG_FILE" "context.exclude")"
+
+# --- Filtering ---
+
+# Default-excluded path segments (directories, matched anywhere in the path)
+DEFAULT_EXCLUDE_DIRS=".specclaw node_modules vendor dist build archive deprecated i18n .git"
+
+# Does path contain one of the default-excluded segments?
+default_dir_excluded() {
+  local path="$1" seg
+  for seg in $DEFAULT_EXCLUDE_DIRS; do
+    case "/$path/" in
+      */"$seg"/*) return 0 ;;
+    esac
+  done
+  return 1
+}
+
+# Default-excluded basenames (changelog/license/conduct variants), case-insensitive
+default_file_excluded() {
+  local base lower
+  base="${1##*/}"
+  lower="$(printf '%s' "$base" | tr '[:upper:]' '[:lower:]')"
+  case "$lower" in
+    changelog*|license*|licence*|copying*|notice*|code_of_conduct*|code-of-conduct*) return 0 ;;
+  esac
+  return 1
+}
+
+# Match one config pattern against a repo-relative path.
+# Forms: "./root-relative", glob ("**" treated as "*"; case globs cross "/"),
+# or simple segment name.
+pattern_matches() {
+  local pattern="$1" path="$2" glob
+  # Normalize ** -> * (in bash case, * already crosses '/')
+  glob="${pattern//\*\*/\*}"
+  if [[ "$pattern" == ./* ]]; then
+    # Root-relative: anchor at repo root (prefix or exact)
+    glob="${glob#./}"
+    case "$path" in
+      $glob|$glob/*) return 0 ;;
+    esac
+    return 1
+  fi
+  if [[ "$pattern" == *[\*\?]* || "$pattern" == */* ]]; then
+    # Glob or path pattern: match whole path, any suffix under a matched dir,
+    # or anywhere in the tree (globstar-ish semantics)
+    case "$path" in
+      $glob|$glob/*|*/$glob|*/$glob/*) return 0 ;;
+    esac
+    return 1
+  fi
+  # Simple name: match as a path segment anywhere, or as the basename
+  case "/$path/" in
+    */"$pattern"/*) return 0 ;;
+  esac
+  case "${path##*/}" in
+    $glob) return 0 ;;
+  esac
+  return 1
+}
+
+config_excluded() {
+  local path="$1" pattern
+  [[ -z "$CFG_EXCLUDE" ]] && return 1
+  while IFS= read -r pattern; do
+    [[ -z "$pattern" ]] && continue
+    pattern_matches "$pattern" "$path" && return 0
+  done <<EOF_PATTERNS
+$CFG_EXCLUDE
+EOF_PATTERNS
+  return 1
+}
+
+outside_folders() {
+  local path="$1" folder ok=1
+  [[ -z "$CFG_FOLDERS" ]] && return 1
+  while IFS= read -r folder; do
+    [[ -z "$folder" ]] && continue
+    folder="${folder#./}"
+    folder="${folder%/}"
+    case "$path" in
+      "$folder"/*|"$folder") ok=0 ;;
+    esac
+  done <<EOF_FOLDERS
+$CFG_FOLDERS
+EOF_FOLDERS
+  return $ok
+}
+
+is_pinned() {
+  local path="$1" pin
+  [[ -z "$CFG_PIN" ]] && return 1
+  while IFS= read -r pin; do
+    [[ -z "$pin" ]] && continue
+    pin="${pin#./}"
+    [[ "$path" == "$pin" ]] && return 0
+  done <<EOF_PINS
+$CFG_PIN
+EOF_PINS
+  return 1
+}
+
+# --- Enumeration ---
+
+TMP_ALL="$(mktemp)"
+TMP_RANKED="$(mktemp)"
+trap 'rm -f "$TMP_ALL" "$TMP_RANKED"' EXIT
+
+if git -C "$PROJECT_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  # -z + tr keeps paths with spaces intact; embedded newlines/tabs become
+  # unusable in the line pipeline and are filtered below with a warning.
+  git -C "$PROJECT_ROOT" ls-files -z -- '*.md' 'llms.txt' 'llms-full.txt' 2>/dev/null \
+    | tr '\0' '\n' > "$TMP_ALL"
+else
+  (
+    cd "$PROJECT_ROOT" || exit 0
+    find . \( -name .git -o -name node_modules -o -name .specclaw -o -name vendor -o -name dist -o -name build \) -prune \
+      -o -type f \( -name '*.md' -o -name 'llms.txt' -o -name 'llms-full.txt' \) -print 2>/dev/null \
+      | sed 's|^\./||'
+  ) > "$TMP_ALL"
+fi
+
+[[ -s "$TMP_ALL" ]] || exit 0
+
+# --- llms.txt index (tier 1) ---
+# Collect repo-relative link targets / bare paths that exist on disk.
+LLMS_LISTED=""
+for idx in "llms.txt" "llms-full.txt"; do
+  [[ -f "$PROJECT_ROOT/$idx" ]] || continue
+  while IFS= read -r target; do
+    [[ -z "$target" ]] && continue
+    case "$target" in
+      http://*|https://*|\#*) continue ;;
+    esac
+    target="${target#./}"
+    target="${target%%#*}"
+    [[ -z "$target" ]] && continue
+    if [[ -f "$PROJECT_ROOT/$target" ]]; then
+      LLMS_LISTED="$LLMS_LISTED$target
+"
+    else
+      echo "WARN: llms.txt entry not found in repo, skipping: $target" >&2
+    fi
+  done <<EOF_LLMS
+$(sed -n 's/.*](\([^)]*\)).*/\1/p; /^[[:space:]]*[A-Za-z0-9_./-]*\.md[[:space:]]*$/{s/^[[:space:]]*//;s/[[:space:]]*$//;p;}' "$PROJECT_ROOT/$idx" 2>/dev/null | sort -u)
+EOF_LLMS
+done
+
+llms_listed() {
+  local path="$1"
+  [[ -z "$LLMS_LISTED" ]] && return 1
+  case "$LLMS_LISTED" in
+    *"$path
+"*) return 0 ;;
+  esac
+  return 1
+}
+
+# --- Rank each candidate ---
+
+rank_of() {
+  local path="$1" base lower
+  base="${path##*/}"
+  lower="$(printf '%s' "$base" | tr '[:upper:]' '[:lower:]')"
+
+  if llms_listed "$path"; then
+    echo 1; return
+  fi
+  # Root canonical names (no slash in path), plus docs/index.md
+  if [[ "$path" != */* ]]; then
+    case "$lower" in
+      claude.md|agents.md|readme.md|contributing.md|architecture.md|code-conventions.md|security.md)
+        echo 2; return ;;
+    esac
+  fi
+  if [[ "$path" == "docs/index.md" ]]; then
+    echo 2; return
+  fi
+  case "$path" in
+    docs/*|doc/*|.github/*|wiki/*) echo 3; return ;;
+  esac
+  case "$lower" in
+    readme.md|claude.md) echo 4; return ;;
+  esac
+  echo 5
+}
+
+# Build "rank<TAB>path" lines for included candidates
+while IFS= read -r path; do
+  [[ -z "$path" ]] && continue
+  case "$path" in
+    *"	"*) echo "WARN: path contains a tab, skipping: $path" >&2; continue ;;
+  esac
+  [[ -f "$PROJECT_ROOT/$path" ]] || continue
+  # llms.txt index files are inputs, not docs to inject
+  case "${path##*/}" in
+    llms.txt|llms-full.txt) continue ;;
+  esac
+
+  if is_pinned "$path"; then
+    printf '0\t%s\n' "$path" >> "$TMP_RANKED"
+    continue
+  fi
+  config_excluded "$path" && continue
+  default_dir_excluded "$path" && continue
+  default_file_excluded "$path" && continue
+  outside_folders "$path" && continue
+
+  printf '%s\t%s\n' "$(rank_of "$path")" "$path" >> "$TMP_RANKED"
+done < "$TMP_ALL"
+
+[[ -s "$TMP_RANKED" ]] || exit 0
+
+# Deterministic order: rank, then path
+SORTED="$(LC_ALL=C sort -t '	' -k1,1n -k2,2 "$TMP_RANKED" | LC_ALL=C sort -u -t '	' -k2,2 | LC_ALL=C sort -t '	' -k1,1n -k2,2)"
+
+# --- Output ---
+
+if [[ "$MODE" == "list" ]]; then
+  while IFS='	' read -r rank path; do
+    [[ -z "$path" ]] && continue
+    lines="$(wc -l < "$PROJECT_ROOT/$path" | tr -d '[:space:]')"
+    printf '%s\t%s\t%s\n' "$rank" "$lines" "$path"
+  done <<EOF_SORTED
+$SORTED
+EOF_SORTED
+  exit 0
+fi
+
+# emit mode
+USED=0
+DROPPED=""
+MIN_TRUNCATE=20   # don't bother emitting fewer lines than this from a truncated file
+
+while IFS='	' read -r rank path; do
+  [[ -z "$path" ]] && continue
+  lines="$(wc -l < "$PROJECT_ROOT/$path" | tr -d '[:space:]')"
+  remaining=$((BUDGET - USED))
+
+  if [[ "$lines" -le "$remaining" ]]; then
+    printf '<!-- discovered: %s (%s lines, rank %s) -->\n' "$path" "$lines" "$rank"
+    printf '### %s\n\n' "$path"
+    cat "$PROJECT_ROOT/$path"
+    printf '\n\n'
+    USED=$((USED + lines))
+  elif [[ "$remaining" -ge "$MIN_TRUNCATE" ]]; then
+    printf '<!-- discovered: %s (truncated to %s of %s lines, rank %s) -->\n' "$path" "$remaining" "$lines" "$rank"
+    printf '### %s (truncated)\n\n' "$path"
+    head -n "$remaining" "$PROJECT_ROOT/$path"
+    printf '\n\n'
+    USED=$BUDGET
+    DROPPED="$DROPPED, $path (truncated at $remaining/$lines lines)"
+  else
+    DROPPED="$DROPPED, $path ($lines lines)"
+  fi
+done <<EOF_SORTED
+$SORTED
+EOF_SORTED
+
+if [[ -n "$DROPPED" ]]; then
+  printf '<!-- dropped (over %s-line budget): %s -->\n' "$BUDGET" "${DROPPED#, }"
+fi
+
+exit 0
