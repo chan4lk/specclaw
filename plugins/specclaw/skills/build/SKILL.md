@@ -66,7 +66,7 @@ specclaw-update-task-status .specclaw/changes/<change>/tasks.md <TASK_ID> failed
    ```bash
    specclaw-build-context .specclaw <change> <TASK_ID>
    ```
-3. Spawn a coding agent with that payload as the task. Use the model from config. Run independent tasks in parallel up to `parallel_tasks`.
+3. Spawn a coding agent with that payload as the task. Use the model from config. Run independent tasks in parallel up to `parallel_tasks`. Calibrate delegation: spawn agents for tasks that are parallel, isolated, or independent workstreams; for a trivial sequential edit where spawning costs more than doing, apply the change directly and record it against the task as usual.
 
 **d.** Wait for all agents in the wave to complete.
 

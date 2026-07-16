@@ -91,7 +91,7 @@ Paste the controller's stdout (the `🛑 LOOP HALTED` block) as the **escalation
      --failure-record .specclaw/changes/<change>/.loop-failure.txt \
      --reflection .specclaw/changes/<change>/.loop-reflection.md
    ```
-3. Spawn a fix agent with that payload as the task. Use the model from config `models.coding`. Instruct it to make the **SMALLEST diff** that turns the red gate(s) green, touch no unrelated code, and **never modify test files to force a pass**.
+3. Spawn a fix agent with that payload as the task. Use the model from config `models.coding`. Instruct it to make the **SMALLEST diff** that turns the red gate(s) green, touch no unrelated code, and **never modify test files to force a pass**. Additionally instruct it on reversibility: prefer local, reversible actions (editing files, running tests); do **not** take hard-to-reverse or externally visible actions to get a gate green — no deleting files or branches, no `git push --force`, no `git reset --hard`, no bypassing safety checks (e.g. `--no-verify`), no discarding unfamiliar files that may be in-progress work. If a gate seems to require such an action, halt and report instead — that is an escalation, not a fix.
 
 **f. Reward-hack guard — run AFTER the fix agent, BEFORE committing:**
 
