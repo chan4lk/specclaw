@@ -12,8 +12,8 @@
 | Spec | ✅ Complete | 7 FRs, 3 NFRs, 9 ACs |
 | Design | ✅ Complete | one helper, three call sites |
 | Tasks | ✅ Complete | 4 tasks, 3 waves |
-| Build | ⚪ Pending | |
-| Verify | ⚪ Pending | |
+| Build | ✅ Complete | 4/4 tasks |
+| Verify | ✅ PASS | 9/9 ACs, suite 19/19 |
 
 ## Task Progress
 
