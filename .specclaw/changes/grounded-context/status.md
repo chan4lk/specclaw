@@ -27,3 +27,5 @@
 
 ## Issues
 
+
+**PR:** https://github.com/chan4lk/specclaw/pull/32
