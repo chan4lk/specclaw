@@ -4,6 +4,28 @@ All notable changes to specclaw are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3] — 2026-07-16
+
+### Added
+- **Smart base branch detection.** New `detect_base_branch()` (duplicated
+  into `specclaw-build` and `specclaw-pr` per the self-contained-script
+  convention) resolves the base as: `git.base_branch` config override →
+  `origin/HEAD` (self-healing via `git remote set-head origin --auto`) →
+  `gh repo view` default branch → `main`/`master` fallback. New config key
+  `git.base_branch` (empty = auto).
+
+### Fixed
+- **`specclaw-build setup` no longer branches from arbitrary HEAD.** New
+  change branches start from `origin/<base>` (fetched first, offline-safe
+  local fallback); creating a branch while off-base prints a divergence
+  warning so stacking is deliberate. Resume behavior unchanged. Setup JSON
+  gains a `base_branch` field.
+- **`specclaw-build finalize` merges into the detected base** instead of
+  guessing `main`-else-`master`.
+- **`specclaw-pr` no longer hardcodes `--base main`** — the PR targets the
+  detected base; the version-bump comparison now uses the same single
+  source of truth.
+
 ## [0.4.2] — 2026-05-24
 
 ### Fixed

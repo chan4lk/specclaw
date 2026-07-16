@@ -113,6 +113,7 @@ models:
 
 git:
   strategy: "branch-per-change"   # or "direct", or "worktree-per-change"
+  base_branch: ""                 # empty = auto-detect (origin/HEAD → gh default → main/master)
   auto_commit: true
   commit_prefix: "specclaw"
 
@@ -141,6 +142,10 @@ workflow:
   code_review: false               # Spawn code-reviewer agent on /specclaw:verify
   code_review_block: false         # Block /specclaw:pr if code review finds BLOCK issues
 ```
+
+### Base Branch Detection
+
+Change branches fork from — and merges/PRs target — the repo's actual base branch, resolved as: `git.base_branch` config override → `origin/HEAD` (self-healing via `git remote set-head origin --auto`) → `gh` default branch → `main`/`master` fallback. New change branches start from `origin/<base>` (fetched, offline-safe), never silently from whatever HEAD happens to be; creating a branch while off-base prints a warning so stacking is always deliberate. Repos on `develop`, `trunk`, or release branches work without configuration; set `git.base_branch` explicitly to pin a release flow.
 
 ### Code Review
 

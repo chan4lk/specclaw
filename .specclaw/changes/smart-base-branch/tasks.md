@@ -12,13 +12,13 @@ Both script edits are independent (same helper duplicated per repo convention) a
 
 ### Wave 1 — Script changes (parallel)
 
-- [ ] `T1` — specclaw-build: helper + base-aware setup/finalize
+- [x] `T1` — specclaw-build: helper + base-aware setup/finalize
   - Files: plugins/specclaw/bin/specclaw-build
   - Estimate: medium
   - Depends: —
   - Notes: Add detect_base_branch() per design.md. Setup: fetch base (warn-only), new branches start from origin/<base> when the ref verifies, else local <base>, else HEAD+warning; divergence warning when creating while HEAD isn't the base tip; resume path untouched; add "base_branch" to setup JSON. Finalize: replace main/master guess, checkout detected base before merge. Quote every branch expansion (slashed names).
 
-- [ ] `T2` — specclaw-pr: helper + dynamic --base
+- [x] `T2` — specclaw-pr: helper + dynamic --base
   - Files: plugins/specclaw/bin/specclaw-pr
   - Estimate: small
   - Depends: —
@@ -26,7 +26,7 @@ Both script edits are independent (same helper duplicated per repo convention) a
 
 ### Wave 2 — Tests + config
 
-- [ ] `T3` — Fixture tests + config key
+- [x] `T3` — Fixture tests + config key
   - Files: plugins/specclaw/tests/run-parser-tests.sh, plugins/specclaw/templates/config.yaml
   - Estimate: medium
   - Depends: T1, T2
@@ -34,7 +34,7 @@ Both script edits are independent (same helper duplicated per repo convention) a
 
 ### Wave 3 — Release plumbing
 
-- [ ] `T4` — README, CHANGELOG, version 0.5.3
+- [x] `T4` — README, CHANGELOG, version 0.5.3
   - Files: README.md, CHANGELOG.md, plugins/specclaw/.claude-plugin/plugin.json, .claude-plugin/marketplace.json
   - Estimate: small
   - Depends: T1, T2, T3
