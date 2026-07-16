@@ -455,17 +455,14 @@ Make the SMALLEST diff that turns the failing gate(s) green. Do not touch unrela
 fi
 
 # --- Build the prompt ---
+# Section order is deliberate (prompt-hardening FR4): static guardrails first
+# (prompt-cache locality), longform context in the middle, the task itself and
+# its constraints LAST — queries at the end of long prompts measurably improve
+# response quality.
 cat <<PROMPT
 You are a coding agent implementing a specific task in the project "${PROJECT_NAME}".
 
 ${GUARDRAILS_SECTION}${KNOWLEDGE_SECTION}${CONTEXT_SECTION}
-## Your Task
-${TASK_TITLE}
-${TASK_NOTES}
-
-## Files to Modify
-${FILE_LIST_FORMATTED}
-
 ## Specification Context
 ${SPEC_CONTENT}
 
@@ -476,10 +473,31 @@ ${DESIGN_CONTENT}
 ${EXISTING_CODE}
 
 ${ERROR_HISTORY}${REMEDIATION_SECTION}
+## Working Rules
+- **Investigate before answering.** Never speculate about code you have not
+  opened. If a claim depends on a file's contents, read that file first. Give
+  grounded answers only — if you cannot point to the code, do not assert it.
+- **General-purpose solutions only.** Tests verify correctness; they do not
+  define the solution. Do not hard-code values or special-case logic just to
+  make specific test inputs pass. If a test appears incorrect or the task
+  infeasible, report that instead of working around it.
+- **Clean up after yourself.** If you create temporary files, scripts, or
+  helpers for iteration, remove them before finishing the task.
+
+## Your Task
+${TASK_TITLE}
+${TASK_NOTES}
+
+## Files to Modify
+${FILE_LIST_FORMATTED}
+
 ## Constraints
-1. ONLY modify/create the files listed above
+1. ONLY modify/create the files listed above — other files may belong to
+   parallel tasks in this wave, and out-of-list edits are auto-logged as
+   design_gap scope deviations by the post-build review
 2. Follow existing code style and patterns
-3. Write tests for new functionality (if test framework exists)
+3. Write tests for new functionality (if a test framework exists) — the verify
+   gate consumes this evidence to judge the change's acceptance criteria
 4. Use existing utilities/helpers — don't duplicate
 5. Keep changes minimal and focused on THIS task only
 6. Commit with message: "${COMMIT_PREFIX}(${CHANGE_NAME}): ${TASK_ID} — ${TASK_TITLE}"
