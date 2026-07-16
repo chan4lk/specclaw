@@ -21,6 +21,9 @@ models:
 #   worktree-per-change  — isolated worktree per change, enables parallel multi-change builds
 git:
   strategy: "branch-per-change"   # "branch-per-change" | "direct" | "worktree-per-change"
+  base_branch: ""                 # Branch to fork changes from and target PRs/merges at.
+                                  # Empty = auto-detect: origin/HEAD, then gh default branch,
+                                  # then main/master. Set explicitly for release-branch flows.
   auto_commit: true
   commit_prefix: "specclaw"       # Prefix for auto-commits
   branch_prefix: "specclaw/"      # Prefix for feature branches

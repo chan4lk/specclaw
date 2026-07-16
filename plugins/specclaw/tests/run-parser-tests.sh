@@ -168,6 +168,84 @@ fi
 echo
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Case 7 — smart-base-branch: detect_base_branch chain + base-aware setup.
+# Local bare origin with default branch 'develop'; jq-free asserts.
+# ─────────────────────────────────────────────────────────────────────────────
+echo "--- Case 7: base branch detection + base-aware setup ---"
+BUILD_BIN="$BIN_DIR/specclaw-build"
+GPROJ="$WORK/base-branch-proj"
+
+# Build a bare origin whose default branch is 'develop'
+mkdir -p "$WORK/origin-src" && (
+  cd "$WORK/origin-src"
+  git init -q -b develop .
+  git config user.email t@t && git config user.name t
+  echo base > base.txt && git add . && git commit -qm base
+  echo dev2 > dev2.txt && git add . && git commit -qm dev2
+) && git clone -q --bare "$WORK/origin-src" "$WORK/origin.git" && (
+  git -C "$WORK/origin.git" symbolic-ref HEAD refs/heads/develop
+) && git clone -q "$WORK/origin.git" "$GPROJ" && (
+  cd "$GPROJ"
+  git config user.email t@t && git config user.name t
+  mkdir -p .specclaw/changes/bb-test
+  printf 'version: 1\ngit:\n  strategy: "branch-per-change"\n  branch_prefix: "specclaw/"\n' > .specclaw/config.yaml
+  printf '# t\n- [ ] `T1` — x\n  - Files: a\n' > .specclaw/changes/bb-test/tasks.md
+)
+
+if [[ ! -f "$BUILD_BIN" ]]; then
+  fail "specclaw-build missing"
+else
+  # 7a (AC1) — detection resolves origin/HEAD -> develop; setup JSON reports it
+  setup_json="$(cd "$GPROJ" && bash "$BUILD_BIN" setup .specclaw bb-test 2>/dev/null)"
+  base_val="$(printf '%s' "$setup_json" | grep -o '"base_branch": "[^"]*"' | sed 's/.*: "//;s/"//')"
+  assert_eq "7a detected base (origin/HEAD)" "develop" "$base_val"
+
+  # 7b (AC4) — new change branch starts at origin/develop tip
+  tip_origin="$(git -C "$GPROJ" rev-parse origin/develop)"
+  tip_branch="$(git -C "$GPROJ" rev-parse specclaw/bb-test)"
+  assert_eq "7b branch starts at origin/develop tip" "$tip_origin" "$tip_branch"
+
+  # 7c (AC5) — resume path unchanged (second run warns, same branch)
+  resume_out="$(cd "$GPROJ" && bash "$BUILD_BIN" setup .specclaw bb-test 2>&1 >/dev/null)"
+  if grep -q "already exists — resuming" <<<"$resume_out"; then
+    pass "7c resume warning intact"
+  else
+    fail "7c resume warning intact"
+  fi
+
+  # 7d (AC2) — config override beats origin/HEAD
+  (cd "$GPROJ" && git checkout -q develop && git branch -q -D specclaw/bb-test)
+  printf 'version: 1\ngit:\n  strategy: "branch-per-change"\n  branch_prefix: "specclaw/"\n  base_branch: "release/1.0"\n' > "$GPROJ/.specclaw/config.yaml"
+  (cd "$GPROJ" && git branch -q "release/1.0")
+  setup_json="$(cd "$GPROJ" && bash "$BUILD_BIN" setup .specclaw bb-test 2>/dev/null)"
+  base_val="$(printf '%s' "$setup_json" | grep -o '"base_branch": "[^"]*"' | sed 's/.*: "//;s/"//')"
+  assert_eq "7d config override wins" "release/1.0" "$base_val"
+
+  # 7e (AC3) — no origin remote: falls back to local main/master without error
+  NOREMOTE="$WORK/noremote-proj"
+  mkdir -p "$NOREMOTE" && (
+    cd "$NOREMOTE"
+    git init -q -b main .
+    git config user.email t@t && git config user.name t
+    echo x > x.txt && git add . && git commit -qm x
+    mkdir -p .specclaw/changes/nr-test
+    printf 'version: 1\ngit:\n  strategy: "branch-per-change"\n  branch_prefix: "specclaw/"\n' > .specclaw/config.yaml
+    printf '# t\n- [ ] `T1` — x\n  - Files: a\n' > .specclaw/changes/nr-test/tasks.md
+  )
+  setup_json="$(cd "$NOREMOTE" && bash "$BUILD_BIN" setup .specclaw nr-test 2>/dev/null)"
+  base_val="$(printf '%s' "$setup_json" | grep -o '"base_branch": "[^"]*"' | sed 's/.*: "//;s/"//')"
+  assert_eq "7e no-remote fallback" "main" "$base_val"
+
+  # 7f (AC6) — specclaw-pr uses detected base, no hardcoded '--base main'
+  if grep -q -- '--base "\$pr_base"' "$BIN_DIR/specclaw-pr" && ! grep -q -- '--base main' "$BIN_DIR/specclaw-pr"; then
+    pass "7f pr --base uses detection"
+  else
+    fail "7f pr --base uses detection"
+  fi
+fi
+echo
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Summary
 # ─────────────────────────────────────────────────────────────────────────────
 echo "=================================================="
