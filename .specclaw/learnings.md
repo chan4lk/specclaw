@@ -80,3 +80,18 @@ Spec did not specify behavior when spec.md already exists and /specclaw:plan is 
 Resolved in T3 by adding explicit 'if spec.md exists, skip spec step' branch in plan/SKILL.md; should be backported into spec.md FR7 wording on a future iteration
 
 ---
+
+## [L6] agent_issue — specclaw-gh-sync create detects Issues disabled on the ta...
+
+**When:** 2026-07-16 09:01 UTC
+**Category:** agent_issue
+**Priority:** medium
+**Status:** pending
+
+### Detail
+specclaw-gh-sync create detects Issues disabled on the target repo and exits 0 with a skip warning, recording nothing in status.md. specclaw-validate-change plan/build gates then hard-fail (strict mode) on the missing 'GitHub Issue' line — a permanently unpassable gate while github.sync: true. Same condition treated as skip by one component, fatal by another.
+
+### Action
+validate-change should detect the issues-disabled condition, or gh-sync should record 'GitHub Issue: disabled' in status.md, so gates warn instead of block.
+
+---

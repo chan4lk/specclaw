@@ -39,7 +39,7 @@ notifications:
 
 # GitHub Issues integration
 github:
-  sync: true
+  sync: false   # Issues are disabled on chan4lk/specclaw — sync cannot create tracking issues (specclaw-gh-sync skips, but validate-change would hard-block every plan/build gate)
   repo: "chan4lk/specclaw"
   token: ""
   label: "specclaw"
