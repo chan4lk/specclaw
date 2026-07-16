@@ -4,6 +4,32 @@ All notable changes to specclaw are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] — 2026-07-16
+
+### Changed
+- **Evidence-grounded agent payloads (prompt hardening).** Sourced from
+  Anthropic's and OpenAI's published prompt-engineering guides:
+  - Verify agent and code-reviewer now use quote-first verdicts — extract
+    the exact AC/code/test-output lines a judgment rests on before judging;
+    findings without quotable evidence are dropped.
+  - Build/fix payloads gain Working Rules: investigate before answering
+    (never speculate about unopened code), general-purpose solutions only
+    (tests verify correctness, they don't define it; report bad tests
+    instead of working around them), temp-file cleanup.
+  - Build payload reordered task-last: longform spec/design/code first,
+    task + constraints at the end (measured long-context win); guardrails
+    stay first for prompt-cache locality.
+  - Constraints now carry motivations (scope limit ↔ parallel-task
+    conflicts + design_gap auto-logging; tests ↔ verify gate evidence).
+  - Few-shot `<example>` pairs in agent-prompts.md (good/bad reviewer
+    finding, strong/weak acceptance criterion).
+  - Loop fix agents carry reversibility rules: no force-push, no
+    `git reset --hard`, no `--no-verify`, no destructive shortcuts to
+    green a gate — halt and escalate instead.
+  - spec-author gains research discipline: competing hypotheses,
+    confidence tracking, self-critique before the final write.
+  Karpathy guardrails section remains verbatim.
+
 ## [0.4.2] — 2026-05-24
 
 ### Fixed

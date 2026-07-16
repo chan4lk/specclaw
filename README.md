@@ -148,6 +148,10 @@ Set `workflow.code_review: true` to enable an automated code review step inside 
 
 Set `workflow.code_review_block: true` to hard-block `/specclaw:pr` when the review verdict is `CHANGES_REQUESTED`. Defaults to `false` so existing projects are unaffected.
 
+### Evidence-Grounded Agent Payloads
+
+Agent prompts follow published prompt-engineering guidance from Anthropic and OpenAI: coding agents are instructed to investigate before answering (never speculate about unopened code) and to write general-purpose solutions (tests verify correctness, they don't define it); verify and review agents must quote the exact spec/code/output lines a verdict rests on — unquotable claims are dropped; payloads put longform context first and the task last; loop fix agents carry reversibility rules (no force-push, no `--no-verify`, no destructive shortcuts to green a gate).
+
 ## Workflow
 
 1. **Propose** — draft a proposal, refine it with the user.
