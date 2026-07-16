@@ -26,6 +26,19 @@ git:
   branch_prefix: "specclaw/"      # Prefix for feature branches
   worktree_dir: ".specclaw/worktrees"  # Base directory for worktrees (worktree-per-change only)
 
+# Grounded context discovery — auto-discover project docs (README, CLAUDE.md,
+# docs/, llms.txt, ...) and inject them into plan/build/verify payloads.
+# Filter precedence per file: exclude match -> out; folders non-empty and file
+# outside -> out; otherwise in. pin entries bypass filtering and ranking.
+# Pattern forms for exclude: simple name ("node_modules" — matches that path
+# segment anywhere), root-relative ("./x"), glob ("*.gen.md", "**/dist").
+context:
+  discovery: true                  # false = no discovery, phases behave as before
+  max_lines: 3000                  # total line budget for injected docs
+  folders: []                      # restrict discovery to these dirs (empty = whole repo)
+  pin: []                          # always-include paths (exact, repo-relative)
+  exclude: []                      # patterns to skip
+
 # Build settings
 build:
   test_command: ""                 # e.g., "npm test", "pytest"
