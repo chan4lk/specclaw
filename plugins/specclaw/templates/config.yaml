@@ -86,6 +86,13 @@ pr:
                     # e2e   — requires e2e test evidence in verify-report + build.test_command set
                     # both  — requires unit + e2e evidence
 
+# Plugin housekeeping
+plugin:
+  update_check: true   # /specclaw:status checks the plugin repo for a newer published
+                       # version (max once/24h, cached in .specclaw/.update-check —
+                       # add that file to .gitignore). Fail-silent: network problems
+                       # never affect any command. Set false for zero network calls.
+
 # Azure DevOps integration (optional)
 # Run `specclaw auth azdo` to configure. Token stored in .specclaw/.env (gitignored).
 azdo:

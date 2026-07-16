@@ -15,3 +15,4 @@ Show the project dashboard.
    - Recently archived changes
    - Overall project health
 3. For a specific change, run `specclaw-validate-change .specclaw <change> status` to get a per-change snapshot.
+4. **Update check:** run `specclaw-check-update .specclaw`. If it prints a line (a newer plugin version is published), show that line verbatim after the dashboard; if it prints nothing, say nothing. The script is fail-silent and gated by `plugin.update_check` in config.yaml — never treat its absence of output as an error.

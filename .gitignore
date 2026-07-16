@@ -5,3 +5,4 @@ dist/
 .DS_Store
 .specclaw/.env
 .session-id
+.specclaw/.update-check

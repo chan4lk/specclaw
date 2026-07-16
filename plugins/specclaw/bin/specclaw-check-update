@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+# specclaw-check-update — quiet plugin update notifier.
+#
+# Usage:
+#   specclaw-check-update <specclaw_dir> [--force] [--remote-version X.Y.Z]
+#
+# Compares the installed plugin version (this script's own plugin.json)
+# against the published version in the plugin repo's marketplace.json
+# (repo derived from plugin.json's "repository" field). When a newer
+# version is published, prints exactly one line:
+#
+#   ⬆ specclaw X.Y.Z available (installed A.B.C) — update: /plugin update specclaw
+#
+# Otherwise prints nothing. Design rules:
+#   - plugin.update_check: false in config.yaml → no network, no output, exit 0
+#   - network hit at most once per 24h (cache: <specclaw_dir>/.update-check,
+#     recommended for .gitignore); --force bypasses the cache read
+#   - --remote-version X skips cache AND network — pure compare (test hook)
+#   - EVERY failure path (no curl, network down, unparseable response) is
+#     silent success: exit 0, empty stdout. A notifier must never break or
+#     delay a workflow.
+#
+# Plain bash + coreutils; curl optional; no jq.
+
+set -u
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CACHE_TTL=86400
+CURL_TIMEOUT=5
+
+[[ $# -ge 1 ]] || { echo "Usage: specclaw-check-update <specclaw_dir> [--force] [--remote-version X.Y.Z]" >&2; exit 1; }
+
+SPECCLAW_DIR="$1"; shift
+FORCE=false
+REMOTE_OVERRIDE=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --force) FORCE=true; shift ;;
+    --remote-version) REMOTE_OVERRIDE="${2:-}"; shift 2 || exit 1 ;;
+    *) echo "Unknown argument: $1" >&2; exit 1 ;;
+  esac
+done
+
+CONFIG_FILE="$SPECCLAW_DIR/config.yaml"
+CACHE_FILE="$SPECCLAW_DIR/.update-check"
+
+# --- Gate: plugin.update_check (absent = true) ---
+if [[ -f "$CONFIG_FILE" ]]; then
+  gate="$(awk '
+    /^[a-zA-Z_]/ { in_plugin = ($0 ~ /^plugin:/) }
+    in_plugin && /^[[:space:]]+update_check:/ {
+      sub(/^[[:space:]]+update_check:[[:space:]]*/, ""); sub(/[[:space:]]*#.*$/, "")
+      gsub(/["'"'"']/, ""); print; exit
+    }' "$CONFIG_FILE" 2>/dev/null)"
+  [[ "$gate" == "false" ]] && exit 0
+fi
+
+# --- Installed version (this plugin's own manifest) ---
+LOCAL_MANIFEST="$SCRIPT_DIR/../.claude-plugin/plugin.json"
+[[ -f "$LOCAL_MANIFEST" ]] || exit 0
+LOCAL_VER="$(grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' "$LOCAL_MANIFEST" 2>/dev/null | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
+[[ -n "$LOCAL_VER" ]] || exit 0
+
+# --- Remote version ---
+remote_ver=""
+if [[ -n "$REMOTE_OVERRIDE" ]]; then
+  remote_ver="$REMOTE_OVERRIDE"
+else
+  # Fresh cache short-circuits the network
+  if [[ "$FORCE" == false && -f "$CACHE_FILE" ]]; then
+    read -r cache_epoch cache_ver < "$CACHE_FILE" 2>/dev/null || true
+    now="$(date +%s)"
+    case "${cache_epoch:-}" in
+      ''|*[!0-9]*) : ;;  # corrupt cache — treat as stale
+      *)
+        if [[ -n "${cache_ver:-}" && $((now - cache_epoch)) -lt "$CACHE_TTL" ]]; then
+          remote_ver="$cache_ver"
+        fi
+        ;;
+    esac
+  fi
+
+  if [[ -z "$remote_ver" ]]; then
+    command -v curl >/dev/null 2>&1 || exit 0
+    # Derive owner/repo from the plugin manifest's repository URL
+    repo_url="$(grep -o '"repository"[[:space:]]*:[[:space:]]*"[^"]*"' "$LOCAL_MANIFEST" 2>/dev/null | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
+    [[ -n "$repo_url" ]] || exit 0
+    owner_repo="$(printf '%s' "$repo_url" | sed -e 's|^git@[^:]*:||' -e 's|^[a-z]*://[^/]*/||' -e 's|\.git$||' -e 's|/$||')"
+    [[ "$owner_repo" == */* ]] || exit 0
+
+    for branch in main master; do
+      body="$(curl -fsS --max-time "$CURL_TIMEOUT" "https://raw.githubusercontent.com/$owner_repo/$branch/.claude-plugin/marketplace.json" 2>/dev/null)" || body=""
+      [[ -n "$body" ]] && break
+    done
+    [[ -n "$body" ]] || exit 0
+
+    # Extract the specclaw entry's version (jq-free)
+    remote_ver="$(printf '%s' "$body" | sed -n '/"name"[[:space:]]*:[[:space:]]*"specclaw"/,/}/p' | grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
+    [[ -n "$remote_ver" ]] || exit 0
+
+    printf '%s %s\n' "$(date +%s)" "$remote_ver" > "$CACHE_FILE" 2>/dev/null || true
+  fi
+fi
+
+# --- Compare (numeric, per component, pad to 3) ---
+ver_part() {  # $1=version $2=index(1-3)
+  local p
+  p="$(printf '%s' "$1" | cut -d. -f"$2")"
+  case "$p" in ''|*[!0-9]*) echo 0 ;; *) echo "$p" ;; esac
+}
+
+newer=false
+for i in 1 2 3; do
+  r="$(ver_part "$remote_ver" "$i")"
+  l="$(ver_part "$LOCAL_VER" "$i")"
+  if [[ "$r" -gt "$l" ]]; then newer=true; break
+  elif [[ "$r" -lt "$l" ]]; then break; fi
+done
+
+if [[ "$newer" == true ]]; then
+  echo "⬆ specclaw $remote_ver available (installed $LOCAL_VER) — update: /plugin update specclaw"
+fi
+
+exit 0

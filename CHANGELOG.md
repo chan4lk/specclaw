@@ -4,6 +4,19 @@ All notable changes to specclaw are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] — 2026-07-16
+
+### Added
+- **Plugin update check.** New `specclaw-check-update` script: `/specclaw:status`
+  now surfaces a one-line hint when a newer plugin version is published
+  (compared against the plugin repo's raw `marketplace.json`, repo derived
+  from plugin.json's `repository` field). Network at most once per 24h
+  (cache `.specclaw/.update-check`, gitignore-recommended), 5s timeout,
+  fail-silent on every error path — a notifier must never break a command.
+  Gate: `plugin.update_check` config key (default true; `false` = zero
+  network calls). Offline test hook `--remote-version` covers the compare,
+  gate, cache, and silence paths in the suite.
+
 ## [0.4.2] — 2026-05-24
 
 ### Fixed
