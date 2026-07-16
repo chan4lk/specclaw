@@ -336,3 +336,14 @@ replace_var "lint_output" "$TMPDIR_CTX/lint_output"
 replace_var "build_output" "$TMPDIR_CTX/build_output"
 
 cat "$TEMPLATE_FILE"
+
+# ─── Step 7: Discovered project docs (grounded context discovery) ────────────
+# Appended after the template so the verify agent sees the project's own
+# documented conventions. Empty digest (discovery off / nothing found) emits
+# nothing — output stays identical to pre-discovery behavior.
+if [ -f "$SCRIPT_DIR/specclaw-discover-context" ]; then
+  DISCOVERED_DOCS="$(bash "$SCRIPT_DIR/specclaw-discover-context" "$SPECCLAW_DIR" emit 2>/dev/null || true)"
+  if [ -n "$DISCOVERED_DOCS" ]; then
+    printf '\n## Discovered Project Docs\n%s\n' "$DISCOVERED_DOCS"
+  fi
+fi

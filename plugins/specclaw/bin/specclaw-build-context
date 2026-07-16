@@ -271,6 +271,20 @@ $(cat "$KNOWLEDGE_HINTS_FILE")
 "
 fi
 
+# --- Discovered project docs (grounded context discovery) ---
+# Auto-discovered project documentation digest — empty when context.discovery
+# is false or nothing qualifies, in which case no section is emitted (payload
+# stays byte-identical to pre-discovery behavior).
+DISCOVERED_SECTION=""
+if [[ -f "$SCRIPT_DIR/specclaw-discover-context" ]]; then
+  DISCOVERED_DOCS="$(bash "$SCRIPT_DIR/specclaw-discover-context" "$SPECCLAW_DIR" emit 2>/dev/null)"
+  if [[ -n "$DISCOVERED_DOCS" ]]; then
+    DISCOVERED_SECTION="## Discovered Project Docs
+$DISCOVERED_DOCS
+"
+  fi
+fi
+
 # --- Project context (living architecture doc) ---
 MAX_CONTEXT_LINES=150
 CONTEXT_FILE="$SPECCLAW_DIR/context.md"
@@ -458,7 +472,7 @@ fi
 cat <<PROMPT
 You are a coding agent implementing a specific task in the project "${PROJECT_NAME}".
 
-${GUARDRAILS_SECTION}${KNOWLEDGE_SECTION}${CONTEXT_SECTION}
+${GUARDRAILS_SECTION}${KNOWLEDGE_SECTION}${CONTEXT_SECTION}${DISCOVERED_SECTION}
 ## Your Task
 ${TASK_TITLE}
 ${TASK_NOTES}

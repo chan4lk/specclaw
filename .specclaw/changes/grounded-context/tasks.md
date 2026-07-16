@@ -40,7 +40,7 @@ Build the discovery script first (T1 — everything depends on it), then fan out
 
 ### Wave 3 — Payload builders
 
-- [ ] `T5` — Inject digest into build + verify payloads
+- [x] `T5` — Inject digest into build + verify payloads
   - Files: plugins/specclaw/bin/specclaw-build-context, plugins/specclaw/bin/specclaw-verify-context
   - Estimate: medium
   - Depends: T1, T3
