@@ -336,3 +336,16 @@ replace_var "lint_output" "$TMPDIR_CTX/lint_output"
 replace_var "build_output" "$TMPDIR_CTX/build_output"
 
 cat "$TEMPLATE_FILE"
+
+# Quote-first verdict discipline (prompt-hardening FR1): grounding verdicts in
+# extracted quotes measurably improves accuracy on long payloads.
+cat <<'QUOTE_FIRST'
+
+## Evidence Discipline (read before judging)
+Before writing any verdict, first extract the exact quotes your judgment rests
+on into a "Quotes" section: the acceptance-criterion line, the code line(s)
+that satisfy or violate it, and the test/lint/build output line(s) that prove
+it. Then evaluate each criterion by referencing those quotes. A claim you
+cannot back with a quote from the material above is not evidence — leave it
+out or mark it explicitly as an assumption.
+QUOTE_FIRST
