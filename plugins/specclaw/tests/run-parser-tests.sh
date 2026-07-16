@@ -168,6 +168,83 @@ fi
 echo
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Case 8 — update-check: compare logic, gate, fail-silence, cache (all offline).
+# ─────────────────────────────────────────────────────────────────────────────
+echo "--- Case 8: update-check compare / gate / silence / cache ---"
+CHECK_BIN="$BIN_DIR/specclaw-check-update"
+UPROJ="$WORK/update-proj/.specclaw"
+mkdir -p "$UPROJ"
+printf 'version: 1\n' > "$UPROJ/config.yaml"
+
+if [[ ! -f "$CHECK_BIN" ]]; then
+  fail "specclaw-check-update missing"
+else
+  local_ver="$(grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' "$BIN_DIR/../.claude-plugin/plugin.json" | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
+
+  # 8a (AC1) — newer remote → exactly one line with both versions + update hint
+  out="$(bash "$CHECK_BIN" "$UPROJ" --remote-version 99.0.0)"
+  if [[ "$(wc -l <<<"$out")" == "1" ]] && grep -q "99.0.0" <<<"$out" && grep -q "$local_ver" <<<"$out" && grep -q "/plugin update specclaw" <<<"$out"; then
+    pass "8a newer remote notifies"
+  else
+    fail "8a newer remote notifies (got: $out)"
+  fi
+
+  # 8b (AC2) — equal and older remote → silent, exit 0
+  out_eq="$(bash "$CHECK_BIN" "$UPROJ" --remote-version "$local_ver")"; rc_eq=$?
+  out_old="$(bash "$CHECK_BIN" "$UPROJ" --remote-version 0.0.1)"; rc_old=$?
+  if [[ -z "$out_eq" && -z "$out_old" && "$rc_eq" -eq 0 && "$rc_old" -eq 0 ]]; then
+    pass "8b equal/older silent"
+  else
+    fail "8b equal/older silent"
+  fi
+
+  # 8c (AC3) — gate beats hook: update_check false + newer remote → silent
+  printf 'version: 1\nplugin:\n  update_check: false\n' > "$UPROJ/config.yaml"
+  out="$(bash "$CHECK_BIN" "$UPROJ" --remote-version 99.0.0)"; rc=$?
+  if [[ -z "$out" && "$rc" -eq 0 ]]; then
+    pass "8c gate disables check"
+  else
+    fail "8c gate disables check"
+  fi
+  printf 'version: 1\n' > "$UPROJ/config.yaml"
+
+  # 8d (AC5) — fresh cache short-circuits network: seed newer cached version,
+  # no --remote-version, notification comes from the cache alone
+  printf '%s 99.0.0\n' "$(date +%s)" > "$UPROJ/.update-check"
+  out="$(bash "$CHECK_BIN" "$UPROJ")"
+  if grep -q "99.0.0 available" <<<"$out"; then
+    pass "8d cache short-circuit notifies"
+  else
+    fail "8d cache short-circuit notifies (got: $out)"
+  fi
+
+  # 8e (AC5) — corrupt cache ignored (treated stale); with no network result
+  # available the check stays silent rather than erroring
+  printf 'garbage-not-epoch 99.0.0\n' > "$UPROJ/.update-check"
+  out="$(bash "$CHECK_BIN" "$UPROJ" --remote-version 0.0.1)"; rc=$?
+  if [[ -z "$out" && "$rc" -eq 0 ]]; then
+    pass "8e corrupt cache ignored"
+  else
+    fail "8e corrupt cache ignored"
+  fi
+  rm -f "$UPROJ/.update-check"
+
+  # 8f (AC4) — unreachable repo host: silent exit 0 (fail-silent network path).
+  # Copy the script beside a fake manifest so repo derivation hits a dead host.
+  FAKEBIN="$WORK/fake-plugin/bin"
+  mkdir -p "$FAKEBIN" "$WORK/fake-plugin/.claude-plugin"
+  cp "$CHECK_BIN" "$FAKEBIN/"
+  printf '{ "name": "specclaw", "version": "0.0.1", "repository": "https://invalid.invalid/nobody/nothing" }\n' > "$WORK/fake-plugin/.claude-plugin/plugin.json"
+  out="$(bash "$FAKEBIN/specclaw-check-update" "$UPROJ" --force 2>/dev/null)"; rc=$?
+  if [[ -z "$out" && "$rc" -eq 0 ]]; then
+    pass "8f unreachable host silent"
+  else
+    fail "8f unreachable host silent (rc=$rc, out: $out)"
+  fi
+fi
+echo
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Summary
 # ─────────────────────────────────────────────────────────────────────────────
 echo "=================================================="
