@@ -34,7 +34,7 @@ Both script edits are independent (same helper duplicated per repo convention) a
 
 ### Wave 3 — Release plumbing
 
-- [x] `T4` — README, CHANGELOG, version 0.5.3
+- [x] `T4` — README, CHANGELOG, version 0.5.1
   - Files: README.md, CHANGELOG.md, plugins/specclaw/.claude-plugin/plugin.json, .claude-plugin/marketplace.json
   - Estimate: small
   - Depends: T1, T2, T3
