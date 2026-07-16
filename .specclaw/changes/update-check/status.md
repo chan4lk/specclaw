@@ -12,8 +12,8 @@
 | Spec | ✅ Complete | 8 FRs, 3 NFRs, 8 ACs |
 | Design | ✅ Complete | one script, one wiring line |
 | Tasks | ✅ Complete | 4 tasks, 3 waves |
-| Build | ⚪ Pending | |
-| Verify | ⚪ Pending | |
+| Build | ✅ Complete | 4/4 tasks |
+| Verify | ✅ PASS | 8/8 ACs, suite 19/19 |
 
 ## Task Progress
 
