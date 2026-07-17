@@ -5,7 +5,7 @@ title: SpecClaw — Spec-driven development for Claude Code
 
 # 🦞 SpecClaw
 
-**Spec-driven development for Claude Code.** Every change gets a paper trail: proposal → spec → design → ordered task list → verified PR.
+**Spec-driven development for Claude Code.** Just say _"I have a proposal"_ — SpecClaw is a Claude Code plugin that turns a plain-English idea into merged, production-ready code through an automated **propose → plan → build → verify → pr** lifecycle. Every change gets a paper trail: proposal → spec → design → ordered task list → verified PR.
 
 [View on GitHub](https://github.com/chan4lk/specclaw){: .btn .btn-primary}
 [Install instructions](#installation){: .btn}
