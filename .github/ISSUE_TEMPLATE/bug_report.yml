@@ -1,0 +1,44 @@
+name: 🐛 Bug report
+description: Something in SpecClaw isn't working as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for helping improve SpecClaw! Please fill in the details below.
+  - type: input
+    id: version
+    attributes:
+      label: SpecClaw version
+      description: See `plugins/specclaw/.claude-plugin/plugin.json` or `/specclaw:status`.
+      placeholder: "0.5.3"
+    validations:
+      required: true
+  - type: input
+    id: claude-code
+    attributes:
+      label: Claude Code version
+      placeholder: "2.1.x"
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what actually happened?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. /specclaw:init
+        2. /specclaw:propose "..."
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output / logs
+      render: shell

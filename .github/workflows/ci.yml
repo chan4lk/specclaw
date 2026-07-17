@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Parser regression suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+      - name: Run parser tests
+        run: bash plugins/specclaw/tests/run-parser-tests.sh
+
+  shellcheck:
+    name: ShellCheck bin scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: Lint bin/ scripts
+        run: shellcheck plugins/specclaw/bin/specclaw-* || true
+
+  json:
+    name: Validate plugin manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check JSON + version sync
+        run: |
+          python3 -c "import json; json.load(open('.claude-plugin/marketplace.json'))"
+          python3 -c "import json; json.load(open('plugins/specclaw/.claude-plugin/plugin.json'))"
+          PV=$(python3 -c "import json; print(json.load(open('plugins/specclaw/.claude-plugin/plugin.json'))['version'])")
+          MV=$(python3 -c "import json; print(json.load(open('.claude-plugin/marketplace.json'))['plugins'][0]['version'])")
+          echo "plugin.json=$PV marketplace.json=$MV"
+          test "$PV" = "$MV" || { echo "::error::version mismatch between plugin.json ($PV) and marketplace.json ($MV)"; exit 1; }

@@ -4,6 +4,20 @@ All notable changes to specclaw are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3] — 2026-07-17
+
+### Added
+- **Repo discoverability & community health.** README now leads with status
+  badges (CI, release, license, Claude Code compat, stars, PRs-welcome), a
+  30-second try-it line, and a demo placeholder for a propose→plan→build→pr
+  recording. Added `.github/` community files: bug-report and feature-request
+  issue templates (`config.yml` routes questions to Discussions), a pull-request
+  template with the version-sync checklist, `SECURITY.md`, and
+  `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1).
+- **CI.** New `.github/workflows/ci.yml` runs the parser regression suite (with
+  `jq` installed), ShellCheck over `bin/`, and a JSON + plugin/marketplace
+  version-sync check on every push and PR.
+
 ## [0.5.2] — 2026-07-16
 
 ### Added
