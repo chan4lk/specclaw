@@ -1,6 +1,12 @@
+<div align="center">
+
 # 🦞 SpecClaw
 
-**Spec-driven development for Claude Code.**
+### _"I have a proposal."_
+
+**Spec-driven development for Claude Code.** Turn a plain-English idea into merged, production-ready code through a fully automated SDLC.
+
+![SpecClaw — the "I have a proposal" SDLC workflow](docs/assets/specclaw-hero.png)
 
 [![CI](https://github.com/chan4lk/specclaw/actions/workflows/ci.yml/badge.svg)](https://github.com/chan4lk/specclaw/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/chan4lk/specclaw?color=e11d48&label=release)](https://github.com/chan4lk/specclaw/releases)
@@ -9,12 +15,9 @@
 [![Stars](https://img.shields.io/github/stars/chan4lk/specclaw?style=social)](https://github.com/chan4lk/specclaw/stargazers)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-SpecClaw is a Claude Code plugin that manages the full lifecycle of a code change: propose → plan → build → verify → pr. It writes structured proposals, specs, designs, and ordered task lists into your project, then drives implementation through the lifecycle with full traceability from requirement to merged PR.
+</div>
 
-<!-- DEMO: replace with a 15–30s asciinema/GIF of the propose → plan → build → pr loop.
-     Record: `asciinema rec`, upload to asciinema.org, then embed the SVG/GIF here.
-     A demo at the top of the README is the single biggest driver of stars for CLI tools. -->
-<!-- ![SpecClaw demo](docs/demo.gif) -->
+Just say **"I have a proposal"** — SpecClaw manages the full lifecycle of a code change: propose → plan → build → verify → pr. It writes structured proposals, specs, designs, and ordered task lists into your project, then drives implementation through the lifecycle with full traceability from requirement to merged PR.
 
 > **Try it in 30 seconds:** `/plugin marketplace add chan4lk/specclaw` → `/plugin install specclaw@chan4lk` → `/specclaw:init`
 
