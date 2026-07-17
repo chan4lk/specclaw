@@ -1,7 +1,17 @@
-title: SpecClaw
-description: Spec-driven development for Claude Code. Propose → plan → build → verify → pr, with full traceability.
+title: SpecClaw — Spec-driven development for Claude Code
+description: >-
+  SpecClaw is a Claude Code plugin for spec-driven development: turn a
+  plain-English idea into merged, production-ready code through an automated
+  propose → plan → build → verify → pr lifecycle with full traceability.
 theme: jekyll-theme-cayman
 show_downloads: false
+
+# Canonical URLs for sitemap / robots (default GitHub Pages project site)
+url: https://chan4lk.github.io
+baseurl: /specclaw
+
+plugins:
+  - jekyll-sitemap
 
 repository: chan4lk/specclaw
 

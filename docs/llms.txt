@@ -1,0 +1,23 @@
+# SpecClaw
+
+> SpecClaw is a Claude Code plugin for spec-driven development. It turns a plain-English idea ("I have a proposal") into merged, production-ready code through an automated propose → plan → build → verify → pr lifecycle, writing structured proposals, specs, designs, and ordered task lists into your repo with full traceability from requirement to merged PR.
+
+SpecClaw is spec-driven development for Claude Code. Every change gets a paper trail: `proposal.md` (why), `spec.md` (requirements + acceptance criteria), `design.md` (technical approach), `tasks.md` (ordered, parallelizable waves), and `verify-report.md` (evidence). State lives in `.specclaw/` in your project; nothing is hidden inside the plugin install. Optional sync to GitHub Issues, Azure DevOps, and Jira.
+
+## Docs
+
+- [Documentation site](https://chan4lk.github.io/specclaw): Overview, install, quickstart, commands
+- [README](https://github.com/chan4lk/specclaw/blob/main/README.md): Full project readme
+- [Full LLM text](https://chan4lk.github.io/specclaw/llms-full.txt): Expanded, self-contained description
+
+## Getting started
+
+- [Installation](https://chan4lk.github.io/specclaw/#installation): `/plugin marketplace add chan4lk/specclaw` then `/plugin install specclaw@chan4lk`
+- [Quickstart](https://chan4lk.github.io/specclaw/#quickstart): init → propose → plan → build → verify → pr
+- [Commands](https://chan4lk.github.io/specclaw/#commands): All `/specclaw:` commands
+
+## Source
+
+- [GitHub repository](https://github.com/chan4lk/specclaw): Source, issues, releases
+- [Changelog](https://github.com/chan4lk/specclaw/blob/main/CHANGELOG.md): Release history
+- [License (MIT)](https://github.com/chan4lk/specclaw/blob/main/LICENSE): MIT License

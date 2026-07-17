@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://chan4lk.github.io/specclaw/sitemap.xml

@@ -1,0 +1,91 @@
+# SpecClaw — Spec-driven development for Claude Code
+
+## What it is
+
+SpecClaw is a Claude Code plugin that manages the full lifecycle of a code change: propose → plan → build → verify → pr. Instead of one-shot prompting, it turns a plain-English idea into merged, production-ready code by writing structured artifacts into your repository and driving implementation with full traceability from requirement to merged pull request.
+
+The entry point is conversational: say "I have a proposal" (or run `/specclaw:propose`) and SpecClaw begins the lifecycle.
+
+Every change lives in `.specclaw/changes/<change-name>/` inside your own repo. The plugin operates on your project's current working directory; nothing is hidden inside the plugin install. Git history is the audit trail.
+
+## Why it exists
+
+AI coding agents are powerful but lose context fast. SpecClaw gives every change durable structure so context survives across sessions and agents:
+
+- proposal.md — why the change matters, what is in and out of scope
+- spec.md — functional and non-functional requirements, acceptance criteria, edge cases
+- design.md — technical approach, architecture, file changes map, key decisions, risks
+- tasks.md — ordered tasks grouped into parallelizable waves with explicit dependencies
+- verify-report.md — evidence the implementation meets the spec
+- learnings.md and patterns.md — recurring issues become cross-change prevention rules
+
+## The lifecycle
+
+1. Propose — `/specclaw:propose "<idea>"` drafts a structured proposal (problem, solution, scope, impact, open questions) for review.
+2. Plan — `/specclaw:plan <change>` analyzes the codebase and generates spec.md, design.md, and an ordered tasks.md from the approved proposal. Add `--author-spec` to co-author the spec interactively (5 Whys, Jobs-to-be-Done, Inversion, Pre-mortem, MoSCoW) with an approval gate.
+3. Build — `/specclaw:build <change>` executes tasks wave-by-wave, committing each, logging errors to errors.md and insights to learnings.md. Parallel within a wave, sequential across waves.
+4. Verify — `/specclaw:verify <change>` runs the configured test/lint/build commands, evaluates against the acceptance criteria, and writes verify-report.md. Optionally runs an automated code review across 10 quality dimensions.
+5. PR — `/specclaw:pr <change>` opens a GitHub pull request (or `/specclaw:pr-azdo` for Azure DevOps) using the spec and verify report as the description.
+6. Archive — after merge, `/specclaw:archive <change>` moves the change to the archive and closes any synced issue.
+
+An autonomous loop (`/specclaw:loop`, default-on) closes build → verify → review automatically: it evaluates gates, makes the smallest diff to turn a failing gate green, re-verifies, and repeats until every gate passes or a guardrail halts (iteration cap, no-progress limit, regression, oscillation). A reward-hack guard reverts agent edits to test files so tests always run from committed HEAD.
+
+## Installation
+
+Requires Claude Code v2.1 or later.
+
+```
+/plugin marketplace add chan4lk/specclaw
+/plugin install specclaw@chan4lk
+```
+
+Future plugins by the same owner ship in the same `chan4lk` marketplace — register it once.
+
+## Quickstart
+
+```
+/specclaw:init                                  # initialize .specclaw/ in the project
+/specclaw:propose "add dark mode support"       # draft a proposal
+/specclaw:plan add-dark-mode                    # generate spec + design + tasks
+/specclaw:build add-dark-mode                   # execute tasks wave-by-wave
+/specclaw:verify add-dark-mode                  # validate against acceptance criteria
+/specclaw:pr add-dark-mode                      # open the pull request
+```
+
+## Commands
+
+- /specclaw:init — Initialize .specclaw/ in the current project
+- /specclaw:propose "<idea>" — Draft a new change proposal
+- /specclaw:plan <change> — Generate spec + design + tasks (--author-spec for interactive spec authoring)
+- /specclaw:author-spec <change> — Author spec.md interactively via the spec-author subagent
+- /specclaw:build <change> — Execute tasks wave-by-wave
+- /specclaw:verify <change> — Validate implementation against spec
+- /specclaw:pr <change> — Open a GitHub pull request
+- /specclaw:pr-azdo <change> — Open an Azure DevOps pull request
+- /specclaw:learn <change> "..." — Record a spec gap, design miss, or pattern
+- /specclaw:patterns — Inspect the cross-change pattern registry
+- /specclaw:loop — Autonomously iterate build → verify → review until gates are green
+- /specclaw:status — Show the project dashboard
+- /specclaw:archive <change> — Archive a completed change
+- /specclaw:auto — Advance the queue of active changes autonomously
+- /specclaw:issue <change> — Create a Jira issue from a proposal
+- /specclaw:azdo-issue <change> — Create an Azure Boards Work Item from a proposal
+- /specclaw:auth-azdo, /specclaw:auth-jira — One-time credentials setup (explicit-only)
+
+## Configuration
+
+Project config lives in `.specclaw/config.yaml`: models (planning/coding/review), git strategy (branch-per-change, direct, or worktree-per-change), base branch auto-detection, GitHub/Azure DevOps/Jira integrations, automation flags, the workflow code-review toggle, the autonomous loop block, and grounded context discovery (auto-discovers project docs and injects a budget-capped digest into plan/build/verify payloads).
+
+## Integrations
+
+- GitHub Issues sync — mirror proposals and task checklists to issues
+- GitHub / Azure DevOps pull requests
+- Azure Boards Work Items
+- Jira issues
+
+## Project and license
+
+- Source, issues, releases: https://github.com/chan4lk/specclaw
+- Documentation: https://chan4lk.github.io/specclaw
+- License: MIT
+- Author: @chan4lk. SpecClaw is the first plugin in the chan4lk Claude Code marketplace.
