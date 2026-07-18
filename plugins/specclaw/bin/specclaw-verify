@@ -118,7 +118,11 @@ cmd_collect() {
     # Extract backtick-delimited paths
     while [[ "$paths_str" =~ \`([^\`]+)\` ]]; do
       file_paths+=("${BASH_REMATCH[1]}")
-      paths_str="${paths_str#*\`${BASH_REMATCH[1]}\`}"
+      # Advance past the matched `path` token with content-agnostic strips.
+      # Interpolating ${BASH_REMATCH[1]} into the pattern would glob-interpret
+      # the path (e.g. `app/[id]/page.tsx`), no-op the strip, and infinite-loop.
+      paths_str="${paths_str#*\`}"   # drop up to & incl the opening backtick
+      paths_str="${paths_str#*\`}"   # drop the path text and its closing backtick
     done
     # If no backticks, try comma-separated plain text
     if [ ${#file_paths[@]} -eq 0 ] 2>/dev/null; then
