@@ -406,6 +406,47 @@ fi
 echo
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Case 9 — verify-glob-oom-fix: `Files:` paths with glob metacharacters (e.g.
+# Next.js dynamic routes `app/[id]/page.tsx`) must extract verbatim and NOT
+# hang. Pre-fix the strip glob-interpreted the captured path, no-op'd, and
+# infinite-looped until OOM. Guard with `timeout` so a regression fails fast.
+# ─────────────────────────────────────────────────────────────────────────────
+echo "--- Case 9: verify collect handles glob/dynamic-route paths (no hang) ---"
+gdir="$WORK/changes/glob-path"
+mkdir -p "$gdir"
+printf '# spec\n## Acceptance Criteria\n- [ ] AC-1: works\n' > "$gdir/spec.md"
+{
+  printf '# tasks\n'
+  printf -- '- [ ] `T1` — dynamic route\n'
+  printf -- '  - Files: `app/[id]/page.tsx`\n'
+  printf -- '- [ ] `T2` — catch-all + plain\n'
+  printf -- '  - Files: `app/[...slug]/route.ts`, `src/plain.ts`\n'
+} > "$gdir/tasks.md"
+
+# The critical assertion: collect terminates. `timeout` kills a runaway loop
+# (exit 124) so the hang manifests as a fail, not a stalled suite.
+gout="$(timeout 10 "$VERIFY" collect "$WORK" glob-path 2>/dev/null)"; grc=$?
+if [[ "$grc" -eq 0 ]]; then
+  pass "AC-1/AC-2 verify collect terminates on glob paths (no hang)"
+else
+  fail "AC-1/AC-2 verify collect terminates on glob paths (rc=$grc — 124=timeout/hang)"
+fi
+
+# jq-free asserts (jq is not guaranteed on every runner): count and match the
+# "path": entries directly in the JSON so a glob path that got dropped or
+# duplicated is caught regardless of jq availability.
+gcount="$(printf '%s' "$gout" | grep -c '"path":')"
+assert_eq "glob paths extracted count" "3" "${gcount:-0}"
+for needle in 'app/[id]/page.tsx' 'app/[...slug]/route.ts' 'src/plain.ts'; do
+  if grep -qF "\"path\": \"$needle\"" <<<"$gout"; then
+    pass "glob path extracted verbatim: $needle"
+  else
+    fail "glob path extracted verbatim: $needle"
+  fi
+done
+echo
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Summary
 # ─────────────────────────────────────────────────────────────────────────────
 echo "=================================================="
