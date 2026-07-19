@@ -66,7 +66,20 @@ specclaw-update-task-status .specclaw/changes/<change>/tasks.md <TASK_ID> failed
    ```bash
    specclaw-build-context .specclaw <change> <TASK_ID>
    ```
-3. Spawn a coding agent with that payload as the task. Use the model from config. Run independent tasks in parallel up to `parallel_tasks`. Calibrate delegation: spawn agents for tasks that are parallel, isolated, or independent workstreams; for a trivial sequential edit where spawning costs more than doing, apply the change directly and record it against the task as usual.
+3. Spawn a coding agent with that payload as the task. Run independent tasks in parallel up to `parallel_tasks`. Calibrate delegation: spawn agents for tasks that are parallel, isolated, or independent workstreams; for a trivial sequential edit where spawning costs more than doing, apply the change directly and record it against the task as usual.
+
+   **Dynamic subagents (`build.dynamic_agents.enabled: true`):** instead of the generic coder with `models.coding`, synthesize a bespoke agent per task:
+   1. Synthesize the scaffold:
+      ```bash
+      specclaw-build synth-agent .specclaw <change> <TASK_ID>
+      ```
+      Returns JSON `{kind, tier, role, tools, model, downgrade, sig, system_prompt}` (and caches it under `.specclaw/changes/<change>/agents/<TASK_ID>.json` when `cache: true`). A cache hit with an unchanged task signature is reused.
+   2. **LLM-fill (hybrid):** replace the `{{SPEC_DESIGN_SLICE}}` marker in `system_prompt` with the task's relevant slice of `spec.md` / `design.md` (the acceptance criteria this task serves + the design decisions touching its files). Write the enriched spec back to `agents/<TASK_ID>.json`.
+   3. **Dispatch:** spawn the agent with `system_prompt` as its system prompt, the `specclaw-build-context` output as its task, restricted to the synthesized `tools`, at the synthesized `model`.
+   4. **Provenance:** record the task's `role` and `model` in `status.md`'s Agent Runs table.
+   5. **Fallback:** if synthesis fails (helper error, malformed JSON), fall back to the generic coder with `models.coding` for that task and continue — never block the build.
+
+   When `build.dynamic_agents.enabled: false` (default), skip all of the above and use the generic coder exactly as before — no synthesis, no `agents/` directory.
 
 **d.** Wait for all agents in the wave to complete.
 
