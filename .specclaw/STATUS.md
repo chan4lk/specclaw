@@ -1,7 +1,7 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** specclaw
-**Last Updated:** 2026-07-18 11:27 UTC
+**Last Updated:** 2026-07-19 02:29 UTC
 
 ## Active Changes
 
@@ -12,6 +12,7 @@
 - ✅ **claude-plugin-packaging** — 11/11 tasks (100%) | 0 failed
 - 🔨 **code-reviewer-agent** — 5/6 tasks (83%) | 0 failed
 - 🔨 **discoverability-indexing** — 5/6 tasks (83%) | 0 failed
+- 🔨 **dynamic-subagents-for-build** — 7/8 tasks (87%) | 0 failed
 - ✅ **github-issues-sync** — 3/3 tasks (100%) | 0 failed
 - ✅ **git-worktrees** — 3/3 tasks (100%) | 0 failed
 - ✅ **grounded-context** — 6/6 tasks (100%) | 0 failed
@@ -41,6 +42,6 @@ _None._
 
 ## Stats
 
-- **Total changes:** 24
-- **Active:** 24
+- **Total changes:** 25
+- **Active:** 25
 - **Completed:** 0
