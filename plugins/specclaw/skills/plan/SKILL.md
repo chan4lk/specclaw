@@ -26,7 +26,7 @@ Turn an approved proposal into an executable plan.
      - **Otherwise:** generate `spec.md` directly using `$CLAUDE_PLUGIN_ROOT/templates/spec.md` as a starting template (single-shot, no dialogue).
      - **If `spec.md` already exists** (e.g. authored previously via `/specclaw:author-spec`): do not overwrite it; skip the spec step and proceed to `design.md` / `tasks.md`.
    - `design.md` — technical approach, architecture, file changes map, key decisions, risks. Template: `$CLAUDE_PLUGIN_ROOT/templates/design.md`. **When discovery produced docs, add a "Grounding sources" section** listing the discovered files you actually used — each entry cites the path plus the specific convention or quoted line applied. The paper trail for what informed the design, backed by quotable evidence rather than vague attribution.
-   - `tasks.md` — ordered tasks grouped into waves with dependencies. Template: `$CLAUDE_PLUGIN_ROOT/templates/tasks.md`.
+   - `tasks.md` — ordered tasks grouped into waves with dependencies. Template: `$CLAUDE_PLUGIN_ROOT/templates/tasks.md`. **Tag each task with an optional `Kind:` hint** (`docs | test | config | refactor | impl | migration`) inferred from what the task does — it lets `build.dynamic_agents` (when enabled) synthesize a specialized subagent with the right role, minimal tools, and cost-appropriate model. When a task's nature is genuinely mixed or unclear, omit `Kind` and build will classify heuristically (default `impl`).
 5. Present a plan summary to the user (counts of FRs, ACs, tasks, waves).
 6. Update status: `specclaw-update-status .specclaw`.
 7. **GitHub sync** (if enabled): `specclaw-gh-sync update .specclaw <change>` to attach the task checklist to the GitHub Issue.

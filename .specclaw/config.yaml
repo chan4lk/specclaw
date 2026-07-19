@@ -9,9 +9,9 @@ project:
 
 # Model routing — use the best model for each phase
 models:
-  planning: "anthropic/claude-opus-4-6"      # Proposals, specs, design
-  coding: "openai/gpt-5.1-codex"             # Implementation
-  review: "anthropic/claude-sonnet-4-5"       # Verification & code review
+  planning: "anthropic/claude-opus-4-8"      # Proposals, specs, design
+  coding: "anthropic/claude-sonnet-5"        # Implementation
+  review: "anthropic/claude-sonnet-5"        # Verification & code review
 
 # Git strategy
 git:
@@ -27,6 +27,21 @@ build:
   build_command: ""                # e.g., "npm run build"
   parallel_tasks: 3               # Max concurrent agent spawns
   timeout_seconds: 300             # Per-task timeout
+
+  # Dynamically synthesized per-task build subagents (opt-in).
+  # When enabled, each build task gets a bespoke agent: kind-classified,
+  # minimal tools, cost-aware Claude model from the ladder below. Default
+  # off — build dispatches the generic coder exactly as before.
+  dynamic_agents:
+    enabled: false
+    ladder:                                    # task tier -> model (cheap -> strong)
+      trivial:  "anthropic/claude-haiku-4-5"   # docs / rename / config
+      standard: "anthropic/claude-sonnet-5"    # normal impl / test / refactor
+      complex:  "anthropic/claude-opus-4-8"    # large / cross-module
+      extreme:  "anthropic/claude-fable-5"     # highly-complex only (see cap)
+    max_model: "anthropic/claude-opus-4-8"     # ceiling; extreme requires explicit highly-complex mark
+    fable_max_fraction: 0.2                     # cap Fable share of tasks per build
+    cache: true                                 # persist synthesized specs under changes/<change>/agents/
 
 # Notifications
 notifications:

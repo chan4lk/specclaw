@@ -121,14 +121,15 @@ function emit_task() {
 
   if (!first) printf ","
   first = 0
-  printf "\n  {\"id\":\"%s\",\"title\":\"%s\",\"status\":\"%s\",\"wave\":%d,\"files\":\"%s\",\"depends\":\"%s\",\"estimate\":\"%s\"}",
+  printf "\n  {\"id\":\"%s\",\"title\":\"%s\",\"status\":\"%s\",\"wave\":%d,\"files\":\"%s\",\"depends\":\"%s\",\"estimate\":\"%s\",\"kind\":\"%s\"}",
     json_escape(task_id),
     json_escape(title),
     json_escape(status),
     wave,
     json_escape(files),
     json_escape(depends),
-    json_escape(estimate)
+    json_escape(estimate),
+    json_escape(kind)
   task_id = ""
   next_is_detail = 0
 }
@@ -183,6 +184,7 @@ BEGIN {
   files = ""
   depends = ""
   estimate = ""
+  kind = ""
   notes = ""
   next_is_detail = 1
   next
@@ -203,6 +205,12 @@ next_is_detail && /^  - Depends:/ {
 next_is_detail && /^  - Estimate:/ {
   estimate = $0
   sub(/^  - Estimate: /, "", estimate)
+  next
+}
+
+next_is_detail && /^  - Kind:/ {
+  kind = $0
+  sub(/^  - Kind: /, "", kind)
   next
 }
 

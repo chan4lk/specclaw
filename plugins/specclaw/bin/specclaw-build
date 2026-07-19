@@ -24,6 +24,10 @@ Subcommands:
   worktree-path <specclaw_dir> <change_name>
                 Output the worktree path for a change (reads git.worktree_dir from config).
 
+  synth-agent   <specclaw_dir> <change_name> <task_id>
+                Synthesize a per-task build subagent spec (kind, tools, cost-aware
+                model, scaffold system_prompt) as JSON. Deterministic; cache-aware.
+
 Git strategies (git.strategy in config.yaml):
   branch-per-change   Create a branch and switch to it (default)
   worktree-per-change Create a branch + git worktree for isolated parallel work
@@ -448,6 +452,184 @@ cmd_worktree_path() {
   echo "$worktree_dir/$change_name"
 }
 
+# ─── synth-agent ──────────────────────────────────────────────────────────────
+# Deterministically synthesize a per-task build subagent spec (kind, tools,
+# cost-aware model, scaffold system_prompt). Hybrid: this emits the deterministic
+# scaffold; the build skill enriches system_prompt with the spec/design slice.
+
+SYNTH_SCHEMA_VERSION=1
+
+# Escape a string for JSON, including newlines/tabs (json_str handles only \ and ").
+json_ml() {
+  awk 'BEGIN{ORS=""} {
+    s=$0
+    gsub(/\\/,"\\\\",s); gsub(/"/,"\\\"",s); gsub(/\t/,"\\t",s)
+    if (NR>1) printf "\\n"
+    printf "%s", s
+  }' <<< "$1"
+}
+
+# Rank a model id by tier keyword (cheap→strong). Unknown → 2 (standard).
+model_rank() {
+  case "$1" in
+    *haiku*) echo 1 ;;
+    *sonnet*) echo 2 ;;
+    *opus*) echo 3 ;;
+    *fable*) echo 4 ;;
+    *) echo 2 ;;
+  esac
+}
+
+# Read a key from the build.dynamic_agents block (one or two levels deep under it).
+# da_val <config> <key>  — key is e.g. "enabled", "max_model", "ladder.trivial".
+da_val() {
+  local config="$1" key="$2" subk=""
+  if [[ "$key" == ladder.* ]]; then subk="${key#ladder.}"; key="ladder"; fi
+  awk -v key="$key" -v subk="$subk" '
+    /^[a-zA-Z_]/ { inbuild = ($0 ~ /^build:/) }
+    inbuild && /^  dynamic_agents:/ { inda=1; next }
+    inbuild && /^  [a-zA-Z_]/ && $0 !~ /^  dynamic_agents:/ { inda=0 }
+    !inda { next }
+    subk == "" && $0 ~ "^    " key ":" { line=$0; sub("^    " key ":[[:space:]]*","",line); print line; exit }
+    subk != "" {
+      if ($0 ~ /^    ladder:/) { inl=1; next }
+      if (inl && $0 ~ /^    [a-zA-Z_]/) inl=0
+      if (inl && $0 ~ "^      " subk ":") { line=$0; sub("^      " subk ":[[:space:]]*","",line); print line; exit }
+    }
+  ' "$config" | sed -E 's/[[:space:]]*#.*$//; s/[[:space:]]+$//; s/^"(.*)"$/\1/; s/^'\''(.*)'\''$/\1/'
+}
+
+cmd_synth_agent() {
+  [[ $# -ge 3 ]] || die "synth-agent requires: <specclaw_dir> <change_name> <task_id>"
+  local specclaw_dir="$1" change_name="$2" task_id="$3"
+  local config="$specclaw_dir/config.yaml"
+  local change_dir="$specclaw_dir/changes/$change_name"
+  local tasks_file="$change_dir/tasks.md"
+  [[ -f "$config" ]] || die "Config not found: $config"
+  [[ -f "$tasks_file" ]] || die "Tasks not found: $tasks_file"
+
+  # --- Parse the task ---
+  local task_json
+  task_json="$("$SCRIPT_DIR/specclaw-parse-tasks" "$tasks_file" 2>/dev/null || true)"
+  # Extract this task's object (grep-based, jq-free): match "id":"T3"
+  local obj
+  obj="$(printf '%s\n' "$task_json" | tr '}' '\n' | grep "\"id\":\"$task_id\"" | head -1)"
+  [[ -n "$obj" ]] || die "Task $task_id not found in $tasks_file"
+
+  field() { printf '%s' "$obj" | sed -n "s/.*\"$1\":\"\([^\"]*\)\".*/\1/p"; }
+  local title files estimate kind
+  title="$(field title)"; files="$(field files)"; estimate="$(field estimate)"; kind="$(field kind)"
+
+  # --- Classify kind (explicit wins; else heuristic; unknown → impl) ---
+  kind="$(printf '%s' "$kind" | tr '[:upper:]' '[:lower:]' | tr -d ' ')"
+  if [[ -z "$kind" ]]; then
+    local hay; hay="$(printf '%s %s' "$title" "$files" | tr '[:upper:]' '[:lower:]')"
+    case "$hay" in
+      *.md*|*doc*|*readme*)        kind=docs ;;
+      *test*|*spec.*|*.test.*)     kind=test ;;
+      *config*|*.yaml*|*.yml*|*.toml*|*.json*) kind=config ;;
+      *refactor*|*rename*)         kind=refactor ;;
+      *migrat*)                    kind=migration ;;
+      *)                           kind=impl ;;
+    esac
+  fi
+
+  # --- Tool set by kind ---
+  local tools
+  case "$kind" in
+    docs)      tools='"Read", "Write"' ;;
+    config)    tools='"Read", "Edit"' ;;
+    test)      tools='"Read", "Write", "Bash"' ;;
+    refactor)  tools='"Read", "Edit", "Grep", "Glob"' ;;
+    migration) tools='"Read", "Write", "Edit", "Bash"' ;;
+    *)         tools='"Read", "Write", "Edit", "Bash", "Grep", "Glob"' ; kind="${kind:-impl}" ;;
+  esac
+
+  # --- Tier: (kind, estimate) → tier. extreme requires explicit kind=extreme. ---
+  local tier
+  estimate="$(printf '%s' "$estimate" | tr '[:upper:]' '[:lower:]' | tr -d ' ')"
+  if [[ "$kind" == "extreme" ]]; then
+    tier=extreme
+  elif [[ "$kind" == "docs" || "$kind" == "config" ]] && [[ "$estimate" == "small" ]]; then
+    tier=trivial
+  elif [[ "$estimate" == "large" ]]; then
+    tier=complex
+  else
+    tier=standard
+  fi
+
+  # --- Resolve model from ladder, clamp to max_model, guard Fable fraction ---
+  local ladder_model max_model
+  ladder_model="$(da_val "$config" "ladder.$tier")"
+  max_model="$(da_val "$config" "max_model")"
+  [[ -n "$ladder_model" ]] || ladder_model="$(yaml_val "$config" "models.coding")"
+
+  local model="$ladder_model" downgrade=""
+  # Fable fraction guard: extreme tier only allowed under fable_max_fraction share.
+  if [[ "$tier" == "extreme" ]]; then
+    local frac total used allowed
+    frac="$(da_val "$config" "fable_max_fraction")"; frac="${frac:-0.2}"
+    total="$(printf '%s\n' "$task_json" | grep -o '"id":"T[0-9]*"' | wc -l | tr -d ' ')"
+    used="$(grep -l 'fable' "$change_dir/agents/"*.json 2>/dev/null | wc -l | tr -d ' ' || true)"
+    used="${used:-0}"
+    [[ "$total" -gt 0 ]] || total=1
+    # allowed = floor(total * frac); if used >= allowed, downgrade
+    allowed="$(awk -v t="$total" -v f="$frac" 'BEGIN{printf "%d", t*f}')"
+    if [[ "$used" -ge "$allowed" ]]; then
+      model="$(da_val "$config" "ladder.complex")"; downgrade="fable-fraction-cap"
+    fi
+  fi
+  # Ceiling clamp
+  if [[ -n "$max_model" ]] && [[ "$(model_rank "$model")" -gt "$(model_rank "$max_model")" ]]; then
+    model="$max_model"; downgrade="${downgrade:+$downgrade,}max-model-ceiling"
+  fi
+
+  # --- Scaffold system_prompt (guardrails + role + enrichment placeholder) ---
+  local guardrails="" gfile="$SCRIPT_DIR/../references/agent-guardrails.md"
+  [[ -f "$gfile" ]] && guardrails="$(cat "$gfile")"
+  local role="Specialized ${kind} build agent for ${task_id} — ${title}"
+  local prompt
+  prompt="$(printf '%s\n\n%s\n\n## Scope fence\nModify ONLY these declared files: %s\nSatisfy the acceptance criteria this task contributes to (see spec below).\n\n## Task spec/design slice\n{{SPEC_DESIGN_SLICE}}\n' \
+    "You are the **${role}**." "$guardrails" "$files")"
+
+  # --- Cache check: reuse if signature unchanged ---
+  local cache_on sig cache_file
+  cache_on="$(da_val "$config" "cache")"; cache_on="${cache_on:-true}"
+  sig="$(printf '%s|%s|%s|%s' "$kind" "$title" "$files" "$estimate" | cksum | cut -d' ' -f1)"
+  cache_file="$change_dir/agents/${task_id}.json"
+  if [[ "$cache_on" == "true" && -f "$cache_file" ]]; then
+    local cached_sig cached_ver
+    cached_sig="$(sed -n 's/.*"sig":[[:space:]]*"\([^"]*\)".*/\1/p' "$cache_file")"
+    cached_ver="$(sed -n 's/.*"schema_version":[[:space:]]*\([0-9]*\).*/\1/p' "$cache_file")"
+    if [[ "$cached_sig" == "$sig" && "$cached_ver" == "$SYNTH_SCHEMA_VERSION" ]]; then
+      cat "$cache_file"; return 0
+    fi
+  fi
+
+  # --- Emit JSON ---
+  local out
+  out="$(cat <<EOF
+{
+  "task": $(json_str "$task_id"),
+  "kind": $(json_str "$kind"),
+  "tier": $(json_str "$tier"),
+  "role": $(json_str "$role"),
+  "tools": [$tools],
+  "model": $(json_str "$model"),
+  "downgrade": $(json_str "$downgrade"),
+  "sig": $(json_str "$sig"),
+  "schema_version": $SYNTH_SCHEMA_VERSION,
+  "system_prompt": "$(json_ml "$prompt")"
+}
+EOF
+)"
+  if [[ "$cache_on" == "true" ]]; then
+    mkdir -p "$change_dir/agents"
+    printf '%s\n' "$out" > "$cache_file"
+  fi
+  printf '%s\n' "$out"
+}
+
 # ─── Main dispatch ────────────────────────────────────────────────────────────
 
 [[ $# -gt 0 ]] || { usage; exit 1; }
@@ -458,5 +640,6 @@ case "$1" in
   commit)        shift; cmd_commit "$@" ;;
   finalize)      shift; cmd_finalize "$@" ;;
   worktree-path) shift; cmd_worktree_path "$@" ;;
+  synth-agent)   shift; cmd_synth_agent "$@" ;;
   *)             die "Unknown subcommand: $1 (try --help)" ;;
 esac
