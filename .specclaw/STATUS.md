@@ -1,36 +1,11 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** specclaw
-**Last Updated:** 2026-07-19 02:30 UTC
+**Last Updated:** 2026-07-22 12:10 UTC
 
 ## Active Changes
 
-
-- ✅ **azure-boards-integration** — 10/10 tasks (100%) | 0 failed
-- ✅ **build-engine** — 6/6 tasks (100%) | 0 failed
-- ✅ **build-error-journal** — 3/3 tasks (100%) | 0 failed
-- ✅ **claude-plugin-packaging** — 11/11 tasks (100%) | 0 failed
-- 🔨 **code-reviewer-agent** — 5/6 tasks (83%) | 0 failed
-- 🔨 **discoverability-indexing** — 5/6 tasks (83%) | 0 failed
-- 🔨 **dynamic-subagents-for-build** — 7/8 tasks (87%) | 0 failed
-- ✅ **github-issues-sync** — 3/3 tasks (100%) | 0 failed
-- ✅ **git-worktrees** — 3/3 tasks (100%) | 0 failed
-- ✅ **grounded-context** — 6/6 tasks (100%) | 0 failed
-- ✅ **karpathy-build-guardrails** — 6/6 tasks (100%) | 0 failed
-- ✅ **learn-command** — 2/2 tasks (100%) | 0 failed
-- ✅ **lifecycle-bug-fixes** — 8/8 tasks (100%) | 0 failed
-- 🔨 **living-project-context** — 8/9 tasks (88%) | 0 failed
-- 🔨 **loop-engineering** — 10/11 tasks (90%) | 0 failed
-- ✅ **pattern-detection** — 3/3 tasks (100%) | 0 failed
-- ✅ **phase-validation** — 2/2 tasks (100%) | 0 failed
-- ✅ **post-build-review** — 1/1 tasks (100%) | 0 failed
-- ✅ **pr-command** — 7/7 tasks (100%) | 0 failed
-- ✅ **prompt-hardening** — 6/6 tasks (100%) | 0 failed
-- ✅ **smart-base-branch** — 4/4 tasks (100%) | 0 failed
-- 🔨 **spec-author-agent** — 4/5 tasks (80%) | 0 failed
-- ✅ **update-check** — 4/4 tasks (100%) | 0 failed
-- ✅ **verification-engine** — 4/4 tasks (100%) | 0 failed
-- 🔨 **verify-glob-oom-fix** — 3/4 tasks (75%) | 0 failed
+_No active changes._
 
 ## Pending Proposals
 
@@ -38,10 +13,35 @@ _None._
 
 ## Recently Completed
 
-_None._
+
+- ✅ **2026-07-21-code-reviewer-agent**
+- ✅ **2026-07-22-azure-boards-integration**
+- ✅ **2026-07-22-build-engine**
+- ✅ **2026-07-22-build-error-journal**
+- ✅ **2026-07-22-claude-plugin-packaging**
+- ✅ **2026-07-22-discoverability-indexing**
+- ✅ **2026-07-22-dynamic-subagents-for-build**
+- ✅ **2026-07-22-github-issues-sync**
+- ✅ **2026-07-22-git-worktrees**
+- ✅ **2026-07-22-grounded-context**
+- ✅ **2026-07-22-karpathy-build-guardrails**
+- ✅ **2026-07-22-learn-command**
+- ✅ **2026-07-22-lifecycle-bug-fixes**
+- ✅ **2026-07-22-living-project-context**
+- ✅ **2026-07-22-loop-engineering**
+- ✅ **2026-07-22-pattern-detection**
+- ✅ **2026-07-22-phase-validation**
+- ✅ **2026-07-22-post-build-review**
+- ✅ **2026-07-22-pr-command**
+- ✅ **2026-07-22-prompt-hardening**
+- ✅ **2026-07-22-smart-base-branch**
+- ✅ **2026-07-22-spec-author-agent**
+- ✅ **2026-07-22-update-check**
+- ✅ **2026-07-22-verification-engine**
+- ✅ **2026-07-22-verify-glob-oom-fix**
 
 ## Stats
 
 - **Total changes:** 25
-- **Active:** 25
-- **Completed:** 0
+- **Active:** 0
+- **Completed:** 25
