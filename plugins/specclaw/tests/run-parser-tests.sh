@@ -138,17 +138,22 @@ echo
 echo "--- Case 5 (NFR2): real in-repo change still parses ---"
 REAL_SPECCLAW="$REPO_ROOT/.specclaw"
 REAL_CHANGE="build-engine"
+# REAL_CHANGE is the change path relative to changes/ (e.g. "build-engine" or
+# "archive/2026-07-22-build-engine"), so both PARSE_TASKS (full path) and
+# VERIFY collect (specclaw_dir + change_name) resolve it.
 if [[ ! -f "$REAL_SPECCLAW/changes/$REAL_CHANGE/spec.md" ]]; then
-  # Fallback: pick any change that has both spec.md and tasks.md.
-  for d in "$REAL_SPECCLAW"/changes/*/; do
+  # Fallback: pick any change with both spec.md and tasks.md — active first,
+  # then archived (all active changes may be archived, e.g. after cleanup).
+  REAL_CHANGE=""
+  for d in "$REAL_SPECCLAW"/changes/*/ "$REAL_SPECCLAW"/changes/archive/*/; do
     if [[ -f "$d/spec.md" && -f "$d/tasks.md" ]]; then
-      REAL_CHANGE="$(basename "$d")"
+      REAL_CHANGE="${d#"$REAL_SPECCLAW"/changes/}"; REAL_CHANGE="${REAL_CHANGE%/}"
       break
     fi
   done
 fi
 
-if [[ -f "$REAL_SPECCLAW/changes/$REAL_CHANGE/spec.md" && -f "$REAL_SPECCLAW/changes/$REAL_CHANGE/tasks.md" ]]; then
+if [[ -n "$REAL_CHANGE" && -f "$REAL_SPECCLAW/changes/$REAL_CHANGE/spec.md" && -f "$REAL_SPECCLAW/changes/$REAL_CHANGE/tasks.md" ]]; then
   echo "    using real change: $REAL_CHANGE"
   real_ids="$("$PARSE_TASKS" "$REAL_SPECCLAW/changes/$REAL_CHANGE/tasks.md" | jq 'length')"
   if [[ "$real_ids" -gt 0 ]]; then
