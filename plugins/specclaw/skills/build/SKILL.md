@@ -56,7 +56,13 @@ If empty, the build is complete — skip to Step 4.
 specclaw-update-task-status .specclaw/changes/<change>/tasks.md <TASK_ID> failed
 ```
 
-**c.** For each task in the wave (up to `parallel_tasks` concurrent):
+**b'.** Compute the memory-aware concurrency ceiling for this wave:
+```bash
+specclaw-parallel-budget .specclaw
+```
+Prints one integer — `min(parallel_tasks, memory_budget)`. Use it as the concurrency ceiling for THIS wave in place of raw `parallel_tasks`. When no `build.memory` config is present it returns `parallel_tasks` unchanged (opt-in — no behavior change).
+
+**c.** For each task in the wave (up to the memory-aware budget from `specclaw-parallel-budget` (≤ `parallel_tasks`) concurrent):
 
 1. Mark in-progress:
    ```bash
@@ -66,7 +72,7 @@ specclaw-update-task-status .specclaw/changes/<change>/tasks.md <TASK_ID> failed
    ```bash
    specclaw-build-context .specclaw <change> <TASK_ID>
    ```
-3. Spawn a coding agent with that payload as the task. Run independent tasks in parallel up to `parallel_tasks`. Calibrate delegation: spawn agents for tasks that are parallel, isolated, or independent workstreams; for a trivial sequential edit where spawning costs more than doing, apply the change directly and record it against the task as usual.
+3. Spawn a coding agent with that payload as the task. Run independent tasks in parallel up to the memory-aware budget from step **b'** (≤ `parallel_tasks`). Calibrate delegation: spawn agents for tasks that are parallel, isolated, or independent workstreams; for a trivial sequential edit where spawning costs more than doing, apply the change directly and record it against the task as usual.
 
    **Dynamic subagents (`build.dynamic_agents.enabled: true`):** instead of the generic coder with `models.coding`, synthesize a bespoke agent per task:
    1. Synthesize the scaffold:
