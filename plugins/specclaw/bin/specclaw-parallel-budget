@@ -135,13 +135,18 @@ if [[ "$per_agent_mb" -eq 0 ]]; then
   exit 0
 fi
 
-# NFR2: /proc/meminfo missing/unreadable → fall back to parallel_tasks.
-if [[ ! -r /proc/meminfo ]]; then
+# Source of MemAvailable — /proc/meminfo by default. Overridable via
+# SPECCLAW_MEMINFO_PATH so the budget can be exercised against a fixture in tests
+# (the format matches /proc/meminfo: a `MemAvailable:   <kb> kB` line).
+meminfo_path="${SPECCLAW_MEMINFO_PATH:-/proc/meminfo}"
+
+# NFR2: meminfo missing/unreadable → fall back to parallel_tasks.
+if [[ ! -r "$meminfo_path" ]]; then
   echo "$parallel_tasks"
   exit 0
 fi
 
-mem_avail_kb="$(awk '/^MemAvailable:/ { print $2; exit }' /proc/meminfo 2>/dev/null || true)"
+mem_avail_kb="$(awk '/^MemAvailable:/ { print $2; exit }' "$meminfo_path" 2>/dev/null || true)"
 if [[ -z "$mem_avail_kb" ]]; then
   echo "$parallel_tasks"
   exit 0
