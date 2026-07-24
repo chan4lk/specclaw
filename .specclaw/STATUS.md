@@ -1,11 +1,12 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** specclaw
-**Last Updated:** 2026-07-22 12:10 UTC
+**Last Updated:** 2026-07-24 01:10 UTC
 
 ## Active Changes
 
-_No active changes._
+
+- 🔨 **memory-aware-parallelism** — 0/6 tasks (0%) | 0 failed
 
 ## Pending Proposals
 
@@ -42,6 +43,6 @@ _None._
 
 ## Stats
 
-- **Total changes:** 25
-- **Active:** 0
+- **Total changes:** 26
+- **Active:** 1
 - **Completed:** 25

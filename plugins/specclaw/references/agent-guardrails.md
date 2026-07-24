@@ -89,3 +89,9 @@ shape behavior inside a single task. Two specclaw-specific anchors:
   the acceptance criteria in `spec.md` that the task contributes to. Tests
   are one form of goal-check, but the spec's ACs are the ground truth for
   `/specclaw:verify`.
+- **Browser cap (Playwright/Chromium)** — any agent that launches a
+  Playwright/Chromium browser during verification MUST bracket it with
+  `specclaw-browser-lock .specclaw acquire` (capture the printed slot id) before
+  launch and `specclaw-browser-lock .specclaw release <slot>` after. This honors
+  the `verify.playwright.max_browsers` cap across parallel agents so concurrent
+  browsers never over-subscribe host memory.

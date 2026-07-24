@@ -54,7 +54,7 @@ notifications:
 
 # GitHub Issues integration
 github:
-  sync: false   # Issues disabled on chan4lk/specclaw — validate-change would block every gate (see grounded-context L6)
+  sync: true    # Re-enabled 2026-07-24 — Issues now enabled on repo (has_issues=true), gh authed as chan4lk
   repo: "chan4lk/specclaw"
   token: ""
   label: "specclaw"

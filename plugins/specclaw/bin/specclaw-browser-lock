@@ -1,0 +1,219 @@
+#!/usr/bin/env bash
+# specclaw-browser-lock — N-slot filesystem semaphore for Playwright browsers.
+# Part of the specclaw skill. Bash + coreutils only.
+#
+# Slots are directories under <specclaw_dir>/.locks/playwright/slot-<i>/, each
+# holding a `pid` file with the acquiring PID. Atomic claim via `mkdir` (mkdir
+# is atomic on POSIX; EEXIST loses the race and retries). Fail-open: on any
+# degeneracy (unwritable lock dir, acquire timeout) proceed without a slot so a
+# wedged pool can never hang the build (NFR2/NFR3).
+set -euo pipefail
+
+# Max seconds acquire will poll before giving up and failing open (NFR3).
+ACQUIRE_TIMEOUT_SECONDS="${SPECCLAW_BROWSER_LOCK_TIMEOUT:-120}"
+# Seconds between poll attempts when the pool is full.
+POLL_INTERVAL_SECONDS=0.5
+
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+
+usage() {
+  cat <<'EOF'
+Usage: specclaw-browser-lock <specclaw_dir> <acquire|release <slot_id>|status>
+
+Subcommands:
+  acquire              Claim a free slot (blocks/polls until one is free or a
+                       bounded timeout). Prints the slot id (e.g. slot-2) on
+                       success. On timeout: warns to stderr, prints `none`,
+                       exits 0 (fail-open).
+  release <slot_id>    Free the named slot. Idempotent.
+  status               Print `held/max` (live-PID slots vs max_browsers).
+
+N (max slots) = verify.playwright.max_browsers in config.yaml (default 2).
+
+Options:
+  -h, --help   Show this help message
+EOF
+}
+
+warn() { echo "WARN: $*" >&2; }
+
+# Read a simple yaml value: yaml_val <file> <dotted.key>
+# Handles top-level and one-level nested keys (good enough for config.yaml).
+yaml_val() {
+  local file="$1" key="$2"
+  local section field
+  if [[ "$key" == *.* ]]; then
+    section="${key%%.*}"
+    field="${key#*.}"
+  else
+    section=""
+    field="$key"
+  fi
+
+  local in_section=false value=""
+  while IFS= read -r line; do
+    # skip comments / blank
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ -z "${line// /}" ]] && continue
+
+    if [[ -z "$section" ]]; then
+      if [[ "$line" =~ ^${field}:[[:space:]]*(.*) ]]; then
+        value="${BASH_REMATCH[1]}"
+        break
+      fi
+    else
+      if [[ "$line" =~ ^[a-zA-Z_] ]]; then
+        if [[ "$line" =~ ^${section}: ]]; then
+          in_section=true
+        else
+          in_section=false
+        fi
+        continue
+      fi
+      if $in_section; then
+        if [[ "$line" =~ ^[[:space:]]+${field}:[[:space:]]*(.*) ]]; then
+          value="${BASH_REMATCH[1]}"
+          break
+        fi
+      fi
+    fi
+  done < "$file"
+
+  # Strip inline `#` comments
+  if [[ "$value" =~ ([[:space:]]+#) ]]; then
+    value="${value%%"${BASH_REMATCH[1]}"*}"
+  fi
+  # Strip trailing whitespace
+  if [[ "$value" =~ [[:space:]]+$ ]]; then
+    value="${value%"${BASH_REMATCH[0]}"}"
+  fi
+  # Strip surrounding quotes
+  value="${value#\"}"
+  value="${value%\"}"
+  value="${value#\'}"
+  value="${value%\'}"
+  echo "$value"
+}
+
+# Resolve N = verify.playwright.max_browsers (default 2).
+# The two-level-deep key isn't handled by yaml_val (one nesting level only),
+# so read it directly with a scoped scan.
+read_max_browsers() {
+  local config="$1" n=""
+  if [[ -f "$config" ]]; then
+    n="$(awk '
+      /^[a-zA-Z_]/ { inv = ($0 ~ /^verify:/) }
+      inv && /^  playwright:/ { inp=1; next }
+      inv && /^  [a-zA-Z_]/ && $0 !~ /^  playwright:/ { inp=0 }
+      inp && /^    max_browsers:/ {
+        line=$0; sub(/^    max_browsers:[[:space:]]*/,"",line)
+        sub(/[[:space:]]*#.*$/,"",line); sub(/[[:space:]]+$/,"",line)
+        print line; exit
+      }
+    ' "$config")"
+  fi
+  [[ "$n" =~ ^[0-9]+$ ]] && [[ "$n" -ge 1 ]] || n=2
+  echo "$n"
+}
+
+# Is a slot occupied by a live process? slot_live <slot_dir>
+# Returns 0 (live) only if the pid file holds a PID that `kill -0` accepts.
+slot_live() {
+  local slot_dir="$1" pid
+  [[ -d "$slot_dir" ]] || return 1
+  pid="$(cat "$slot_dir/pid" 2>/dev/null || true)"
+  [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+  kill -0 "$pid" 2>/dev/null
+}
+
+# ─── acquire ────────────────────────────────────────────────────────────────
+
+cmd_acquire() {
+  local specclaw_dir="$1"
+  local config="$specclaw_dir/config.yaml"
+  local pool="$specclaw_dir/.locks/playwright"
+  local n; n="$(read_max_browsers "$config")"
+
+  # Ensure the pool dir exists; fail-open if we cannot create it (NFR2).
+  if ! mkdir -p "$pool" 2>/dev/null; then
+    warn "browser-lock: cannot create lock dir '$pool' — proceeding without a slot (uncapped)"
+    echo "none"
+    return 0
+  fi
+
+  local deadline elapsed i slot_dir
+  deadline=$(( SECONDS + ACQUIRE_TIMEOUT_SECONDS ))
+  while :; do
+    for (( i = 1; i <= n; i++ )); do
+      slot_dir="$pool/slot-$i"
+      # Reclaim a stale slot held by a dead PID (FR7).
+      if [[ -d "$slot_dir" ]] && ! slot_live "$slot_dir"; then
+        rm -rf "$slot_dir" 2>/dev/null || true
+      fi
+      # Atomic claim: mkdir succeeds only if the slot dir did not exist.
+      if mkdir "$slot_dir" 2>/dev/null; then
+        echo "$$" > "$slot_dir/pid"
+        echo "slot-$i"
+        return 0
+      fi
+      # mkdir failed → another acquirer won the race; try the next slot.
+    done
+    # No free slot this pass.
+    elapsed=$SECONDS
+    if (( elapsed >= deadline )); then
+      warn "browser-lock: timed out after ${ACQUIRE_TIMEOUT_SECONDS}s waiting for a free slot (max_browsers=$n) — proceeding without a slot (uncapped)"
+      echo "none"
+      return 0
+    fi
+    sleep "$POLL_INTERVAL_SECONDS"
+  done
+}
+
+# ─── release ──────────────────────────────────────────────────────────────
+
+cmd_release() {
+  local specclaw_dir="$1" slot_id="${2:-}"
+  [[ -n "$slot_id" ]] || { warn "release requires a slot id"; return 0; }
+  local slot_dir="$specclaw_dir/.locks/playwright/$slot_id"
+  # Idempotent: releasing an already-free slot is not an error.
+  rm -rf "$slot_dir" 2>/dev/null || true
+}
+
+# ─── status ─────────────────────────────────────────────────────────────────
+
+cmd_status() {
+  local specclaw_dir="$1"
+  local config="$specclaw_dir/config.yaml"
+  local pool="$specclaw_dir/.locks/playwright"
+  local n; n="$(read_max_browsers "$config")"
+
+  local held=0 i slot_dir
+  for (( i = 1; i <= n; i++ )); do
+    slot_dir="$pool/slot-$i"
+    if slot_live "$slot_dir"; then
+      held=$(( held + 1 ))
+    fi
+  done
+  echo "${held}/${n}"
+}
+
+# ─── Main dispatch ────────────────────────────────────────────────────────────
+
+[[ $# -gt 0 ]] || { usage; exit 1; }
+
+case "$1" in
+  -h|--help) usage; exit 0 ;;
+esac
+
+[[ $# -ge 2 ]] || { usage; exit 1; }
+
+specclaw_dir="$1"
+subcmd="$2"
+shift 2
+
+case "$subcmd" in
+  acquire) cmd_acquire "$specclaw_dir" ;;
+  release) cmd_release "$specclaw_dir" "${1:-}" ;;
+  status)  cmd_status "$specclaw_dir" ;;
+  *)       warn "Unknown subcommand: $subcmd (try --help)"; usage; exit 1 ;;
+esac

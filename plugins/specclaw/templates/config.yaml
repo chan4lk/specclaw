@@ -50,6 +50,12 @@ build:
   parallel_tasks: 3               # Max concurrent agent spawns
   timeout_seconds: 300             # Per-task timeout
 
+  # Memory-aware parallelism (opt-in). Lowers effective build concurrency
+  # when free RAM is tight; absent → parallel_tasks used unchanged.
+  memory:
+    min_free_mb: 1024             # RAM floor (MB) kept free before spawning another agent
+    per_agent_mb: 1024            # Estimated RAM (MB) reserved per parallel agent
+
   # Dynamically synthesized per-task build subagents (opt-in).
   # When enabled, each build task gets a bespoke agent: kind-classified,
   # minimal tools, cost-aware Claude model from the ladder below. Default
@@ -64,6 +70,11 @@ build:
     max_model: "anthropic/claude-opus-4-8"     # ceiling; extreme requires explicit highly-complex mark
     fable_max_fraction: 0.2                     # cap Fable share of tasks per build
     cache: true                                 # persist synthesized specs under changes/<change>/agents/
+
+# Verify settings
+verify:
+  playwright:
+    max_browsers: 2                # Hard cap on concurrent Playwright/Chromium instances across all agents
 
 # Notifications
 notifications:

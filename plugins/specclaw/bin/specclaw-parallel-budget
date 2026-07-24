@@ -1,0 +1,163 @@
+#!/usr/bin/env bash
+# specclaw-parallel-budget — memory-aware effective wave concurrency (FR1–FR3).
+# Prints ONE integer to stdout: the concurrency ceiling for the current build wave.
+# Opt-in / fail-open: on any degeneracy (no /proc/meminfo, no memory config,
+# per_agent_mb == 0) it prints build.parallel_tasks unchanged and exits 0 (NFR2).
+# Bash + coreutils only.
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: specclaw-parallel-budget <specclaw_dir>
+
+Prints a single integer: the effective concurrency for the current build wave,
+computed as min(build.parallel_tasks, floor((MemAvailable_mb - min_free_mb) / per_agent_mb)),
+clamped to a minimum of 1. Falls back to build.parallel_tasks when memory info or
+config is missing/degenerate.
+EOF
+}
+
+die() { echo "ERROR: $*" >&2; exit 1; }
+
+# Read a simple yaml value: yaml_val <file> <dotted.key>
+# Handles top-level and one-level nested keys (good enough for config.yaml).
+yaml_val() {
+  local file="$1" key="$2"
+  local section field
+  if [[ "$key" == *.* ]]; then
+    section="${key%%.*}"
+    field="${key#*.}"
+  else
+    section=""
+    field="$key"
+  fi
+
+  local in_section=false value=""
+  while IFS= read -r line; do
+    # skip comments / blank
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ -z "${line// /}" ]] && continue
+
+    if [[ -z "$section" ]]; then
+      # top-level key
+      if [[ "$line" =~ ^${field}:[[:space:]]*(.*) ]]; then
+        value="${BASH_REMATCH[1]}"
+        break
+      fi
+    else
+      # detect section header (no leading whitespace)
+      if [[ "$line" =~ ^[a-zA-Z_] ]]; then
+        if [[ "$line" =~ ^${section}: ]]; then
+          in_section=true
+        else
+          in_section=false
+        fi
+        continue
+      fi
+      if $in_section; then
+        # indented key
+        if [[ "$line" =~ ^[[:space:]]+${field}:[[:space:]]*(.*) ]]; then
+          value="${BASH_REMATCH[1]}"
+          break
+        fi
+      fi
+    fi
+  done < "$file"
+
+  # Strip inline `#` comments before quote-stripping.
+  if [[ "$value" =~ ([[:space:]]+#) ]]; then
+    value="${value%%"${BASH_REMATCH[1]}"*}"
+  fi
+  # Strip trailing whitespace
+  if [[ "$value" =~ [[:space:]]+$ ]]; then
+    value="${value%"${BASH_REMATCH[0]}"}"
+  fi
+  # Strip surrounding quotes
+  value="${value#\"}"
+  value="${value%\"}"
+  value="${value#\'}"
+  value="${value%\'}"
+  echo "$value"
+}
+
+# Read a key from the build.memory: sub-block (two levels deep under build:).
+# mem_val <config> <key>  — key is e.g. "min_free_mb" or "per_agent_mb".
+# Prints the raw value, or nothing if the block/key is absent.
+mem_val() {
+  local config="$1" key="$2"
+  awk -v key="$key" '
+    /^[a-zA-Z_]/ { inbuild = ($0 ~ /^build:/) }
+    inbuild && /^  memory:/ { inmem=1; next }
+    inbuild && /^  [a-zA-Z_]/ && $0 !~ /^  memory:/ { inmem=0 }
+    !inmem { next }
+    $0 ~ "^    " key ":" { line=$0; sub("^    " key ":[[:space:]]*","",line); print line; exit }
+  ' "$config" | sed -E 's/[[:space:]]*#.*$//; s/[[:space:]]+$//; s/^"(.*)"$/\1/; s/^'\''(.*)'\''$/\1/'
+}
+
+[[ $# -ge 1 ]] || { usage >&2; exit 1; }
+case "$1" in
+  -h|--help) usage; exit 0 ;;
+esac
+
+specclaw_dir="$1"
+config="$specclaw_dir/config.yaml"
+[[ -f "$config" ]] || die "Config not found: $config"
+
+# --- build.parallel_tasks (default 3) — the fallback / ceiling ---
+parallel_tasks="$(yaml_val "$config" "build.parallel_tasks")"
+parallel_tasks="${parallel_tasks:-3}"
+# NFR2: a garbled parallel_tasks must not break arithmetic downstream.
+[[ "$parallel_tasks" =~ ^[0-9]+$ ]] || parallel_tasks=3
+
+# --- memory config (opt-in). Empty when the build.memory block is absent. ---
+min_free_mb="$(mem_val "$config" "min_free_mb")"
+per_agent_mb="$(mem_val "$config" "per_agent_mb")"
+
+# FR3: no build.memory block at all → opt-out, print parallel_tasks unchanged.
+if [[ -z "$min_free_mb" && -z "$per_agent_mb" ]]; then
+  echo "$parallel_tasks"
+  exit 0
+fi
+
+# Apply defaults for a partially-specified block.
+min_free_mb="${min_free_mb:-1024}"
+per_agent_mb="${per_agent_mb:-1024}"
+
+# NFR2: non-numeric config must not crash the build → fall back to no gating.
+if [[ ! "$min_free_mb" =~ ^[0-9]+$ || ! "$per_agent_mb" =~ ^[0-9]+$ ]]; then
+  echo "$parallel_tasks"
+  exit 0
+fi
+
+# Guard divide-by-zero (edge case) → treat as no memory gating.
+if [[ "$per_agent_mb" -eq 0 ]]; then
+  echo "$parallel_tasks"
+  exit 0
+fi
+
+# Source of MemAvailable — /proc/meminfo by default. Overridable via
+# SPECCLAW_MEMINFO_PATH so the budget can be exercised against a fixture in tests
+# (the format matches /proc/meminfo: a `MemAvailable:   <kb> kB` line).
+meminfo_path="${SPECCLAW_MEMINFO_PATH:-/proc/meminfo}"
+
+# NFR2: meminfo missing/unreadable → fall back to parallel_tasks.
+if [[ ! -r "$meminfo_path" ]]; then
+  echo "$parallel_tasks"
+  exit 0
+fi
+
+mem_avail_kb="$(awk '/^MemAvailable:/ { print $2; exit }' "$meminfo_path" 2>/dev/null || true)"
+if [[ -z "$mem_avail_kb" ]]; then
+  echo "$parallel_tasks"
+  exit 0
+fi
+
+mem_avail_mb=$(( mem_avail_kb / 1024 ))
+
+# budget = min(parallel_tasks, floor((mem_avail_mb - min_free_mb) / per_agent_mb)), clamp >=1.
+mem_budget=$(( (mem_avail_mb - min_free_mb) / per_agent_mb ))
+budget="$parallel_tasks"
+[[ "$mem_budget" -lt "$budget" ]] && budget="$mem_budget"
+[[ "$budget" -lt 1 ]] && budget=1
+
+echo "$budget"
