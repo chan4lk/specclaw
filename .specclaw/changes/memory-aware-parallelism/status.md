@@ -13,7 +13,7 @@
 | Design | ⚪ Pending | |
 | Tasks | ⚪ Pending | |
 | Build | ⚪ Pending | |
-| Verify | ⚪ Pending | |
+| Verify | ✅ Passed |  |
 
 ## Task Progress
 
