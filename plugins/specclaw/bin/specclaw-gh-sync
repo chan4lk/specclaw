@@ -645,7 +645,12 @@ cmd_create() {
   local has_issues
   has_issues="$(repo_has_issues)"
   if [[ "$has_issues" == "false" ]]; then
-    warn "GitHub Issues are disabled for $REPO — skipping issue creation (no tracking issue recorded)."
+    warn "GitHub Issues are disabled for $REPO — skipping issue creation."
+    # Write sentinel so specclaw-validate-change knows sync was attempted
+    local status_file="$specclaw_dir/changes/$change_name/status.md"
+    if [[ -f "$status_file" ]] && ! grep -q "GitHub Issue" "$status_file" 2>/dev/null; then
+      echo "**GitHub Issue:** N/A (Issues disabled on $REPO)" >> "$status_file"
+    fi
     exit 0
   fi
 

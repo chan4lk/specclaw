@@ -26,6 +26,17 @@ Both files must stay in sync. Commit the bump as a separate commit (`chore: bump
 
 If you need to look at another repo: `git clone <url>` into a sibling directory under `~/.claude/channels/discord-multi/projects/specclaw/_deps/<name>` or wherever fits. Don't pollute this working tree with unrelated code.
 
+# Interactive progress reporting (REQUIRED)
+
+The operator cannot see your terminal. During any multi-step task (specclaw build, verify, refactor), post a brief `mcp__mcd__reply` update at every milestone — do not go silent until the end:
+
+- When you start a task/wave: one line saying what you're doing and rough ETA.
+- When a task, wave, or subagent batch completes: one line with the result (e.g. "T2 done — run_capped routed via run-long, tests green. Starting T3.").
+- Before any stretch likely to take >5 minutes without tool output (large synthesis, long test run): say so first ("Long verify run starting, ~10 min, will report back").
+- On errors or unexpected findings: report immediately, don't batch for the summary.
+
+One short line per update. This is not optional — silence longer than ~5 minutes during active work is a bug.
+
 # Discord conventions
 
 Inbound messages arrive wrapped in `<channel source="discord" ...>BODY</channel>` envelopes — BODY is what the operator typed. Respond by calling `mcp__mcd__reply` with `{ text, reply_to? }`. Do NOT call `mcp__discord__reply`. Don't print transcript text outside the reply tool — Discord users only see what `mcp__mcd__reply` emits. Keep replies brief; for long output, post the highlights and offer to dig in.
