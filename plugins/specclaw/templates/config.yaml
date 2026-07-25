@@ -84,6 +84,10 @@ verify:
   heartbeat_seconds: 60            # Liveness heartbeat interval for long commands (stderr)
   playwright:
     max_browsers: 2                # Hard cap on concurrent Playwright/Chromium instances across all agents
+    max_memory_mb: 4096            # Memory ceiling (MB) per e2e invocation, applied via systemd-run --scope
+                                   # Absent → 4096. systemd-run unusable → command runs uncapped (warned).
+    projects: []                   # Playwright project names to run one-per-invocation, sequentially
+                                   # Absent or empty → a single invocation, no --project flag added.
 
 # Notifications
 notifications:
