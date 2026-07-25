@@ -44,7 +44,10 @@ context:
 
 # Build settings
 build:
-  test_command: ""                 # e.g., "npm test", "pytest"
+  test_command: ""                 # Fast tier: unit/integration. e.g., "npm test", "pytest"
+  e2e_command: ""                  # Slow tier: browser/e2e. e.g., "npx playwright test"
+                                   # Run separately from test_command, per verify.e2e below.
+                                   # Absent or empty → no e2e tier, behaviour unchanged.
   lint_command: ""                 # e.g., "npm run lint"
   build_command: ""                # e.g., "npm run build"
   parallel_tasks: 3               # Max concurrent agent spawns
@@ -73,6 +76,12 @@ build:
 
 # Verify settings
 verify:
+  # When the slow tier (build.e2e_command) runs. Absent → "last".
+  #   skip   — never run e2e during verify
+  #   last   — run e2e only after lint, build and test all pass
+  #   always — run e2e even when an earlier gate failed
+  e2e: last
+  heartbeat_seconds: 60            # Liveness heartbeat interval for long commands (stderr)
   playwright:
     max_browsers: 2                # Hard cap on concurrent Playwright/Chromium instances across all agents
 
