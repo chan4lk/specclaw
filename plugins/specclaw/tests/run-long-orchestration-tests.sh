@@ -343,6 +343,69 @@ assert_eq "edge4b cached-dirty sidecar re-executes" "2" "$(wc -l < "$ctr12" | tr
 assert_contains "edge4b cached-dirty refusal is reported" "recorded with a dirty tree" "$(cat "$err12")"
 echo
 
+echo "--- Case 12b (review): an untracked file counts as dirty and refuses reuse ---"
+# `git diff` and `git diff --cached` are both blind to untracked files, so a
+# brand-new not-yet-added test file would otherwise leave the tree looking clean
+# and serve a cached pass for a suite that never saw the new file.
+r12b="$WORK/repo-untracked"
+make_repo "$r12b"
+d12b="$WORK/untracked-logs"
+ctr12b="$WORK/counter-untracked"
+: > "$ctr12b"
+SIDE12B="sh -c 'echo z >> $ctr12b'"
+( cd "$r12b" && "$RUNLONG" --log-dir "$d12b" --phase ut -- "$SIDE12B" ) >/dev/null 2>&1
+assert_eq "review untracked: first run executes" "1" "$(wc -l < "$ctr12b" | tr -d ' ')"
+# Clean tree, matching HEAD -> the reuse would hit ...
+( cd "$r12b" && "$RUNLONG" --log-dir "$d12b" --phase ut --reuse -- "$SIDE12B" ) >/dev/null 2>&1
+assert_eq "review untracked: a genuinely clean tree still reuses" "1" \
+  "$(wc -l < "$ctr12b" | tr -d ' ')"
+# ... until an untracked file appears.
+echo "new test" > "$r12b/new_test.sh"
+err12b="$WORK/reuse-untracked.err"
+( cd "$r12b" && "$RUNLONG" --log-dir "$d12b" --phase ut --reuse -- "$SIDE12B" ) >/dev/null 2>"$err12b"
+assert_eq "review untracked: an untracked file re-executes" "2" "$(wc -l < "$ctr12b" | tr -d ' ')"
+assert_contains "review untracked: refusal is reported as a dirty tree" \
+  "working tree is dirty" "$(cat "$err12b")"
+# A .gitignore'd file is NOT dirt — --exclude-standard must hold, or reuse would
+# never hit in any repo with build output on disk.
+rm -f "$r12b/new_test.sh"
+echo "junk.log" > "$r12b/.gitignore"
+git -C "$r12b" add .gitignore
+git -C "$r12b" commit -qm "gitignore"
+echo noise > "$r12b/junk.log"
+( cd "$r12b" && "$RUNLONG" --log-dir "$d12b" --phase ut -- "$SIDE12B" ) >/dev/null 2>&1
+( cd "$r12b" && "$RUNLONG" --log-dir "$d12b" --phase ut --reuse -- "$SIDE12B" ) >/dev/null 2>&1
+assert_eq "review untracked: an ignored file is not dirt, reuse still hits" "3" \
+  "$(wc -l < "$ctr12b" | tr -d ' ')"
+echo
+
+echo "--- Case 12c (review): a slug collision does not serve another command's result ---"
+# The sidecar is located by slug, and the slug is truncated, so two long commands
+# sharing a prefix land on the same filename. Only the stored `cmd` proves identity.
+r12c="$WORK/repo-slugcollide"
+make_repo "$r12c"
+d12c="$WORK/slugcollide-logs"
+ctr12c="$WORK/counter-slugcollide"
+: > "$ctr12c"
+PREFIX="sh -c 'echo aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+CMD_A="$PREFIX >/dev/null; echo A >> $ctr12c'"
+CMD_B="$PREFIX >/dev/null; echo B >> $ctr12c'"
+( cd "$r12c" && "$RUNLONG" --log-dir "$d12c" --phase sc -- "$CMD_A" ) >/dev/null 2>&1
+assert_eq "review slug: command A ran once" "1" "$(wc -l < "$ctr12c" | tr -d ' ')"
+# Same phase, same truncated slug, same HEAD, clean tree — the only difference is
+# the command itself, which must be enough to force a re-run.
+err12c="$WORK/reuse-slugcollide.err"
+( cd "$r12c" && "$RUNLONG" --log-dir "$d12c" --phase sc --reuse -- "$CMD_B" ) >/dev/null 2>"$err12c"
+assert_eq "review slug: command B is not served A's cached result" "2" \
+  "$(wc -l < "$ctr12c" | tr -d ' ')"
+assert_eq "review slug: it was B that ran, not A again" "B" "$(tail -1 "$ctr12c")"
+assert_contains "review slug: the refusal names the command mismatch" \
+  "written for a different command" "$(cat "$err12c")"
+# The identical command still reuses — the guard must not break the happy path.
+( cd "$r12c" && "$RUNLONG" --log-dir "$d12c" --phase sc --reuse -- "$CMD_B" ) >/dev/null 2>&1
+assert_eq "review slug: an identical command still reuses" "2" "$(wc -l < "$ctr12c" | tr -d ' ')"
+echo
+
 echo "--- Case 13 (edge 3): repo with zero commits -> empty head stamp, reuse fails closed ---"
 r13="$WORK/repo-empty"
 make_repo "$r13" --empty

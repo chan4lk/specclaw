@@ -43,6 +43,12 @@ build:
     fable_max_fraction: 0.2                     # cap Fable share of tasks per build
     cache: true                                 # persist synthesized specs under changes/<change>/agents/
 
+# Workflow gates
+workflow:
+  strict: true
+  code_review: true                # Spawn the code-reviewer agent on /specclaw:verify
+  code_review_block: false         # Do not hard-block /specclaw:pr on CHANGES_REQUESTED yet
+
 # Notifications
 notifications:
   enabled: true

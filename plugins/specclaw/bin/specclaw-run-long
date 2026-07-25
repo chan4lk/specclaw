@@ -139,7 +139,12 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
   # commits yet, so the empty stamp correctly disables --reuse (edge case 3).
   current_head="$(git rev-parse --verify --quiet HEAD || true)"
   if [[ -n "$current_head" ]]; then
-    if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+    # Untracked files count as dirty: a brand-new, not-yet-`git add`ed test file
+    # changes what the suite would do, but `git diff` (with or without --cached)
+    # is blind to it. Missing that means --reuse serves a stale pass for a suite
+    # that never ran the new file — the one failure mode reuse must never have.
+    if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null ||
+       [[ -n "$(git ls-files --others --exclude-standard 2>/dev/null || true)" ]]; then
       current_dirty="true"
     fi
   fi
@@ -155,6 +160,7 @@ if [[ -n "$prior_sidecar" ]]; then
   cached_dirty="$(sidecar_val "$prior_sidecar" dirty)"
   cached_exit="$(sidecar_val "$prior_sidecar" exit)"
   cached_log="$(sidecar_val "$prior_sidecar" log)"
+  cached_cmd="$(sidecar_val "$prior_sidecar" cmd)"
 
   # Refuse reuse when there is no HEAD (edge case 3): HEAD stamp is empty.
   if [[ -z "$cached_head" ]] || [[ -z "$current_head" ]]; then
@@ -164,6 +170,12 @@ if [[ -n "$prior_sidecar" ]]; then
     warn "--reuse: working tree is dirty — refusing to reuse to avoid masking uncommitted edits"
   elif [[ "$cached_dirty" == "true" ]]; then
     warn "--reuse: cached result was recorded with a dirty tree — refusing to reuse"
+  # Refuse reuse when the sidecar was written for a different command. The
+  # sidecar is found by slug, and the slug is truncated to SLUG_MAX chars — two
+  # long commands sharing a prefix collide, so the stored `cmd` is the only
+  # thing that actually proves identity.
+  elif [[ "$cached_cmd" != "$cmd" ]]; then
+    warn "--reuse: cached sidecar was written for a different command — re-executing"
   # Refuse reuse when HEAD doesn't match.
   elif [[ "$cached_head" != "$current_head" ]]; then
     warn "--reuse: cached HEAD ${cached_head:0:8} != current ${current_head:0:8} — re-executing"
@@ -195,6 +207,12 @@ start_time="$SECONDS"
 # Called from trap — shellcheck does not see trap-based invocations as calls.
 # shellcheck disable=SC2329
 _cleanup_interrupt() {
+  # A signal arriving between `&` and `child_pid="$!"` would otherwise see an
+  # empty PID and leave the child running unsupervised. `jobs -p` still knows
+  # about it in that window.
+  if [[ -z "$child_pid" ]]; then
+    child_pid="$(jobs -p | tail -1 || true)"
+  fi
   if [[ -n "$child_pid" ]]; then
     # Kill entire process group to avoid orphans.
     kill -- -"$child_pid" 2>/dev/null || true
