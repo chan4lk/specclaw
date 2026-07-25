@@ -110,3 +110,48 @@ yaml_get in specclaw-build-context does not strip inline YAML comments — commi
 Port yaml_val's comment-stripping into yaml_get (or reuse yaml_val) in a lifecycle-bug-fixes follow-up change.
 
 ---
+
+## [L8] design_gap — specclaw-browser-lock cmd_acquire writes $$ — the PID of ...
+
+**When:** 2026-07-25 05:37 UTC
+**Category:** design_gap
+**Priority:** high
+**Status:** pending
+
+### Detail
+specclaw-browser-lock cmd_acquire writes $$ — the PID of the short-lived browser-lock process itself — into the slot file, so slot_live() always sees a dead PID: 'status' reports 0/N while a slot is demonstrably held, and a concurrent acquire reclaims a live slot as stale. verify.playwright.max_browsers therefore does not gate concurrency for any subprocess caller (only for a caller that sources the script). Pre-existing since v0.5.9, found while wiring T9.
+
+### Action
+Follow-up change: record the caller's PID (or a heartbeat/flock) instead of $$, and add a concurrency test that two sequential acquires cannot both win the same slot
+
+---
+
+## [L9] design_gap — yaml_val strips a trailing single quote unconditionally a...
+
+**When:** 2026-07-25 05:37 UTC
+**Category:** design_gap
+**Priority:** medium
+**Status:** pending
+
+### Detail
+yaml_val strips a trailing single quote unconditionally after stripping double quotes, so any config value ending in ' — e.g. test_command: "sh -c 'npm test'" — is read back truncated and dies with 'unexpected EOF while looking for matching'. Pattern is duplicated across 6+ bin scripts.
+
+### Action
+Fix the quote-stripping to be paired-only, in one shared helper; add a parser test with a nested-quote command
+
+---
+
+## [L10] design_gap — specclaw-verify-context never forwards e2e evidence to th...
+
+**When:** 2026-07-25 05:37 UTC
+**Category:** design_gap
+**Priority:** medium
+**Status:** pending
+
+### Detail
+specclaw-verify-context never forwards e2e evidence to the verify agent: it maps only test_output/lint_output/build_output, and references/agent-prompts.md has no {{e2e_output}} placeholder. FR9's guarantee currently depends on the agent voluntarily re-reading collect output.
+
+### Action
+Add an {{e2e_output}}/e2e_state slot to specclaw-verify-context and agent-prompts.md — neither file is in this change's file map, so either extend T12 or open a follow-up
+
+---
