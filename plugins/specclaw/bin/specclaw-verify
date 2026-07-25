@@ -69,6 +69,19 @@ yaml_val() {
   printf '%s' "$val"
 }
 
+# True when a simple scalar key is literally present in config.yaml.
+# yaml_val cannot tell "key absent" from "key present but empty", and that
+# distinction is what keeps the payload byte-identical to v0.5.9 when none of
+# the new e2e keys exist (NFR1).
+yaml_has_key() {
+  local file="$1" field="$2"
+  grep -qE "^[[:space:]]*${field}:" "$file" 2>/dev/null
+}
+
+# Heartbeat interval (seconds) handed to specclaw-run-long as --heartbeat.
+# Empty = do not pass the flag, so run-long applies its own default.
+HEARTBEAT_SECONDS=""
+
 # Run a command, capture output (capped at 100 lines), return exit code
 # Usage: run_capped <varname_output> <command_string> [phase] [log_dir]
 # Sets: <varname_output> to captured output, returns command exit code
@@ -88,6 +101,7 @@ run_capped() {
   if [ -n "$RUN_LONG" ]; then
     local rl_args=(--phase "$phase")
     [ -n "$log_dir" ] && rl_args+=(--log-dir "$log_dir")
+    [ -n "$HEARTBEAT_SECONDS" ] && rl_args+=(--heartbeat "$HEARTBEAT_SECONDS")
     local rl_out=""
     rl_out=$("$RUN_LONG" "${rl_args[@]}" -- "$cmd") || rc=$?
     # run-long's last stdout line is "log: <path>"; the full log lives there.
@@ -229,26 +243,38 @@ cmd_collect() {
   done
 
   # 4. Read config for commands
-  local test_cmd="" lint_cmd="" build_cmd=""
+  local test_cmd="" lint_cmd="" build_cmd="" e2e_cmd="" e2e_policy=""
+  # e2e_configured: any of the new e2e keys is literally present. When none are,
+  # the e2e payload fields are omitted entirely so output matches v0.5.9 (NFR1/AC6).
+  local e2e_configured=false
   if [ -f "$config_file" ]; then
     test_cmd=$(yaml_val "$config_file" "build.test_command")
     lint_cmd=$(yaml_val "$config_file" "build.lint_command")
     build_cmd=$(yaml_val "$config_file" "build.build_command")
+    e2e_cmd=$(yaml_val "$config_file" "build.e2e_command")
+    e2e_policy=$(yaml_val "$config_file" "verify.e2e")
+    HEARTBEAT_SECONDS=$(yaml_val "$config_file" "verify.heartbeat_seconds")
+    if yaml_has_key "$config_file" "e2e_command" || yaml_has_key "$config_file" "e2e"; then
+      e2e_configured=true
+    fi
   else
     warn "config.yaml not found at ${config_file}, skipping commands"
   fi
 
-  # 5. Run commands
+  # Resolve the e2e policy (FR8). Absent → "last" (edge case 8);
+  # unrecognised → warn and fall back to "last", never a silent skip (edge case 9).
+  case "$e2e_policy" in
+    skip|last|always) ;;
+    "") e2e_policy="last" ;;
+    *)  warn "verify.e2e: unrecognised value '${e2e_policy}' — falling back to 'last'"
+        e2e_policy="last" ;;
+  esac
+
+  # 5. Run commands — fast gates in lint → build → test order, then e2e per policy (FR8).
   local test_output="" lint_output="" build_output=""
   local tests_passed=true lint_passed=true build_passed=true
 
   local log_dir="${change_dir}/logs"
-
-  if [ -n "$test_cmd" ]; then
-    if ! run_capped test_output "$test_cmd" test "$log_dir"; then
-      tests_passed=false
-    fi
-  fi
 
   if [ -n "$lint_cmd" ]; then
     if ! run_capped lint_output "$lint_cmd" lint "$log_dir"; then
@@ -262,6 +288,55 @@ cmd_collect() {
     fi
   fi
 
+  if [ -n "$test_cmd" ]; then
+    if ! run_capped test_output "$test_cmd" test "$log_dir"; then
+      tests_passed=false
+    fi
+  fi
+
+  # 5b. E2E tier (FR8, FR9, FR13).
+  # e2e_state is an enumerated string, never an empty-output sentinel: a skip is
+  # structurally un-mistakable for a pass, and every non-passed state carries a
+  # human-readable reason in e2e_output.
+  local e2e_output="" e2e_state="not_configured" e2e_memory_limited=false
+  if [ "$e2e_configured" = true ]; then
+    if [ -z "$e2e_cmd" ]; then
+      e2e_state="not_configured"
+      e2e_output="NOT CONFIGURED — build.e2e_command is empty; there is no e2e tier to run. This is NOT a pass."
+    elif [ "$e2e_policy" = "skip" ]; then
+      e2e_state="skipped_policy"
+      e2e_output="SKIPPED BY POLICY — verify.e2e=skip; e2e command was never executed. This is NOT a pass."
+    else
+      # Under "last", an unset fast-tier command is vacuously passing (edge case 10):
+      # *_passed stay true when their command is empty, so e2e still runs.
+      local failed_gates=""
+      if [ "$e2e_policy" = "last" ]; then
+        [ "$lint_passed" = true ]  || failed_gates="${failed_gates}${failed_gates:+, }lint"
+        [ "$build_passed" = true ] || failed_gates="${failed_gates}${failed_gates:+, }build"
+        [ "$tests_passed" = true ] || failed_gates="${failed_gates}${failed_gates:+, }test"
+      fi
+      if [ -n "$failed_gates" ]; then
+        e2e_state="skipped_gate_failure"
+        e2e_output="SKIPPED — verify.e2e=last and an earlier gate failed (${failed_gates}); e2e command was never executed. This is NOT a pass."
+      else
+        local e2e_rc=0
+        run_capped e2e_output "$e2e_cmd" e2e "$log_dir" || e2e_rc=$?
+        if [ "$e2e_rc" -eq 0 ]; then
+          e2e_state="passed"
+        else
+          e2e_state="failed"
+          # Exit 137 = SIGKILL, i.e. the memory limit was exceeded (FR13). Never
+          # report it as a generic or flaky test failure.
+          if [ "$e2e_rc" -eq 137 ]; then
+            e2e_memory_limited=true
+            e2e_output="MEMORY LIMIT EXCEEDED — e2e command was killed with SIGKILL (exit 137), not a test assertion failure.
+${e2e_output}"
+          fi
+        fi
+      fi
+    fi
+  fi
+
   # 6. Build AC JSON array
   local ac_json=""
   for ac in "${ac_lines[@]}"; do
@@ -271,6 +346,16 @@ cmd_collect() {
   done
 
   # 7. Output JSON
+  # The e2e block is appended only when the new keys are configured, so a config
+  # without them reproduces the v0.5.9 payload byte-for-byte (NFR1, AC6).
+  local e2e_json=""
+  if [ "$e2e_configured" = true ]; then
+    e2e_json=",
+  \"e2e_output\": \"$(json_escape "$e2e_output")\",
+  \"e2e_state\": \"${e2e_state}\",
+  \"e2e_memory_limited\": ${e2e_memory_limited}"
+  fi
+
   local output
   output=$(cat <<ENDJSON
 {
@@ -284,7 +369,7 @@ cmd_collect() {
   "build_output": "$(json_escape "$build_output")",
   "tests_passed": ${tests_passed},
   "lint_passed": ${lint_passed},
-  "build_passed": ${build_passed}
+  "build_passed": ${build_passed}${e2e_json}
 }
 ENDJSON
 )

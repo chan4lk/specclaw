@@ -24,7 +24,33 @@ If it fails (tasks not all complete), report and stop.
 specclaw-verify collect .specclaw <change>
 ```
 
-Gathers acceptance criteria from `spec.md`, current contents of changed files, and configured test/lint/build command results.
+Gathers acceptance criteria from `spec.md`, current contents of changed files, and configured lint/build/test command results — run in that order — followed by the e2e tier when configured.
+
+### E2E tier (`build.e2e_command` + `verify.e2e`)
+
+`build.e2e_command` is the slow tier (browser/e2e); `build.test_command` stays the fast tier. `verify.e2e` decides when the slow tier runs:
+
+| Policy | Behaviour |
+|--------|-----------|
+| `last` (default) | Run e2e only after `lint_command`, `build_command` and `test_command` all pass. An unset fast-tier command is vacuously passing. |
+| `skip` | Never run e2e. |
+| `always` | Run e2e even when an earlier gate failed. |
+
+An absent `verify.e2e` means `last`; an unrecognised value warns on stderr and falls back to `last`.
+
+When any of these keys is present, `collect` adds three fields to the payload:
+
+- **`e2e_output`** — the e2e command's capped output, or an explicit reason string when it did not run.
+- **`e2e_state`** — one of `passed`, `failed`, `skipped_policy`, `skipped_gate_failure`, `not_configured`.
+- **`e2e_memory_limited`** — `true` when the e2e command was killed with SIGKILL (exit `137`), i.e. it exceeded its memory limit.
+
+With none of the keys present, the payload is unchanged from before the e2e tier existed.
+
+**Report a skip as a skip — never as a pass.** `e2e_state` is the authority, not `e2e_output`:
+
+- `passed` is the *only* state that may be reported as e2e passing.
+- `skipped_policy`, `skipped_gate_failure` and `not_configured` mean **e2e evidence does not exist**. Say so explicitly in `verify-report.md` (e.g. "E2E: skipped — `verify.e2e=last`, lint gate failed; no e2e evidence"), and do not mark an acceptance criterion that depends on e2e evidence as met. If an AC can only be proven by the e2e suite, a skipped e2e makes that AC unverified, which caps the verdict at PARTIAL.
+- `e2e_memory_limited: true` must be reported as *the memory limit was exceeded*, never as a generic or flaky test failure.
 
 ## Step 2 — Build verify context
 
