@@ -1,0 +1,286 @@
+#!/usr/bin/env bash
+# specclaw-run-long — Detached command execution with heartbeat, capped tail,
+# and HEAD-stamped sidecar for long-running test/lint/build commands.
+# Part of the specclaw skill. Bash + coreutils only (no jq, no python, NFR3).
+#
+# Stream discipline: heartbeats → stderr (liveness); 100-line tail → stdout
+# (captured payload); full log → disk (truth). Getting this wrong breaks AC6.
+#
+# Fail-open: unwritable log dir → mktemp fallback → inline execution (NFR2).
+set -euo pipefail
+
+# Default heartbeat interval in seconds (clamped from 0/non-integer, edge case 7).
+DEFAULT_HEARTBEAT=60
+# Maximum tail lines (matches run_capped() in specclaw-verify).
+TAIL_LINES=100
+# Slug max length for log filename.
+SLUG_MAX=40
+
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+
+usage() {
+  cat <<'EOF'
+Usage: specclaw-run-long [--log-dir DIR] [--phase NAME] [--heartbeat N] [--reuse] -- <command string>
+
+Runs a command detached, writing combined stdout+stderr to a log file.
+Emits heartbeats to stderr every N seconds. On completion prints the last
+100 lines of the log to stdout plus the log path. Writes a result sidecar.
+
+Options:
+  --log-dir DIR    Directory for log and sidecar files (default: mktemp dir)
+  --phase NAME     Phase label used in the log filename (default: run)
+  --heartbeat N    Heartbeat interval in seconds (default: 60; 0 clamps to default)
+  --reuse          Return cached sidecar if HEAD matches and tree is clean
+
+Stream discipline:
+  stderr: heartbeat progress lines (for agent/watchdog liveness)
+  stdout: 100-line tail + log path (captured payload for verify report)
+  disk:   full log (complete truth)
+
+  -h, --help   Show this help message
+EOF
+}
+
+warn() { echo "WARN [run-long]: $*" >&2; }
+
+# Read a key=value sidecar file; echo the value for a given key.
+# Values may contain '=' (e.g. log paths), so only split on the first '='.
+sidecar_val() {
+  local file="$1" key="$2"
+  [[ -r "$file" ]] || return 0
+  # Use parameter expansion on the line to split at the first '=' only.
+  while IFS= read -r line; do
+    local k="${line%%=*}"
+    if [[ "$k" == "$key" ]]; then
+      echo "${line#*=}"
+      return 0
+    fi
+  done < "$file"
+  return 0
+}
+
+# Newest sidecar for this phase+command, ignoring the PID discriminator.
+# Log names carry a PID (edge case 5), so reuse must not look for its own.
+newest_sidecar() {
+  local candidate="" newest=""
+  for candidate in "${log_dir}/${phase}-${slug}"-*.result; do
+    [[ -f "$candidate" ]] || continue
+    if [[ -z "$newest" ]] || [[ "$candidate" -nt "$newest" ]]; then
+      newest="$candidate"
+    fi
+  done
+  echo "$newest"
+}
+
+# ─── Argument parsing ──────────────────────────────────────────────────────────
+
+log_dir=""
+phase="run"
+heartbeat="$DEFAULT_HEARTBEAT"
+reuse=false
+cmd=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    --log-dir)  [[ $# -ge 2 ]] || { warn "--log-dir requires an argument"; exit 1; }
+                log_dir="$2"; shift 2 ;;
+    --phase)    [[ $# -ge 2 ]] || { warn "--phase requires an argument"; exit 1; }
+                phase="$2"; shift 2 ;;
+    --heartbeat)[[ $# -ge 2 ]] || { warn "--heartbeat requires an argument"; exit 1; }
+                heartbeat="$2"; shift 2 ;;
+    --reuse)    reuse=true; shift ;;
+    --)         shift; cmd="$*"; break ;;
+    *)          warn "Unknown option: $1 (try --help)"; exit 1 ;;
+  esac
+done
+
+[[ -n "$cmd" ]] || { warn "No command provided after --"; usage; exit 1; }
+
+# Clamp heartbeat to default if 0 or non-integer (edge case 7).
+if ! [[ "$heartbeat" =~ ^[0-9]+$ ]] || [[ "$heartbeat" -eq 0 ]]; then
+  warn "heartbeat '${heartbeat}' is not a positive integer — clamping to ${DEFAULT_HEARTBEAT}s"
+  heartbeat="$DEFAULT_HEARTBEAT"
+fi
+
+# ─── Log directory resolution (NFR2 fail-open) ────────────────────────────────
+
+if [[ -n "$log_dir" ]]; then
+  if ! mkdir -p "$log_dir" 2>/dev/null; then
+    warn "cannot create log dir '${log_dir}' — falling back to mktemp"
+    log_dir=""
+  fi
+fi
+
+if [[ -z "$log_dir" ]]; then
+  if ! log_dir="$(mktemp -d 2>/dev/null)"; then
+    warn "mktemp also failed — running inline (no log, no sidecar)"
+    eval "$cmd"
+    exit $?
+  fi
+fi
+
+# ─── Log path construction ─────────────────────────────────────────────────────
+
+# Slug: sanitize command to [a-z0-9-], truncate to SLUG_MAX chars.
+slug="$(echo "$cmd" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | tr -s '-' | sed 's/^-//;s/-$//' | cut -c1-"${SLUG_MAX}")"
+[[ -n "$slug" ]] || slug="cmd"
+
+log_base="${log_dir}/${phase}-${slug}-$$"
+log_file="${log_base}.log"
+sidecar="${log_base}.result"
+
+# ─── HEAD and dirty-tree detection ────────────────────────────────────────────
+
+current_head=""
+current_dirty="false"
+if git rev-parse --git-dir >/dev/null 2>&1; then
+  # --verify --quiet: prints nothing (not the literal "HEAD") when there are no
+  # commits yet, so the empty stamp correctly disables --reuse (edge case 3).
+  current_head="$(git rev-parse --verify --quiet HEAD || true)"
+  if [[ -n "$current_head" ]]; then
+    if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+      current_dirty="true"
+    fi
+  fi
+fi
+
+# ─── Reuse path (FR5, edge cases 3 & 4) ──────────────────────────────────────
+
+prior_sidecar=""
+"$reuse" && prior_sidecar="$(newest_sidecar)"
+
+if [[ -n "$prior_sidecar" ]]; then
+  cached_head="$(sidecar_val "$prior_sidecar" head)"
+  cached_dirty="$(sidecar_val "$prior_sidecar" dirty)"
+  cached_exit="$(sidecar_val "$prior_sidecar" exit)"
+  cached_log="$(sidecar_val "$prior_sidecar" log)"
+
+  # Refuse reuse when there is no HEAD (edge case 3): HEAD stamp is empty.
+  if [[ -z "$cached_head" ]] || [[ -z "$current_head" ]]; then
+    warn "--reuse: no HEAD available — refusing to reuse (fail closed)"
+  # Refuse reuse when the tree is dirty (edge case 4).
+  elif [[ "$current_dirty" == "true" ]]; then
+    warn "--reuse: working tree is dirty — refusing to reuse to avoid masking uncommitted edits"
+  elif [[ "$cached_dirty" == "true" ]]; then
+    warn "--reuse: cached result was recorded with a dirty tree — refusing to reuse"
+  # Refuse reuse when HEAD doesn't match.
+  elif [[ "$cached_head" != "$current_head" ]]; then
+    warn "--reuse: cached HEAD ${cached_head:0:8} != current ${current_head:0:8} — re-executing"
+  else
+    # All checks pass: serve the cached result.
+    echo "[run-long] reuse: sidecar HEAD matches current HEAD (${current_head:0:8}), clean tree — skipping execution" >&2
+    # Print the stored tail from the log file if it still exists.
+    if [[ -f "$cached_log" ]]; then
+      local_total="$(wc -l < "$cached_log" 2>/dev/null || echo 0)"
+      if [[ "$local_total" -gt "$TAIL_LINES" ]]; then
+        tail -"${TAIL_LINES}" "$cached_log"
+        echo "... (truncated, ${local_total} total lines)"
+      else
+        cat "$cached_log"
+      fi
+    fi
+    echo "log: ${cached_log:-$sidecar}"
+    [[ "$cached_exit" =~ ^[0-9]+$ ]] || cached_exit=1
+    exit "$cached_exit"
+  fi
+fi
+
+# ─── Child setup and trap ─────────────────────────────────────────────────────
+
+child_pid=""
+start_time="$SECONDS"
+
+# Write an interrupted sidecar and kill the child process group (NFR7, edge case 16).
+# Called from trap — shellcheck does not see trap-based invocations as calls.
+# shellcheck disable=SC2329
+_cleanup_interrupt() {
+  if [[ -n "$child_pid" ]]; then
+    # Kill entire process group to avoid orphans.
+    kill -- -"$child_pid" 2>/dev/null || true
+    wait "$child_pid" 2>/dev/null || true
+  fi
+  local elapsed=$(( SECONDS - start_time ))
+  {
+    echo "exit=1"
+    echo "duration_s=${elapsed}"
+    echo "log=${log_file}"
+    echo "head=${current_head}"
+    echo "dirty=${current_dirty}"
+    echo "cmd=${cmd}"
+    echo "interrupted=true"
+  } > "$sidecar"
+  exit 1
+}
+
+trap '_cleanup_interrupt' INT
+trap '_cleanup_interrupt' TERM
+
+# ─── Execute detached ─────────────────────────────────────────────────────────
+
+# Use eval to preserve pipes, &&, env prefixes (edge case 2, design decision 2).
+# set -m enables job control so the child gets its own process group, allowing
+# the trap to kill the whole group cleanly (NFR7).
+set -m
+eval "$cmd" >"$log_file" 2>&1 &
+child_pid="$!"
+
+# ─── Heartbeat loop ───────────────────────────────────────────────────────────
+
+next_heartbeat="$heartbeat"
+
+while kill -0 "$child_pid" 2>/dev/null; do
+  sleep 1
+  elapsed=$(( SECONDS - start_time ))
+  if [[ "$elapsed" -ge "$next_heartbeat" ]]; then
+    # Count log lines (|| true per learning [L2]: no-match pipeline aborts set -e).
+    log_lines="$(wc -l < "$log_file" 2>/dev/null || echo 0)"
+    # Get last non-empty line (|| true per learning [L2]).
+    last_line="$(grep -v '^[[:space:]]*$' "$log_file" 2>/dev/null | tail -1 || true)"
+    if [[ -z "$last_line" ]]; then
+      last_line="(no output yet)"
+    fi
+    # Truncate last line to keep the heartbeat terse (NFR4).
+    if [[ "${#last_line}" -gt 120 ]]; then
+      last_line="${last_line:0:117}..."
+    fi
+    echo "[run-long] ${elapsed}s elapsed | ${log_lines} log lines | last: ${last_line}" >&2
+    next_heartbeat=$(( elapsed + heartbeat ))
+  fi
+done
+
+# ─── Harvest exit code ────────────────────────────────────────────────────────
+
+rc=0
+wait "$child_pid" 2>/dev/null || rc=$?
+set +m
+
+end_time="$SECONDS"
+duration=$(( end_time - start_time ))
+
+# ─── Write sidecar (always, pass or fail — FR4) ───────────────────────────────
+
+{
+  echo "exit=${rc}"
+  echo "duration_s=${duration}"
+  echo "log=${log_file}"
+  echo "head=${current_head}"
+  echo "dirty=${current_dirty}"
+  echo "cmd=${cmd}"
+  echo "interrupted=false"
+} > "$sidecar"
+
+# ─── Print capped tail to stdout (FR3) ────────────────────────────────────────
+
+total="$(wc -l < "$log_file" 2>/dev/null || echo 0)"
+
+if [[ "$total" -gt "$TAIL_LINES" ]]; then
+  tail -"${TAIL_LINES}" "$log_file"
+  echo "... (truncated, ${total} total lines)"
+else
+  cat "$log_file"
+fi
+
+echo "log: ${log_file}"
+
+exit "$rc"
