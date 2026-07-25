@@ -25,6 +25,16 @@
 #     7: --heartbeat 0 / non-integer clamps to the 60s default.
 #     16: SIGTERM kills the child process group, writes an `interrupted=true`
 #         sidecar, exits non-zero, leaves no orphan.
+#   specclaw-browser-lock wrap (FR10–FR12):
+#     AC10: `--workers=1` appended for Playwright commands, an existing
+#           `--workers` preserved and never duplicated.
+#     AC11: MemoryMax defaults to 4096M and honours an explicit value; an
+#           unusable `systemd-run` emits the command uncapped with one WARN.
+#     AC12: `verify.playwright.projects` (both yaml list forms) fans out into
+#           one `&&`-joined `--project=` invocation each; absent/empty -> one.
+#     Edge 11: `systemd-run` absent from PATH *and* present-but-failing.
+#     Edge 12: project names with spaces / `&` survive as single argv entries.
+#     Edge 13: non-Playwright commands never gain `--workers`.
 #
 # Plain bash + coreutils — no jq/bats/npm (NFR3). Run from anywhere:
 #   bash plugins/specclaw/tests/run-long-orchestration-tests.sh
@@ -1098,6 +1108,443 @@ if [[ "${beats40:-0}" -ge 2 ]]; then
 else
   fail "a 1s heartbeat produces liveness lines on verify's stderr (got ${beats40:-0})"
 fi
+echo
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Bounded Playwright invocation — bin/specclaw-browser-lock wrap (FR10–FR12)
+#
+# `wrap` PRINTS a transformed command and never executes it, so every case below
+# is a pure string assertion plus the exit-code convention (0 = capped,
+# 10 = emitted uncapped, 1 = no command). Locks in:
+#   AC10: `--workers=1` appended for Playwright commands; an existing
+#         `--workers=N` is preserved, never duplicated.
+#   AC11: MemoryMax defaults to 4096M (key absent / garbage / no config file at
+#         all) and honours an explicit value; `systemd-run` unusable -> the
+#         unwrapped command on stdout, one WARN on stderr, exit 10.
+#   AC12: `verify.playwright.projects` in both yaml forms (inline flow and block
+#         sequence) -> one `&&`-joined invocation per project carrying
+#         `--project=<name>`; absent/empty -> exactly one invocation, no
+#         `--project` flag.
+#   Edge cases:
+#     2:  shell metacharacters (pipes, `&&`, `VAR=x` env prefixes) survive the
+#         wrap verbatim and stay inside the capped `bash -c`.
+#     11: `systemd-run` missing from PATH *and* present-but-failing both fall
+#         back uncapped — usability is probed, not inferred from presence.
+#     12: project names with spaces or `&` survive as single argv entries
+#         (proved by re-parsing the emitted string against a recording stub).
+#   Scoping: only `verify.playwright` is read — a `build.playwright` block is
+#         ignored.
+#   Regression: `status` / `acquire` / `release` / unknown-subcommand dispatch is
+#         unchanged by the new subcommand.
+#
+# `systemd-run` is stubbed in both directions (CAP_STUB / NOCAP_STUB above) plus
+# a shim PATH with no `systemd-run` at all, so no case depends on a working
+# cgroup session (NFR6).
+# ─────────────────────────────────────────────────────────────────────────────
+
+LOCK="$BIN_DIR/specclaw-browser-lock"
+if [[ ! -f "$LOCK" ]]; then
+  echo "FATAL: missing bin script: $LOCK" >&2
+  exit 2
+fi
+
+# make_pw_project <name> [config heredoc on stdin] — a `.specclaw` dir under
+# $WORK/<name>. With no stdin content, no config.yaml is written at all (the
+# "no config file" default path). Echoes the .specclaw path.
+make_pw_project() {
+  local d="$WORK/$1"
+  mkdir -p "$d/.specclaw"
+  if [[ ! -t 0 ]]; then
+    cat > "$d/.specclaw/config.yaml.tmp"
+    if [[ -s "$d/.specclaw/config.yaml.tmp" ]]; then
+      mv "$d/.specclaw/config.yaml.tmp" "$d/.specclaw/config.yaml"
+    else
+      rm -f "$d/.specclaw/config.yaml.tmp"
+    fi
+  fi
+  printf '%s' "$d/.specclaw"
+}
+
+# wrap_with <stub_dir> <specclaw_dir> <errfile> <cmd…> — `wrap` with <stub_dir>
+# shadowing systemd-run. Echoes the emitted command string; sets WRAP_RC.
+WRAP_RC=0
+wrap_with() {
+  local stub="$1" dir="$2" err="$3"; shift 3
+  local o
+  o="$(PATH="$stub:$PATH" "$LOCK" "$dir" wrap "$@" 2>"$err")"; WRAP_RC=$?
+  printf '%s' "$o"
+}
+
+# Occurrences of <needle> in <haystack>, as a count.
+count_of() { grep -o -- "$1" <<<"$2" | wc -l | tr -d ' '; }
+
+# A recording `npx` so the emitted string can be re-parsed and its argv
+# inspected — the only way to prove a project name survived as ONE word.
+WRAP_ARGV_STUB="$WORK/stub-wrap-argv"
+stub_bin "$WRAP_ARGV_STUB" npx 'for a in "$@"; do printf "ARG[%s]\n" "$a"; done'
+
+# A PATH with no `systemd-run` on it at all (edge case 11, first half): only the
+# binaries `wrap` itself needs. Distinct from NOCAP_STUB, which *has* the binary
+# but fails when run.
+NOSYSD_SHIM="$WORK/shim-nosystemd"
+mkdir -p "$NOSYSD_SHIM"
+for b in bash awk sed head cat tr ls; do
+  ln -sf "$(command -v "$b")" "$NOSYSD_SHIM/$b"
+done
+
+echo "--- Case 41 (AC11): MemoryMax defaults to 4096M; an explicit value is honoured ---"
+d41="$(make_pw_project wrap-cap-default </dev/null)"
+out="$(wrap_with "$CAP_STUB" "$d41" "$WORK/w41.err" 'npx playwright test')"
+assert_eq "AC11 a capped wrap exits 0" "0" "$WRAP_RC"
+assert_eq "AC11 no config file at all -> the 4096M default, one capped invocation" \
+  "systemd-run --user --scope -q -p MemoryMax=4096M bash -c 'npx playwright test --workers=1'" \
+  "$out"
+assert_eq "AC11 a capped wrap emits nothing on stderr" "" "$(cat "$WORK/w41.err")"
+
+d41b="$(make_pw_project wrap-cap-nokey <<'EOF'
+version: 1
+verify:
+  playwright:
+    max_browsers: 2
+EOF
+)"
+out="$(wrap_with "$CAP_STUB" "$d41b" "$WORK/w41b.err" 'npx playwright test')"
+assert_contains "AC11 a playwright block without max_memory_mb still caps at 4096M" \
+  "MemoryMax=4096M" "$out"
+
+d41c="$(make_pw_project wrap-cap-explicit <<'EOF'
+version: 1
+verify:
+  playwright:
+    max_memory_mb: 2048
+EOF
+)"
+out="$(wrap_with "$CAP_STUB" "$d41c" "$WORK/w41c.err" 'npx playwright test')"
+assert_contains "AC11 an explicit max_memory_mb is used" "MemoryMax=2048M" "$out"
+assert_not_contains "AC11 the default does not leak alongside an explicit value" \
+  "4096M" "$out"
+
+# Garbage and zero must clamp to the default rather than emit `MemoryMax=M` or
+# `MemoryMax=0M` (an unbounded/instantly-fatal scope).
+d41d="$(make_pw_project wrap-cap-garbage <<'EOF'
+version: 1
+verify:
+  playwright:
+    max_memory_mb: "lots"
+EOF
+)"
+out="$(wrap_with "$CAP_STUB" "$d41d" "$WORK/w41d.err" 'npx playwright test')"
+assert_contains "AC11 a non-numeric max_memory_mb clamps to 4096M" "MemoryMax=4096M" "$out"
+assert_not_contains "AC11 a non-numeric cap is never emitted verbatim" "MemoryMax=lots" "$out"
+
+d41e="$(make_pw_project wrap-cap-zero <<'EOF'
+version: 1
+verify:
+  playwright:
+    max_memory_mb: 0
+EOF
+)"
+out="$(wrap_with "$CAP_STUB" "$d41e" "$WORK/w41e.err" 'npx playwright test')"
+assert_contains "AC11 max_memory_mb: 0 clamps to 4096M" "MemoryMax=4096M" "$out"
+assert_not_contains "AC11 a zero cap is never emitted" "MemoryMax=0M" "$out"
+
+# Trailing inline comments are config.yaml's shipped style (templates/config.yaml).
+d41f="$(make_pw_project wrap-cap-comment <<'EOF'
+version: 1
+verify:
+  playwright:
+    max_memory_mb: 8192   # cap for the e2e tier
+EOF
+)"
+out="$(wrap_with "$CAP_STUB" "$d41f" "$WORK/w41f.err" 'npx playwright test')"
+assert_contains "AC11 an inline comment is stripped from max_memory_mb" "MemoryMax=8192M" "$out"
+assert_not_contains "AC11 the comment text never reaches the command" "cap for the e2e" "$out"
+echo
+
+echo "--- Case 42 (AC11b + edge 11): systemd-run absent AND unusable both fall back ---"
+d42="$(make_pw_project wrap-uncapped <<'EOF'
+version: 1
+verify:
+  playwright:
+    max_memory_mb: 2048
+EOF
+)"
+# (a) present on PATH but failing — usability is probed, not assumed.
+err42a="$WORK/w42a.err"
+out="$(PATH="$NOCAP_STUB:$PATH" "$LOCK" "$d42" wrap 'npx playwright test' 2>"$err42a")"; rc=$?
+assert_eq "edge11 a present-but-failing systemd-run exits 10 (emitted uncapped)" "10" "$rc"
+assert_eq "edge11 the emitted string is the plain transformed command" \
+  "npx playwright test --workers=1" "$out"
+assert_not_contains "edge11 no systemd-run prefix is emitted when it is unusable" \
+  "systemd-run" "$out"
+assert_not_contains "edge11 no MemoryMax is claimed when nothing was capped" "MemoryMax=2048M" "$out"
+assert_contains "edge11 the fallback warns on stderr" "systemd-run unusable" "$(cat "$err42a")"
+assert_contains "edge11 the warning names the cap that was NOT applied" "MemoryMax=2048M not applied" \
+  "$(cat "$err42a")"
+assert_eq "edge11 exactly one WARN line is emitted" "1" \
+  "$(grep -c '^WARN: ' "$err42a" 2>/dev/null || true)"
+# (b) not on PATH at all — same fallback, same exit code.
+err42b="$WORK/w42b.err"
+out="$(PATH="$NOSYSD_SHIM" "$LOCK" "$d42" wrap 'npx playwright test' 2>"$err42b")"; rc=$?
+assert_eq "edge11 systemd-run missing from PATH also exits 10" "10" "$rc"
+assert_eq "edge11 missing systemd-run emits the plain command too" \
+  "npx playwright test --workers=1" "$out"
+assert_contains "edge11 the missing-binary path warns identically" "systemd-run unusable" \
+  "$(cat "$err42b")"
+echo
+
+echo "--- Case 43 (AC10): --workers=1 is appended, an existing --workers is preserved ---"
+d43="$(make_pw_project wrap-workers </dev/null)"
+out="$(wrap_with "$CAP_STUB" "$d43" "$WORK/w43.err" 'npx playwright test')"
+assert_contains "AC10 a playwright command gains --workers=1" "--workers=1" "$out"
+assert_eq "AC10 exactly one --workers flag is emitted" "1" "$(count_of '--workers' "$out")"
+
+out="$(wrap_with "$CAP_STUB" "$d43" "$WORK/w43.err" 'npx playwright test --workers=2')"
+assert_contains "AC10 an existing --workers=2 is preserved" "--workers=2" "$out"
+assert_not_contains "AC10 --workers=1 is not forced over an explicit value" "--workers=1" "$out"
+assert_eq "AC10 an explicit --workers is never duplicated" "1" "$(count_of '--workers' "$out")"
+
+# The space-separated form is a --workers choice too and must not be doubled.
+out="$(wrap_with "$CAP_STUB" "$d43" "$WORK/w43.err" 'npx playwright test --workers 4')"
+assert_contains "AC10 the space-separated --workers 4 form is preserved" "--workers 4" "$out"
+assert_eq "AC10 the space-separated form is not duplicated either" "1" \
+  "$(count_of '--workers' "$out")"
+echo
+
+echo "--- Case 44 (edge 13): a non-Playwright command gets no --workers, but is still capped ---"
+d44="$(make_pw_project wrap-cypress </dev/null)"
+out="$(wrap_with "$CAP_STUB" "$d44" "$WORK/w44.err" 'npx cypress run')"
+assert_eq "edge13 a cypress command still exits 0 (capped)" "0" "$WRAP_RC"
+assert_eq "edge13 cypress is capped but untouched otherwise" \
+  "systemd-run --user --scope -q -p MemoryMax=4096M bash -c 'npx cypress run'" "$out"
+assert_not_contains "edge13 no --workers is injected into a non-playwright command" \
+  "--workers" "$out"
+out="$(wrap_with "$CAP_STUB" "$d44" "$WORK/w44.err" 'bash scripts/e2e.sh')"
+assert_not_contains "edge13 a plain script gets no --workers either" "--workers" "$out"
+assert_contains "edge13 a plain script is still memory-capped" "MemoryMax=4096M" "$out"
+echo
+
+echo "--- Case 45 (AC12): inline-flow projects -> one &&-joined invocation each ---"
+d45="$(make_pw_project wrap-proj-inline <<'EOF'
+version: 1
+verify:
+  playwright:
+    max_memory_mb: 2048
+    projects: [desktop, mobile]
+EOF
+)"
+out="$(wrap_with "$CAP_STUB" "$d45" "$WORK/w45.err" 'npx playwright test')"
+assert_eq "AC12 a project fan-out still exits 0" "0" "$WRAP_RC"
+assert_eq "AC12 inline-flow projects emit both invocations, joined with && , in order" \
+  "systemd-run --user --scope -q -p MemoryMax=2048M bash -c 'npx playwright test --workers=1 --project=desktop' && systemd-run --user --scope -q -p MemoryMax=2048M bash -c 'npx playwright test --workers=1 --project=mobile'" \
+  "$out"
+assert_eq "AC12 two projects mean exactly one && join" "1" "$(count_of '&&' "$out")"
+assert_eq "AC12 each project gets its own capped scope" "2" "$(count_of 'MemoryMax=2048M' "$out")"
+assert_eq "AC12 --workers=1 is applied once per invocation, not once overall" "2" \
+  "$(count_of '--workers=1' "$out")"
+echo
+
+echo "--- Case 46 (AC12b): block-sequence projects behave identically ---"
+d46="$(make_pw_project wrap-proj-block <<'EOF'
+version: 1
+verify:
+  playwright:
+    max_memory_mb: 2048
+    projects:
+      - desktop
+      - mobile
+EOF
+)"
+out46="$(wrap_with "$CAP_STUB" "$d46" "$WORK/w46.err" 'npx playwright test')"
+assert_eq "AC12b the block-sequence form exits 0" "0" "$WRAP_RC"
+assert_contains "AC12b block sequence yields --project=desktop" "--project=desktop" "$out46"
+assert_contains "AC12b block sequence yields --project=mobile" "--project=mobile" "$out46"
+assert_eq "AC12b block sequence joins with a single &&" "1" "$(count_of '&&' "$out46")"
+# The two yaml spellings are the same configuration, so they must wrap the same.
+out45="$(wrap_with "$CAP_STUB" "$d45" "$WORK/w46b.err" 'npx playwright test')"
+assert_eq "AC12b both yaml list forms produce the identical command" "$out45" "$out46"
+echo
+
+echo "--- Case 47 (AC12c): absent or empty projects -> exactly one plain invocation ---"
+d47="$(make_pw_project wrap-proj-absent <<'EOF'
+version: 1
+verify:
+  playwright:
+    max_memory_mb: 2048
+EOF
+)"
+out="$(wrap_with "$CAP_STUB" "$d47" "$WORK/w47.err" 'npx playwright test')"
+assert_eq "AC12c an absent projects key emits a single invocation, no --project" \
+  "systemd-run --user --scope -q -p MemoryMax=2048M bash -c 'npx playwright test --workers=1'" \
+  "$out"
+assert_not_contains "AC12c no --project flag is invented" "--project" "$out"
+assert_eq "AC12c a single invocation carries no && join" "0" "$(count_of '&&' "$out")"
+
+d47b="$(make_pw_project wrap-proj-empty <<'EOF'
+version: 1
+verify:
+  playwright:
+    projects: []
+EOF
+)"
+out="$(wrap_with "$CAP_STUB" "$d47b" "$WORK/w47b.err" 'npx playwright test')"
+assert_eq "AC12c an explicitly empty list behaves as absent" \
+  "systemd-run --user --scope -q -p MemoryMax=4096M bash -c 'npx playwright test --workers=1'" \
+  "$out"
+assert_not_contains "AC12c an empty list adds no --project" "--project" "$out"
+echo
+
+echo "--- Case 48 (edge 12): project names with spaces / & survive as single argv entries ---"
+d48="$(make_pw_project wrap-proj-quoting <<'EOF'
+version: 1
+verify:
+  playwright:
+    projects: ["my project", "smoke & regression"]
+EOF
+)"
+# Capped: re-parse the emitted string with a recording `npx` on PATH. Only one
+# ARG[] line per project proves the name did not split into separate words, and
+# that the `&` did not background the invocation.
+out="$(wrap_with "$CAP_STUB" "$d48" "$WORK/w48.err" 'npx playwright test')"
+assert_eq "edge12 a quoted-name fan-out exits 0" "0" "$WRAP_RC"
+argv48="$(PATH="$WRAP_ARGV_STUB:$CAP_STUB:$PATH" bash -c "$out" 2>&1)"
+assert_contains "edge12 a project name with a space arrives as ONE argv entry" \
+  "ARG[--project=my project]" "$argv48"
+assert_contains "edge12 a project name containing & arrives as ONE argv entry" \
+  "ARG[--project=smoke & regression]" "$argv48"
+assert_eq "edge12 both invocations ran, 4 argv entries each" "8" \
+  "$(count_of 'ARG\[' "$argv48")"
+# Uncapped: the same names must survive the no-systemd-run path too.
+out="$(PATH="$NOCAP_STUB:$PATH" "$LOCK" "$d48" wrap 'npx playwright test' 2>/dev/null)"; rc=$?
+assert_eq "edge12 the uncapped fan-out exits 10" "10" "$rc"
+argv48b="$(PATH="$WRAP_ARGV_STUB:$NOCAP_STUB:$PATH" bash -c "$out" 2>&1)"
+assert_contains "edge12 spaces survive the uncapped path as one argv entry" \
+  "ARG[--project=my project]" "$argv48b"
+assert_contains "edge12 & survives the uncapped path as one argv entry" \
+  "ARG[--project=smoke & regression]" "$argv48b"
+assert_eq "edge12 the uncapped fan-out also ran both invocations" "8" \
+  "$(count_of 'ARG\[' "$argv48b")"
+echo
+
+echo "--- Case 49 (edge 2): pipes, &&, and env prefixes survive the wrap ---"
+d49="$(make_pw_project wrap-metachars </dev/null)"
+META='CI=1 npx cypress run | tee /dev/null && echo chained'
+out="$(wrap_with "$CAP_STUB" "$d49" "$WORK/w49.err" "$META")"
+assert_eq "edge2 a metacharacter-heavy command still caps (exit 0)" "0" "$WRAP_RC"
+# The whole compound goes inside ONE `bash -c`, so the pipeline's right-hand side
+# is inside the cap rather than escaping it (design rationale for `bash -c`).
+assert_eq "edge2 the compound command is wrapped verbatim inside one bash -c" \
+  "systemd-run --user --scope -q -p MemoryMax=4096M bash -c 'CI=1 npx cypress run | tee /dev/null && echo chained'" \
+  "$out"
+assert_eq "edge2 only one bash -c is emitted (nothing escapes the scope)" "1" \
+  "$(count_of 'bash -c' "$out")"
+# Semantics, not just the string: re-run it and check the env prefix and the
+# `&&` right-hand side both took effect.
+ran49="$(PATH="$WRAP_ARGV_STUB:$CAP_STUB:$PATH" bash -c "$out" 2>&1)"
+assert_contains "edge2 the piped-through output survived" "ARG[cypress]" "$ran49"
+assert_contains "edge2 the && right-hand side still ran" "chained" "$ran49"
+# Env prefix reaching the child, proved through the wrap.
+out="$(wrap_with "$CAP_STUB" "$d49" "$WORK/w49b.err" 'FOO=bar sh -c "echo got=\$FOO"')"
+assert_contains "edge2 an env prefix is preserved in the emitted string" "FOO=bar" "$out"
+assert_eq "edge2 the env prefix reaches the child when the wrapped string runs" "got=bar" \
+  "$(PATH="$CAP_STUB:$PATH" bash -c "$out" 2>&1)"
+# Uncapped path: nothing is re-quoted, the command comes back byte-identical.
+out="$(PATH="$NOCAP_STUB:$PATH" "$LOCK" "$d49" wrap "$META" 2>/dev/null)"
+assert_eq "edge2 the uncapped path returns the command byte-identical" "$META" "$out"
+echo
+
+echo "--- Case 50: only verify.playwright is read; a build.playwright block is ignored ---"
+d50="$(make_pw_project wrap-scoping <<'EOF'
+version: 1
+build:
+  playwright:
+    max_memory_mb: 999
+    projects: [ghost]
+verify:
+  playwright:
+    max_memory_mb: 2048
+    projects: [desktop]
+EOF
+)"
+out="$(wrap_with "$CAP_STUB" "$d50" "$WORK/w50.err" 'npx playwright test')"
+assert_contains "scoping the verify.playwright cap wins" "MemoryMax=2048M" "$out"
+assert_not_contains "scoping a build.playwright cap is ignored" "MemoryMax=999M" "$out"
+assert_contains "scoping the verify.playwright project is used" "--project=desktop" "$out"
+assert_not_contains "scoping a build.playwright project is ignored" "ghost" "$out"
+# The same keys under build: alone must leave the defaults untouched.
+d50b="$(make_pw_project wrap-scoping-buildonly <<'EOF'
+version: 1
+build:
+  playwright:
+    max_memory_mb: 999
+    projects: [ghost]
+EOF
+)"
+out="$(wrap_with "$CAP_STUB" "$d50b" "$WORK/w50b.err" 'npx playwright test')"
+assert_eq "scoping build.playwright alone leaves the 4096M default and no fan-out" \
+  "systemd-run --user --scope -q -p MemoryMax=4096M bash -c 'npx playwright test --workers=1'" \
+  "$out"
+echo
+
+echo "--- Case 51: wrap with no command warns and exits 1 ---"
+d51="$(make_pw_project wrap-nocmd </dev/null)"
+err51="$WORK/w51.err"
+out="$(PATH="$CAP_STUB:$PATH" "$LOCK" "$d51" wrap 2>"$err51")"; rc=$?
+assert_eq "a missing command exits 1" "1" "$rc"
+assert_eq "a missing command emits nothing on stdout" "" "$out"
+assert_contains "a missing command says what it needs" "wrap requires a command string" \
+  "$(cat "$err51")"
+# An all-whitespace command is just as unusable as an absent one.
+out="$(PATH="$CAP_STUB:$PATH" "$LOCK" "$d51" wrap "" 2>"$err51")"; rc=$?
+assert_eq "an empty command string exits 1 too" "1" "$rc"
+assert_eq "an empty command string emits nothing on stdout" "" "$out"
+echo
+
+echo "--- Case 52: status / acquire / release / unknown dispatch is unchanged ---"
+d52="$(make_pw_project wrap-subcmds <<'EOF'
+version: 1
+verify:
+  playwright:
+    max_browsers: 3
+    max_memory_mb: 2048
+    projects: [desktop]
+EOF
+)"
+assert_eq "status still prints held/max with the configured max_browsers" "0/3" \
+  "$("$LOCK" "$d52" status)"
+slot52="$("$LOCK" "$d52" acquire 2>"$WORK/w52.err")"; rc=$?
+assert_eq "acquire still exits 0" "0" "$rc"
+assert_eq "acquire still prints the lowest free slot id" "slot-1" "$slot52"
+if [[ -d "$d52/.locks/playwright/slot-1" ]]; then
+  pass "acquire still creates the slot directory"
+else
+  fail "acquire still creates the slot directory"
+fi
+"$LOCK" "$d52" release "$slot52"; rc=$?
+assert_eq "release still exits 0" "0" "$rc"
+if [[ -d "$d52/.locks/playwright/slot-1" ]]; then
+  fail "release still removes the slot directory"
+else
+  pass "release still removes the slot directory"
+fi
+"$LOCK" "$d52" release "$slot52"; rc=$?
+assert_eq "release is still idempotent" "0" "$rc"
+# A slot pinned by a live PID is still counted as held.
+sleep 43 & p52=$!; SLEEPERS+=("$p52")
+mkdir -p "$d52/.locks/playwright/slot-2"
+echo "$p52" > "$d52/.locks/playwright/slot-2/pid"
+assert_eq "status still counts a live-PID slot as held" "1/3" "$("$LOCK" "$d52" status)"
+kill "$p52" 2>/dev/null || true
+"$LOCK" "$d52" release slot-2 2>/dev/null || true
+# The new subcommand did not shift the dispatch: an unknown one still fails.
+err52="$WORK/w52-unknown.err"
+"$LOCK" "$d52" bogus >/dev/null 2>"$err52"; rc=$?
+assert_eq "an unknown subcommand still exits 1" "1" "$rc"
+assert_contains "an unknown subcommand still warns by name" "Unknown subcommand: bogus" \
+  "$(cat "$err52")"
+"$LOCK" --help >/dev/null 2>&1; rc=$?
+assert_eq "--help still exits 0" "0" "$rc"
+assert_contains "--help documents the wrap subcommand" "wrap <cmd>" "$("$LOCK" --help)"
 echo
 
 echo "=================================================="
