@@ -176,6 +176,10 @@ e2e_acquire_slot() {
   local prior_exit=""
   prior_exit="$(trap -p EXIT)"
   if [ -n "$prior_exit" ]; then
+    # SC2064 (expand-now) is the point: `$prior_exit` must be baked into the new
+    # handler at install time, since the variable is local and will be gone by
+    # the time EXIT fires.
+    # shellcheck disable=SC2064
     trap "e2e_release_slot; ${prior_exit}" EXIT
   else
     trap 'e2e_release_slot' EXIT

@@ -204,8 +204,11 @@ child_pid=""
 start_time="$SECONDS"
 
 # Write an interrupted sidecar and kill the child process group (NFR7, edge case 16).
-# Called from trap — shellcheck does not see trap-based invocations as calls.
-# shellcheck disable=SC2329
+# Called from trap — shellcheck does not see trap-based invocations as calls, so it
+# reports the function as never called (SC2329) and every line in its body as
+# unreachable (SC2317). Both are artefacts of that blind spot; the body is covered
+# by the interrupt test cases.
+# shellcheck disable=SC2329,SC2317
 _cleanup_interrupt() {
   # A signal arriving between `&` and `child_pid="$!"` would otherwise see an
   # empty PID and leave the child running unsupervised. `jobs -p` still knows
