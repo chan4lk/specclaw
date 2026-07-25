@@ -12,6 +12,80 @@ STATUS_FILE="$SPECCLAW_DIR/STATUS.md"
 # Read project name from config
 PROJECT_NAME=$(grep 'name:' "$SPECCLAW_DIR/config.yaml" | head -1 | sed 's/.*name: *"\(.*\)"/\1/')
 
+# ─── PR state (FR14) ─────────────────────────────────────────────────────────
+# A change that is already in review must never render as "awaiting planning".
+# Fail-open by contract (NFR2): a missing, unauthenticated, offline, or slow
+# `gh`/`az` yields an empty state, never an error — with no PR discoverable the
+# dashboard is byte-identical to the pre-FR14 rendering (NFR1).
+# `SPECCLAW_STATUS_NO_PR=1` skips the whole block.
+
+PR_LOOKUP=1
+[ "${SPECCLAW_STATUS_NO_PR:-0}" = "1" ] && PR_LOOKUP=0
+declare -A PR_STATE_CACHE=()
+
+# Read `<section>.<key>` from config.yaml — section-scoped, inline-comment and
+# quote stripped. Trimmed-down twin of `yaml_val` in specclaw-build.
+cfg_val() {
+  local section="$1" key="$2" v
+  v=$(sed -n "/^${section}:/,/^[a-zA-Z_]/{s/^[[:space:]][[:space:]]*${key}:[[:space:]]*//p;}" \
+    "$SPECCLAW_DIR/config.yaml" 2>/dev/null | head -1 || true)
+  if [[ "$v" =~ ([[:space:]]+#) ]]; then v="${v%%"${BASH_REMATCH[1]}"*}"; fi
+  v="${v%"${v##*[![:space:]]}"}"
+  v="${v#\"}"; v="${v%\"}"; v="${v#\'}"; v="${v%\'}"
+  printf '%s' "$v"
+}
+
+# Branch names must match what specclaw actually pushes: <branch_prefix><change>.
+BRANCH_PREFIX="$(cfg_val git branch_prefix)"
+BRANCH_PREFIX="${BRANCH_PREFIX:-specclaw/}"
+
+# Bounded invocation (NFR5) — a network call must never stall status generation.
+pr_bounded() {
+  if command -v timeout >/dev/null 2>&1; then timeout 5 "$@"; else "$@"; fi
+}
+
+# One `<updatedAt> <number> <state>` row per PR on the branch, or nothing.
+# GitHub via `gh` first, then Azure DevOps via `az`; both optional.
+pr_rows() {
+  local branch="$1" rows=""
+  if command -v gh >/dev/null 2>&1; then
+    rows=$(pr_bounded gh pr list --head "$branch" --state all --limit 20 \
+      --json number,state,updatedAt \
+      --template '{{range .}}{{.updatedAt}} {{.number}} {{.state}}{{"\n"}}{{end}}' 2>/dev/null || true)
+  fi
+  if [ -z "$rows" ] && command -v az >/dev/null 2>&1; then
+    rows=$(pr_bounded az repos pr list --source-branch "refs/heads/$branch" --status all \
+      --query '[].[creationDate,pullRequestId,status]' -o tsv 2>/dev/null || true)
+  fi
+  printf '%s' "$rows"
+}
+
+# pr_state_for <change> — `PR #123 open` for the most recently updated PR on the
+# change's branch, rendering its real state (edge case 15: a merged PR reads as
+# merged, never as open). Empty when nothing is discoverable. Memoised per run.
+pr_state_for() {
+  local change="$1" branch newest state rendered=""
+  [ "$PR_LOOKUP" = "1" ] || return 0
+  if [ -n "${PR_STATE_CACHE[$change]+set}" ]; then
+    printf '%s' "${PR_STATE_CACHE[$change]}"
+    return 0
+  fi
+  branch="${BRANCH_PREFIX}${change}"
+  # ISO-8601 timestamps sort lexically, so `sort -r | head -1` is the newest PR.
+  # `|| true`: a no-match grep in this pipeline must not abort the script ([L2]).
+  newest=$(pr_rows "$branch" | tr '\t' ' ' | grep -v '^[[:space:]]*$' | sort -r | head -1 || true)
+  if [ -n "$newest" ]; then
+    # shellcheck disable=SC2086  # deliberate split of the "<ts> <num> <state>" row
+    set -- $newest
+    if [ "$#" -ge 3 ]; then
+      state=$(printf '%s' "$3" | tr '[:upper:]' '[:lower:]')
+      rendered="PR #$2 $state"
+    fi
+  fi
+  PR_STATE_CACHE["$change"]="$rendered"
+  printf '%s' "$rendered"
+}
+
 ACTIVE_COUNT=0
 COMPLETED_COUNT=0
 ACTIVE_LINES=""
@@ -24,6 +98,7 @@ for change_dir in "$CHANGES_DIR"/*/; do
   [ "$(basename "$change_dir")" = "archive" ] && continue
 
   change_name=$(basename "$change_dir")
+  pr_state="$(pr_state_for "$change_name")"
 
   if [ -f "$change_dir/tasks.md" ]; then
     total=$(grep -c '^\- \[' "$change_dir/tasks.md" 2>/dev/null || true)
@@ -43,7 +118,11 @@ for change_dir in "$CHANGES_DIR"/*/; do
     [ "$failed" -gt 0 ] && status_emoji="⚠️"
     [ "$done" -eq "$total" ] && [ "$total" -gt 0 ] && status_emoji="✅"
 
-    ACTIVE_LINES="${ACTIVE_LINES}\n- $status_emoji **$change_name** — $done/$total tasks ($pct%) ${failed:+| $failed failed}"
+    ACTIVE_LINES="${ACTIVE_LINES}\n- $status_emoji **$change_name** — $done/$total tasks ($pct%) ${failed:+| $failed failed}${pr_state:+ | $pr_state}"
+    ACTIVE_COUNT=$((ACTIVE_COUNT + 1))
+  elif [ -n "$pr_state" ]; then
+    # Unplanned but already in review — in flight, not "awaiting planning" (AC15).
+    ACTIVE_LINES="${ACTIVE_LINES}\n- 🔀 **$change_name** — $pr_state"
     ACTIVE_COUNT=$((ACTIVE_COUNT + 1))
   elif [ -f "$change_dir/proposal.md" ]; then
     PENDING_LINES="${PENDING_LINES}\n- 📋 **$change_name** — proposal ready, awaiting planning"

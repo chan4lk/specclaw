@@ -472,6 +472,209 @@ done
 assert_eq "edge16 no orphaned child process survives" "0" "$orphan"
 echo
 
+# ─────────────────────────────────────────────────────────────────────────────
+# PR-aware status — bin/specclaw-update-status (FR14)
+#
+# Locks in:
+#   AC14: a stubbed `gh` returning an open PR renders that change's line with
+#         the PR reference; a stubbed *failing* lookup leaves STATUS.md
+#         byte-identical to the SPECCLAW_STATUS_NO_PR=1 baseline, exit 0.
+#   AC15: proposal.md + all-[x] tasks.md + an open PR never renders as
+#         "awaiting planning"; a proposal-only change with a PR is reported as
+#         in flight rather than pending.
+#   Edge 15: several PRs on one branch -> newest by `updatedAt`, real state
+#         rendered (a merged PR must not read as open).
+#   NFR1: `SPECCLAW_STATUS_NO_PR=1` skips the lookup entirely (the stub is
+#         never even invoked) — the seam the unchanged-output test uses.
+#   NFR5: a hanging lookup is timeout-bounded, not a hang.
+#   NFR2: branch resolves as <git.branch_prefix><change>; `gh` absent falls back
+#         to `az`; both absent degrades to the pre-FR14 rendering.
+# ─────────────────────────────────────────────────────────────────────────────
+
+UPDATESTATUS="$BIN_DIR/specclaw-update-status"
+if [[ ! -f "$UPDATESTATUS" ]]; then
+  echo "FATAL: missing bin script: $UPDATESTATUS" >&2
+  exit 2
+fi
+
+# make_status_project <dir> [branch_prefix]
+# A minimal `.specclaw/` tree: config.yaml (with an inline comment on the
+# prefix, as templates/config.yaml ships it) plus an empty changes/ dir.
+make_status_project() {
+  local d="$1" prefix="${2:-specclaw/}"
+  mkdir -p "$d/.specclaw/changes"
+  printf 'version: 1\nproject:\n  name: "statusproj"\ngit:\n  strategy: "branch-per-change"\n  branch_prefix: "%s"      # Prefix for feature branches\n' \
+    "$prefix" > "$d/.specclaw/config.yaml"
+}
+
+# add_change <project_dir> <name> [--proposal-only]
+# Default shape is a fully-built change: proposal.md + tasks.md with all [x].
+add_change() {
+  local d="$1" name="$2" mode="${3:-}"
+  mkdir -p "$d/.specclaw/changes/$name"
+  printf '# Proposal\n' > "$d/.specclaw/changes/$name/proposal.md"
+  [[ "$mode" == "--proposal-only" ]] && return 0
+  printf -- '- [x] T1 one\n- [x] T2 two\n' > "$d/.specclaw/changes/$name/tasks.md"
+}
+
+# stub_bin <dir> <name> <body> — an executable stub on a PATH shim directory.
+stub_bin() {
+  local dir="$1" name="$2" body="$3"
+  mkdir -p "$dir"
+  printf '#!/usr/bin/env bash\n%s\n' "$body" > "$dir/$name"
+  chmod +x "$dir/$name"
+}
+
+# STATUS.md minus the volatile `Last Updated` line, for byte-comparison.
+status_body() { grep -v '^\*\*Last Updated:' "$1" || true; }
+
+echo "--- Case 19 (AC14): a stubbed open PR renders in the change's line ---"
+p19="$WORK/st-ac14"
+make_status_project "$p19"
+add_change "$p19" alpha
+stub_bin "$p19/stub" gh 'echo "2026-07-24T09:00:00Z 123 OPEN"'
+out="$(PATH="$p19/stub:$PATH" "$UPDATESTATUS" "$p19/.specclaw" 2>&1)"; rc=$?
+assert_eq "AC14 update-status exits 0 with a PR found" "0" "$rc"
+assert_contains "AC14 update-status reports the file it wrote" "OK: Updated" "$out"
+st19="$(cat "$p19/.specclaw/STATUS.md")"
+assert_contains "AC14 STATUS.md carries the PR reference" "PR #123 open" "$st19"
+assert_contains "AC14 the tasks.md rendering is preserved alongside it" \
+  "**alpha** — 2/2 tasks (100%)" "$st19"
+echo
+
+echo "--- Case 20 (AC14b): a failing lookup leaves output unchanged, exit 0 ---"
+p20="$WORK/st-ac14b"
+make_status_project "$p20"
+add_change "$p20" beta
+# Baseline: the PR block disabled entirely.
+SPECCLAW_STATUS_NO_PR=1 "$UPDATESTATUS" "$p20/.specclaw" >/dev/null 2>&1
+cp "$p20/.specclaw/STATUS.md" "$p20/baseline.md"
+stub_bin "$p20/stub" gh 'echo "gh: could not determine repo" >&2; exit 1'
+out="$(PATH="$p20/stub:$PATH" "$UPDATESTATUS" "$p20/.specclaw" 2>&1)"; rc=$?
+assert_eq "AC14b a failing PR lookup still exits 0" "0" "$rc"
+assert_eq "AC14b output is byte-identical to the no-PR baseline" \
+  "$(status_body "$p20/baseline.md")" "$(status_body "$p20/.specclaw/STATUS.md")"
+assert_not_contains "AC14b no PR text is invented on failure" "PR #" \
+  "$(cat "$p20/.specclaw/STATUS.md")"
+assert_not_contains "AC14b the lookup's stderr is not leaked into STATUS.md" \
+  "could not determine repo" "$(cat "$p20/.specclaw/STATUS.md")"
+echo
+
+echo "--- Case 21 (edge 15): newest PR by updatedAt wins; merged never reads as open ---"
+p21="$WORK/st-edge15"
+make_status_project "$p21"
+add_change "$p21" gamma
+stub_bin "$p21/stub" gh 'printf "2026-07-20T10:00:00Z 100 OPEN\n2026-07-24T11:00:00Z 456 MERGED\n"'
+PATH="$p21/stub:$PATH" "$UPDATESTATUS" "$p21/.specclaw" >/dev/null 2>&1; rc=$?
+assert_eq "edge15 multi-PR lookup exits 0" "0" "$rc"
+st21="$(cat "$p21/.specclaw/STATUS.md")"
+assert_contains "edge15 newest PR is the one rendered, with its real state" "PR #456 merged" "$st21"
+assert_not_contains "edge15 a merged PR never reads as open" "open" "$st21"
+assert_not_contains "edge15 the older PR is not rendered" "PR #100" "$st21"
+echo
+
+echo "--- Case 22 (AC15): an open PR means in flight, never 'awaiting planning' ---"
+p22="$WORK/st-ac15"
+make_status_project "$p22"
+add_change "$p22" delta                    # planned: proposal + all-[x] tasks
+add_change "$p22" epsilon --proposal-only  # unplanned, but PR'd
+stub_bin "$p22/stub" gh 'case "$*" in
+  *delta*)   echo "2026-07-24T09:00:00Z 11 OPEN" ;;
+  *epsilon*) echo "2026-07-24T10:00:00Z 12 OPEN" ;;
+esac'
+PATH="$p22/stub:$PATH" "$UPDATESTATUS" "$p22/.specclaw" >/dev/null 2>&1; rc=$?
+assert_eq "AC15 update-status exits 0" "0" "$rc"
+st22="$(cat "$p22/.specclaw/STATUS.md")"
+assert_not_contains "AC15 no PR'd change is reported as awaiting planning" \
+  "awaiting planning" "$st22"
+assert_contains "AC15 the completed change keeps its task rendering + PR state" \
+  "**delta** — 2/2 tasks (100%) | 0 failed | PR #11 open" "$st22"
+assert_contains "AC15 a proposal-only change with a PR renders as in flight" \
+  "**epsilon** — PR #12 open" "$st22"
+assert_contains "AC15 both PR'd changes count as active" "**Active:** 2" "$st22"
+echo
+
+echo "--- Case 23 (NFR1): SPECCLAW_STATUS_NO_PR=1 skips the lookup entirely ---"
+p23="$WORK/st-nfr1"
+make_status_project "$p23"
+add_change "$p23" zeta
+mark23="$p23/gh-was-called"
+stub_bin "$p23/stub" gh "echo called >> '$mark23'; echo \"2026-07-24T09:00:00Z 99 OPEN\""
+out="$(SPECCLAW_STATUS_NO_PR=1 PATH="$p23/stub:$PATH" "$UPDATESTATUS" "$p23/.specclaw" 2>&1)"; rc=$?
+assert_eq "NFR1 disabled PR block still exits 0" "0" "$rc"
+if [[ -f "$mark23" ]]; then
+  fail "NFR1 the lookup is never invoked when disabled (stub ran)"
+else
+  pass "NFR1 the lookup is never invoked when disabled"
+fi
+assert_not_contains "NFR1 no PR text with the block disabled" "PR #" \
+  "$(cat "$p23/.specclaw/STATUS.md")"
+# Same fixture, block enabled: proves the seam is what suppressed it.
+PATH="$p23/stub:$PATH" "$UPDATESTATUS" "$p23/.specclaw" >/dev/null 2>&1
+assert_contains "NFR1 the same fixture does render a PR when enabled" "PR #99 open" \
+  "$(cat "$p23/.specclaw/STATUS.md")"
+echo
+
+echo "--- Case 24 (NFR5): a hanging lookup is timeout-bounded, not a hang ---"
+p24="$WORK/st-nfr5"
+make_status_project "$p24"
+add_change "$p24" eta
+# `exec` so the stub *is* the sleeping process: a real slow `gh` is one process,
+# and `timeout` must be able to reap it without the caller waiting on a child.
+stub_bin "$p24/stub" gh 'exec sleep 30'
+t24=$SECONDS
+PATH="$p24/stub:$PATH" "$UPDATESTATUS" "$p24/.specclaw" >/dev/null 2>&1; rc=$?
+el24=$((SECONDS - t24))
+assert_eq "NFR5 a hanging lookup still exits 0" "0" "$rc"
+if [[ "$el24" -lt 15 ]]; then
+  pass "NFR5 status generation stayed bounded (${el24}s < 15s)"
+else
+  fail "NFR5 status generation stayed bounded (took ${el24}s)"
+fi
+assert_not_contains "NFR5 a timed-out lookup contributes no PR text" "PR #" \
+  "$(cat "$p24/.specclaw/STATUS.md")"
+echo
+
+echo "--- Case 25 (NFR2): the branch is <git.branch_prefix><change> ---"
+p25="$WORK/st-branch"
+make_status_project "$p25" "wip/"
+add_change "$p25" theta
+argv25="$p25/gh-argv"
+stub_bin "$p25/stub" gh "printf '%s\\n' \"\$*\" >> '$argv25'; echo \"2026-07-24T09:00:00Z 5 OPEN\""
+PATH="$p25/stub:$PATH" "$UPDATESTATUS" "$p25/.specclaw" >/dev/null 2>&1
+assert_contains "NFR2 configured branch_prefix is used for the lookup" \
+  "--head wip/theta" "$(cat "$argv25" 2>/dev/null || true)"
+assert_contains "NFR2 the lookup asks for every state, so merged PRs are visible" \
+  "--state all" "$(cat "$argv25" 2>/dev/null || true)"
+assert_eq "NFR2 one change costs exactly one lookup (memoised per run)" "1" \
+  "$(wc -l < "$argv25" | tr -d ' ')"
+echo
+
+echo "--- Case 26 (NFR2): gh absent -> az fallback; both absent -> unchanged ---"
+p26="$WORK/st-az"
+make_status_project "$p26"
+add_change "$p26" iota
+# A shim PATH with no `gh` at all — only the binaries update-status itself needs.
+shim26="$p26/shim"
+mkdir -p "$shim26"
+for b in bash cat sed grep head sort tr date basename timeout; do
+  ln -sf "$(command -v "$b")" "$shim26/$b"
+done
+SPECCLAW_STATUS_NO_PR=1 PATH="$shim26" "$UPDATESTATUS" "$p26/.specclaw" >/dev/null 2>&1
+cp "$p26/.specclaw/STATUS.md" "$p26/baseline.md"
+# Both lookups absent: degrade to the pre-FR14 rendering (NFR2).
+PATH="$shim26" "$UPDATESTATUS" "$p26/.specclaw" >/dev/null 2>&1; rc=$?
+assert_eq "NFR2 no gh and no az still exits 0" "0" "$rc"
+assert_eq "NFR2 no lookup available -> output unchanged" \
+  "$(status_body "$p26/baseline.md")" "$(status_body "$p26/.specclaw/STATUS.md")"
+# Now Azure DevOps answers instead (tab-separated, as `az ... -o tsv` emits).
+stub_bin "$shim26" az 'printf "2026-07-24T08:00:00Z\t77\tactive\n"'
+PATH="$shim26" "$UPDATESTATUS" "$p26/.specclaw" >/dev/null 2>&1; rc=$?
+assert_eq "NFR2 az fallback exits 0" "0" "$rc"
+assert_contains "NFR2 az fallback renders the PR with its ADO state" "PR #77 active" \
+  "$(cat "$p26/.specclaw/STATUS.md")"
+echo
+
 echo "=================================================="
 echo "$PASS passed, $FAIL failed"
 if [[ "$FAIL" -gt 0 ]]; then
