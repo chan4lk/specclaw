@@ -316,6 +316,23 @@ cmd_commit() {
 
 # ─── finalize ─────────────────────────────────────────────────────────────────
 
+# Run a configured check command through specclaw-run-long so a long suite stays
+# observable while running (heartbeats on stderr) and contributes only a capped
+# tail to the transcript, with the full log kept on disk (FR6).
+# All output lands on stderr, exactly as the previous inline eval did — stdout
+# stays reserved for finalize's summary JSON. Returns the command's exit code.
+# Fail-open (NFR2): if run-long is not resolvable, run inline as before.
+run_long_check() {
+  local phase="$1" log_dir="$2" cmd="$3"
+  local runner="$SCRIPT_DIR/specclaw-run-long"
+  if [[ -x "$runner" ]]; then
+    "$runner" --log-dir "$log_dir" --phase "$phase" -- "$cmd" >&2
+  else
+    warn "specclaw-run-long not found at $runner — running $phase command inline"
+    eval "$cmd" >&2 2>&1
+  fi
+}
+
 cmd_finalize() {
   [[ $# -ge 2 ]] || die "finalize requires: <specclaw_dir> <change_name>"
   local specclaw_dir="$1" change_name="$2"
@@ -334,10 +351,13 @@ cmd_finalize() {
   local tests_passed=true lint_passed=true build_passed=true merged=false
   local errors=()
 
+  # Full logs live beside the change; run-long falls back to mktemp if unwritable.
+  local log_dir="$specclaw_dir/changes/$change_name/logs"
+
   # Run test command
   if [[ -n "$test_command" ]]; then
     echo "Running tests: $test_command" >&2
-    if ! eval "$test_command" >&2 2>&1; then
+    if ! run_long_check test "$log_dir" "$test_command"; then
       tests_passed=false
       errors+=("Test command failed: $test_command")
     fi
@@ -346,7 +366,7 @@ cmd_finalize() {
   # Run lint command
   if [[ -n "$lint_command" ]]; then
     echo "Running lint: $lint_command" >&2
-    if ! eval "$lint_command" >&2 2>&1; then
+    if ! run_long_check lint "$log_dir" "$lint_command"; then
       lint_passed=false
       errors+=("Lint command failed: $lint_command")
     fi
@@ -355,7 +375,7 @@ cmd_finalize() {
   # Run build command
   if [[ -n "$build_command" ]]; then
     echo "Running build: $build_command" >&2
-    if ! eval "$build_command" >&2 2>&1; then
+    if ! run_long_check build "$log_dir" "$build_command"; then
       build_passed=false
       errors+=("Build command failed: $build_command")
     fi
