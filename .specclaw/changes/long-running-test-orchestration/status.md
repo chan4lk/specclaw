@@ -13,7 +13,7 @@
 | Design | ✅ Done | 4 seams, 10 key decisions, grounding sources cited |
 | Tasks | ✅ Done | 12 tasks in 5 waves (4 root causes + release) |
 | Build | ✅ Done | All 5 waves committed 2026-07-24/25; T1–T12 |
-| Verify | ⚪ Pending | |
+| Verify | ⚠️ Partial |  |
 
 ## Task Progress
 

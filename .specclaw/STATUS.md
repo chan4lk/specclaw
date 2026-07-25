@@ -1,13 +1,13 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** specclaw
-**Last Updated:** 2026-07-25 01:51 UTC
+**Last Updated:** 2026-07-25 08:13 UTC
 
 ## Active Changes
 
 
-- 🔨 **long-running-test-orchestration** — 0/12 tasks (0%) | 0 failed
-- 🔨 **memory-aware-parallelism** — 5/6 tasks (83%) | 0 failed
+- ✅ **long-running-test-orchestration** — 12/12 tasks (100%) | 0 failed
+- 🔨 **memory-aware-parallelism** — 5/6 tasks (83%) | 0 failed | PR #46 merged
 
 ## Pending Proposals
 
