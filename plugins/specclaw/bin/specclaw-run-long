@@ -153,7 +153,7 @@ fi
 # ─── Reuse path (FR5, edge cases 3 & 4) ──────────────────────────────────────
 
 prior_sidecar=""
-"$reuse" && prior_sidecar="$(newest_sidecar)"
+[[ "$reuse" == "true" ]] && prior_sidecar="$(newest_sidecar)"
 
 if [[ -n "$prior_sidecar" ]]; then
   cached_head="$(sidecar_val "$prior_sidecar" head)"

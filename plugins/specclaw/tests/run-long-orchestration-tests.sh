@@ -1241,6 +1241,15 @@ wrap_with() {
 # Occurrences of <needle> in <haystack>, as a count.
 count_of() { grep -o -- "$1" <<<"$2" | wc -l | tr -d ' '; }
 
+# `wrap` emits one `bash -c '<cmd>'` invocation per Playwright project (or exactly
+# one when no projects are configured), so "one --workers per invocation" is the
+# fixture-independent invariant. Asserting a literal "1" instead would silently
+# pass a fan-out that duplicated the flag within a single invocation.
+assert_one_workers_per_invocation() {
+  local label="$1" out="$2"
+  assert_eq "$label" "$(count_of 'bash -c' "$out")" "$(count_of '\--workers' "$out")"
+}
+
 # A recording `npx` so the emitted string can be re-parsed and its argv
 # inspected — the only way to prove a project name survived as ONE word.
 WRAP_ARGV_STUB="$WORK/stub-wrap-argv"
@@ -1360,18 +1369,17 @@ echo "--- Case 43 (AC10): --workers=1 is appended, an existing --workers is pres
 d43="$(make_pw_project wrap-workers </dev/null)"
 out="$(wrap_with "$CAP_STUB" "$d43" "$WORK/w43.err" 'npx playwright test')"
 assert_contains "AC10 a playwright command gains --workers=1" "--workers=1" "$out"
-assert_eq "AC10 exactly one --workers flag is emitted" "1" "$(count_of '--workers' "$out")"
+assert_one_workers_per_invocation "AC10 exactly one --workers flag per invocation" "$out"
 
 out="$(wrap_with "$CAP_STUB" "$d43" "$WORK/w43.err" 'npx playwright test --workers=2')"
 assert_contains "AC10 an existing --workers=2 is preserved" "--workers=2" "$out"
 assert_not_contains "AC10 --workers=1 is not forced over an explicit value" "--workers=1" "$out"
-assert_eq "AC10 an explicit --workers is never duplicated" "1" "$(count_of '--workers' "$out")"
+assert_one_workers_per_invocation "AC10 an explicit --workers is never duplicated" "$out"
 
 # The space-separated form is a --workers choice too and must not be doubled.
 out="$(wrap_with "$CAP_STUB" "$d43" "$WORK/w43.err" 'npx playwright test --workers 4')"
 assert_contains "AC10 the space-separated --workers 4 form is preserved" "--workers 4" "$out"
-assert_eq "AC10 the space-separated form is not duplicated either" "1" \
-  "$(count_of '--workers' "$out")"
+assert_one_workers_per_invocation "AC10 the space-separated form is not duplicated either" "$out"
 echo
 
 echo "--- Case 44 (edge 13): a non-Playwright command gets no --workers, but is still capped ---"
@@ -1404,7 +1412,8 @@ assert_eq "AC12 inline-flow projects emit both invocations, joined with && , in 
 assert_eq "AC12 two projects mean exactly one && join" "1" "$(count_of '&&' "$out")"
 assert_eq "AC12 each project gets its own capped scope" "2" "$(count_of 'MemoryMax=2048M' "$out")"
 assert_eq "AC12 --workers=1 is applied once per invocation, not once overall" "2" \
-  "$(count_of '--workers=1' "$out")"
+  "$(count_of '\--workers=1' "$out")"
+assert_one_workers_per_invocation "AC12 the fan-out keeps one --workers per invocation" "$out"
 echo
 
 echo "--- Case 46 (AC12b): block-sequence projects behave identically ---"

@@ -157,6 +157,25 @@ _(No findings for Dimension 9 (Scope creep): all modified files appear in the `f
 
 _(Design adherence Dimension 8: implementation matches design.md across all four seams: run-long mechanics, slow-test tier, wrap subcommand, PR-aware status. No divergence found.)_
 
+## Resolution (2026-07-25)
+
+All 10 findings addressed. NOTE 1 was the reviewer's own "no change required".
+
+| # | Finding | Resolution |
+|---|---------|------------|
+| WARN | `run-long:142` untracked files not dirty | Fixed — `git ls-files --others --exclude-standard` joins the check. `--exclude-standard` keeps ignored build output from permanently disabling reuse. Test Case 12b, verified failing against the unfixed code. |
+| WARN | `run-long:155` sidecar `cmd` not compared | Fixed — reuse now refuses on a `cmd` mismatch. Test Case 12c reproduces the collision: without the fix, command B is served A's result. |
+| WARN | `run-long:190` trap/PID race | Fixed — the handler falls back to `jobs -p` when `child_pid` is still empty. |
+| WARN | `verify:151` EXIT trap clobbered | Fixed — the prior handler is captured with `trap -p EXIT` and chained rather than overwritten. |
+| WARN | `build:329` misleading redirect | Fixed — `1>&2`. Same effect, no longer reads as a stream swap. |
+| WARN | `tests:1289` "exactly one `--workers`" | Fixed — replaced with `assert_one_workers_per_invocation`, which asserts one flag per `bash -c` invocation. Fixture-independent, so it now also guards the fan-out path (new assertion in Case 45). |
+| NOTE | `run-long:125` `log_base` naming | No change, per the reviewer's own suggestion. |
+| NOTE | `verify:299` `e2e` key anchor | Fixed — the `verify.e2e` probe is anchored to `^[[:space:]]*e2e:[[:space:]]`, so a future `e2e_timeout:` cannot switch the block on. Fails closed on a valueless `e2e:`. |
+| NOTE | `verify:311` `cmd_collect` nesting | Fixed — "acquire slot, wrap, execute, release, classify" extracted to `e2e_run()`. `cmd_collect`'s e2e block is now a policy dispatcher; deepest nesting drops from 5 levels to 3. |
+| NOTE | `run-long:180` `"$reuse" &&` idiom | Fixed — `[[ "$reuse" == "true" ]]`. |
+
+Suite after all fixes: **272 passed, 0 failed** (was 261 at review time).
+
 ## Verdict Rationale
 
 There are no BLOCK findings. The six WARN findings cover two reuse-cache correctness gaps (untracked files not detected as dirty; sidecar `cmd` field not compared on reuse), a narrow process-lifecycle race (SIGTERM between trap set and child PID assignment), a trap-clobbering risk in slot acquisition, a misleading redirect idiom in the inline fallback, and a test assertion that gives correct results for its fixture but would give false confidence on a multi-project fixture. None of these are reachable under the expected call patterns in the current codebase, but each describes a real failure mode that future callers or config changes could trigger. The four NOTE findings are style and complexity observations. The implementation correctly handles all 17 edge cases from the spec, passes NFR1 (byte-identical default output), correctly applies the [L2] `|| true` guard on every `grep`/`head`/`sed` pipeline in command substitution, and uses no `jq` or external runtime dependencies beyond coreutils (NFR3).

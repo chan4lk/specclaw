@@ -329,7 +329,9 @@ run_long_check() {
     "$runner" --log-dir "$log_dir" --phase "$phase" -- "$cmd" >&2
   else
     warn "specclaw-run-long not found at $runner — running $phase command inline"
-    eval "$cmd" >&2 2>&1
+    # `1>&2` alone: stdout joins stderr, and stderr is already there. The older
+    # `>&2 2>&1` spelling had the same effect but reads like a stream swap.
+    eval "$cmd" 1>&2
   fi
 }
 
