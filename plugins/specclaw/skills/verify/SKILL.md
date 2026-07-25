@@ -38,11 +38,13 @@ Gathers acceptance criteria from `spec.md`, current contents of changed files, a
 
 An absent `verify.e2e` means `last`; an unrecognised value warns on stderr and falls back to `last`.
 
+When the e2e command does run, `collect` brackets it: it takes a browser slot (`specclaw-browser-lock acquire`), passes the command through `specclaw-browser-lock wrap` — which adds `--workers=1` for Playwright, one sequential `--project=` invocation per `verify.playwright.projects` entry, and a `MemoryMax=<verify.playwright.max_memory_mb>M` scope when `systemd-run` is usable — runs the wrapped string, then releases the slot. The slot is released even when the command fails or the run is interrupted. When `systemd-run` is unusable, `wrap` warns and the command runs uncapped.
+
 When any of these keys is present, `collect` adds three fields to the payload:
 
 - **`e2e_output`** — the e2e command's capped output, or an explicit reason string when it did not run.
 - **`e2e_state`** — one of `passed`, `failed`, `skipped_policy`, `skipped_gate_failure`, `not_configured`.
-- **`e2e_memory_limited`** — `true` when the e2e command was killed with SIGKILL (exit `137`), i.e. it exceeded its memory limit.
+- **`e2e_memory_limited`** — `true` only when the e2e command exited `137` (SIGKILL) **while a memory cap was actually applied**. An exit `137` with no cap in force (`systemd-run` unusable, or no browser-lock) leaves this `false`, because the kill cannot be attributed to a specclaw cap.
 
 With none of the keys present, the payload is unchanged from before the e2e tier existed.
 
@@ -50,7 +52,8 @@ With none of the keys present, the payload is unchanged from before the e2e tier
 
 - `passed` is the *only* state that may be reported as e2e passing.
 - `skipped_policy`, `skipped_gate_failure` and `not_configured` mean **e2e evidence does not exist**. Say so explicitly in `verify-report.md` (e.g. "E2E: skipped — `verify.e2e=last`, lint gate failed; no e2e evidence"), and do not mark an acceptance criterion that depends on e2e evidence as met. If an AC can only be proven by the e2e suite, a skipped e2e makes that AC unverified, which caps the verdict at PARTIAL.
-- `e2e_memory_limited: true` must be reported as *the memory limit was exceeded*, never as a generic or flaky test failure.
+- `e2e_memory_limited: true` must be reported as **the memory limit was exceeded**, naming the cap that `e2e_output` quotes (e.g. "E2E: memory limit exceeded — killed by SIGKILL under cap 4096M"). Never call it a flaky, transient or generic test failure, and never suggest a re-run as the fix: raise `verify.playwright.max_memory_mb`, cut `verify.playwright.max_browsers`, or split `verify.playwright.projects`.
+- `e2e_memory_limited: false` with `e2e_state: failed` is an ordinary failure — report it from `e2e_output` on its own terms. An exit `137` here means the process was killed with no specclaw cap in force (host OOM killer or an external kill); say that, and do not name a cap.
 
 ## Step 2 — Build verify context
 

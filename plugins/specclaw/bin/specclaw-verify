@@ -15,6 +15,16 @@ elif command -v specclaw-run-long >/dev/null 2>&1; then
   RUN_LONG="$(command -v specclaw-run-long)"
 fi
 
+# Resolve specclaw-browser-lock (browser-slot semaphore + memory-cap command
+# wrapper). Empty when unresolvable — the e2e command then runs unwrapped,
+# uncapped and without a slot, exactly as before the e2e tier existed (NFR2).
+BROWSER_LOCK=""
+if [ -x "${SCRIPT_DIR}/specclaw-browser-lock" ]; then
+  BROWSER_LOCK="${SCRIPT_DIR}/specclaw-browser-lock"
+elif command -v specclaw-browser-lock >/dev/null 2>&1; then
+  BROWSER_LOCK="$(command -v specclaw-browser-lock)"
+fi
+
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 usage() {
@@ -139,6 +149,38 @@ run_capped() {
   fi
   rm -f "$tmpfile"
   return "$rc"
+}
+
+# Browser slot currently held by the e2e tier. Tracked in globals so the slot is
+# released from a trap too: a leaked slot would starve the pool for every later
+# run, so release must happen on failure and on interruption, not just on the
+# happy path.
+E2E_SLOT=""
+E2E_SLOT_DIR=""
+
+# Claim a browser slot for the e2e command. Fail-open: acquire prints `none` and
+# exits 0 when the pool is unusable or times out, and we then proceed slotless
+# rather than blocking the run (NFR2).
+e2e_acquire_slot() {
+  local specclaw_dir="$1" slot=""
+  slot=$("$BROWSER_LOCK" "$specclaw_dir" acquire) || slot=""
+  case "$slot" in
+    ""|none) return 0 ;;
+  esac
+  E2E_SLOT="$slot"
+  E2E_SLOT_DIR="$specclaw_dir"
+  trap 'e2e_release_slot' EXIT
+  trap 'e2e_release_slot; exit 130' INT
+  trap 'e2e_release_slot; exit 143' TERM
+}
+
+# Release the held slot. Idempotent, so the trap and the normal path can both
+# call it, and never fatal — a failed release must not mask the e2e result.
+e2e_release_slot() {
+  [ -n "$E2E_SLOT" ] || return 0
+  local slot="$E2E_SLOT"
+  E2E_SLOT=""
+  "$BROWSER_LOCK" "$E2E_SLOT_DIR" release "$slot" || true
 }
 
 # ─── Subcommand: collect ──────────────────────────────────────────────────────
@@ -319,17 +361,43 @@ cmd_collect() {
         e2e_state="skipped_gate_failure"
         e2e_output="SKIPPED — verify.e2e=last and an earlier gate failed (${failed_gates}); e2e command was never executed. This is NOT a pass."
       else
+        # Bounded invocation (FR10, FR12): hold a browser slot for the run, let
+        # browser-lock decide how the command is constrained (--workers=1,
+        # sequential --project fan-out, MemoryMax scope), and execute the string
+        # it prints. Each script keeps one job — browser-lock constrains, run-long
+        # (via run_capped) executes and observes.
+        local e2e_run_cmd="$e2e_cmd" e2e_cap=""
+        if [ -n "$BROWSER_LOCK" ]; then
+          e2e_acquire_slot "$specclaw_dir"
+          local wrapped="" wrap_rc=0
+          wrapped=$("$BROWSER_LOCK" "$specclaw_dir" wrap "$e2e_cmd") || wrap_rc=$?
+          if [ -n "$wrapped" ] && { [ "$wrap_rc" -eq 0 ] || [ "$wrap_rc" -eq 10 ]; }; then
+            e2e_run_cmd="$wrapped"
+            # wrap exit 0 = a memory cap was applied, 10 = emitted uncapped. Only
+            # the capped case may attribute an exit 137 to the cap (FR13), and the
+            # cap it actually carries is the one named in the report.
+            if [ "$wrap_rc" -eq 0 ] && [[ "$wrapped" =~ MemoryMax=([0-9]+M) ]]; then
+              e2e_cap="cap ${BASH_REMATCH[1]}"
+            fi
+          else
+            warn "browser-lock wrap failed (exit ${wrap_rc}) — running the e2e command unwrapped and uncapped"
+          fi
+        fi
+
         local e2e_rc=0
-        run_capped e2e_output "$e2e_cmd" e2e "$log_dir" || e2e_rc=$?
+        run_capped e2e_output "$e2e_run_cmd" e2e "$log_dir" || e2e_rc=$?
+        e2e_release_slot
         if [ "$e2e_rc" -eq 0 ]; then
           e2e_state="passed"
         else
           e2e_state="failed"
-          # Exit 137 = SIGKILL, i.e. the memory limit was exceeded (FR13). Never
-          # report it as a generic or flaky test failure.
-          if [ "$e2e_rc" -eq 137 ]; then
+          # Exit 137 = SIGKILL. Only a run that actually carried a memory cap can
+          # be reported as a memory-limit breach, and then it never reads as a
+          # generic or flaky test failure (FR13). The same code with no cap
+          # applied stays a plain failure (AC13).
+          if [ "$e2e_rc" -eq 137 ] && [ -n "$e2e_cap" ]; then
             e2e_memory_limited=true
-            e2e_output="MEMORY LIMIT EXCEEDED — e2e command was killed with SIGKILL (exit 137), not a test assertion failure.
+            e2e_output="MEMORY LIMIT EXCEEDED — e2e command exceeded its memory limit (${e2e_cap}) and was killed with SIGKILL (exit 137), not a test assertion failure.
 ${e2e_output}"
           fi
         fi
