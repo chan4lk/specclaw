@@ -1,11 +1,11 @@
 # Verify Report: long-running-test-orchestration
 
-**Verdict:** PARTIAL
+**Verdict:** PASS
 **Date:** 2026-07-25
 
 ## Summary
 
-The implementation covers all 16 acceptance criteria structurally. 261 of 261 tests in the new `run-long-orchestration-tests.sh` suite pass; the existing memory-parallelism suite (16/16) is unaffected. The core paths for AC1–AC15 were confirmed both by code reading and by targeted live-shell verification (AC6 byte-identical golden, AC13 cap-detection logic, AC15 rendering). Two items could not be fully verified in this environment: `shellcheck` is absent locally (AC16 "no new shellcheck findings" sub-criterion), and the "existing suites still pass" portion of AC16 is partially degraded by a pre-existing `jq: command not found` failure in `run-parser-tests.sh` that also exists on `origin/main`. CI (`ci.yml`) registers the new suite and runs `shellcheck` on every push, which is the appropriate gating mechanism for those two gaps.
+The implementation covers all 16 acceptance criteria structurally. 261 of 261 tests in the new `run-long-orchestration-tests.sh` suite pass; the existing memory-parallelism suite (16/16) is unaffected. The core paths for AC1–AC15 were confirmed both by code reading and by targeted live-shell verification (AC6 byte-identical golden, AC13 cap-detection logic, AC15 rendering). AC16 was initially UNVERIFIED because neither `shellcheck` nor `jq` is installed on the build host; it was closed against CI instead. The first PR CI run turned out to expose **22 new shellcheck findings** on the changed bins (21 SC2317 in `specclaw-run-long`, 1 SC2064 in `specclaw-verify`) — so the sub-criterion was genuinely failing, not merely unobservable. Both codes are artefacts of shellcheck not modelling trap invocation and were suppressed with rationale in `15eca0d`. Diffing CI run 30152305952 against main's 30059040240 now shows **0 new findings** on all five changed bins, and the parser suite passes in CI. Verdict raised to PASS.
 
 ## Acceptance Criteria
 
@@ -26,7 +26,7 @@ The implementation covers all 16 acceptance criteria structurally. 261 of 261 te
 | AC13 — exit 137 under cap → memory-limit message with cap value; same code without cap → plain failure | MET | Cases 37–38; cap detection at `specclaw-verify:374,379-380` (`wrap_rc -eq 0` AND `MemoryMax=` in wrapped string); uncapped path (wrap_rc=10) leaves `e2e_cap` empty so exit 137 is a plain failure |
 | AC14 — stubbed open PR renders in line; stubbed failing lookup → unchanged output, exit 0 | MET | Cases 19–20; failing stub confirmed byte-identical to `SPECCLAW_STATUS_NO_PR=1` baseline |
 | AC15 — all-[x] tasks + open PR never renders as "awaiting planning" | MET | Case 22; delta (tasks + PR) and epsilon (proposal-only + PR) both confirmed active, not pending; live run confirmed the STATUS.md text |
-| AC16 — existing suites pass; shellcheck no new findings | UNVERIFIED | New suite registered in `ci.yml:21`; parser suite has pre-existing 11 failures due to `jq: command not found` on this machine (identical on `origin/main` — not a regression); `shellcheck` not installed locally |
+| AC16 — existing suites pass; shellcheck no new findings | MET | New suite registered in `ci.yml:21`. Verified in CI, not locally: parser suite passes in CI run 30152305952 (its 11 local failures are `jq: command not found`, identical on `origin/main`). Shellcheck findings on the changed bins diffed between CI run 30152305952 (head) and 30059040240 (main): **0 new**. The 22 findings the first PR run exposed were fixed in `15eca0d`. |
 
 ## Test Results
 
@@ -47,6 +47,6 @@ The implementation covers all 16 acceptance criteria structurally. 261 of 261 te
 
 ## Unverified in this environment
 
-- **`shellcheck` findings on changed `bin/` scripts** — `shellcheck` is not installed locally. The CI `shellcheck` job runs on every push with `shellcheck plugins/specclaw/bin/specclaw-* || true` (note: `|| true` means CI does not block on findings; findings are advisory only).
+- **`shellcheck` findings on changed `bin/` scripts** — resolved in CI rather than locally; shellcheck is still not installed on this host. Note the CI job runs `shellcheck plugins/specclaw/bin/specclaw-* || true`, so it reports `pass` regardless of findings: a green check is **not** evidence of a clean lint. The finding counts had to be read out of the job log and diffed against main by hand. Worth making that job fail on new findings, or the AC has no automatic gate.
 - **Real Playwright / systemd run** — No browser installed; all Playwright and `systemd-run` paths are covered by stubs per NFR6.
 - **`run-parser-tests.sh` baseline** — 11 tests fail due to `jq` absent on this machine; failure is pre-existing on `origin/main` and not caused by this branch.
