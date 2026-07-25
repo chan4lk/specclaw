@@ -1,0 +1,39 @@
+# ShellCheck baseline — findings that already existed when the gate was added.
+#
+# One `<path> <SCxxxx>` pair per line, sorted. Line numbers are deliberately
+# absent: a pair survives unrelated edits to the file, so the baseline does not
+# churn every time a script is touched.
+#
+# The gate (shellcheck-gate.sh) fails CI on any pair NOT listed here. Fixing a
+# listed finding is always safe; the gate reports the now-unused line so it can
+# be pruned, but never fails for it.
+#
+# Do not add a line to silence a new finding — fix it, or add a targeted
+# `# shellcheck disable=SCxxxx` comment with a rationale at the call site.
+plugins/specclaw/bin/specclaw-azdo-pr SC2295
+plugins/specclaw/bin/specclaw-build SC2155
+plugins/specclaw/bin/specclaw-build SC2209
+plugins/specclaw/bin/specclaw-build SC2221
+plugins/specclaw/bin/specclaw-build SC2222
+plugins/specclaw/bin/specclaw-build SC2295
+plugins/specclaw/bin/specclaw-build-context SC2016
+plugins/specclaw/bin/specclaw-build-context SC2034
+plugins/specclaw/bin/specclaw-detect-patterns SC2001
+plugins/specclaw/bin/specclaw-detect-patterns SC2094
+plugins/specclaw/bin/specclaw-discover-context SC2254
+plugins/specclaw/bin/specclaw-discover-context SC2295
+plugins/specclaw/bin/specclaw-gh-sync SC2034
+plugins/specclaw/bin/specclaw-gh-sync SC2064
+plugins/specclaw/bin/specclaw-gh-sync SC2295
+plugins/specclaw/bin/specclaw-jira-issue SC2295
+plugins/specclaw/bin/specclaw-loop SC2015
+plugins/specclaw/bin/specclaw-loop SC2034
+plugins/specclaw/bin/specclaw-loop SC2254
+plugins/specclaw/bin/specclaw-pr SC2034
+plugins/specclaw/bin/specclaw-pr SC2295
+plugins/specclaw/bin/specclaw-validate-change SC2168
+plugins/specclaw/bin/specclaw-validate-change SC2295
+plugins/specclaw/bin/specclaw-verify SC2034
+plugins/specclaw/bin/specclaw-verify SC2155
+plugins/specclaw/bin/specclaw-verify-context SC2016
+plugins/specclaw/bin/specclaw-verify-context SC2034
