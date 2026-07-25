@@ -187,6 +187,22 @@ Set `workflow.code_review: true` to enable an automated code review step inside 
 
 Set `workflow.code_review_block: true` to hard-block `/specclaw:pr` when the review verdict is `CHANGES_REQUESTED`. Defaults to `false` so existing projects are unaffected.
 
+### Long-Running Test Suites
+
+Suites that take minutes used to look like hangs: no output while they ran, so a session could tear itself down mid-run and then re-run the whole thing from scratch. `specclaw-run-long` now executes every configured test/lint/build/e2e command detached — heartbeats go to stderr, a capped tail to stdout, and the full log plus a HEAD-stamped sidecar to `<change>/logs/`. Because the sidecar records the commit and tree state, a re-verify at the same clean HEAD reuses the previous result instead of paying for it twice.
+
+Browser suites get their own tier, so a slow e2e run never blocks the fast feedback loop:
+
+| Key | Default | Purpose |
+|-----|---------|---------|
+| `build.e2e_command` | `""` | Slow tier (browser/e2e), run separately from `test_command`. Empty → no e2e tier. |
+| `verify.e2e` | `last` | When the slow tier runs: `skip`, `last` (only after lint/build/test pass), or `always`. |
+| `verify.heartbeat_seconds` | `60` | Liveness heartbeat interval for long commands. |
+| `verify.playwright.max_memory_mb` | `4096` | Memory ceiling per e2e invocation, applied via `systemd-run --scope`. |
+| `verify.playwright.projects` | `[]` | Playwright project names to run one-per-invocation, sequentially. Empty → a single invocation. |
+
+Every key is optional and absent keys mean unchanged behaviour. Playwright commands are pinned to `--workers=1` unless you set `--workers` yourself, and are capped at `max_memory_mb` when `systemd-run` is usable (probed, not assumed — an unusable one runs the command uncapped and says so). A run killed at the cap is reported as *memory limit exceeded*, never as an ordinary test failure. Skips are reported as skips: verify's payload carries an explicit `e2e_state` of `passed`, `failed`, `skipped_policy`, `skipped_gate_failure`, or `not_configured`, so a suite that never ran can't be read as a green one.
+
 ### Evidence-Grounded Agent Payloads
 
 Agent prompts follow published prompt-engineering guidance from Anthropic and OpenAI: coding agents are instructed to investigate before answering (never speculate about unopened code) and to write general-purpose solutions (tests verify correctness, they don't define it); verify and review agents must quote the exact spec/code/output lines a verdict rests on — unquotable claims are dropped; payloads put longform context first and the task last; loop fix agents carry reversibility rules (no force-push, no `--no-verify`, no destructive shortcuts to green a gate).

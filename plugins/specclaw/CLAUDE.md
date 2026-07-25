@@ -44,7 +44,8 @@ All executable scripts live in `bin/`. Key ones:
 | `specclaw-build-context` | Build coding agent payload (includes context.md; `--failure-record`/`--reflection` for loop remediation) |
 | `specclaw-loop` | Autonomous loop controller: `init` / `gates` / `decide` / `guard-tests` / `log-turn` / `escalate` / `ci-poll` / `done` |
 | `specclaw-update-context` | Output LLM prompt to rewrite context.md post-merge |
-| `specclaw-update-status` | Regenerate `.specclaw/STATUS.md` dashboard |
+| `specclaw-run-long` | Run a long command detached: heartbeats to stderr, capped tail to stdout, full log + HEAD-stamped sidecar on disk; `--reuse` skips a re-run when HEAD matches and the tree is clean |
+| `specclaw-update-status` | Regenerate `.specclaw/STATUS.md` dashboard (resolves open/merged PR state per change) |
 | `specclaw-gh-sync` | GitHub Issues sync |
 | `specclaw-pr` | Create GitHub PR (enforces test policy, triggers context update) |
 | `specclaw-validate-change` | Check phase prerequisites |

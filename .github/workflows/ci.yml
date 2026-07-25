@@ -17,6 +17,8 @@ jobs:
         run: bash plugins/specclaw/tests/run-parser-tests.sh
       - name: Run memory-aware-parallelism tests
         run: bash plugins/specclaw/tests/run-memory-parallelism-tests.sh
+      - name: Run long-running-orchestration tests
+        run: bash plugins/specclaw/tests/run-long-orchestration-tests.sh
 
   shellcheck:
     name: ShellCheck bin scripts
