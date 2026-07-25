@@ -675,6 +675,431 @@ assert_contains "NFR2 az fallback renders the PR with its ADO state" "PR #77 act
   "$(cat "$p26/.specclaw/STATUS.md")"
 echo
 
+# ─────────────────────────────────────────────────────────────────────────────
+# E2E tier — bin/specclaw-verify collect (FR7–FR9, FR13)
+#
+# Locks in:
+#   Gate order: lint -> build -> test, then e2e per policy.
+#   AC6/NFR1: a config carrying none of the new keys produces a payload
+#         byte-identical to v0.5.9 (golden captured from 451301d) — no `e2e_*`
+#         keys at all, not even empty ones.
+#   AC7: `last` + a failing lint never runs e2e; the payload names the gate.
+#   AC8: `skip` never runs e2e and says so; no state reads as a pass.
+#   AC9: `always` runs e2e even when lint failed.
+#   AC13: exit 137 *under a cap* -> e2e_memory_limited=true and the message
+#         names the cap; exit 137 with no cap applied (wrap exit 10) -> a plain
+#         failure with e2e_memory_limited=false.
+#   Every e2e_state value: passed | failed | skipped_policy |
+#         skipped_gate_failure | not_configured.
+#   verify.heartbeat_seconds reaches run-long as `--heartbeat`.
+#   Browser slot released even when the e2e command fails.
+#   Edge cases:
+#     8:  e2e_command set, verify.e2e absent -> default `last`.
+#     9:  unrecognised verify.e2e -> warn on stderr, fall back to `last`.
+#     10: e2e_command set, test_command empty -> vacuously passing, e2e runs.
+#
+# `systemd-run` is stubbed in both directions so neither path depends on a
+# working cgroup/systemd session on the host (NFR6).
+# ─────────────────────────────────────────────────────────────────────────────
+
+VERIFY="$BIN_DIR/specclaw-verify"
+if [[ ! -f "$VERIFY" ]]; then
+  echo "FATAL: missing bin script: $VERIFY" >&2
+  exit 2
+fi
+
+# make_verify_project <root> — a minimal `.specclaw/` tree for `verify collect`:
+# spec.md with one AC and tasks.md naming one (deliberately absent) file. The
+# change is always `vc`. config.yaml is written per case so the key set under
+# test is exact — that is what makes the AC6 byte-comparison meaningful.
+make_verify_project() {
+  local root="$1"
+  mkdir -p "$root/.specclaw/changes/vc"
+  printf '# Spec\n\n- **AC1** — first criterion.\n' > "$root/.specclaw/changes/vc/spec.md"
+  printf -- '- [x] T1 one\n  - Files: `src/specclaw-t7-absent.txt`\n' > "$root/.specclaw/changes/vc/tasks.md"
+}
+
+# Stub `systemd-run` both ways, so the cap decision is a property of the test and
+# not of the host. CAP: strip the scope flags and exec the real command (so the
+# usability probe passes and the wrapped command actually runs). NOCAP: always
+# fail, which is exactly edge case 11 — present on PATH but unusable.
+CAP_STUB="$WORK/stub-cap"
+NOCAP_STUB="$WORK/stub-nocap"
+stub_bin "$CAP_STUB" systemd-run 'while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --user|--scope|-q) shift ;;
+    -p) shift 2 ;;
+    *) break ;;
+  esac
+done
+exec "$@"'
+stub_bin "$NOCAP_STUB" systemd-run 'exit 1'
+
+# collect_with <stub_dir> <project_root> <errfile> — `verify collect` for change
+# `vc`, with <stub_dir> shadowing systemd-run. Echoes the JSON payload.
+collect_with() {
+  PATH="$1:$PATH" "$VERIFY" collect "$2/.specclaw" vc 2>"$3"
+}
+
+# jval <payload> <key> — the value of a top-level `"key": …` line, unquoted.
+# json_escape() collapses newlines to `\n`, so every value is one line (no jq —
+# NFR3).
+jval() {
+  local v
+  v="$(printf '%s\n' "$1" | sed -n "s/^  \"$2\": //p" | head -1 || true)"
+  v="${v%,}"
+  v="${v#\"}"
+  v="${v%\"}"
+  printf '%s' "$v"
+}
+
+echo "--- Case 27: gate order is lint -> build -> test, then e2e ---"
+p27="$WORK/e2e-order"
+make_verify_project "$p27"
+ord27="$p27/order"
+cat > "$p27/.specclaw/config.yaml" <<EOF
+version: 1
+build:
+  lint_command: "echo lint >> $ord27"
+  build_command: "echo build >> $ord27"
+  test_command: "echo test >> $ord27"
+  e2e_command: "echo e2e >> $ord27"
+verify:
+  e2e: last
+EOF
+out="$(collect_with "$NOCAP_STUB" "$p27" "$p27/err")"
+assert_eq "gate order is lint, build, test, then e2e" "lint build test e2e" \
+  "$(tr '\n' ' ' < "$ord27" | sed 's/ $//')"
+assert_eq "all gates green -> e2e_state=passed" "passed" "$(jval "$out" e2e_state)"
+echo
+
+echo "--- Case 28 (AC6/NFR1): no new keys -> payload byte-identical to v0.5.9 ---"
+p28="$WORK/e2e-ac6"
+make_verify_project "$p28"
+# Deliberately none of the five new keys: no build.e2e_command, no verify.e2e,
+# no verify.heartbeat_seconds, no verify.playwright block.
+cat > "$p28/.specclaw/config.yaml" <<'EOF'
+version: 1
+build:
+  lint_command: "echo lint-ok"
+  build_command: "echo build-ok"
+  test_command: "echo unit-ok"
+EOF
+# Golden captured by running v0.5.9's specclaw-verify (git 451301d) against this
+# exact fixture. Any drift here is an NFR1 regression, not a test to update.
+golden28="$(cat <<'ENDGOLDEN'
+{
+  "change": "vc",
+  "acceptance_criteria": [
+    "AC1 — first criterion."
+  ],
+  "changed_files": [
+    {"path": "src/specclaw-t7-absent.txt", "exists": false, "content": null}
+  ],
+  "test_output": "unit-ok",
+  "lint_output": "lint-ok",
+  "build_output": "build-ok",
+  "tests_passed": true,
+  "lint_passed": true,
+  "build_passed": true
+}
+ENDGOLDEN
+)"
+out="$(collect_with "$NOCAP_STUB" "$p28" "$p28/err")"; rc=$?
+assert_eq "AC6 collect exits 0" "0" "$rc"
+assert_eq "AC6 payload is byte-identical to the v0.5.9 golden" "$golden28" "$out"
+assert_not_contains "AC6 not a single e2e key is emitted" "e2e" "$out"
+echo
+
+echo "--- Case 29 (AC8): verify.e2e=skip never runs e2e and cannot read as a pass ---"
+p29="$WORK/e2e-skip"
+make_verify_project "$p29"
+cat > "$p29/.specclaw/config.yaml" <<EOF
+version: 1
+build:
+  test_command: "echo unit-ok"
+  e2e_command: "echo ran >> $p29/ran"
+verify:
+  e2e: skip
+EOF
+out="$(collect_with "$NOCAP_STUB" "$p29" "$p29/err")"
+assert_eq "AC8 e2e_state=skipped_policy" "skipped_policy" "$(jval "$out" e2e_state)"
+if [[ -f "$p29/ran" ]]; then
+  fail "AC8 the e2e command was never executed (marker file was written)"
+else
+  pass "AC8 the e2e command was never executed"
+fi
+assert_contains "AC8 the skip states its reason" "verify.e2e=skip" "$(jval "$out" e2e_output)"
+assert_contains "AC8 the skip is explicit that it is not a pass" "This is NOT a pass" \
+  "$(jval "$out" e2e_output)"
+assert_not_contains "AC8 a skip never emits the passed state" '"e2e_state": "passed"' "$out"
+assert_eq "AC8 a skip is not a memory kill either" "false" "$(jval "$out" e2e_memory_limited)"
+# The fast tier still ran and still reports independently of the e2e state.
+assert_eq "AC8 the fast tier is unaffected by the skip" "true" "$(jval "$out" tests_passed)"
+echo
+
+echo "--- Case 30 (AC7): verify.e2e=last + a failing lint skips e2e, naming the gate ---"
+p30="$WORK/e2e-gatefail"
+make_verify_project "$p30"
+cat > "$p30/.specclaw/config.yaml" <<EOF
+version: 1
+build:
+  lint_command: "echo lint-broke; exit 9"
+  e2e_command: "echo ran >> $p30/ran"
+verify:
+  e2e: last
+EOF
+out="$(collect_with "$NOCAP_STUB" "$p30" "$p30/err")"
+assert_eq "AC7 lint_passed=false" "false" "$(jval "$out" lint_passed)"
+assert_eq "AC7 e2e_state=skipped_gate_failure" "skipped_gate_failure" "$(jval "$out" e2e_state)"
+if [[ -f "$p30/ran" ]]; then
+  fail "AC7 the e2e command was never executed (marker file was written)"
+else
+  pass "AC7 the e2e command was never executed"
+fi
+assert_contains "AC7 the failing gate is named as the reason" "an earlier gate failed (lint)" \
+  "$(jval "$out" e2e_output)"
+assert_contains "AC7 the gate-failure skip is not a pass" "This is NOT a pass" \
+  "$(jval "$out" e2e_output)"
+assert_not_contains "AC7 a gate-failure skip never emits the passed state" \
+  '"e2e_state": "passed"' "$out"
+echo
+
+echo "--- Case 31 (AC9): verify.e2e=always runs e2e even when lint failed ---"
+p31="$WORK/e2e-always"
+make_verify_project "$p31"
+cat > "$p31/.specclaw/config.yaml" <<EOF
+version: 1
+build:
+  lint_command: "echo lint-broke; exit 9"
+  e2e_command: "echo ran >> $p31/ran; echo e2e-output"
+verify:
+  e2e: always
+EOF
+out="$(collect_with "$NOCAP_STUB" "$p31" "$p31/err")"
+assert_eq "AC9 lint still reports failed" "false" "$(jval "$out" lint_passed)"
+assert_eq "AC9 e2e ran anyway -> e2e_state=passed" "passed" "$(jval "$out" e2e_state)"
+if [[ -f "$p31/ran" ]]; then
+  pass "AC9 the e2e command was executed despite the failing gate"
+else
+  fail "AC9 the e2e command was executed despite the failing gate (no marker file)"
+fi
+assert_contains "AC9 e2e stdout is captured into the payload" "e2e-output" "$(jval "$out" e2e_output)"
+echo
+
+echo "--- Case 32: e2e_state=failed, and the browser slot is released anyway ---"
+p32="$WORK/e2e-failed"
+make_verify_project "$p32"
+cat > "$p32/.specclaw/config.yaml" <<'EOF'
+version: 1
+build:
+  e2e_command: "echo e2e-broke; exit 4"
+verify:
+  e2e: always
+EOF
+out="$(collect_with "$NOCAP_STUB" "$p32" "$p32/err")"; rc=$?
+assert_eq "failed e2e does not abort collect" "0" "$rc"
+assert_eq "a non-zero e2e exit -> e2e_state=failed" "failed" "$(jval "$out" e2e_state)"
+assert_contains "the failing e2e output is captured" "e2e-broke" "$(jval "$out" e2e_output)"
+assert_eq "an ordinary e2e failure is not a memory kill" "false" "$(jval "$out" e2e_memory_limited)"
+# The slot must come back even on the failure path: a leaked slot starves the
+# pool for every later run.
+held32="$(ls -d "$p32/.specclaw/.locks/playwright"/slot-* 2>/dev/null | wc -l | tr -d ' ')"
+assert_eq "the browser slot is released after a FAILING e2e run" "0" "$held32"
+assert_eq "browser-lock agrees the pool is idle again" "0/2" \
+  "$("$BIN_DIR/specclaw-browser-lock" "$p32/.specclaw" status)"
+echo
+
+echo "--- Case 33: e2e_state=not_configured when e2e_command is empty ---"
+p33="$WORK/e2e-notconf"
+make_verify_project "$p33"
+cat > "$p33/.specclaw/config.yaml" <<'EOF'
+version: 1
+build:
+  e2e_command: ""
+verify:
+  e2e: last
+EOF
+out="$(collect_with "$NOCAP_STUB" "$p33" "$p33/err")"
+assert_eq "an empty e2e_command -> e2e_state=not_configured" "not_configured" \
+  "$(jval "$out" e2e_state)"
+assert_contains "not_configured is explicit that it is not a pass" "This is NOT a pass" \
+  "$(jval "$out" e2e_output)"
+assert_not_contains "not_configured never emits the passed state" '"e2e_state": "passed"' "$out"
+echo
+
+echo "--- Case 34 (edge 8): e2e_command set, verify.e2e absent -> default 'last' ---"
+p34="$WORK/e2e-edge8"
+make_verify_project "$p34"
+cat > "$p34/.specclaw/config.yaml" <<EOF
+version: 1
+build:
+  test_command: "echo unit-ok"
+  e2e_command: "echo ran >> $p34/ran"
+EOF
+out="$(collect_with "$NOCAP_STUB" "$p34" "$p34/err")"
+assert_eq "edge8 the default policy runs e2e after green gates" "passed" "$(jval "$out" e2e_state)"
+if [[ -f "$p34/ran" ]]; then
+  pass "edge8 the e2e command ran under the defaulted policy"
+else
+  fail "edge8 the e2e command ran under the defaulted policy (no marker file)"
+fi
+assert_not_contains "edge8 the absent policy is not treated as 'skip'" "skipped_policy" "$out"
+echo
+
+echo "--- Case 35 (edge 9): an unrecognised verify.e2e warns and falls back to 'last' ---"
+p35="$WORK/e2e-edge9"
+make_verify_project "$p35"
+cat > "$p35/.specclaw/config.yaml" <<EOF
+version: 1
+build:
+  lint_command: "exit 9"
+  e2e_command: "echo ran >> $p35/ran"
+verify:
+  e2e: sometimes
+EOF
+out="$(collect_with "$NOCAP_STUB" "$p35" "$p35/err")"; rc=$?
+assert_eq "edge9 an unrecognised policy does not fail the run" "0" "$rc"
+assert_contains "edge9 the unrecognised value is warned about on stderr" \
+  "unrecognised value 'sometimes'" "$(cat "$p35/err")"
+assert_contains "edge9 the warning names the fallback" "falling back to 'last'" "$(cat "$p35/err")"
+# `last` semantics, not a silent skip: the earlier gate failed, so e2e is
+# reported as gate-skipped rather than skipped_policy.
+assert_eq "edge9 the fallback behaves as 'last'" "skipped_gate_failure" "$(jval "$out" e2e_state)"
+assert_not_contains "edge9 an unrecognised policy is never a silent policy-skip" \
+  "skipped_policy" "$out"
+if [[ -f "$p35/ran" ]]; then
+  fail "edge9 the failing gate still gated e2e (marker file was written)"
+else
+  pass "edge9 the failing gate still gated e2e"
+fi
+echo
+
+echo "--- Case 36 (edge 10): an empty test_command is vacuously passing, e2e still runs ---"
+p36="$WORK/e2e-edge10"
+make_verify_project "$p36"
+cat > "$p36/.specclaw/config.yaml" <<EOF
+version: 1
+build:
+  lint_command: ""
+  build_command: ""
+  test_command: ""
+  e2e_command: "echo ran >> $p36/ran"
+verify:
+  e2e: last
+EOF
+out="$(collect_with "$NOCAP_STUB" "$p36" "$p36/err")"
+assert_eq "edge10 an unset fast tier still reports tests_passed=true" "true" \
+  "$(jval "$out" tests_passed)"
+assert_eq "edge10 e2e runs on a vacuously-green fast tier" "passed" "$(jval "$out" e2e_state)"
+if [[ -f "$p36/ran" ]]; then
+  pass "edge10 the e2e command ran with no fast tier configured"
+else
+  fail "edge10 the e2e command ran with no fast tier configured (no marker file)"
+fi
+echo
+
+echo "--- Case 37 (AC13): exit 137 UNDER A CAP is reported as a memory kill ---"
+p37="$WORK/e2e-ac13-capped"
+make_verify_project "$p37"
+cat > "$p37/.specclaw/config.yaml" <<'EOF'
+version: 1
+build:
+  e2e_command: "echo about-to-die; exit 137"
+verify:
+  e2e: always
+  playwright:
+    max_memory_mb: 2048
+EOF
+out="$(collect_with "$CAP_STUB" "$p37" "$p37/err")"
+assert_eq "AC13 a capped 137 is still a failure, never a pass" "failed" "$(jval "$out" e2e_state)"
+assert_eq "AC13 e2e_memory_limited=true under a cap" "true" "$(jval "$out" e2e_memory_limited)"
+o37="$(jval "$out" e2e_output)"
+assert_contains "AC13 the report names the memory limit" "MEMORY LIMIT EXCEEDED" "$o37"
+assert_contains "AC13 the report names the configured cap value" "cap 2048M" "$o37"
+assert_contains "AC13 the report rules out a test assertion failure" \
+  "not a test assertion failure" "$o37"
+assert_contains "AC13 the command's own output is still carried" "about-to-die" "$o37"
+echo
+
+echo "--- Case 38 (AC13b): exit 137 with NO cap applied stays a plain failure ---"
+p38="$WORK/e2e-ac13-uncapped"
+make_verify_project "$p38"
+# Same config, same exit code — only `systemd-run` differs: the NOCAP stub is on
+# PATH but fails, so `wrap` exits 10 and no cap is applied (edge case 11).
+cat > "$p38/.specclaw/config.yaml" <<'EOF'
+version: 1
+build:
+  e2e_command: "echo about-to-die; exit 137"
+verify:
+  e2e: always
+  playwright:
+    max_memory_mb: 2048
+EOF
+out="$(collect_with "$NOCAP_STUB" "$p38" "$p38/err")"
+assert_contains "AC13b wrap reported the uncapped emission" "systemd-run unusable" \
+  "$(cat "$p38/err")"
+assert_eq "AC13b an uncapped 137 is a plain failure" "failed" "$(jval "$out" e2e_state)"
+assert_eq "AC13b e2e_memory_limited=false with no cap applied" "false" \
+  "$(jval "$out" e2e_memory_limited)"
+o38="$(jval "$out" e2e_output)"
+assert_not_contains "AC13b no memory-limit claim without a cap" "MEMORY LIMIT EXCEEDED" "$o38"
+assert_not_contains "AC13b no cap value is invented" "2048M" "$o38"
+assert_contains "AC13b the command's output is reported as-is" "about-to-die" "$o38"
+echo
+
+echo "--- Case 39: verify.heartbeat_seconds reaches run-long as --heartbeat ---"
+# A recording stub for run-long in a copied bin dir: specclaw-verify resolves
+# the helper next to itself, so this is the seam that shows the exact argv.
+fb39="$WORK/hb-bin"
+mkdir -p "$fb39"
+cp "$VERIFY" "$fb39/specclaw-verify"
+argv39="$WORK/hb-argv"
+: > "$argv39"
+stub_bin "$fb39" specclaw-run-long "printf '%s\n' \"\$*\" >> '$argv39'
+exit 0"
+p39="$WORK/e2e-heartbeat"
+make_verify_project "$p39"
+cat > "$p39/.specclaw/config.yaml" <<'EOF'
+version: 1
+build:
+  test_command: "echo unit-ok"
+verify:
+  heartbeat_seconds: 7
+EOF
+"$fb39/specclaw-verify" collect "$p39/.specclaw" vc >/dev/null 2>"$p39/err"
+assert_contains "configured heartbeat_seconds is passed as --heartbeat" "--heartbeat 7" \
+  "$(cat "$argv39")"
+assert_contains "the phase label still reaches run-long" "--phase test" "$(cat "$argv39")"
+# Absent key -> no flag at all, so run-long applies its own 60s default (NFR1).
+: > "$argv39"
+p39b="$WORK/e2e-heartbeat-absent"
+make_verify_project "$p39b"
+printf 'version: 1\nbuild:\n  test_command: "echo unit-ok"\n' > "$p39b/.specclaw/config.yaml"
+"$fb39/specclaw-verify" collect "$p39b/.specclaw" vc >/dev/null 2>"$p39b/err"
+assert_not_contains "an absent heartbeat_seconds passes no --heartbeat flag" "--heartbeat" \
+  "$(cat "$argv39")"
+echo
+
+echo "--- Case 40: the configured heartbeat is honoured end to end ---"
+p40="$WORK/e2e-heartbeat-live"
+make_verify_project "$p40"
+cat > "$p40/.specclaw/config.yaml" <<'EOF'
+version: 1
+build:
+  test_command: "sleep 3"
+verify:
+  heartbeat_seconds: 1
+EOF
+collect_with "$NOCAP_STUB" "$p40" "$p40/err" >/dev/null
+beats40="$(grep -c '^\[run-long\] ' "$p40/err" 2>/dev/null || true)"
+if [[ "${beats40:-0}" -ge 2 ]]; then
+  pass "a 1s heartbeat produces liveness lines on verify's stderr (got $beats40)"
+else
+  fail "a 1s heartbeat produces liveness lines on verify's stderr (got ${beats40:-0})"
+fi
+echo
+
 echo "=================================================="
 echo "$PASS passed, $FAIL failed"
 if [[ "$FAIL" -gt 0 ]]; then
