@@ -222,7 +222,12 @@ trap '_cleanup_interrupt' TERM
 # set -m enables job control so the child gets its own process group, allowing
 # the trap to kill the whole group cleanly (NFR7).
 set -m
-eval "$cmd" >"$log_file" 2>&1 &
+# `set +e` inside the subshell: the background job inherits errexit, which would
+# terminate it with status 1 instead of the child's real status for a *simple*
+# command (`npm test`, `npx playwright test`). That collapse would make the
+# exit-137 memory-kill classification (FR13) impossible. AND-lists are exempt
+# from errexit, which is why the bug only shows on the common case.
+( set +e; eval "$cmd" ) >"$log_file" 2>&1 &
 child_pid="$!"
 
 # ─── Heartbeat loop ───────────────────────────────────────────────────────────
