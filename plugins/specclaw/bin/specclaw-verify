@@ -5,6 +5,16 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Resolve specclaw-run-long (long-running command executor: heartbeats to stderr,
+# full log to disk). Empty when unresolvable — run_capped then executes inline
+# exactly as before, so a missing helper never blocks a verify run (NFR2).
+RUN_LONG=""
+if [ -x "${SCRIPT_DIR}/specclaw-run-long" ]; then
+  RUN_LONG="${SCRIPT_DIR}/specclaw-run-long"
+elif command -v specclaw-run-long >/dev/null 2>&1; then
+  RUN_LONG="$(command -v specclaw-run-long)"
+fi
+
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 usage() {
@@ -60,17 +70,54 @@ yaml_val() {
 }
 
 # Run a command, capture output (capped at 100 lines), return exit code
-# Usage: run_capped <varname_output> <command_string>
+# Usage: run_capped <varname_output> <command_string> [phase] [log_dir]
 # Sets: <varname_output> to captured output, returns command exit code
+#
+# Execution goes through specclaw-run-long when available, so a multi-minute
+# suite emits heartbeats to stderr and keeps its full log on disk. The captured
+# payload is still re-capped here from the log file with the same head -100 +
+# truncation marker as the inline path, so callers see byte-identical output.
 run_capped() {
   local -n _out_ref="$1"
   local cmd="$2"
+  local phase="${3:-run}"
+  local log_dir="${4:-}"
+  local rc=0
+  local total
+
+  if [ -n "$RUN_LONG" ]; then
+    local rl_args=(--phase "$phase")
+    [ -n "$log_dir" ] && rl_args+=(--log-dir "$log_dir")
+    local rl_out=""
+    rl_out=$("$RUN_LONG" "${rl_args[@]}" -- "$cmd") || rc=$?
+    # run-long's last stdout line is "log: <path>"; the full log lives there.
+    local log_path
+    log_path=$(printf '%s\n' "$rl_out" | tail -1 | sed -n 's/^log: //p')
+    if [ -n "$log_path" ] && [ -f "$log_path" ]; then
+      _out_ref=$(head -100 "$log_path")
+      total=$(wc -l < "$log_path")
+      if [ "$total" -gt 100 ]; then
+        _out_ref="${_out_ref}
+... (truncated, ${total} total lines)"
+      fi
+    else
+      # run-long could not create a log (its own inline fallback) — its stdout
+      # is the raw, uncapped command output, so apply the cap here.
+      _out_ref=$(printf '%s\n' "$rl_out" | head -100)
+      total=$(printf '%s\n' "$rl_out" | wc -l)
+      if [ "$total" -gt 100 ]; then
+        _out_ref="${_out_ref}
+... (truncated, ${total} total lines)"
+      fi
+    fi
+    return "$rc"
+  fi
+
+  # specclaw-run-long unavailable — execute inline as before (NFR2 fail-open).
   local tmpfile
   tmpfile=$(mktemp)
-  local rc=0
   eval "$cmd" >"$tmpfile" 2>&1 || rc=$?
   _out_ref=$(head -100 "$tmpfile")
-  local total
   total=$(wc -l < "$tmpfile")
   if [ "$total" -gt 100 ]; then
     _out_ref="${_out_ref}
@@ -195,20 +242,22 @@ cmd_collect() {
   local test_output="" lint_output="" build_output=""
   local tests_passed=true lint_passed=true build_passed=true
 
+  local log_dir="${change_dir}/logs"
+
   if [ -n "$test_cmd" ]; then
-    if ! run_capped test_output "$test_cmd"; then
+    if ! run_capped test_output "$test_cmd" test "$log_dir"; then
       tests_passed=false
     fi
   fi
 
   if [ -n "$lint_cmd" ]; then
-    if ! run_capped lint_output "$lint_cmd"; then
+    if ! run_capped lint_output "$lint_cmd" lint "$log_dir"; then
       lint_passed=false
     fi
   fi
 
   if [ -n "$build_cmd" ]; then
-    if ! run_capped build_output "$build_cmd"; then
+    if ! run_capped build_output "$build_cmd" build "$log_dir"; then
       build_passed=false
     fi
   fi
