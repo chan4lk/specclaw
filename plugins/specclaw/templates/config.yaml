@@ -106,6 +106,21 @@ github:
   token: ""                      # GitHub PAT for curl fallback (not needed if gh CLI is authed)
   label: "specclaw"              # Label applied to SpecClaw issues
 
+# Teaching mode (opt-in). When enabled, lifecycle phases explain before they
+# implement, surface design choices as decisions for the human instead of
+# deciding silently, and record what was taught in
+# changes/<change>/teaching.md. Absent or false -> phases behave as before.
+#
+# Companion to /specclaw:learn, which records what the MACHINE learned.
+# This records what the HUMAN learned.
+teach:
+  enabled: false
+  depth: "brief"        # minimal | brief | full
+                        #   minimal - decisions surfaced as options, no briefs
+                        #   brief   - + 3-min concept brief for tech rated a/b
+                        #   full    - + prediction beforeevery measurement, debrief at pr
+  gate_builds: true     # pause before a build wave using an unfamiliar technology
+
 # Workflow enforcement
 workflow:
   strict: true                     # Enforce phase prerequisites (disable for rapid prototyping)
