@@ -40,7 +40,7 @@ wires CI.
 
 ### Wave 2 — Route every call site through it
 
-- [ ] `T3` — Wire the lifecycle to `set-phase`
+- [x] `T3` — Wire the lifecycle to `set-phase`
   - Files: `plugins/specclaw/bin/specclaw-build`, `plugins/specclaw/bin/specclaw-verify`, `plugins/specclaw/skills/propose/SKILL.md`, `plugins/specclaw/skills/plan/SKILL.md`, `plugins/specclaw/skills/archive/SKILL.md`
   - Estimate: large
   - Kind: refactor
@@ -52,7 +52,7 @@ wires CI.
     instructing the model to edit `status.md` prose — that instruction is why the Build row drifts
     (`skills/build/SKILL.md:100`).
 
-- [ ] `T4` — Route `save_pr_url` in both PR scripts through `set-phase`, fail-soft
+- [x] `T4` — Route `save_pr_url` in both PR scripts through `set-phase`, fail-soft
   - Files: `plugins/specclaw/bin/specclaw-pr`, `plugins/specclaw/bin/specclaw-azdo-pr`
   - Estimate: medium
   - Kind: refactor
@@ -61,7 +61,7 @@ wires CI.
     loudly and continues, never aborts under `set -euo pipefail`. Keep the `specclaw-status-row`
     call path from PR #52 intact underneath — this only moves the *decision* into `set-phase`.
 
-- [ ] `T5` — `specclaw-update-status` reads `state.json`
+- [x] `T5` — `specclaw-update-status` reads `state.json`
   - Files: `plugins/specclaw/bin/specclaw-update-status`
   - Estimate: medium
   - Kind: impl

@@ -35,9 +35,82 @@ cfg_val() {
   printf '%s' "$v"
 }
 
-# Branch names must match what specclaw actually pushes: <branch_prefix><change>.
+# Fallback only (FR4): the branch recorded in state.json wins when present. The
+# `<branch_prefix><change>` guess silently misses whenever branch naming diverges
+# from `git.branch_prefix` — it does in this very repo.
 BRANCH_PREFIX="$(cfg_val git branch_prefix)"
 BRANCH_PREFIX="${BRANCH_PREFIX:-specclaw/}"
+
+# ─── Recorded phase (FR6/FR7) ────────────────────────────────────────────────
+# `changes/<change>/state.json`, written solely by `specclaw-set-phase`, is the
+# recorded phase. Reading it is what lets "verified", "PR raised" and "build
+# finished" render differently — the checkbox counts below cannot tell them
+# apart. Every read is fail-open: absent, unreadable or malformed state falls
+# through to the checkbox inference, warns, and still exits 0 (FR7/AC7), which
+# keeps output byte-identical for changes that have no state.json (AC6).
+
+# state_field <file> <dotted.path> — same reader as specclaw-set-phase: jq when
+# installed, else python3, neither required. Any failure prints nothing.
+state_field() {
+  local file="$1" path="$2"
+  [ -f "$file" ] || return 0
+  if command -v jq >/dev/null 2>&1; then
+    jq -rc ".${path} // empty" "$file" 2>/dev/null || true
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import json, sys
+try:
+    v = json.load(open(sys.argv[1]))
+    for k in sys.argv[2].split("."):
+        v = v[k]
+except Exception:
+    sys.exit(0)
+if v is None:
+    sys.exit(0)
+sys.stdout.write(v if isinstance(v, str) else json.dumps(v, separators=(",", ":"), ensure_ascii=False))
+' "$file" "$path" 2>/dev/null || true
+  fi
+}
+
+# state_str <file> <path> — a state_field read reduced to its first line, so a
+# stray newline in the JSON can break neither a markdown row nor a `gh` argument.
+state_str() {
+  local v
+  v="$(state_field "$1" "$2")"
+  printf '%s' "${v%%$'\n'*}"
+}
+
+# True when the file parses. With neither interpreter installed nothing can be
+# read anyway, so it reports parseable and the empty reads take the fallback.
+state_parses() {
+  if command -v jq >/dev/null 2>&1; then
+    jq -e . "$1" >/dev/null 2>&1
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import json, sys; json.load(open(sys.argv[1]))' "$1" >/dev/null 2>&1
+  fi
+}
+
+# phase_render <state_file> <phase> — sets PHASE_EMOJI and PHASE_TEXT for the
+# recorded phase (`🔀` / `pr open`). The qualifier is the most specific field
+# that phase records, falling back to its status; empty when nothing is recorded.
+PHASE_EMOJI=""
+PHASE_TEXT=""
+phase_render() {
+  local file="$1" phase="$2" qual=""
+  case "$phase" in
+    proposal) PHASE_EMOJI="📋" ;;
+    spec | design | tasks) PHASE_EMOJI="📝" ;;
+    verify) PHASE_EMOJI="🔍" ;;
+    pr) PHASE_EMOJI="🔀" ;;
+    archived) PHASE_EMOJI="✅" ;;
+    *) PHASE_EMOJI="🔨" ;;
+  esac
+  case "$phase" in
+    pr) qual="$(state_str "$file" "phases.pr.state")" ;;
+    verify) qual="$(state_str "$file" "phases.verify.verdict")" ;;
+  esac
+  [ -n "$qual" ] || qual="$(state_str "$file" "phases.${phase}.status")"
+  PHASE_TEXT="${phase}${qual:+ $qual}"
+}
 
 # Bounded invocation (NFR5) — a network call must never stall status generation.
 pr_bounded() {
@@ -60,17 +133,19 @@ pr_rows() {
   printf '%s' "$rows"
 }
 
-# pr_state_for <change> — `PR #123 open` for the most recently updated PR on the
-# change's branch, rendering its real state (edge case 15: a merged PR reads as
-# merged, never as open). Empty when nothing is discoverable. Memoised per run.
+# pr_state_for <change> [branch] — `PR #123 open` for the most recently updated
+# PR on the change's branch, rendering its real state (edge case 15: a merged PR
+# reads as merged, never as open). Empty when nothing is discoverable. Memoised
+# per run. `branch` is the one recorded in state.json when there is one (FR6);
+# only without it do we fall back to guessing from `git.branch_prefix`.
 pr_state_for() {
-  local change="$1" branch newest state rendered=""
+  local change="$1" branch="${2:-}" newest state rendered=""
   [ "$PR_LOOKUP" = "1" ] || return 0
   if [ -n "${PR_STATE_CACHE[$change]+set}" ]; then
     printf '%s' "${PR_STATE_CACHE[$change]}"
     return 0
   fi
-  branch="${BRANCH_PREFIX}${change}"
+  [ -n "$branch" ] || branch="${BRANCH_PREFIX}${change}"
   # ISO-8601 timestamps sort lexically, so `sort -r | head -1` is the newest PR.
   # `|| true`: a no-match grep in this pipeline must not abort the script ([L2]).
   newest=$(pr_rows "$branch" | tr '\t' ' ' | grep -v '^[[:space:]]*$' | sort -r | head -1 || true)
@@ -98,7 +173,26 @@ for change_dir in "$CHANGES_DIR"/*/; do
   [ "$(basename "$change_dir")" = "archive" ] && continue
 
   change_name=$(basename "$change_dir")
-  pr_state="$(pr_state_for "$change_name")"
+
+  # FR7: a state file that exists but cannot be read is reported once and then
+  # ignored — this loop must degrade, never abort (the script exits 0 either way).
+  state_file="$change_dir/state.json"
+  phase=""
+  state_branch=""
+  if [ -f "$state_file" ]; then
+    if [ -r "$state_file" ] && state_parses "$state_file"; then
+      phase="$(state_str "$state_file" phase)"
+      state_branch="$(state_str "$state_file" branch)"
+    else
+      echo "specclaw-update-status: WARN: unreadable state.json for ${change_name}; falling back to task inference" >&2
+    fi
+  fi
+  # A change still at `proposal` has not started: it keeps its Pending Proposals
+  # placement below rather than being promoted into Active by its own state file.
+  [ "$phase" = "proposal" ] && phase=""
+  [ -n "$phase" ] && phase_render "$state_file" "$phase"
+
+  pr_state="$(pr_state_for "$change_name" "$state_branch")"
 
   if [ -f "$change_dir/tasks.md" ]; then
     total=$(grep -c '^\- \[' "$change_dir/tasks.md" 2>/dev/null || true)
@@ -114,11 +208,25 @@ for change_dir in "$CHANGES_DIR"/*/; do
       pct=0
     fi
 
-    status_emoji="🔨"
-    [ "$failed" -gt 0 ] && status_emoji="⚠️"
-    [ "$done" -eq "$total" ] && [ "$total" -gt 0 ] && status_emoji="✅"
+    if [ -n "$phase" ]; then
+      # FR6: the recorded phase leads, the counts stay as the progress detail —
+      # `🔀 pr open — 11/11 tasks (100%)` instead of an indistinguishable 🔨.
+      status_emoji="$PHASE_EMOJI"
+      [ "$failed" -gt 0 ] && status_emoji="⚠️"
+      phase_prefix="$PHASE_TEXT | "
+    else
+      status_emoji="🔨"
+      [ "$failed" -gt 0 ] && status_emoji="⚠️"
+      [ "$done" -eq "$total" ] && [ "$total" -gt 0 ] && status_emoji="✅"
+      phase_prefix=""
+    fi
 
-    ACTIVE_LINES="${ACTIVE_LINES}\n- $status_emoji **$change_name** — $done/$total tasks ($pct%) ${failed:+| $failed failed}${pr_state:+ | $pr_state}"
+    ACTIVE_LINES="${ACTIVE_LINES}\n- $status_emoji **$change_name** — $phase_prefix$done/$total tasks ($pct%) ${failed:+| $failed failed}${pr_state:+ | $pr_state}"
+    ACTIVE_COUNT=$((ACTIVE_COUNT + 1))
+  elif [ -n "$phase" ]; then
+    # Phase recorded before tasks.md exists (mid-plan), or a PR on a change that
+    # never had one. AC5: this renders without consulting the network at all.
+    ACTIVE_LINES="${ACTIVE_LINES}\n- $PHASE_EMOJI **$change_name** — $PHASE_TEXT${pr_state:+ | $pr_state}"
     ACTIVE_COUNT=$((ACTIVE_COUNT + 1))
   elif [ -n "$pr_state" ]; then
     # Unplanned but already in review — in flight, not "awaiting planning" (AC15).
@@ -129,7 +237,9 @@ for change_dir in "$CHANGES_DIR"/*/; do
   fi
 done
 
-# Scan archived changes
+# Scan archived changes. state.json travels with the directory into archive/
+# (edge case 7); archived rows are terminal, so it is deliberately not read here
+# — nothing under archive/ can affect this listing, malformed or not.
 if [ -d "$ARCHIVE_DIR" ]; then
   for arch_dir in "$ARCHIVE_DIR"/*/; do
     [ -d "$arch_dir" ] || continue
