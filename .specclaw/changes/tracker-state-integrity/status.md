@@ -13,7 +13,7 @@
 | Design | ✅ Done | Row-upsert over wholesale re-render; depends on PR #52 |
 | Tasks | ✅ Done | 7 tasks / 3 waves |
 | Build | ⚪ Pending | |
-| Verify | ⚪ Pending | |
+| Verify | ⚠️ Partial | PARTIAL |
 
 ## Task Progress
 

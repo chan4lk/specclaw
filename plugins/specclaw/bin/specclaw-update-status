@@ -90,8 +90,13 @@ state_parses() {
 }
 
 # phase_render <state_file> <phase> — sets PHASE_EMOJI and PHASE_TEXT for the
-# recorded phase (`🔀` / `pr open`). The qualifier is the most specific field
+# recorded phase (`🔀` / `pr raised`). The qualifier is the most specific field
 # that phase records, falling back to its status; empty when nothing is recorded.
+#
+# Only `verify` has a more specific field than `status`. `pr` deliberately does
+# not: specclaw-set-phase records the PR's disposition *in* `phases.pr.status`
+# (raised | merged | closed), so a second `phases.pr.state` read would be dead
+# code — nothing writes that field.
 PHASE_EMOJI=""
 PHASE_TEXT=""
 phase_render() {
@@ -105,7 +110,6 @@ phase_render() {
     *) PHASE_EMOJI="🔨" ;;
   esac
   case "$phase" in
-    pr) qual="$(state_str "$file" "phases.pr.state")" ;;
     verify) qual="$(state_str "$file" "phases.verify.verdict")" ;;
   esac
   [ -n "$qual" ] || qual="$(state_str "$file" "phases.${phase}.status")"

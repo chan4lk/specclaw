@@ -871,9 +871,129 @@ run_recon "$NOGH" "$RSPEC" no-such-change
 assert_eq "R10f naming an unknown change is a usage error" "2" "$RC"
 assert_contains "R10g with a message naming it" "no such change: no-such-change" "$ROUT"
 
+# ─── S: the renderer — specclaw-update-status against state.json (AC5–AC7) ───
+#
+# The writer and the auditor were covered above; the *reader* is the third side
+# of the contract and the one a user actually looks at. These three cases were
+# proved by hand during verify, which is exactly why they belong here: a hand
+# proof does not run in CI.
+#
+# Every case runs under the no-gh shim with SPECCLAW_STATUS_NO_PR=1, so the
+# rendered line is a pure function of the fixture — no network, no clock beyond
+# the `Last Updated` header, which no assertion reads.
+
+USTATUS="$BIN_DIR/specclaw-update-status"
+if [[ ! -f "$USTATUS" ]]; then
+  fail "Sa specclaw-update-status exists"
+else
+  USPEC="$WORK/.specclaw-render"
+  mkdir -p "$USPEC/changes"
+  cat >"$USPEC/config.yaml" <<'EOF'
+version: 1
+project:
+  name: "render-fixture"
+git:
+  branch_prefix: "specclaw/"
+EOF
+
+  SOUT=""
+  SERR=""
+  # run_us — regenerate STATUS.md, capture rc and stderr, read back the dashboard.
+  run_us() {
+    RC=0
+    PATH="$NOGH" SPECCLAW_STATUS_NO_PR=1 "$USTATUS" "$USPEC" \
+      >"$WORK/us.out" 2>"$WORK/us.err" || RC=$?
+    SERR="$(cat "$WORK/us.err")"
+    SOUT="$(cat "$USPEC/STATUS.md" 2>/dev/null || true)"
+  }
+
+  # line_for <change> — the one dashboard bullet naming this change.
+  line_for() {
+    grep -F -- "**$1**" "$USPEC/STATUS.md" 2>/dev/null | head -1
+  }
+
+  # AC5 — a recorded `pr` phase renders as PR-in-review with no network reachable.
+  # Pre-change this rendered `✅ … 2/2 tasks`, indistinguishable from "build done",
+  # which is the whole reason state.json exists.
+  mkdir -p "$USPEC/changes/recorded"
+  make_tasks "$USPEC/changes/recorded/tasks.md" 2 2
+  run_sp_p "$NOGH" "$USPEC" recorded build done --tasks 2/2/0
+  run_sp_p "$NOGH" "$USPEC" recorded pr raised --url "$URL"
+  run_us
+  assert_eq "S1a rendering a recorded phase exits 0" "0" "$RC"
+  assert_eq "S1b the pr phase leads the line, counts follow" \
+    "- 🔀 **recorded** — pr raised | 2/2 tasks (100%) | 0 failed" "$(line_for recorded)"
+  assert_lacks "S1c and it is not rendered as a finished build" \
+    "✅ **recorded**" "$SOUT"
+  assert_eq "S1d a recorded phase needs no gh at all" "" "$SERR"
+
+  # The `pr` qualifier comes from phases.pr.status. phases.pr.state is written by
+  # nothing, so a renderer reading it would silently print a bare `pr`.
+  assert_eq "S1e the qualifier is the recorded status, not an unwritten field" \
+    "raised" "$(json_get "$USPEC/changes/recorded/state.json" phases.pr.status)"
+  assert_eq "S1f nothing writes phases.pr.state" \
+    "" "$(json_get "$USPEC/changes/recorded/state.json" phases.pr.state)"
+
+  # AC6 — no state.json: byte-for-byte the pre-change checkbox inference, and no
+  # warning. Every change that predates this feature takes this path.
+  mkdir -p "$USPEC/changes/unmanaged"
+  make_tasks "$USPEC/changes/unmanaged/tasks.md" 1 2
+  run_us
+  assert_eq "S2a a change with no state.json still renders" "0" "$RC"
+  assert_eq "S2b via checkbox inference, exactly as before the change" \
+    "- 🔨 **unmanaged** — 1/2 tasks (50%) | 0 failed" "$(line_for unmanaged)"
+  assert_eq "S2c and silently — an absent state.json is not a fault" "" "$SERR"
+
+  # AC7 — corrupt state.json: fall back, warn, exit 0. A half-written file must
+  # never be believed, and must never take the dashboard down with it.
+  mkdir -p "$USPEC/changes/corrupt"
+  make_tasks "$USPEC/changes/corrupt/tasks.md" 1 2
+  printf '%s' '{"change":"corrupt","phase":"pr","phas' \
+    >"$USPEC/changes/corrupt/state.json"
+  run_us
+  assert_eq "S3a a corrupt state.json still exits 0" "0" "$RC"
+  assert_contains "S3b with a warning naming the change" \
+    "unreadable state.json for corrupt" "$SERR"
+  assert_eq "S3c and renders via inference, not the phase it half-claims" \
+    "- 🔨 **corrupt** — 1/2 tasks (50%) | 0 failed" "$(line_for corrupt)"
+  assert_lacks "S3d the truncated 'pr' is not believed" "🔀 **corrupt**" "$SOUT"
+
+  # Not JSON at all — the other corruption shape, same contract.
+  printf '%s' 'garbage not json' >"$USPEC/changes/corrupt/state.json"
+  run_us
+  assert_eq "S3e non-JSON content is handled identically" "0" "$RC"
+  assert_eq "S3f and renders identically" \
+    "- 🔨 **corrupt** — 1/2 tasks (50%) | 0 failed" "$(line_for corrupt)"
+
+  # Edge case 7 — a corrupt state.json under archive/ is never read at all.
+  mkdir -p "$USPEC/changes/archive/2026-01-01-gone"
+  make_tasks "$USPEC/changes/archive/2026-01-01-gone/tasks.md" 3 3
+  printf '%s' 'totally broken {{{' \
+    >"$USPEC/changes/archive/2026-01-01-gone/state.json"
+  run_us
+  assert_eq "S4a an archived change's state.json is never read" "0" "$RC"
+  assert_lacks "S4b so it raises no warning" "2026-01-01-gone" "$SERR"
+fi
+
+# ─── E11: a change name with sed metacharacters ──────────────────────────────
+#
+# The template self-heal interpolates the change name into a sed *replacement*,
+# where `&` means "the whole match" and `/` closes the expression. An unescaped
+# name here wrote `{{title}}` back as the literal `{{title}}` (for `&`) or
+# aborted the run outright (for `/`), after state.json was already written.
+
+C="$(new_change 'a&b')"
+run_sp "$SPECCLAW" 'a&b' build done --tasks 1/1/0
+assert_eq "E11a a change name containing & is written" "0" "$RC"
+assert_eq "E11b state.json records it verbatim" "a&b" "$(json_get "$C/state.json" change)"
+assert_contains "E11c and the template title is the name, not the match" \
+  "a&b" "$(head -3 "$C/status.md" 2>/dev/null)"
+assert_lacks "E11d with no unsubstituted placeholder left behind" \
+  "{{title}}" "$(cat "$C/status.md" 2>/dev/null)"
+
 # ─── Hermeticity: nothing was written outside the temp workdir ───────────────
 assert_eq "Ha every change directory lives under the temp workdir" "0" \
-  "$(find "$SPECCLAW" "$RSPEC" -name state.json -not -path "$WORK/*" | wc -l)"
+  "$(find "$SPECCLAW" "$RSPEC" ${USPEC:+"$USPEC"} -name state.json -not -path "$WORK/*" | wc -l)"
 
 echo
 echo "─────────────────────────────"

@@ -37,6 +37,10 @@
 #      overrides. Every read is fail-open: unreadable or malformed state never
 #      blocks a transition, it just means no constraint to check.
 
+# `-e` is deliberately absent: every state read is fail-open (rule 4 above), and
+# under `-e` a non-zero `jq` on a malformed file would abort the transition it is
+# meant to permit. Anything that must not silently continue is checked explicitly
+# and routed through `die`.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -215,6 +219,9 @@ build_record() {
 OLD_REC="$(state_field "$STATE_FILE" "phases.${PHASE}")"
 OLD_AT="$(state_field "$STATE_FILE" "phases.${PHASE}.at")"
 AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+# Without `set -e` a failed `date` leaves AT empty and the record ships with
+# `"at": ""`, which reads as "never happened". Refuse instead of recording a lie.
+[ -n "$AT" ] || die "date -u produced no timestamp; refusing to write a record without one"
 # Re-running the same transition must not churn the timestamp (AC2).
 if [ -n "$OLD_AT" ] && [ "$(build_record "$OLD_AT")" = "$OLD_REC" ]; then
   AT="$OLD_AT"
@@ -262,8 +269,12 @@ if [ ! -f "$STATUS_FILE" ]; then
   template_file="$(cd "${SCRIPT_DIR}/.." && pwd)/templates/status.md"
   if [ -f "$template_file" ]; then
     today="$(date +%Y-%m-%d)"
-    sed -e "s/{{title}}/${CHANGE}/g" \
-      -e "s/{{change_name}}/${CHANGE}/g" \
+    # The change name lands in a sed *replacement*, where `\`, `&` and the `/`
+    # delimiter are all special. Escape them, or a change called `a&b` expands
+    # to the whole match and one called `a/b` aborts the template self-heal.
+    change_sed="$(printf '%s' "$CHANGE" | sed -e 's/[\\&/]/\\&/g')"
+    sed -e "s/{{title}}/${change_sed}/g" \
+      -e "s/{{change_name}}/${change_sed}/g" \
       -e "s/{{date}}/${today}/g" \
       -e "s/{{updated}}/${today}/g" \
       -e "s/{{[a-zA-Z_]*}}/-/g" \

@@ -1,0 +1,8 @@
+{
+  "change": "tracker-state-integrity",
+  "phase": "verify",
+  "branch": "specclaw/tracker-state-integrity",
+  "phases": {
+    "verify": {"status":"partial","at":"2026-08-01T13:20:44Z","verdict":"PARTIAL"}
+  }
+}
