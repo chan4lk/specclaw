@@ -1,0 +1,326 @@
+#!/usr/bin/env bash
+# specclaw-set-phase — the only writer of a change's phase.
+# Usage: specclaw-set-phase <specclaw_dir> <change> <phase> <status> [options]
+#
+# Phase used to be *derived* — from tasks.md checkbox counts and a `gh pr list`
+# guess — and edited from half a dozen call sites, so trackers lied: a change
+# with an open PR rendered as 🔨 build. This script records the phase once, in
+# `changes/<change>/state.json`, and then reflects it into the human-readable
+# `status.md`. Every other script reads; only this one writes.
+#
+# Four choices worth explaining:
+#
+#   1. Atomic write. The document is built in a temp file *inside the change
+#      directory* (so the final `mv` is a same-filesystem rename, not a copy),
+#      validated as parseable JSON, and only then moved over the target. A crash
+#      mid-write leaves the previous state.json intact. Two racing writers mean
+#      the loser's write is lost — never a corrupt file. Not locked, by design.
+#
+#   2. The status.md row is delegated to `specclaw-status-row`, never edited
+#      here. The Progress table is pipe-delimited and `sed` cannot be trusted
+#      with pipes (a `\|` in a BRE address is alternation, and `s|…| *PR *|…|`
+#      collides with its own delimiter) — that bug appended 33 PR rows to a
+#      stock status.md and killed specclaw-pr under `set -e`. status-row does
+#      the edit in awk, collapses duplicates, and leaves every other line
+#      byte-identical, which is what keeps the `GitHub Issue` / `Jira Issue` /
+#      Work Item lines that three integration scripts grep for untouched.
+#
+#   3. Per-phase records are emitted on one compact line each. A carried-over
+#      record is re-emitted exactly as it was read (jq -c and python's json.dumps
+#      agree on that form), so re-running a transition cannot reflow the file.
+#      For the same reason `at` is *preserved* when the rest of the record is
+#      unchanged: idempotency (FR3) beats a fresh-but-meaningless timestamp.
+#      A changed status/verdict/url/tasks does refresh it.
+#
+#   4. Monotonic, not strict. Phases may be re-entered (re-verify after a loop
+#      fix is normal); only a move to a *lower* rank is refused, and `--force`
+#      overrides. Every read is fail-open: unreadable or malformed state never
+#      blocks a transition, it just means no constraint to check.
+
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Rank order for the monotonicity check (FR3). Position in this list *is* the rank.
+PHASE_ORDER=(proposal spec design tasks build verify pr archived)
+
+usage() {
+  cat <<'EOF'
+Usage: specclaw-set-phase <specclaw_dir> <change> <phase> <status> [options]
+
+  specclaw_dir  path to the .specclaw directory
+  change        change name (directory under changes/)
+  phase         one of: proposal spec design tasks build verify pr archived
+  status        free-form, e.g. approved | done | passed | failed | raised
+
+Options:
+  --note S              extra text for the status.md Notes column
+  --url U               PR/issue URL (recorded and shown in Notes)
+  --verdict V           verify verdict, e.g. PASS | FAIL | PARTIAL
+  --branch B            the real branch name for this change
+  --tasks done/total/failed
+                        task counts, e.g. 7/11/0
+  --force               allow a transition to an earlier phase
+  -h, --help            show this message
+EOF
+}
+
+die() {
+  echo "specclaw-set-phase: $*" >&2
+  exit 2
+}
+warn() { echo "specclaw-set-phase: WARN: $*" >&2; }
+
+# ─── Argument parsing ────────────────────────────────────────────────────────
+
+case "${1:-}" in
+  -h | --help | '')
+    usage
+    exit 0
+    ;;
+esac
+
+SPECCLAW_DIR="$1"
+CHANGE="${2:-}"
+PHASE="${3:-}"
+STATUS="${4:-}"
+shift 4 2>/dev/null || die "missing required arguments
+
+$(usage)"
+
+NOTE=""
+URL=""
+VERDICT=""
+BRANCH=""
+TASKS=""
+FORCE=0
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --note) NOTE="${2:-}"; shift 2 || die "--note needs a value" ;;
+    --url) URL="${2:-}"; shift 2 || die "--url needs a value" ;;
+    --verdict) VERDICT="${2:-}"; shift 2 || die "--verdict needs a value" ;;
+    --branch) BRANCH="${2:-}"; shift 2 || die "--branch needs a value" ;;
+    --tasks) TASKS="${2:-}"; shift 2 || die "--tasks needs a value" ;;
+    --force) FORCE=1; shift ;;
+    -h | --help) usage; exit 0 ;;
+    *) die "unknown option: $1" ;;
+  esac
+done
+
+[ -n "$CHANGE" ] || die "change name is required"
+[ -n "$PHASE" ] || die "phase is required"
+[ -n "$STATUS" ] || die "status is required"
+
+# Edge case 8: an unknown phase would write state nothing can render, so reject
+# it here rather than later.
+phase_rank() {
+  local want="$1" i
+  for i in "${!PHASE_ORDER[@]}"; do
+    [ "${PHASE_ORDER[$i]}" = "$want" ] && { printf '%s' "$i"; return 0; }
+  done
+  return 1
+}
+
+NEW_RANK="$(phase_rank "$PHASE")" || die "unknown phase: ${PHASE}
+valid phases: ${PHASE_ORDER[*]}"
+
+T_DONE=""
+T_TOTAL=""
+T_FAILED=""
+if [ -n "$TASKS" ]; then
+  [[ "$TASKS" =~ ^[0-9]+/[0-9]+/[0-9]+$ ]] || die "--tasks must be done/total/failed, e.g. 7/11/0 (got: ${TASKS})"
+  IFS='/' read -r T_DONE T_TOTAL T_FAILED <<<"$TASKS"
+fi
+
+CHANGE_DIR="${SPECCLAW_DIR}/changes/${CHANGE}"
+STATE_FILE="${CHANGE_DIR}/state.json"
+STATUS_FILE="${CHANGE_DIR}/status.md"
+
+[ -d "$SPECCLAW_DIR" ] || die "no such specclaw dir: ${SPECCLAW_DIR}"
+
+# ─── Reading state ───────────────────────────────────────────────────────────
+
+# state_field <file> <dotted.path> — the single read path (FR7). Uses jq when
+# installed, else python3; both are CI dependencies, neither is required. Any
+# failure — no file, bad JSON, absent key — prints nothing and exits 0, so a
+# broken state file degrades to "no recorded state" instead of an error.
+state_field() {
+  local file="$1" path="$2"
+  [ -f "$file" ] || return 0
+  if command -v jq >/dev/null 2>&1; then
+    jq -rc ".${path} // empty" "$file" 2>/dev/null || true
+  elif command -v python3 >/dev/null 2>&1; then
+    # ensure_ascii=False and the tight separators match jq -rc's output byte for
+    # byte, so which interpreter ran is invisible to the written file.
+    python3 -c 'import json, sys
+try:
+    v = json.load(open(sys.argv[1]))
+    for k in sys.argv[2].split("."):
+        v = v[k]
+except Exception:
+    sys.exit(0)
+if v is None:
+    sys.exit(0)
+sys.stdout.write(v if isinstance(v, str) else json.dumps(v, separators=(",", ":"), ensure_ascii=False))
+' "$file" "$path" 2>/dev/null || true
+  fi
+}
+
+# Parseability check for the freshly built document, same optional-dependency
+# rule. With neither interpreter present the write proceeds unvalidated — the
+# generator is the only writer, so that is a lint we lose, not a correctness one.
+json_parses() {
+  if command -v jq >/dev/null 2>&1; then
+    jq -e . "$1" >/dev/null 2>&1
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import json, sys; json.load(open(sys.argv[1]))' "$1" >/dev/null 2>&1
+  fi
+}
+
+json_escape() {
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  s="${s//$'\n'/\\n}"
+  s="${s//$'\r'/\\r}"
+  s="${s//$'\t'/\\t}"
+  printf '%s' "$s"
+}
+
+# ─── Monotonicity (FR3) ──────────────────────────────────────────────────────
+
+CUR_PHASE="$(state_field "$STATE_FILE" phase)"
+if [ -n "$CUR_PHASE" ] && [ "$FORCE" -eq 0 ]; then
+  # An unrecognised recorded phase carries no rank, so it constrains nothing.
+  if cur_rank="$(phase_rank "$CUR_PHASE")" && [ "$NEW_RANK" -lt "$cur_rank" ]; then
+    echo "specclaw-set-phase: refusing to move ${CHANGE} backwards: recorded phase is '${CUR_PHASE}', requested '${PHASE}'. Pass --force to override." >&2
+    exit 3
+  fi
+fi
+
+# ─── Build and write state.json (FR1) ────────────────────────────────────────
+
+# One phase record, compact and single-line. `at` is the caller's argument so
+# the idempotency check below can rebuild the previous record verbatim.
+build_record() {
+  local at="$1" out
+  out="{\"status\":\"$(json_escape "$STATUS")\",\"at\":\"$(json_escape "$at")\""
+  [ -n "$TASKS" ] && out="${out},\"tasks\":{\"done\":${T_DONE},\"total\":${T_TOTAL},\"failed\":${T_FAILED}}"
+  [ -n "$VERDICT" ] && out="${out},\"verdict\":\"$(json_escape "$VERDICT")\""
+  [ -n "$URL" ] && out="${out},\"url\":\"$(json_escape "$URL")\""
+  printf '%s}' "$out"
+}
+
+OLD_REC="$(state_field "$STATE_FILE" "phases.${PHASE}")"
+OLD_AT="$(state_field "$STATE_FILE" "phases.${PHASE}.at")"
+AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+# Re-running the same transition must not churn the timestamp (AC2).
+if [ -n "$OLD_AT" ] && [ "$(build_record "$OLD_AT")" = "$OLD_REC" ]; then
+  AT="$OLD_AT"
+fi
+
+[ -n "$BRANCH" ] || BRANCH="$(state_field "$STATE_FILE" branch)"
+
+mkdir -p "$CHANGE_DIR" || die "cannot create ${CHANGE_DIR}"
+tmpfile="$(mktemp "${CHANGE_DIR}/.state.json.XXXXXX")" || die "cannot create a temp file in ${CHANGE_DIR}"
+trap 'rm -f "$tmpfile"' EXIT
+
+{
+  printf '{\n'
+  printf '  "change": "%s",\n' "$(json_escape "$CHANGE")"
+  printf '  "phase": "%s",\n' "$(json_escape "$PHASE")"
+  printf '  "branch": "%s",\n' "$(json_escape "$BRANCH")"
+  printf '  "phases": {\n'
+  sep=""
+  for p in "${PHASE_ORDER[@]}"; do
+    if [ "$p" = "$PHASE" ]; then
+      rec="$(build_record "$AT")"
+    else
+      rec="$(state_field "$STATE_FILE" "phases.${p}")"
+      # Only objects belong here; anything else is corruption we decline to copy.
+      case "$rec" in '{'*) ;; *) rec="" ;; esac
+    fi
+    [ -n "$rec" ] || continue
+    printf '%s    "%s": %s' "$sep" "$p" "$rec"
+    sep=$',\n'
+  done
+  printf '\n  }\n}\n'
+} >"$tmpfile" || die "failed to build the new state document"
+
+json_parses "$tmpfile" || die "refusing to write unparseable JSON to ${STATE_FILE}"
+
+# mktemp is 0600; state.json is committed and read by every renderer.
+chmod 644 "$tmpfile" 2>/dev/null || true
+mv "$tmpfile" "$STATE_FILE" || die "failed to install ${STATE_FILE}"
+trap - EXIT
+
+# ─── Reflect into status.md (FR2) ────────────────────────────────────────────
+
+# Edge case 4: status.md may not exist yet. Same self-heal as specclaw-verify.
+if [ ! -f "$STATUS_FILE" ]; then
+  template_file="$(cd "${SCRIPT_DIR}/.." && pwd)/templates/status.md"
+  if [ -f "$template_file" ]; then
+    today="$(date +%Y-%m-%d)"
+    sed -e "s/{{title}}/${CHANGE}/g" \
+      -e "s/{{change_name}}/${CHANGE}/g" \
+      -e "s/{{date}}/${today}/g" \
+      -e "s/{{updated}}/${today}/g" \
+      -e "s/{{[a-zA-Z_]*}}/-/g" \
+      "$template_file" >"$STATUS_FILE" || die "could not create ${STATUS_FILE} from the template"
+    warn "status.md not found; created from template at ${STATUS_FILE}"
+  else
+    warn "no status.md at ${STATUS_FILE} and no template at ${template_file}; state.json written, row skipped"
+    echo "OK: ${CHANGE} → ${PHASE} (${STATUS})"
+    exit 0
+  fi
+fi
+
+# Row label per the template's Progress table; `PR` and `Archived` have no
+# template row, so status-row inserts them after the last one.
+case "$PHASE" in
+  pr) LABEL="PR" ;;
+  *) LABEL="$(printf '%s' "${PHASE:0:1}" | tr '[:lower:]' '[:upper:]')${PHASE:1}" ;;
+esac
+
+STATUS_TEXT_BODY="$(printf '%s' "${STATUS:0:1}" | tr '[:lower:]' '[:upper:]')${STATUS:1}"
+case "$(printf '%s' "$STATUS" | tr '[:upper:]' '[:lower:]')" in
+  pass | passed | done | complete | completed | approved | raised | merged | archived) ICON="✅" ;;
+  fail | failed | blocked) ICON="❌" ;;
+  partial | warning | warn) ICON="⚠️" ;;
+  in-progress | in_progress | running | started | building) ICON="🔨" ;;
+  pending | todo | skipped) ICON="⏳" ;;
+  *) ICON="" ;;
+esac
+STATUS_TEXT="${ICON:+$ICON }${STATUS_TEXT_BODY}"
+
+# Notes column: everything the caller gave, most specific first. Joined rather
+# than ranked so a `--url` plus a `--note` cannot silently drop either. A URL
+# containing pipes travels through verbatim — status-row matches on the label
+# column only, so the row's own delimiters are never re-parsed.
+ROW_NOTE=""
+add_note() {
+  [ -n "$1" ] || return 0
+  ROW_NOTE="${ROW_NOTE:+${ROW_NOTE} — }$1"
+}
+add_note "$URL"
+add_note "$VERDICT"
+if [ -n "$TASKS" ]; then
+  tasks_note="${T_DONE}/${T_TOTAL} tasks"
+  [ "$T_FAILED" -gt 0 ] && tasks_note="${tasks_note}, ${T_FAILED} failed"
+  add_note "$tasks_note"
+fi
+add_note "$NOTE"
+
+# Edge case 5: with no Progress table, status-row appends a standalone
+# `**<label>:** …` line and exits 0. That is a success, not a fallback failure.
+row_script="${SCRIPT_DIR}/specclaw-status-row"
+[ -x "$row_script" ] || row_script="$(command -v specclaw-status-row 2>/dev/null || true)"
+if [ -n "$row_script" ] && [ -x "$row_script" ]; then
+  "$row_script" "$STATUS_FILE" "$LABEL" "$STATUS_TEXT" "$ROW_NOTE" ||
+    warn "could not update the ${LABEL} row in ${STATUS_FILE} (state.json is written)"
+else
+  warn "specclaw-status-row not found; ${STATUS_FILE} left unchanged (state.json is written)"
+fi
+
+echo "OK: ${CHANGE} → ${PHASE} (${STATUS})"

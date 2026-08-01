@@ -17,7 +17,7 @@ wires CI.
 
 ### Wave 1 — The writer
 
-- [ ] `T1` — Create `specclaw-set-phase`, the sole phase writer
+- [x] `T1` — Create `specclaw-set-phase`, the sole phase writer
   - Files: `plugins/specclaw/bin/specclaw-set-phase`
   - Estimate: large
   - Kind: impl
