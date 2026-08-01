@@ -435,53 +435,85 @@ EOF
 
 # ─── Save PR URL ──────────────────────────────────────────────────────────────
 
+# record_pr_phase <url> — hand the phase decision to the one writer that owns it.
+#
+# specclaw-set-phase records `pr`/`raised` in state.json and reflects the row
+# into status.md through specclaw-status-row — the same awk upsert this file
+# used to invoke directly, now one level down, so "what phase is this change in"
+# has exactly one answer and one author.
+#
+# Exit codes: 0 recorded, 3 refused as a backwards transition, anything else a
+# real failure. A 3 is an expected outcome, not a problem — re-running
+# specclaw-pr on a change already recorded past `pr` hits it — so it is reported
+# as a plain note on stdout, while a real failure goes to stderr as a WARNING.
+# Neither is fatal: by the time this runs the PR exists on the remote, so the
+# function never returns non-zero (FR9).
+record_pr_phase() {
+  local url="$1"
+  local set_phase_script="$SCRIPT_DIR/specclaw-set-phase"
+  local rc=0
+
+  if [[ ! -x "$set_phase_script" ]]; then
+    warn "specclaw-set-phase not found at $set_phase_script — phase not recorded (PR is live at $url)"
+    return 0
+  fi
+
+  "$set_phase_script" "$SPECCLAW_DIR" "$CHANGE_NAME" pr raised --url "$url" || rc=$?
+  case "$rc" in
+    0) ;;
+    3) echo "  (phase already recorded at or past 'pr' — leaving it as is)" ;;
+    *) warn "specclaw-set-phase exited $rc — PR phase not recorded (PR is live at $url)" ;;
+  esac
+  return 0
+}
+
+# Everything here runs after `gh pr create`, so every step is bookkeeping against
+# a PR that already exists. Each one is individually guarded and the function
+# always returns 0: an abort here is what used to freeze every tracker at its
+# pre-PR state while the URL was still printed, so the failure read as a success
+# (FR9/AC11).
 save_pr_url() {
   local url="$1"
   local status_file="$CHANGE_DIR/status.md"
   local today
   today="$(date +%Y-%m-%d)"
 
+  # First, because set-phase self-heals a missing status.md from the template;
+  # the simple-format fixups below then have a real file to edit.
+  record_pr_phase "$url"
+
   if [[ ! -f "$status_file" ]]; then
-    cat > "$status_file" <<EOF
+    # set-phase could not run, or found no template. Keep the minimal file this
+    # script has always written rather than lose the URL.
+    cat > "$status_file" <<EOF || warn "could not create $status_file (PR is live at $url)"
 # Status: ${CHANGE_NAME}
 
 **Status:** pr-raised
 **PR:** $url
 **Last Updated:** $today
 EOF
-    return
+    return 0
   fi
 
   # Update **Last Updated:** if present, otherwise append it
   if grep -q '^\*\*Last Updated:\*\*' "$status_file"; then
-    sed_i "s|^\*\*Last Updated:\*\*.*|**Last Updated:** $today|" "$status_file"
+    sed_i "s|^\*\*Last Updated:\*\*.*|**Last Updated:** $today|" "$status_file" || \
+      warn "could not refresh the Last Updated line in $status_file"
   fi
 
   # Update **Status:** field (simple format) to pr-raised if present
   if grep -q '^\*\*Status:\*\*' "$status_file"; then
-    sed_i "s|^\*\*Status:\*\*.*|**Status:** pr-raised|" "$status_file"
+    sed_i "s|^\*\*Status:\*\*.*|**Status:** pr-raised|" "$status_file" || \
+      warn "could not refresh the Status line in $status_file"
   fi
 
-  # Upsert the PR row in the Progress table. Delegated to specclaw-status-row,
-  # which edits the row in awk: the table is pipe-delimited, and sed cannot be
-  # trusted with pipes here — `\|` in a BRE address is *alternation* (the old
-  # `/^\|…Verify…\|/a` matched every line and appended 33 PR rows to a stock
-  # status.md), and `s|…| *PR *|…|` collides with its own delimiter
-  # (`sed: unknown option to 's'`, which under `set -e` killed this script
-  # immediately after the PR was created — see the change log for the report).
-  local status_row_script="$SCRIPT_DIR/specclaw-status-row"
-  if [[ -x "$status_row_script" ]]; then
-    "$status_row_script" "$status_file" "PR" "✅ Raised" "$url" || \
-      warn "could not update the PR row in $status_file (PR itself is created)"
-  elif ! grep -qE '^\|[[:space:]]*PR[[:space:]]*\|' "$status_file"; then
-    # Helper missing (partial install) — never lose the URL.
-    echo "**PR:** $url" >> "$status_file"
-  fi
-
-  # If PR URL line doesn't exist yet (non-table simple format), ensure it's present
+  # Last net: with set-phase or status-row missing (partial install) neither a
+  # `| PR |` row nor a `**PR:**` line will have been written. Never lose the URL.
   if ! grep -q '^\*\*PR:\*\*' "$status_file" && ! grep -qE '^\|[[:space:]]*PR[[:space:]]*\|' "$status_file"; then
-    echo "**PR:** $url" >> "$status_file"
+    echo "**PR:** $url" >> "$status_file" || \
+      warn "could not append the PR URL to $status_file (PR is live at $url)"
   fi
+  return 0
 }
 
 # ─── Version Bump ─────────────────────────────────────────────────────────────
