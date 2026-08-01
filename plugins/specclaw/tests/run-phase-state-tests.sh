@@ -17,6 +17,17 @@
 #   E10  verify → verify with a changed verdict is allowed and overwrites
 #   plus a corrupt state.json (fail-open, FR7) and the python3 read fallback.
 #
+# and, for `bin/specclaw-reconcile` (FR8):
+#
+#   AC9  state.json says build while tasks.md is complete and verify-report.md
+#        exists → drift, non-zero exit; --fix advances and exits 0
+#   AC10 `gh` unavailable → the pr dimension is `unknown`, a recorded PR is not
+#        cleared, and --fix names what it skipped
+#   plus the `unknown` vs `none` distinction that AC10 turns on: a *failing* gh
+#   is unknown (not drift, never actionable) while a *successful* gh finding no
+#   PR is drift that --fix still refuses to adopt, because clearing a recorded
+#   PR is a downgrade.
+#
 # Two of these double as defect pins for `specclaw-status-row`:
 #
 #   D3: a new row was inserted after the *last table row in the whole file*, so
@@ -40,8 +51,9 @@ TEMPLATE="$(cd "$SCRIPT_DIR/.." && pwd)/templates/status.md"
 
 SET_PHASE="$BIN_DIR/specclaw-set-phase"
 STATUS_ROW="$BIN_DIR/specclaw-status-row"
+RECONCILE="$BIN_DIR/specclaw-reconcile"
 
-for f in "$SET_PHASE" "$STATUS_ROW" "$TEMPLATE"; do
+for f in "$SET_PHASE" "$STATUS_ROW" "$RECONCILE" "$TEMPLATE"; do
   if [[ ! -f "$f" ]]; then
     echo "FATAL: missing file: $f" >&2
     exit 2
@@ -85,6 +97,15 @@ assert_contains() {
     pass "$label (contains '$needle')"
   else
     fail "$label — '$needle' not found in: $haystack"
+  fi
+}
+
+assert_lacks() {
+  local label="$1" needle="$2" haystack="$3"
+  if [[ "$haystack" != *"$needle"* ]]; then
+    pass "$label (no '$needle')"
+  else
+    fail "$label — '$needle' should not appear, but does"
   fi
 }
 
@@ -503,9 +524,356 @@ assert_same_file "FBj idempotent under the fallback reader (state.json)" \
 assert_same_file "FBk idempotent under the fallback reader (status.md)" \
   "$WORK/fb.status.snap" "$C/status.md"
 
+# ═════════════════════════════════════════════════════════════════════════════
+# specclaw-reconcile (FR8, AC9, AC10)
+# ═════════════════════════════════════════════════════════════════════════════
+#
+# Hermetic by construction: a second .specclaw tree under the same temp workdir
+# (so the counts in the summary line are this section's alone), no network, and
+# `gh` only ever reached through a shim on PATH. The three states that matter —
+# gh absent, gh failing, gh answering — are three PATHs, not three mocks.
+
+RSPEC="$WORK/.specclaw-recon"
+mkdir -p "$RSPEC/changes"
+
+# make_shim <dir> — a PATH holding only what reconcile, set-phase and status-row
+# need. No jq (so every reconcile assertion below also exercises the python3
+# read fallback) and, unless one is added afterwards, no gh.
+make_shim() {
+  local dir="$1" b p
+  mkdir -p "$dir"
+  for b in bash sh env python3 date mktemp chmod mv cp rm mkdir tr sed awk cat \
+    dirname basename grep sort head tail cut wc find timeout git printf ls; do
+    p="$(command -v "$b" 2>/dev/null)" || continue
+    case "$p" in /*) ln -sf "$p" "$dir/$b" ;; esac
+  done
+}
+
+NOGH="$WORK/recon-nogh"
+GHFAIL="$WORK/recon-ghfail"
+GHOK="$WORK/recon-ghok"
+make_shim "$NOGH"
+make_shim "$GHFAIL"
+make_shim "$GHOK"
+
+# A `gh` that always fails, the way an unauthenticated or offline one does.
+cat >"$GHFAIL/gh" <<'EOF'
+#!/usr/bin/env bash
+echo "gh: To get started with GitHub CLI, please run: gh auth login" >&2
+exit 4
+EOF
+chmod +x "$GHFAIL/gh"
+
+# A `gh` that succeeds, answering `pr list` with whatever SPECCLAW_TEST_PR_ROW
+# holds — empty meaning "authenticated, and there is genuinely no PR".
+cat >"$GHOK/gh" <<'EOF'
+#!/usr/bin/env bash
+case "${1:-} ${2:-}" in
+  "pr list") ;;
+  *) echo "gh shim: unsupported: $*" >&2; exit 1 ;;
+esac
+[ -n "${SPECCLAW_TEST_PR_ROW:-}" ] || exit 0
+printf '%s\n' "$SPECCLAW_TEST_PR_ROW"
+EOF
+chmod +x "$GHOK/gh"
+
+assert_eq "Ra the reconcile shims carry no jq" "" "$(PATH="$NOGH" bash -c 'command -v jq' 2>/dev/null)"
+assert_eq "Rb the no-gh shim really has no gh" "" "$(PATH="$NOGH" bash -c 'command -v gh' 2>/dev/null)"
+
+ROUT=""
+# run_recon <shim_path> <args…>
+run_recon() {
+  local p="$1"
+  shift
+  RC=0
+  PATH="$p" "$RECONCILE" "$@" >"$WORK/recon.out" 2>"$WORK/recon.err" || RC=$?
+  ROUT="$(cat "$WORK/recon.out" "$WORK/recon.err")"
+}
+
+# run_sp_p <shim_path> <args…> — set-phase under a shim PATH, for building the
+# fixtures the same way the lifecycle would.
+run_sp_p() {
+  local p="$1"
+  shift
+  RC=0
+  PATH="$p" "$SET_PHASE" "$@" >"$WORK/last.out" 2>"$WORK/last.err" || RC=$?
+}
+
+rchange() {
+  local name="$1"
+  mkdir -p "$RSPEC/changes/$name"
+  printf '%s' "$RSPEC/changes/$name"
+}
+
+# make_tasks <file> <done> <total> [failed] — the three markers reconcile greps.
+make_tasks() {
+  local f="$1" nd="$2" nt="$3" nf="${4:-0}" i n=1
+  printf '# Tasks\n\n' >"$f"
+  for ((i = 0; i < nd; i++)); do
+    printf -- '- [x] `T%d` — done\n' "$n" >>"$f"
+    n=$((n + 1))
+  done
+  for ((i = 0; i < nf; i++)); do
+    printf -- '- [!] `T%d` — failed\n' "$n" >>"$f"
+    n=$((n + 1))
+  done
+  while [ "$n" -le "$nt" ]; do
+    printf -- '- [ ] `T%d` — pending\n' "$n" >>"$f"
+    n=$((n + 1))
+  done
+}
+
+make_verify_report() {
+  cat >"$1" <<EOF
+# Verify Report: $(basename "$(dirname "$1")")
+
+**Date:** 2026-08-01
+
+## Verdict: $2
+
+Evidence elided.
+EOF
+}
+
+# ─── R1: everything agrees → exit 0, no findings ─────────────────────────────
+C="$(rchange clean)"
+make_status "$C/status.md"
+make_tasks "$C/tasks.md" 3 3
+make_verify_report "$C/verify-report.md" PASS
+run_sp_p "$NOGH" "$RSPEC" clean build done --tasks 3/3/0 --branch claude/clean
+run_sp_p "$NOGH" "$RSPEC" clean verify passed --verdict PASS
+cp "$C/state.json" "$WORK/r1.state.snap"
+
+run_recon "$NOGH" "$RSPEC" clean
+assert_eq "R1a an agreeing change exits 0" "0" "$RC"
+assert_contains "R1b it reports no drift" "no drift" "$ROUT"
+assert_lacks "R1c no DRIFT lines" "DRIFT" "$ROUT"
+assert_same_file "R1d the report mode wrote nothing" "$WORK/r1.state.snap" "$C/state.json"
+
+# ─── R2 / AC9: build recorded, reality is verified ───────────────────────────
+C="$(rchange ac9)"
+make_status "$C/status.md"
+make_tasks "$C/tasks.md" 4 4
+make_verify_report "$C/verify-report.md" PASS
+run_sp_p "$NOGH" "$RSPEC" ac9 build done --tasks 2/4/0 --branch claude/ac9
+assert_eq "R2a fixture recorded phase is build" "build" "$(json_get "$C/state.json" phase)"
+cp "$C/state.json" "$WORK/r2.state.snap"
+
+run_recon "$NOGH" "$RSPEC" ac9
+if [[ "$RC" -ne 0 ]]; then
+  pass "AC9a drift exits non-zero (= $RC)"
+else
+  fail "AC9a drift should exit non-zero, exited 0"
+fi
+assert_contains "AC9b the phase drift is named" "state.json says 'build'; observation supports 'verify'" "$ROUT"
+assert_contains "AC9c the stale task counts are named" "state.json records 2/4" "$ROUT"
+assert_contains "AC9d the observed counts are named" "tasks.md shows 4/4" "$ROUT"
+assert_same_file "AC9e reporting drift changed nothing" "$WORK/r2.state.snap" "$C/state.json"
+
+run_recon "$NOGH" "$RSPEC" ac9 --fix
+assert_eq "AC9f --fix exits 0" "0" "$RC"
+assert_eq "AC9g the phase advanced to verify" "verify" "$(json_get "$C/state.json" phase)"
+assert_eq "AC9h the verdict was adopted from verify-report.md" "PASS" \
+  "$(json_get "$C/state.json" phases.verify.verdict)"
+assert_eq "AC9i the build record was refreshed from tasks.md" '{"done":4,"total":4,"failed":0}' \
+  "$(json_get "$C/state.json" phases.build.tasks)"
+# status.md only moves if set-phase did the write — reconcile never touches it.
+assert_eq "AC9j --fix routed through set-phase: the Verify row was rewritten" \
+  "| Verify | ✅ Passed | PASS |" "$(grep '^| Verify |' "$C/status.md")"
+assert_eq "AC9k --fix routed through set-phase: the Build row too" \
+  "| Build | ✅ Done | 4/4 tasks |" "$(grep '^| Build |' "$C/status.md")"
+
+run_recon "$NOGH" "$RSPEC" ac9
+assert_eq "AC9l the audit is idempotent: no drift after --fix" "0" "$RC"
+assert_lacks "AC9m and no findings remain" "DRIFT" "$ROUT"
+
+# ─── R3 / AC10: gh absent → unknown, and a recorded PR survives --fix ────────
+C="$(rchange ac10)"
+make_status "$C/status.md"
+make_tasks "$C/tasks.md" 4 4
+make_verify_report "$C/verify-report.md" PASS
+run_sp_p "$NOGH" "$RSPEC" ac10 build done --tasks 4/4/0 --branch claude/ac10
+run_sp_p "$NOGH" "$RSPEC" ac10 pr raised --url "$URL"
+cp "$C/state.json" "$WORK/r3.state.snap"
+cp "$C/status.md" "$WORK/r3.status.snap"
+
+run_recon "$NOGH" "$RSPEC" ac10
+assert_eq "AC10a an unobservable dimension is not drift" "0" "$RC"
+assert_contains "AC10b the pr dimension reads unknown" "pr       unknown" "$ROUT"
+assert_contains "AC10c and says why" "gh is not installed" "$ROUT"
+assert_lacks "AC10d it never claims there is no PR" "gh finds no PR" "$ROUT"
+assert_lacks "AC10e no drift is invented from the unknown" "DRIFT" "$ROUT"
+
+run_recon "$NOGH" "$RSPEC" ac10 --fix
+assert_eq "AC10f --fix exits 0" "0" "$RC"
+assert_contains "AC10g --fix says it skipped the pr dimension" "SKIP     pr" "$ROUT"
+assert_contains "AC10h and that the reason was 'unknown'" "observation is 'unknown'" "$ROUT"
+assert_contains "AC10i and states the rule it is following" "never clears a recorded PR" "$ROUT"
+assert_same_file "AC10j state.json is byte-identical after --fix" "$WORK/r3.state.snap" "$C/state.json"
+assert_same_file "AC10k status.md is byte-identical after --fix" "$WORK/r3.status.snap" "$C/status.md"
+assert_eq "AC10l the recorded pr phase survived untouched" "pr" "$(json_get "$C/state.json" phase)"
+assert_eq "AC10m the recorded PR url was not cleared" "$URL" "$(json_get "$C/state.json" phases.pr.url)"
+
+# ─── R4 / AC10: real drift alongside an unknown → fix one, skip the other ────
+C="$(rchange ac10b)"
+make_status "$C/status.md"
+make_tasks "$C/tasks.md" 4 4
+make_verify_report "$C/verify-report.md" FAIL
+run_sp_p "$NOGH" "$RSPEC" ac10b build done --tasks 1/4/0 --branch claude/ac10b
+
+run_recon "$NOGH" "$RSPEC" ac10b
+if [[ "$RC" -ne 0 ]]; then
+  pass "AC10n observable drift still exits non-zero with an unknown present (= $RC)"
+else
+  fail "AC10n observable drift alongside an unknown should exit non-zero"
+fi
+
+run_recon "$NOGH" "$RSPEC" ac10b --fix
+assert_eq "AC10o --fix exits 0" "0" "$RC"
+assert_eq "AC10p the observable dimensions were adopted" "verify" "$(json_get "$C/state.json" phase)"
+assert_eq "AC10q including the FAIL verdict" "FAIL" "$(json_get "$C/state.json" phases.verify.verdict)"
+assert_contains "AC10r the unknown pr dimension was still skipped out loud" "SKIP     pr" "$ROUT"
+assert_eq "AC10s and no pr record was invented for it" "" "$(json_get "$C/state.json" phases.pr)"
+
+# ─── R5: a failing gh is `unknown`, never `no PR` ────────────────────────────
+# The distinction AC10 rests on. `gh` exiting 4 (auth) must read exactly like
+# `gh` being absent — otherwise an unauthenticated laptop clears every PR it
+# cannot see.
+C="$(rchange ghfail)"
+make_status "$C/status.md"
+run_sp_p "$GHFAIL" "$RSPEC" ghfail pr raised --url "$URL" --branch claude/ghfail
+cp "$C/state.json" "$WORK/r5.state.snap"
+
+run_recon "$GHFAIL" "$RSPEC" ghfail
+assert_eq "R5a a failing gh is not drift" "0" "$RC"
+assert_contains "R5b the pr dimension reads unknown" "pr       unknown" "$ROUT"
+assert_contains "R5c the exit status is reported" "gh exited 4" "$ROUT"
+assert_lacks "R5d a failing gh never reads as 'no PR'" "gh finds no PR" "$ROUT"
+
+run_recon "$GHFAIL" "$RSPEC" ghfail --fix
+assert_eq "R5e --fix exits 0" "0" "$RC"
+assert_same_file "R5f --fix left the recorded PR alone" "$WORK/r5.state.snap" "$C/state.json"
+
+# ─── R6: a *succeeding* gh finding no PR is drift — and still not adopted ────
+# `none` is a real observation, so it is reported. Adopting it would mean
+# pr → verify, a downgrade; reconcile refuses and says so rather than passing
+# --force behind the operator's back.
+C="$(rchange ghnone)"
+make_status "$C/status.md"
+run_sp_p "$GHOK" "$RSPEC" ghnone pr raised --url "$URL" --branch claude/ghnone
+cp "$C/state.json" "$WORK/r6.state.snap"
+
+export SPECCLAW_TEST_PR_ROW=""
+run_recon "$GHOK" "$RSPEC" ghnone
+if [[ "$RC" -ne 0 ]]; then
+  pass "R6a an authenticated gh finding no PR is drift (= $RC)"
+else
+  fail "R6a gh answering 'no PR' against a recorded one should be drift"
+fi
+assert_contains "R6b the pr dimension reads none, not unknown" "none — gh finds no PR" "$ROUT"
+assert_contains "R6c the finding names the recorded url" "state.json records a PR (${URL})" "$ROUT"
+
+run_recon "$GHOK" "$RSPEC" ghnone --fix
+assert_eq "R6d --fix exits 0" "0" "$RC"
+assert_contains "R6e --fix refuses to clear the PR" "clearing a recorded PR is a downgrade" "$ROUT"
+assert_contains "R6e2 a --fix that applied nothing says so, so exit 0 cannot read as clean" \
+  "finding(s) found, none applied" "$ROUT"
+assert_same_file "R6f the recorded PR is still there" "$WORK/r6.state.snap" "$C/state.json"
+assert_eq "R6g the phase is still pr" "pr" "$(json_get "$C/state.json" phase)"
+
+# ─── R7: a succeeding gh that finds a PR → drift, and --fix adopts it ────────
+C="$(rchange ghok)"
+make_status "$C/status.md"
+make_tasks "$C/tasks.md" 2 2
+make_verify_report "$C/verify-report.md" PASS
+run_sp_p "$GHOK" "$RSPEC" ghok build done --tasks 2/2/0 --branch feature/odd-name
+run_sp_p "$GHOK" "$RSPEC" ghok verify passed --verdict PASS
+
+PR_URL_OBS="https://github.com/chan4lk/specclaw/pull/417"
+export SPECCLAW_TEST_PR_ROW="2026-08-01T10:00:00Z 417 OPEN ${PR_URL_OBS}"
+run_recon "$GHOK" "$RSPEC" ghok
+if [[ "$RC" -ne 0 ]]; then
+  pass "R7a an unrecorded open PR is drift (= $RC)"
+else
+  fail "R7a an unrecorded open PR should be drift"
+fi
+assert_contains "R7b the PR is reported with its number and state" "#417 open" "$ROUT"
+assert_contains "R7c the finding names the recorded branch, not a prefix guess" \
+  "on 'feature/odd-name'; state.json records no PR" "$ROUT"
+
+run_recon "$GHOK" "$RSPEC" ghok --fix
+assert_eq "R7d --fix exits 0" "0" "$RC"
+assert_eq "R7e the phase advanced to pr" "pr" "$(json_get "$C/state.json" phase)"
+assert_eq "R7f the observed url was recorded" "$PR_URL_OBS" "$(json_get "$C/state.json" phases.pr.url)"
+assert_eq "R7g --fix routed through set-phase: one PR row in status.md" "1" \
+  "$(grep -c '^| PR |' "$C/status.md")"
+assert_eq "R7h the PR row carries the url" "| PR | ✅ Raised | $PR_URL_OBS |" \
+  "$(grep '^| PR |' "$C/status.md")"
+unset SPECCLAW_TEST_PR_ROW
+
+# ─── R8: no state.json at all is "unmanaged", not drift ──────────────────────
+C="$(rchange unmanaged)"
+make_status "$C/status.md"
+printf '# Proposal\n' >"$C/proposal.md"
+make_tasks "$C/tasks.md" 2 5
+run_recon "$NOGH" "$RSPEC" unmanaged
+assert_eq "R8a an unmanaged change exits 0" "0" "$RC"
+assert_contains "R8b it is reported as unmanaged" "unmanaged — no state.json" "$ROUT"
+assert_contains "R8c and explicitly not as drift" "no drift (unmanaged)" "$ROUT"
+assert_lacks "R8d no findings are raised against it" "DRIFT" "$ROUT"
+
+run_recon "$NOGH" "$RSPEC" unmanaged --fix
+assert_eq "R8e --fix on an unmanaged change exits 0" "0" "$RC"
+if [[ -f "$C/state.json" ]]; then
+  fail "R8f --fix must not backfill state.json for an unmanaged change (AC6 rendering)"
+else
+  pass "R8f --fix left the unmanaged change unmanaged"
+fi
+
+# ─── R9: a corrupt state.json is drift, and --fix rewrites it ────────────────
+C="$(rchange broken)"
+make_status "$C/status.md"
+make_tasks "$C/tasks.md" 3 3
+printf '{"change":"broken","phase":"bui' >"$C/state.json"
+run_recon "$NOGH" "$RSPEC" broken
+if [[ "$RC" -ne 0 ]]; then
+  pass "R9a an unparseable state.json is drift (= $RC)"
+else
+  fail "R9a an unparseable state.json should be drift"
+fi
+assert_contains "R9b it is named as unreadable, not treated as unmanaged" \
+  "state.json does not parse" "$ROUT"
+run_recon "$NOGH" "$RSPEC" broken --fix
+assert_eq "R9c --fix exits 0" "0" "$RC"
+if json_ok "$C/state.json"; then
+  pass "R9d --fix rewrote it as valid JSON"
+else
+  fail "R9d state.json still unparseable: $(cat "$C/state.json")"
+fi
+assert_eq "R9e with the observed phase" "build" "$(json_get "$C/state.json" phase)"
+
+# ─── R10: sweeping every change, and skipping archive/ ───────────────────────
+mkdir -p "$RSPEC/changes/archive/2026-07-01-old"
+printf '{"change":"2026-07-01-old","phase":"nonsense","phases":{}}\n' \
+  >"$RSPEC/changes/archive/2026-07-01-old/state.json"
+make_tasks "$RSPEC/changes/archive/2026-07-01-old/tasks.md" 9 9
+
+run_recon "$NOGH" "$RSPEC"
+assert_lacks "R10a archived changes are skipped (edge 7)" "2026-07-01-old" "$ROUT"
+assert_lacks "R10b and the archive directory is not itself a change" "▸ archive" "$ROUT"
+assert_contains "R10c the sweep covers every active change" "examined: 9" "$ROUT"
+assert_contains "R10d and counts the unmanaged one separately" "unmanaged: 1" "$ROUT"
+
+run_recon "$NOGH" "$RSPEC" 2026-07-01-old
+assert_eq "R10e naming an archived change is a usage error" "2" "$RC"
+
+run_recon "$NOGH" "$RSPEC" no-such-change
+assert_eq "R10f naming an unknown change is a usage error" "2" "$RC"
+assert_contains "R10g with a message naming it" "no such change: no-such-change" "$ROUT"
+
 # ─── Hermeticity: nothing was written outside the temp workdir ───────────────
 assert_eq "Ha every change directory lives under the temp workdir" "0" \
-  "$(find "$SPECCLAW" -name state.json -not -path "$WORK/*" | wc -l)"
+  "$(find "$SPECCLAW" "$RSPEC" -name state.json -not -path "$WORK/*" | wc -l)"
 
 echo
 echo "─────────────────────────────"

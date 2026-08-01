@@ -1,0 +1,619 @@
+#!/usr/bin/env bash
+# specclaw-reconcile — does the recorded phase still match observable reality?
+# Usage: specclaw-reconcile <specclaw_dir> [<change>] [--fix]
+#
+# `specclaw-set-phase` records the phase; nothing guarantees the record stays
+# true. A build finishes in a session that crashed before the transition, a PR
+# is opened by hand, a verify report lands from a loop turn — and the tracker
+# quietly lies again. keyflow needed a 110-proposal audit to find 104 already
+# shipped entries still marked active. This is that audit as a script (FR8).
+#
+# Four dimensions are observed per change:
+#
+#   tasks   `tasks.md` markers, the same three greps specclaw-update-status
+#           uses: `^- [x]` done, `^- [!]` failed, `^- [` total.
+#   verify  `verify-report.md` presence, and its verdict when parseable.
+#   pr      `gh pr list --head <branch>` on the branch **recorded in
+#           state.json**. Never `${branch_prefix}${change}` — that guess is
+#           wrong in this very repo and a wrong branch reads as "no PR".
+#   git     does the recorded branch actually exist (local or remote ref).
+#
+# The one property worth stating twice: **a dimension that could not be
+# observed is `unknown`, never a negative finding.** `gh` missing, `gh`
+# failing, `gh` unauthenticated, `gh` timing out, no branch recorded — all
+# `unknown`. `--fix` refuses to act on an `unknown` dimension and prints what
+# it skipped and why. Read the other way round, a laptop with no network would
+# see "no PR" everywhere and cheerfully regress every correct state it found:
+# strictly worse than the drift it was sent to fix (Assumption 3, AC10).
+#
+# `--fix` adopts reality by calling `specclaw-set-phase`, never by writing
+# state.json itself. One writer is the entire point of this change, and it is
+# also what makes `--fix` safe by construction: set-phase refuses a backwards
+# transition, so no finding here can silently downgrade a recorded phase.
+#
+# Exit status:
+#   0  report mode: everything agrees (or the change is unmanaged)
+#      --fix mode:  every actionable finding was applied
+#   1  report mode: drift found
+#      --fix mode:  a set-phase call failed
+#   2  usage error
+
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Same rank order as specclaw-set-phase; position in the list *is* the rank.
+PHASE_ORDER=(proposal spec design tasks build verify pr archived)
+
+usage() {
+  cat <<'EOF'
+Usage: specclaw-reconcile <specclaw_dir> [<change>] [--fix]
+
+  specclaw_dir  path to the .specclaw directory
+  change        limit the audit to one change (default: every active change)
+
+Options:
+  --fix         adopt observed reality via specclaw-set-phase; skips any
+                dimension that could not be observed and says which
+  -h, --help    show this message
+
+Exits non-zero when drift is found (report mode) or when a fix failed.
+EOF
+}
+
+die() {
+  echo "specclaw-reconcile: $*" >&2
+  exit 2
+}
+
+# ─── Arguments ───────────────────────────────────────────────────────────────
+
+SPECCLAW_DIR=""
+ONLY_CHANGE=""
+FIX=0
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --fix) FIX=1; shift ;;
+    -h | --help) usage; exit 0 ;;
+    --) shift ;;
+    -*) die "unknown option: $1
+
+$(usage)" ;;
+    *)
+      if [ -z "$SPECCLAW_DIR" ]; then
+        SPECCLAW_DIR="$1"
+      elif [ -z "$ONLY_CHANGE" ]; then
+        ONLY_CHANGE="$1"
+      else
+        die "unexpected argument: $1"
+      fi
+      shift
+      ;;
+  esac
+done
+
+[ -n "$SPECCLAW_DIR" ] || {
+  usage
+  exit 0
+}
+[ -d "$SPECCLAW_DIR" ] || die "no such specclaw dir: ${SPECCLAW_DIR}"
+
+CHANGES_DIR="${SPECCLAW_DIR}/changes"
+[ -d "$CHANGES_DIR" ] || die "no changes directory under ${SPECCLAW_DIR}"
+
+# The repo the specclaw dir lives in, for the local-only git dimension.
+REPO_DIR="$(cd "${SPECCLAW_DIR}/.." 2>/dev/null && pwd)" || REPO_DIR=""
+
+SET_PHASE="${SCRIPT_DIR}/specclaw-set-phase"
+[ -x "$SET_PHASE" ] || SET_PHASE="$(command -v specclaw-set-phase 2>/dev/null || true)"
+
+# ─── Reading state ───────────────────────────────────────────────────────────
+# Third copy of the reader shared with specclaw-set-phase and
+# specclaw-update-status, kept byte-identical on purpose: these scripts are
+# installed as standalone executables with no sourcing convention between them,
+# and a second *behaviour* for reading state.json is exactly the divergence this
+# change exists to remove. Any edit here belongs in all three.
+
+# state_field <file> <dotted.path> — jq when installed, else python3; neither is
+# required. Any failure — no file, bad JSON, absent key — prints nothing.
+state_field() {
+  local file="$1" path="$2"
+  [ -f "$file" ] || return 0
+  if command -v jq >/dev/null 2>&1; then
+    jq -rc ".${path} // empty" "$file" 2>/dev/null || true
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import json, sys
+try:
+    v = json.load(open(sys.argv[1]))
+    for k in sys.argv[2].split("."):
+        v = v[k]
+except Exception:
+    sys.exit(0)
+if v is None:
+    sys.exit(0)
+sys.stdout.write(v if isinstance(v, str) else json.dumps(v, separators=(",", ":"), ensure_ascii=False))
+' "$file" "$path" 2>/dev/null || true
+  fi
+}
+
+# state_str <file> <path> — a state_field read reduced to its first line, so a
+# stray newline in the JSON can break neither a report row nor a `gh` argument.
+state_str() {
+  local v
+  v="$(state_field "$1" "$2")"
+  printf '%s' "${v%%$'\n'*}"
+}
+
+# True when the file parses. With neither interpreter installed nothing can be
+# read anyway, so it reports parseable and the empty reads take the fallback.
+state_parses() {
+  if command -v jq >/dev/null 2>&1; then
+    jq -e . "$1" >/dev/null 2>&1
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import json, sys; json.load(open(sys.argv[1]))' "$1" >/dev/null 2>&1
+  fi
+}
+
+phase_rank() {
+  local want="$1" i
+  for i in "${!PHASE_ORDER[@]}"; do
+    [ "${PHASE_ORDER[$i]}" = "$want" ] && { printf '%s' "$i"; return 0; }
+  done
+  return 1
+}
+
+BUILD_RANK="$(phase_rank build)"
+
+# ─── Observers ───────────────────────────────────────────────────────────────
+
+# Bounded invocation (NFR5): no observation may stall the audit. `gh` on a dead
+# network is the realistic hang, and a hang here reads as a broken tool rather
+# than as the `unknown` it actually is.
+bounded() {
+  if command -v timeout >/dev/null 2>&1; then timeout 10 "$@"; else "$@"; fi
+}
+
+# obs_tasks <change_dir> → T_DONE T_TOTAL T_FAILED, and T_PRESENT.
+T_DONE=0 T_TOTAL=0 T_FAILED=0 T_PRESENT=0
+obs_tasks() {
+  local f="$1/tasks.md"
+  T_DONE=0 T_TOTAL=0 T_FAILED=0 T_PRESENT=0
+  [ -f "$f" ] || return 0
+  T_PRESENT=1
+  T_TOTAL=$(grep -c '^\- \[' "$f" 2>/dev/null || true)
+  T_DONE=$(grep -c '^\- \[x\]' "$f" 2>/dev/null || true)
+  T_FAILED=$(grep -c '^\- \[!\]' "$f" 2>/dev/null || true)
+  T_TOTAL=${T_TOTAL:-0} T_DONE=${T_DONE:-0} T_FAILED=${T_FAILED:-0}
+}
+
+# obs_verify <change_dir> → V_PRESENT, V_VERDICT ("" when unparseable).
+# Both report shapes in the wild are accepted: the template's `**Verdict:** X`
+# and the heading `## Verdict: X` that specclaw-verify actually emits. The
+# verdict is matched against the known set rather than "first word", so a
+# decorated line (`## Verdict: ✅ PASS`) still reads correctly.
+V_PRESENT=0 V_VERDICT=""
+obs_verify() {
+  local f="$1/verify-report.md" line
+  V_PRESENT=0 V_VERDICT=""
+  [ -f "$f" ] || return 0
+  V_PRESENT=1
+  line="$(grep -m1 -E '^(\*\*Verdict:\*\*|##[[:space:]]*Verdict:)' "$f" 2>/dev/null || true)"
+  [ -n "$line" ] || return 0
+  V_VERDICT="$(printf '%s' "$line" | tr '[:lower:]' '[:upper:]' |
+    grep -o -E 'PARTIAL|PASS|FAIL' | head -1 || true)"
+}
+
+# obs_pr <branch> → PR_OBS (unknown|none|open|merged|closed), PR_NUM, PR_URL,
+# PR_REASON. Everything that is not a *successful* lookup returning rows is
+# `unknown`; only a successful, empty lookup is `none` (AC10).
+PR_OBS="unknown" PR_NUM="" PR_URL="" PR_REASON=""
+obs_pr() {
+  local branch="$1" rows="" rc=0 newest=""
+  PR_OBS="unknown" PR_NUM="" PR_URL="" PR_REASON=""
+
+  if [ -z "$branch" ]; then
+    PR_REASON="no branch recorded in state.json; refusing to guess one"
+    return 0
+  fi
+  if ! command -v gh >/dev/null 2>&1; then
+    PR_REASON="gh is not installed"
+    return 0
+  fi
+
+  rows="$(bounded gh pr list --head "$branch" --state all --limit 20 \
+    --json number,state,updatedAt,url \
+    --template '{{range .}}{{.updatedAt}} {{.number}} {{.state}} {{.url}}{{"\n"}}{{end}}' 2>/dev/null)" || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    # 124 is timeout(1)'s. Everything else is gh: no auth, no remote, no
+    # network, rate limit. None of them means "no PR".
+    if [ "$rc" -eq 124 ]; then
+      PR_REASON="gh timed out after 10s"
+    else
+      PR_REASON="gh exited ${rc} (offline, unauthenticated, or no GitHub remote)"
+    fi
+    return 0
+  fi
+
+  # ISO-8601 sorts lexically, so `sort -r | head -1` is the most recent PR.
+  newest="$(printf '%s' "$rows" | tr '\t' ' ' | grep -v '^[[:space:]]*$' | sort -r | head -1 || true)"
+  if [ -z "$newest" ]; then
+    PR_OBS="none"
+    return 0
+  fi
+  # shellcheck disable=SC2086  # deliberate split of "<ts> <num> <state> <url>"
+  set -- $newest
+  if [ "$#" -lt 3 ]; then
+    PR_REASON="gh returned a row this script could not parse: ${newest}"
+    return 0
+  fi
+  PR_NUM="$2"
+  PR_OBS="$(printf '%s' "$3" | tr '[:upper:]' '[:lower:]')"
+  PR_URL="${4:-}"
+}
+
+# obs_git <branch> → G_OBS (unknown|present|missing), G_REASON. Local refs only:
+# a `git ls-remote` here would be a second network call with the same failure
+# modes, and the question "does this branch exist" is answerable offline.
+G_OBS="unknown" G_REASON=""
+obs_git() {
+  local branch="$1"
+  G_OBS="unknown" G_REASON=""
+  if [ -z "$branch" ]; then
+    G_REASON="no branch recorded in state.json"
+    return 0
+  fi
+  if [ -z "$REPO_DIR" ] || ! command -v git >/dev/null 2>&1 ||
+    ! git -C "$REPO_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+    G_REASON="${REPO_DIR:-.} is not a git work tree"
+    return 0
+  fi
+  if git -C "$REPO_DIR" show-ref --verify --quiet "refs/heads/${branch}" ||
+    git -C "$REPO_DIR" show-ref --quiet "refs/remotes/origin/${branch}"; then
+    G_OBS="present"
+  else
+    G_OBS="missing"
+  fi
+}
+
+# ─── Report plumbing ─────────────────────────────────────────────────────────
+
+row() { printf '    %-8s %s\n' "$1" "$2"; }
+
+DRIFTS=()
+UNKNOWNS=()
+drift() {
+  DRIFTS+=("$1|$2")
+}
+unknown() {
+  UNKNOWNS+=("$1|$2")
+}
+
+CHANGE=""
+EXAMINED=0
+DRIFTED=0
+UNMANAGED=0
+FIX_FAILED=0
+FIX_APPLIED=0
+
+# run_set_phase <phase> <status> [opts…] — the only mutation this script makes.
+run_set_phase() {
+  local out=""
+  if [ -z "$SET_PHASE" ] || [ ! -x "$SET_PHASE" ]; then
+    printf '    %-8s %s\n' "FAILED" "specclaw-set-phase not found; cannot apply anything"
+    FIX_FAILED=$((FIX_FAILED + 1))
+    return 1
+  fi
+  printf '    %-8s specclaw-set-phase … %s\n' "FIX" "$*"
+  if out="$("$SET_PHASE" "$SPECCLAW_DIR" "$CHANGE" "$@" 2>&1)"; then
+    FIX_APPLIED=$((FIX_APPLIED + 1))
+    return 0
+  fi
+  printf '    %-8s %s\n' "FAILED" "${out%%$'\n'*}"
+  FIX_FAILED=$((FIX_FAILED + 1))
+  return 1
+}
+
+# ─── Per-change audit ────────────────────────────────────────────────────────
+
+reconcile_one() {
+  local change_dir="$1"
+  CHANGE="$(basename "$change_dir")"
+  EXAMINED=$((EXAMINED + 1))
+  DRIFTS=()
+  UNKNOWNS=()
+
+  local state_file="${change_dir}/state.json"
+  local rec_phase="" rec_branch="" rec_pr_url="" rec_pr_status="" rec_verdict=""
+  local rec_done="" rec_total="" rec_failed=""
+  local unreadable=0 unmanaged=0
+
+  if [ ! -f "$state_file" ]; then
+    unmanaged=1
+  elif [ -r "$state_file" ] && state_parses "$state_file"; then
+    rec_phase="$(state_str "$state_file" phase)"
+    rec_branch="$(state_str "$state_file" branch)"
+    rec_pr_url="$(state_str "$state_file" phases.pr.url)"
+    rec_pr_status="$(state_str "$state_file" phases.pr.status)"
+    rec_verdict="$(state_str "$state_file" phases.verify.verdict)"
+    rec_done="$(state_str "$state_file" phases.build.tasks.done)"
+    rec_total="$(state_str "$state_file" phases.build.tasks.total)"
+    rec_failed="$(state_str "$state_file" phases.build.tasks.failed)"
+  else
+    unreadable=1
+  fi
+
+  obs_tasks "$change_dir"
+  obs_verify "$change_dir"
+  obs_pr "$rec_branch"
+  obs_git "$rec_branch"
+
+  # Observed phase: the highest rank reality supports. Artefacts on disk carry
+  # the early phases; the later ones need an actual observation.
+  local obs_phase=""
+  [ -f "${change_dir}/proposal.md" ] && obs_phase="proposal"
+  [ -f "${change_dir}/spec.md" ] && obs_phase="spec"
+  [ -f "${change_dir}/design.md" ] && obs_phase="design"
+  [ "$T_PRESENT" -eq 1 ] && obs_phase="tasks"
+  [ "$T_PRESENT" -eq 1 ] && [ "$T_DONE" -gt 0 ] && obs_phase="build"
+  [ "$V_PRESENT" -eq 1 ] && obs_phase="verify"
+  case "$PR_OBS" in open | merged | closed) obs_phase="pr" ;; esac
+
+  # Rank -1 means "nothing recorded / nothing observed", which is below every
+  # real phase — so an unrecorded or unrecognised phase constrains nothing and
+  # any observation counts as forward progress.
+  local rec_rank=-1 obs_rank=-1
+  if [ -n "$rec_phase" ]; then rec_rank="$(phase_rank "$rec_phase")" || rec_rank=-1; fi
+  if [ -n "$obs_phase" ]; then obs_rank="$(phase_rank "$obs_phase")" || obs_rank=-1; fi
+
+  # ── the report block ──
+  echo
+  echo "▸ ${CHANGE}"
+  if [ "$unmanaged" -eq 1 ]; then
+    row "state" "unmanaged — no state.json (renders via checkbox inference, FR7)"
+  elif [ "$unreadable" -eq 1 ]; then
+    row "state" "unreadable — state.json exists but does not parse"
+  else
+    row "state" "phase=${rec_phase:-<none>}  branch=${rec_branch:-<none>}"
+  fi
+
+  if [ "$T_PRESENT" -eq 1 ]; then
+    row "tasks" "${T_DONE}/${T_TOTAL} done, ${T_FAILED} failed"
+  else
+    row "tasks" "none — no tasks.md"
+  fi
+  if [ "$V_PRESENT" -eq 1 ]; then
+    row "verify" "verify-report.md present${V_VERDICT:+, verdict ${V_VERDICT}}"
+  else
+    row "verify" "none — no verify-report.md"
+  fi
+  case "$PR_OBS" in
+    unknown) row "pr" "unknown — ${PR_REASON}" ;;
+    none) row "pr" "none — gh finds no PR on '${rec_branch}'" ;;
+    *) row "pr" "#${PR_NUM} ${PR_OBS}${PR_URL:+ (${PR_URL})}" ;;
+  esac
+  case "$G_OBS" in
+    unknown) row "git" "unknown — ${G_REASON}" ;;
+    present) row "git" "branch '${rec_branch}' exists" ;;
+    missing) row "git" "branch '${rec_branch}' not found locally or on origin" ;;
+  esac
+  row "observed" "${obs_phase:-<nothing observable>}"
+
+  # An unmanaged change is the FR7 fallback case, not an error and not drift:
+  # there is no record for reality to contradict. Reported, then left alone —
+  # `--fix` inventing a state.json here would change how STATUS.md renders it
+  # (AC6) as a side effect of an audit.
+  if [ "$unmanaged" -eq 1 ]; then
+    UNMANAGED=$((UNMANAGED + 1))
+    row "result" "no drift (unmanaged)"
+    return 0
+  fi
+
+  # ── findings ──
+  local d_tasks=0 d_verify=0 d_pr=0 d_git=0
+
+  if [ "$unreadable" -eq 1 ]; then
+    drift "state" "state.json does not parse; nothing recorded can be trusted"
+  fi
+
+  if [ "$obs_rank" -gt "$rec_rank" ]; then
+    drift "phase" "state.json says '${rec_phase:-<none>}'; observation supports '${obs_phase}'"
+  fi
+
+  # Task counts only mean something once a build record exists to disagree with.
+  if [ "$T_PRESENT" -eq 1 ] && [ -n "$rec_total" ]; then
+    if [ "$rec_done" != "$T_DONE" ] || [ "$rec_total" != "$T_TOTAL" ] || [ "$rec_failed" != "$T_FAILED" ]; then
+      d_tasks=1
+      drift "tasks" "state.json records ${rec_done}/${rec_total} (${rec_failed} failed); tasks.md shows ${T_DONE}/${T_TOTAL} (${T_FAILED} failed)"
+    fi
+  fi
+
+  if [ "$V_PRESENT" -eq 1 ] && [ -n "$V_VERDICT" ] && [ -n "$rec_verdict" ] && [ "$V_VERDICT" != "$rec_verdict" ]; then
+    d_verify=1
+    drift "verify" "state.json records verdict '${rec_verdict}'; verify-report.md says '${V_VERDICT}'"
+  fi
+
+  case "$PR_OBS" in
+    unknown)
+      unknown "pr" "$PR_REASON"
+      ;;
+    none)
+      if [ -n "$rec_pr_url" ] || [ "$rec_phase" = "pr" ]; then
+        d_pr=1
+        drift "pr" "state.json records a PR (${rec_pr_url:-no url}); gh finds none on '${rec_branch}'"
+      fi
+      ;;
+    *)
+      if [ -z "$rec_pr_url" ]; then
+        d_pr=1
+        drift "pr" "PR #${PR_NUM} is ${PR_OBS} on '${rec_branch}'; state.json records no PR"
+      elif [ -n "$PR_URL" ] && [ "$rec_pr_url" != "$PR_URL" ]; then
+        d_pr=1
+        drift "pr" "state.json records ${rec_pr_url}; gh reports ${PR_URL}"
+      elif [ "$PR_OBS" = "merged" ] && [ "$rec_pr_status" != "merged" ]; then
+        d_pr=1
+        drift "pr" "PR #${PR_NUM} is merged; state.json still records it as '${rec_pr_status}'"
+      fi
+      ;;
+  esac
+
+  case "$G_OBS" in
+    unknown) [ -n "$rec_branch" ] && unknown "git" "$G_REASON" ;;
+    missing)
+      d_git=1
+      drift "git" "recorded branch '${rec_branch}' does not exist locally or on origin"
+      ;;
+  esac
+
+  local f
+  for f in "${DRIFTS[@]+"${DRIFTS[@]}"}"; do
+    printf '    %-8s %-7s %s\n' "DRIFT" "${f%%|*}" "${f#*|}"
+  done
+
+  local has_drift=0
+  [ "${#DRIFTS[@]}" -gt 0 ] && has_drift=1
+  [ "$has_drift" -eq 1 ] && DRIFTED=$((DRIFTED + 1))
+
+  if [ "$FIX" -eq 0 ]; then
+    if [ "$has_drift" -eq 0 ]; then
+      row "result" "no drift"
+    else
+      row "result" "${#DRIFTS[@]} finding(s) — rerun with --fix to adopt what was observed"
+    fi
+    return 0
+  fi
+
+  # ── --fix ──
+  # Never acts on an unknown, ever. Printed first so the skip is visible even
+  # when the fix below succeeds and scrolls the eye past it.
+  for f in "${UNKNOWNS[@]+"${UNKNOWNS[@]}"}"; do
+    printf '    %-8s %-7s %s\n' "SKIP" "${f%%|*}" \
+      "observation is 'unknown' (${f#*|}); --fix never acts on an unobserved dimension and never clears a recorded PR from one"
+  done
+
+  if [ "$has_drift" -eq 0 ]; then
+    row "result" "no drift; nothing to fix"
+    return 0
+  fi
+
+  # Step 1 — refresh the build record, but only while the recorded phase is
+  # still at or below build. Past it, rewriting the build row would be a
+  # backwards transition, and reconcile does not pass --force.
+  local bstatus="in-progress"
+  if [ "$T_FAILED" -gt 0 ]; then
+    bstatus="failed"
+  elif [ "$T_TOTAL" -gt 0 ] && [ "$T_DONE" -eq "$T_TOTAL" ]; then
+    bstatus="done"
+  fi
+
+  if [ "$d_tasks" -eq 1 ]; then
+    if [ "$rec_rank" -le "$BUILD_RANK" ]; then
+      run_set_phase build "$bstatus" --tasks "${T_DONE}/${T_TOTAL}/${T_FAILED}"
+    else
+      printf '    %-8s %-7s %s\n' "SKIP" "tasks" \
+        "recorded phase '${rec_phase}' is past build; refreshing the build record would be a backwards transition — run specclaw-set-phase --force deliberately"
+    fi
+  fi
+
+  # Step 2 — adopt the observed phase, if it is forward of the recorded one, or
+  # refresh the current one when it is the current phase's own detail that drifted.
+  local target="$rec_phase" advance=0
+  if [ "$obs_rank" -gt "$rec_rank" ]; then
+    target="$obs_phase"
+    advance=1
+  elif [ "$rec_phase" = "verify" ] && [ "$d_verify" -eq 1 ]; then
+    advance=1
+  elif [ "$rec_phase" = "pr" ] && [ "$d_pr" -eq 1 ]; then
+    case "$PR_OBS" in
+      open | merged | closed) advance=1 ;;
+      *)
+        printf '    %-8s %-7s %s\n' "SKIP" "pr" \
+          "gh finds no PR on '${rec_branch}'; clearing a recorded PR is a downgrade reconcile will not make automatically"
+        ;;
+    esac
+  fi
+
+  if [ "$advance" -eq 1 ]; then
+    case "$target" in
+      build)
+        # Already applied by step 1 unless the counts happened to agree.
+        if [ "$d_tasks" -eq 0 ]; then
+          run_set_phase build "$bstatus" --tasks "${T_DONE}/${T_TOTAL}/${T_FAILED}"
+        fi
+        ;;
+      verify)
+        local vstatus="done"
+        case "$V_VERDICT" in
+          PASS) vstatus="passed" ;;
+          FAIL) vstatus="failed" ;;
+          PARTIAL) vstatus="partial" ;;
+        esac
+        if [ -n "$V_VERDICT" ]; then
+          run_set_phase verify "$vstatus" --verdict "$V_VERDICT"
+        else
+          run_set_phase verify "$vstatus"
+        fi
+        ;;
+      pr)
+        local pstatus="raised"
+        [ "$PR_OBS" = "merged" ] && pstatus="merged"
+        [ "$PR_OBS" = "closed" ] && pstatus="closed"
+        if [ -n "$PR_URL" ]; then
+          run_set_phase pr "$pstatus" --url "$PR_URL"
+        else
+          run_set_phase pr "$pstatus"
+        fi
+        ;;
+      proposal | spec | design | tasks)
+        run_set_phase "$target" done
+        ;;
+      *)
+        printf '    %-8s %-7s %s\n' "SKIP" "phase" "no fix defined for target phase '${target}'"
+        ;;
+    esac
+  fi
+
+  if [ "$d_git" -eq 1 ]; then
+    printf '    %-8s %-7s %s\n' "SKIP" "git" \
+      "reconcile does not create, rename, or re-record branches; fix with specclaw-set-phase --branch"
+  fi
+
+  # Nothing may drift *and* pass in silence: a --fix run that found drift and
+  # applied nothing has to say so, or the operator reads the zero exit as "clean".
+  if [ "$advance" -eq 0 ] && [ "$d_tasks" -eq 0 ]; then
+    row "result" "${#DRIFTS[@]} finding(s) found, none applied — see the SKIP lines above"
+  fi
+  return 0
+}
+
+# ─── Drive ───────────────────────────────────────────────────────────────────
+
+echo "specclaw-reconcile: ${SPECCLAW_DIR}${ONLY_CHANGE:+ (change: ${ONLY_CHANGE})}"
+if [ "$FIX" -eq 1 ]; then
+  echo "mode: --fix (adopting observed reality via specclaw-set-phase)"
+fi
+
+if [ -n "$ONLY_CHANGE" ]; then
+  [ "$ONLY_CHANGE" = "archive" ] && die "'archive' is not a change"
+  [ -d "${CHANGES_DIR}/${ONLY_CHANGE}" ] || die "no such change: ${ONLY_CHANGE}"
+  reconcile_one "${CHANGES_DIR}/${ONLY_CHANGE}"
+else
+  for d in "$CHANGES_DIR"/*/; do
+    [ -d "$d" ] || continue
+    # Edge case 7: archived changes are terminal. state.json travels with the
+    # directory but nothing under archive/ is worth auditing.
+    [ "$(basename "$d")" = "archive" ] && continue
+    reconcile_one "$d"
+  done
+fi
+
+echo
+echo "─────────────────────────────"
+if [ "$FIX" -eq 1 ]; then
+  echo "examined: ${EXAMINED}   unmanaged: ${UNMANAGED}   with drift: ${DRIFTED}   fixes applied: ${FIX_APPLIED}   failed: ${FIX_FAILED}"
+  [ "$FIX_FAILED" -eq 0 ] || exit 1
+  exit 0
+fi
+echo "examined: ${EXAMINED}   unmanaged: ${UNMANAGED}   with drift: ${DRIFTED}"
+[ "$DRIFTED" -eq 0 ] || exit 1
+exit 0

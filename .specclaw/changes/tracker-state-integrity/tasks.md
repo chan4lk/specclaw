@@ -74,7 +74,7 @@ wires CI.
 
 ### Wave 3 — Drift detection and CI
 
-- [ ] `T6` — Create `specclaw-reconcile` and cover it
+- [x] `T6` — Create `specclaw-reconcile` and cover it
   - Files: `plugins/specclaw/bin/specclaw-reconcile`, `plugins/specclaw/tests/run-phase-state-tests.sh`
   - Estimate: large
   - Kind: impl
