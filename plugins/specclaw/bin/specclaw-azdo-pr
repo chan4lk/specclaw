@@ -356,10 +356,21 @@ json_escape() {
 save_pr_url() {
   local url="$1"
   local status_file="$CHANGE_DIR/status.md"
-  if [[ -f "$status_file" ]]; then
-    echo "**ADO PR:** $url" >> "$status_file"
-  else
+  if [[ ! -f "$status_file" ]]; then
     printf '# Status: %s\n\n**ADO PR:** %s\n' "$CHANGE_NAME" "$url" > "$status_file"
+    return
+  fi
+
+  # Upsert the PR row in the Progress table so a change with an open PR stops
+  # rendering as "still building". Falls back to the plain field line when the
+  # helper is unavailable; the guard keeps a re-run from stacking duplicate
+  # `**ADO PR:**` lines, which the old unconditional append did every time.
+  local status_row_script="$SCRIPT_DIR/specclaw-status-row"
+  if [[ -x "$status_row_script" ]]; then
+    "$status_row_script" "$status_file" "PR" "✅ Raised" "$url" || \
+      warn "could not update the PR row in $status_file (PR itself is created)"
+  elif ! grep -qF "**ADO PR:** $url" "$status_file"; then
+    echo "**ADO PR:** $url" >> "$status_file"
   fi
 }
 
@@ -425,7 +436,10 @@ main() {
   [[ -n "$pr_id" ]] || die "Failed to parse PR ID from ADO response"
 
   local pr_url="https://dev.azure.com/${AZDO_ORG}/${AZDO_PROJECT}/_git/${AZDO_REPO}/pullrequest/${pr_id}"
-  save_pr_url "$pr_url"
+  # The PR exists on the remote from here on, so bookkeeping must warn rather
+  # than abort under `set -e` — an abort here freezes the trackers while still
+  # printing a PR URL, which reads as success.
+  save_pr_url "$pr_url" || warn "failed to record the PR URL in status.md — PR is live at $pr_url"
   echo "✅ ADO PR created: $pr_url"
 
   # Auto-link PR → Azure Boards Work Item (if azdo.boards.sync is enabled and a

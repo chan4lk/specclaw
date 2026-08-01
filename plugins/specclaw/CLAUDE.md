@@ -46,6 +46,7 @@ All executable scripts live in `bin/`. Key ones:
 | `specclaw-update-context` | Output LLM prompt to rewrite context.md post-merge |
 | `specclaw-run-long` | Run a long command detached: heartbeats to stderr, capped tail to stdout, full log + HEAD-stamped sidecar on disk; `--reuse` skips a re-run when HEAD matches and the tree is clean |
 | `specclaw-update-status` | Regenerate `.specclaw/STATUS.md` dashboard (resolves open/merged PR state per change) |
+| `specclaw-status-row` | Upsert one row of a change's `status.md` Progress table (awk — the table's pipes make `sed` unsafe) |
 | `specclaw-gh-sync` | GitHub Issues sync |
 | `specclaw-pr` | Create GitHub PR (enforces test policy, triggers context update) |
 | `specclaw-validate-change` | Check phase prerequisites |
@@ -61,6 +62,7 @@ Suites live in `tests/`, are bash + coreutils only (no jq in the suites themselv
 | `run-long-orchestration-tests.sh` | `run-long`, the e2e tier, `browser-lock wrap`, PR-aware status |
 | `run-synth-agent-tests.sh` | dynamically synthesized build subagents |
 | `run-shellcheck-gate-tests.sh` | the shellcheck gate itself |
+| `run-status-row-tests.sh` | `status-row` upserts, and the two sed defects it replaced |
 
 `shellcheck-gate.sh` fails CI on any shellcheck finding absent from `shellcheck-baseline.txt` (pairs of `<path> <SCxxxx>`, no line numbers, so unrelated edits do not churn it). Fix a new finding or add a targeted `# shellcheck disable=SCxxxx` with a rationale — never silence one by appending to the baseline. It skips with exit 0 when shellcheck is not installed, so the suite still runs locally.
 

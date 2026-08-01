@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+# specclaw-status-row — upsert one row of the Progress table in a change's status.md
+# Usage: specclaw-status-row <status_file> <label> <status_text> [note]
+#
+# The Progress table rows are pipe-delimited, which makes `sed` the wrong tool
+# twice over:
+#
+#   1. In a sed address, `\|` is a GNU BRE *alternation* operator, not a literal
+#      pipe. `/^\|[[:space:]]*Verify[[:space:]]*\|/a…` therefore reads as
+#      "^ OR [[:space:]]*Verify[[:space:]]* OR <empty>" — and the empty branch
+#      matches every line, appending the new row after all of them.
+#   2. `s|^\(| *PR *|\).*|…|` delimits the s command with `|` while the pattern
+#      itself contains literal pipes, which sed rejects outright:
+#      `sed: -e expression #1, char 14: unknown option to 's'`.
+#
+# So the row edit is done in awk with a bracket-expression match (`[|]`), where a
+# pipe is unambiguously literal. Behaviour:
+#
+#   - Row present  → replaced in place, keeping its position in the table.
+#   - Duplicated   → collapsed to a single row (self-heals files already
+#                    corrupted by the sed bug above).
+#   - Row absent   → inserted after the last row of the Progress table, or
+#                    appended as a standalone `**<label>:** <note>` line when the
+#                    file has no table at all.
+#
+# Idempotent: re-running with the same values leaves the file byte-identical.
+
+set -uo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: specclaw-status-row <status_file> <label> <status_text> [note]
+
+  status_file   path to a change's status.md
+  label         first column of the row, e.g. "PR", "Verify", "Build"
+  status_text   second column, e.g. "✅ Raised"
+  note          third column (optional, e.g. the PR URL)
+EOF
+}
+
+case "${1:-}" in
+  -h | --help | '')
+    usage
+    exit 0
+    ;;
+esac
+
+STATUS_FILE="$1"
+LABEL="${2:-}"
+STATUS_TEXT="${3:-}"
+NOTE="${4:-}"
+
+[ -n "$LABEL" ] || {
+  echo "specclaw-status-row: label is required" >&2
+  exit 2
+}
+[ -f "$STATUS_FILE" ] || {
+  echo "specclaw-status-row: no such file: $STATUS_FILE" >&2
+  exit 2
+}
+
+tmpfile="$(mktemp)" || exit 2
+trap 'rm -f "$tmpfile"' EXIT
+
+# Values travel through the environment rather than `-v`: awk expands escape
+# sequences in a `-v` assignment, so a note containing `\z` would silently lose
+# its backslash. ENVIRON is passed through verbatim.
+SR_LABEL="$LABEL" SR_STATUS="$STATUS_TEXT" SR_NOTE="$NOTE" awk '
+  BEGIN {
+    label = ENVIRON["SR_LABEL"]
+    status_text = ENVIRON["SR_STATUS"]
+    note = ENVIRON["SR_NOTE"]
+    row = "| " label " | " status_text " | " note " |"
+    written = 0
+    last_table_line = 0
+  }
+  # A Progress-table row for this label: `| <label> | … |`. `[|]` is a bracket
+  # expression, so the pipe is literal — the whole point of not using sed here.
+  {
+    is_target = ($0 ~ "^[[:space:]]*[|][[:space:]]*" label "[[:space:]]*[|]")
+    is_table_row = ($0 ~ "^[[:space:]]*[|]")
+  }
+  is_target {
+    # First occurrence becomes the canonical row; any further copies (left behind
+    # by the old sed) are dropped rather than re-emitted.
+    if (!written) { lines[++n] = row; written = 1; last_table_line = n }
+    next
+  }
+  {
+    lines[++n] = $0
+    if (is_table_row) last_table_line = n
+  }
+  END {
+    if (!written) {
+      if (last_table_line > 0) {
+        # Insert after the final table row, keeping the row inside the table.
+        for (i = 1; i <= n; i++) {
+          print lines[i]
+          if (i == last_table_line) print row
+        }
+      } else {
+        # No table in this file — fall back to a standalone field line.
+        for (i = 1; i <= n; i++) print lines[i]
+        print "**" label ":** " (note != "" ? note : status_text)
+      }
+    } else {
+      for (i = 1; i <= n; i++) print lines[i]
+    }
+  }
+' "$STATUS_FILE" >"$tmpfile" || {
+  echo "specclaw-status-row: awk failed; $STATUS_FILE left unchanged" >&2
+  exit 1
+}
+
+# Never truncate the file on a failed rewrite.
+[ -s "$tmpfile" ] || {
+  echo "specclaw-status-row: refusing to write empty result to $STATUS_FILE" >&2
+  exit 1
+}
+
+cat "$tmpfile" >"$STATUS_FILE"

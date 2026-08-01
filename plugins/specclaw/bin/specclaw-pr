@@ -462,14 +462,19 @@ EOF
     sed_i "s|^\*\*Status:\*\*.*|**Status:** pr-raised|" "$status_file"
   fi
 
-  # Update PR row in the progress table if present; add it after Verify row if absent
-  if grep -qE '^\|[[:space:]]*PR[[:space:]]*\|' "$status_file"; then
-    sed_i "s|^\(| *PR *|\).*|\1 ✅ Raised | $url |" "$status_file"
-  elif grep -qE '^\|[[:space:]]*Verify[[:space:]]*\|' "$status_file"; then
-    # Insert PR row after the Verify row
-    sed_i "/^\|[[:space:]]*Verify[[:space:]]*\|/a\| PR     | ✅ Raised | $url |" "$status_file"
-  else
-    # Neither table row nor Status field — just append PR line
+  # Upsert the PR row in the Progress table. Delegated to specclaw-status-row,
+  # which edits the row in awk: the table is pipe-delimited, and sed cannot be
+  # trusted with pipes here — `\|` in a BRE address is *alternation* (the old
+  # `/^\|…Verify…\|/a` matched every line and appended 33 PR rows to a stock
+  # status.md), and `s|…| *PR *|…|` collides with its own delimiter
+  # (`sed: unknown option to 's'`, which under `set -e` killed this script
+  # immediately after the PR was created — see the change log for the report).
+  local status_row_script="$SCRIPT_DIR/specclaw-status-row"
+  if [[ -x "$status_row_script" ]]; then
+    "$status_row_script" "$status_file" "PR" "✅ Raised" "$url" || \
+      warn "could not update the PR row in $status_file (PR itself is created)"
+  elif ! grep -qE '^\|[[:space:]]*PR[[:space:]]*\|' "$status_file"; then
+    # Helper missing (partial install) — never lose the URL.
     echo "**PR:** $url" >> "$status_file"
   fi
 
@@ -651,8 +656,11 @@ main() {
   local pr_url
   pr_url="$(gh pr create --base "$pr_base" --title "$title" --body "$body")"
 
-  # Step 7: Save URL
-  save_pr_url "$pr_url"
+  # Step 7: Save URL. The PR now exists on the remote, so everything from here on
+  # is bookkeeping — it must warn, never abort under `set -e`. Aborting here is
+  # what left trackers frozen at their pre-PR state while the PR URL was still
+  # printed, so the failure looked like a success.
+  save_pr_url "$pr_url" || warn "failed to record the PR URL in status.md — PR is live at $pr_url"
 
   # Step 8: Update project context (always-on; errors are non-blocking)
   local update_context_script="$SCRIPT_DIR/specclaw-update-context"
