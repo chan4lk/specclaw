@@ -14,6 +14,7 @@
 | Tasks | ✅ Done | 7 tasks / 3 waves |
 | Build | ⚪ Pending | |
 | Verify | ⚠️ Partial | PARTIAL |
+| PR | ✅ Raised | https://github.com/chan4lk/specclaw/pull/57 — PASS |
 
 ## Task Progress
 

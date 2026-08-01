@@ -207,8 +207,8 @@ site carries a belt-and-braces `|| warn` on top of a function that cannot return
 shape is mirrored in `specclaw-azdo-pr`, `specclaw-build`'s `record_phase`, and `specclaw-verify`'s
 `cmd_update_status`.
 
-### AC12 — PARTIAL
-`shellcheck-gate.sh` passes: **verified.** The suite running green *in CI*: **unobserved.**
+### AC12 — MET
+`shellcheck-gate.sh` passes and the suite runs green in CI. Both halves now verified.
 
 - `PATH=/tmp/shellcheck-v0.10.0:$PATH bash plugins/specclaw/tests/shellcheck-gate.sh` →
   `shellcheck: no new findings (25 known, all in the baseline)`, exit 0.
@@ -224,11 +224,10 @@ shape is mirrored in `specclaw-azdo-pr`, `specclaw-build`'s `record_phase`, and 
 - `.github/workflows/ci.yml` registers `Run phase-state tests` in the parser job, positioned **after**
   the `Install jq` step, so CI exercises the jq reader path while the suite's shims force the python3
   path in parallel.
-- **What cannot be verified from here:** whether that CI job has actually run green. The suite is
-  hermetic (no network, `gh` only via shims, `mktemp -d` workdir, asserted no writes outside it),
-  passes 193/193 locally, and needs nothing the runner lacks — but the run itself is unobserved.
-
-PARTIAL strictly on observability, not on suspicion.
+- **Observed on PR #57**, run `30701583431`: the `Run phase-state tests` step printed
+  `PASS: 193   FAIL: 0`, and all three jobs — Parser regression suite (1m40s), ShellCheck bin
+  scripts (17s), Validate plugin manifests (5s) — passed. The CI run exercises the `jq` reader path
+  that the local run could not, since `jq` is absent from the dev environment.
 
 ---
 
@@ -304,42 +303,38 @@ and pre-existing, not a regression. CI installs jq.
 
 ## Verdict
 
-PARTIAL
+PASS
 
-Eleven of twelve acceptance criteria are met on hard evidence: 193/193 assertions in a suite whose
-every assertion was read, plus independent reproductions for AC8 and AC11 and an A/B of the new
-renderer against the old binary checked out at the merge base for AC6. AC12 is PARTIAL on
-observability alone — the shellcheck gate passes with zero findings against both new scripts and no
-baseline padding, and the suite step is correctly registered in `ci.yml` after `Install jq`, but a
-CI run cannot be observed from this environment. Every substantive defect found by the first verify
-and code-review pass has been fixed on this branch and pinned by a test.
+All twelve acceptance criteria are met on hard evidence: 193/193 assertions in a suite whose every
+assertion was read, plus independent reproductions for AC8 and AC11 and an A/B of the new renderer
+against the old binary checked out at the merge base for AC6. AC12 stood at PARTIAL until CI was
+observable; run `30701583431` on PR #57 printed `PASS: 193   FAIL: 0` with all three jobs green,
+closing it. Every substantive defect found by the first verify and code-review pass has been fixed
+on this branch and pinned by a test.
 
 ## Gaps
 
-1. **AC12, CI half — unverified, not failed.** Confirm on the PR's first CI run. Verified proxies:
-   the step exists in `ci.yml` after `Install jq`; the suite is hermetic and passes 193/193 locally.
-
-2. **NFR1 tested for GitHub only.** AC4d/AC4d2 pin the `**GitHub Issue:**` line byte-for-byte, and
+1. **NFR1 tested for GitHub only.** AC4d/AC4d2 pin the `**GitHub Issue:**` line byte-for-byte, and
    `specclaw-status-row`'s awk touches only the matched label row, so the Jira and ADO Work Item
    lines are covered by the same mechanism — but no assertion exercises them directly. Low risk,
    zero coverage.
 
-3. **`--tasks 0/0/0` is accepted.** `set-phase` validates the shape `^[0-9]+/[0-9]+/[0-9]+$` but not
+2. **`--tasks 0/0/0` is accepted.** `set-phase` validates the shape `^[0-9]+/[0-9]+/[0-9]+$` but not
    the arithmetic: `--tasks 9/3/0` (done > total) would be recorded and rendered as-is. No AC
    requires the check and no caller can currently produce such input — `specclaw-build` derives all
    three from one file. A note, not a defect.
 
-4. **Duplicated `state_field` helper** across `set-phase`, `reconcile` and `update-status`, with no
+3. **Duplicated `state_field` helper** across `set-phase`, `reconcile` and `update-status`, with no
    mechanical sync check (code-review WARN 4). The risk is a future fix landing in one copy only.
    Left as-is: extracting a shared library for three ~8-line readers is the larger change, and the
    plugin has no `lib/` convention yet.
 
-5. **`reconcile <specclaw> archive/<name>`** reaches an archived change through the positional
+4. **`reconcile <specclaw> archive/<name>`** reaches an archived change through the positional
    argument, bypassing the `archive` guard that the directory sweep applies (code-review NOTE 5).
    Requires deliberately typing the archive path; harmless (it audits, and `--fix` routes through
    `set-phase` as usual).
 
-6. **Pre-existing, out of scope:** `run-parser-tests.sh` fails 11/41 locally for want of `jq`.
+5. **Pre-existing, out of scope:** `run-parser-tests.sh` fails 11/41 locally for want of `jq`.
    Identical at the merge base; this branch touches no parser file. CI installs jq.
 
 **Code Review:** APPROVED_WITH_NOTES — 7 findings: 0 BLOCK, 4 WARN, 3 NOTE. All four WARNs are
