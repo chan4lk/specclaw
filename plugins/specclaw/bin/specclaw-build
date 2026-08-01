@@ -145,6 +145,25 @@ json_bool() {
   esac
 }
 
+# Record a phase transition through specclaw-set-phase — the only writer of
+# phase state (state.json plus the matching status.md row). Fail-soft: by the
+# time we call this the build has already created a branch or run a test suite,
+# so a bookkeeping failure warns loudly and continues rather than aborting the
+# whole run under `set -e`. A refused backwards transition (exit 3) is the
+# common case: re-running setup on a change that already reached pr.
+# Usage: record_phase <specclaw_dir> <change_name> <phase> <status> [options...]
+record_phase() {
+  local setter="$SCRIPT_DIR/specclaw-set-phase" rc=0
+  [[ -x "$setter" ]] || setter="$(command -v specclaw-set-phase 2>/dev/null || true)"
+  if [[ -z "$setter" || ! -x "$setter" ]]; then
+    warn "specclaw-set-phase not found — phase not recorded"
+    return 0
+  fi
+  "$setter" "$@" >/dev/null || rc=$?
+  [[ $rc -eq 0 ]] || warn "specclaw-set-phase exited ${rc} — phase not recorded (continuing)"
+  return 0
+}
+
 # ─── setup ────────────────────────────────────────────────────────────────────
 
 cmd_setup() {
@@ -239,6 +258,21 @@ cmd_setup() {
       fi
     fi
   fi
+
+  # Record the *actual* branch, not the ${branch_prefix}${change_name} guess
+  # renderers used to recompute (FR4). The guess is wrong whenever branch naming
+  # diverges from git.branch_prefix — under `direct` it names a branch that was
+  # never created, and a repo whose convention differs from the config silently
+  # loses its PR lookup. Ask git where we actually are; fall back to the
+  # computed name only when git cannot say (detached HEAD).
+  local actual_branch=""
+  if [[ "$git_strategy" == "worktree-per-change" ]]; then
+    actual_branch="$branch_name"
+  else
+    actual_branch="$(git branch --show-current 2>/dev/null || true)"
+  fi
+  actual_branch="${actual_branch:-$branch_name}"
+  record_phase "$specclaw_dir" "$change_name" build in-progress --branch "$actual_branch"
 
   # Output JSON
   cat <<ENDJSON
@@ -436,6 +470,25 @@ cmd_finalize() {
       errors+=("Not on expected feature branch; skipping merge")
     fi
   fi
+
+  # Record build completion with the task counts (FR5). Counts come from the
+  # tasks.md markers — the same greps specclaw-update-status uses — so the Build
+  # row stops depending on a model remembering to edit prose.
+  local tasks_file="$specclaw_dir/changes/$change_name/tasks.md"
+  local t_total=0 t_done=0 t_failed=0
+  if [[ -f "$tasks_file" ]]; then
+    t_total=$(grep -c '^\- \[' "$tasks_file" 2>/dev/null || true)
+    t_done=$(grep -c '^\- \[x\]' "$tasks_file" 2>/dev/null || true)
+    t_failed=$(grep -c '^\- \[!\]' "$tasks_file" 2>/dev/null || true)
+    t_total=${t_total:-0}
+    t_done=${t_done:-0}
+    t_failed=${t_failed:-0}
+  fi
+  local build_status="done"
+  if ! $tests_passed || ! $lint_passed || ! $build_passed || [[ "$t_failed" -gt 0 ]]; then
+    build_status="failed"
+  fi
+  record_phase "$specclaw_dir" "$change_name" build "$build_status" --tasks "${t_done}/${t_total}/${t_failed}"
 
   # Build errors JSON array
   local errors_json="[]"

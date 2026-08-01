@@ -10,8 +10,9 @@ Archive a completed change.
 
 1. **Validate:** `specclaw-validate-change .specclaw <change> archive`. If it fails, report and stop.
 2. Verify the change is complete (all tasks done, verification passed, PR merged).
-3. Move to `.specclaw/changes/archive/YYYY-MM-DD-<change>/`.
-4. Update the dashboard: `specclaw-update-status .specclaw`.
-5. **GitHub sync** (if enabled): `specclaw-gh-sync close .specclaw <change>` to close the issue.
-6. **Azure Boards sync** (if `azdo.boards.sync: true`): `specclaw-azdo-issue close .specclaw <change>` to post a closing comment and add a `closed-by-specclaw` tag. (Does not transition Work Item state — humans drive state in ADO.)
-7. Optionally create a git tag for the release.
+3. Record the phase: `specclaw-set-phase .specclaw <change> archived done`. `specclaw-set-phase` is the only writer of phase state — it records `state.json` and upserts the Archived row in `status.md`. Never hand-edit those rows. Run it **before** the move, so the recorded state travels with the directory.
+4. Move to `.specclaw/changes/archive/YYYY-MM-DD-<change>/`.
+5. Update the dashboard: `specclaw-update-status .specclaw`.
+6. **GitHub sync** (if enabled): `specclaw-gh-sync close .specclaw <change>` to close the issue.
+7. **Azure Boards sync** (if `azdo.boards.sync: true`): `specclaw-azdo-issue close .specclaw <change>` to post a closing comment and add a `closed-by-specclaw` tag. (Does not transition Work Item state — humans drive state in ADO.)
+8. Optionally create a git tag for the release.
