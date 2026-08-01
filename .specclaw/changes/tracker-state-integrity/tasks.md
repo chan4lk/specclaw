@@ -28,7 +28,7 @@ wires CI.
     (mirror `specclaw-verify:541-557`). Unknown phase name → usage error listing valid phases.
     Reads via a `state_field` helper: `jq` when present, `python3 -c` fallback, empty on any error.
 
-- [ ] `T2` — Regression suite for `specclaw-set-phase`
+- [x] `T2` — Regression suite for `specclaw-set-phase`
   - Files: `plugins/specclaw/tests/run-phase-state-tests.sh`
   - Estimate: medium
   - Kind: test
