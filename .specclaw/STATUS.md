@@ -1,7 +1,7 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** specclaw
-**Last Updated:** 2026-07-25 09:30 UTC
+**Last Updated:** 2026-08-01 05:38 UTC
 
 ## Active Changes
 
@@ -10,7 +10,10 @@
 
 ## Pending Proposals
 
-_None._
+
+- 📋 **phase-time-accounting** — proposal ready, awaiting planning
+- 📋 **staged-files-auditor** — proposal ready, awaiting planning
+- 📋 **tracker-state-integrity** — proposal ready, awaiting planning
 
 ## Recently Completed
 
