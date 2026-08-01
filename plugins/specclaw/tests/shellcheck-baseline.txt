@@ -33,7 +33,5 @@ plugins/specclaw/bin/specclaw-pr SC2034
 plugins/specclaw/bin/specclaw-pr SC2295
 plugins/specclaw/bin/specclaw-validate-change SC2168
 plugins/specclaw/bin/specclaw-validate-change SC2295
-plugins/specclaw/bin/specclaw-verify SC2034
-plugins/specclaw/bin/specclaw-verify SC2155
 plugins/specclaw/bin/specclaw-verify-context SC2016
 plugins/specclaw/bin/specclaw-verify-context SC2034

@@ -25,6 +25,8 @@ jobs:
         run: bash plugins/specclaw/tests/run-shellcheck-gate-tests.sh
       - name: Run status-row tests
         run: bash plugins/specclaw/tests/run-status-row-tests.sh
+      - name: Run phase-state tests
+        run: bash plugins/specclaw/tests/run-phase-state-tests.sh
 
   shellcheck:
     name: ShellCheck bin scripts

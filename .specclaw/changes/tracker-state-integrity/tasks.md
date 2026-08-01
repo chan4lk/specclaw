@@ -84,7 +84,7 @@ wires CI.
     adopts reality. A `gh` failure is `unknown` — never `no PR` — and `--fix` skips unknowns and
     says so. Extend the T2 suite rather than adding a second file.
 
-- [ ] `T7` — Register the suite in CI and document the writer
+- [x] `T7` — Register the suite in CI and document the writer
   - Files: `.github/workflows/ci.yml`, `plugins/specclaw/tests/shellcheck-baseline.txt`, `plugins/specclaw/CLAUDE.md`, `plugins/specclaw/.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`
   - Estimate: small
   - Kind: config

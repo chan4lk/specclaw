@@ -42,8 +42,12 @@ shellcheck -f gcc plugins/specclaw/bin/specclaw-* 2>/dev/null |
 
 grep -vE '^[[:space:]]*(#|$)' "$baseline" | LC_ALL=C sort -u > "$expected"
 
-new_findings="$(comm -13 "$expected" "$current")"
-fixed_findings="$(comm -23 "$expected" "$current")"
+# comm must read in the same collation the files were sorted in. Without
+# LC_ALL=C here it applies the ambient locale, where `specclaw-verify SC2034`
+# and `specclaw-verify-context SC2016` order differently than under C — and a
+# mis-collated comm reports the same pair as both fixed and new.
+new_findings="$(LC_ALL=C comm -13 "$expected" "$current")"
+fixed_findings="$(LC_ALL=C comm -23 "$expected" "$current")"
 
 if [[ -n "$fixed_findings" ]]; then
   echo "These baseline entries no longer occur — prune them from shellcheck-baseline.txt:"

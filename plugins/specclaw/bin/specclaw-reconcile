@@ -565,7 +565,8 @@ reconcile_one() {
         fi
         ;;
       proposal | spec | design | tasks)
-        run_set_phase "$target" done
+        # 'done' quoted: bare, bash parses it as the loop keyword (SC1010).
+        run_set_phase "$target" "done"
         ;;
       *)
         printf '    %-8s %-7s %s\n' "SKIP" "phase" "no fix defined for target phase '${target}'"

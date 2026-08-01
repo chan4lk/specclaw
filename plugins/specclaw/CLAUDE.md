@@ -45,11 +45,41 @@ All executable scripts live in `bin/`. Key ones:
 | `specclaw-loop` | Autonomous loop controller: `init` / `gates` / `decide` / `guard-tests` / `log-turn` / `escalate` / `ci-poll` / `done` |
 | `specclaw-update-context` | Output LLM prompt to rewrite context.md post-merge |
 | `specclaw-run-long` | Run a long command detached: heartbeats to stderr, capped tail to stdout, full log + HEAD-stamped sidecar on disk; `--reuse` skips a re-run when HEAD matches and the tree is clean |
-| `specclaw-update-status` | Regenerate `.specclaw/STATUS.md` dashboard (resolves open/merged PR state per change) |
+| `specclaw-set-phase` | **The only phase writer** — see below |
+| `specclaw-reconcile` | Detect (and `--fix`) drift between `state.json` and observed reality |
+| `specclaw-update-status` | Regenerate `.specclaw/STATUS.md` dashboard (renders the recorded phase; resolves PR state on the recorded branch) |
 | `specclaw-status-row` | Upsert one row of a change's `status.md` Progress table (awk — the table's pipes make `sed` unsafe) |
 | `specclaw-gh-sync` | GitHub Issues sync |
 | `specclaw-pr` | Create GitHub PR (enforces test policy, triggers context update) |
 | `specclaw-validate-change` | Check phase prerequisites |
+
+## Phase state: `specclaw-set-phase` is the only writer
+
+Each change's phase lives in `changes/<change>/state.json`. **Nothing else may write it** — not a
+script, not a skill, not the model editing `status.md` prose. Every phase transition goes through:
+
+```
+specclaw-set-phase .specclaw <change> <phase> <status> [--note S] [--url U] [--verdict V] \
+                   [--branch B] [--tasks done/total/failed] [--force]
+```
+
+Phases rank `proposal spec design tasks build verify pr archived`. A transition to a lower rank is
+refused unless `--force`; equal rank is allowed (re-running verify, updating a PR URL). The write is
+atomic (temp file → parse check → `mv`), and the human-readable `status.md` row is delegated to
+`specclaw-status-row` so the two can never disagree.
+
+**Why it matters:** before this, build, verify, both PR scripts, and three SKILL.md files each
+rewrote `status.md` their own way, and `STATUS.md` re-derived the phase by counting checkboxes. Any
+one of them could disagree with the others, and regularly did.
+
+`specclaw-update-status` renders the recorded phase and resolves PR state on the **recorded** branch
+rather than guessing `${branch_prefix}${change}`. A change with no `state.json` still falls through
+to checkbox inference with a warning, so pre-existing changes keep working untouched.
+
+`specclaw-reconcile .specclaw [<change>] [--fix]` audits `state.json` against `tasks.md` markers,
+`verify-report.md`, and `gh pr view` on the recorded branch. It exits non-zero on drift. A `gh`
+failure is `unknown`, never `no PR` — `--fix` skips unknowns and downgrades and reports how many
+findings it declined, so exit 0 can never be misread as clean.
 
 ## Tests
 
@@ -63,6 +93,7 @@ Suites live in `tests/`, are bash + coreutils only (no jq in the suites themselv
 | `run-synth-agent-tests.sh` | dynamically synthesized build subagents |
 | `run-shellcheck-gate-tests.sh` | the shellcheck gate itself |
 | `run-status-row-tests.sh` | `status-row` upserts, and the two sed defects it replaced |
+| `run-phase-state-tests.sh` | `set-phase` transitions and `reconcile` drift detection |
 
 `shellcheck-gate.sh` fails CI on any shellcheck finding absent from `shellcheck-baseline.txt` (pairs of `<path> <SCxxxx>`, no line numbers, so unrelated edits do not churn it). Fix a new finding or add a targeted `# shellcheck disable=SCxxxx` with a rationale — never silence one by appending to the baseline. It skips with exit 0 when shellcheck is not installed, so the suite still runs locally.
 
