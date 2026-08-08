@@ -10,7 +10,11 @@ Create a new proposal for a change.
 
 **If the user hasn't yet provided enough detail to draft the proposal (e.g. they just said "i have a proposal" with no specifics), ask once for the essentials inside this skill — what's the idea, what problem does it solve — then proceed to the steps below. Do not wait for a separate turn to invoke this skill.**
 
-1. Slugify the user's idea into a `<change-name>` (lowercase, hyphens, no spaces).
+1. Name the change `<NNN>-<slug>` — e.g. `001-init-repo`:
+   - **Backfill offer — do this first, because a backfill changes the next number.** Run `specclaw-renumber-changes .specclaw` with no `--apply`: it is dry-run by default and renames nothing. If it prints a plan, unnumbered folders exist — show the user the full `old → new` list and ask **once** whether to apply it. On a yes, re-run with `--apply`; on a no, proceed with creating the new numbered change alone. No "already asked" flag is needed: the offer is conditioned on unnumbered folders existing, so it self-clears the moment a backfill runs.
+   - Run `specclaw-next-change-number .specclaw` for `<NNN>`, and slugify the user's idea (lowercase, hyphens, no spaces) for `<slug>`. Join them with a hyphen. Never format the number by hand — `specclaw-next-change-number` owns that rule and is the only place it lives.
+
+   From here on `<change-name>` means the full numbered name, prefix included.
 2. Create `.specclaw/changes/<change-name>/`.
 3. Generate `proposal.md` from `$CLAUDE_PLUGIN_ROOT/templates/proposal.md`. Fill in: problem statement, proposed solution, scope (in / out), impact (files, complexity, risk), open questions.
    - Also generate `.specclaw/changes/<change-name>/status.md` from `$CLAUDE_PLUGIN_ROOT/templates/status.md`. Fill in: `{{title}}` and `{{change_name}}`, `{{date}}` / `{{updated}}` with today's date, and the phase rows — set Proposal status to `🟡 Draft` and the remaining phases (Spec, Design, Tasks, Build, Verify) to pending. Leave task/agent/issue sections empty for now.

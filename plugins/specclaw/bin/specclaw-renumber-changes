@@ -1,0 +1,467 @@
+#!/usr/bin/env bash
+# specclaw-renumber-changes — backfill ordinal prefixes onto existing changes.
+# Usage: specclaw-renumber-changes <specclaw_dir> [--apply] [--force]
+#
+# Change folders carry a permanent three-digit ordinal — `changes/001-init-repo/`
+# — assigned at propose time by `specclaw-next-change-number`. A repo that
+# predates that rule has none, so this script assigns them once, in creation
+# order, across both `changes/` and `changes/archive/`.
+#
+# It is the one genuinely destructive script in this change, so it runs in three
+# strict phases: **plan → validate → execute**. Nothing touches the filesystem
+# until every check has passed. That ordering is the whole safety story: the
+# failure mode is "stopped early", never "clobbered halfway". A partial rename is
+# the only outcome that would leave a repo worse than it started, and FR13's
+# pre-flight collision check plus FR11's refusal on a re-run are what keep it out
+# of reach.
+#
+# Six choices worth explaining:
+#
+#   1. Dry run is the default (FR9). `--apply` is required to move anything, so
+#      upgrading specclaw renames nothing in a user's repo until they ask.
+#
+#   2. The sort date falls through four sources — `**Created:**` in proposal.md,
+#      the folder's first-commit date, a leading `YYYY-MM-DD-` on the name, then
+#      "sorts last". A folder with no proposal at all (this repo has one) must
+#      still be ordered, never abort the run (AC9, edge case 6). Ties break by
+#      folder name so repeated runs are byte-identical (AC10).
+#
+#   3. The `YYYY-MM-DD-` archive prefix is *stripped* when the new name is
+#      formed. Keeping it would yield `014-2026-07-22-build-engine` and preserve
+#      the misleading prefix this whole change exists to remove — that date was
+#      the bulk-archival date, not the change's, and 24 folders here share one.
+#
+#   4. Such a folder is UNNUMBERED per FR5a: its leading digit run is a *year*,
+#      not an ordinal. The classifier below matches `specclaw-next-change-number`
+#      exactly, because getting it wrong makes the FR11 refusal fire on all 26 of
+#      this repo's legacy archives — i.e. the tool would refuse on the one repo
+#      it exists to migrate (edge case 7).
+#
+#   5. An *active* folder's `state.json` is refreshed by re-invoking
+#      `specclaw-set-phase`, never by editing the file.
+#      `plugins/specclaw/CLAUDE.md`: *"Nothing else may write it — not a script,
+#      not a skill, not the model editing status.md prose."* A `sed` here would
+#      make this the seventh writer of phase state, which is the exact
+#      duplication two prior changes were spent removing. Equal-rank transitions
+#      are explicitly allowed by set-phase, so no `--force` is needed, and it
+#      preserves the `at` timestamp of an unchanged record. Archived folders are
+#      renamed but never refreshed (FR15b) — see the plan loop for why.
+#
+#   6. No digit run read off disk ever enters arithmetic: the FR5a test is a
+#      string match and the ordinal counter starts at 0 in this process. That is
+#      deliberate — `$((08))` is a bash *syntax error*, not a zero, so a folder
+#      named `008-foo` would abort an unguarded script. The one place a number is
+#      evaluated (`$((10#$n))`, in the numbered-folder report) forces base ten.
+
+# `-e` is on: unlike `set-phase`, whose reads are all fail-open, every failure
+# here that is not explicitly tolerated should stop the run before or during a
+# destructive move. Reads that are *meant* to degrade to "unknown" carry their
+# own `|| true`.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# A folder with no resolvable date sorts last (FR10 precedence 4) rather than
+# first, so partially-created folders never displace dated ones.
+NO_DATE="9999-12-31"
+
+usage() {
+  cat <<'EOF'
+Usage: specclaw-renumber-changes <specclaw_dir> [--apply] [--force]
+
+  specclaw_dir  path to the .specclaw directory
+
+Assigns three-digit ordinal prefixes to change folders under changes/ and
+changes/archive/, ordered by creation date ascending. Prints the plan and
+exits without touching the filesystem unless --apply is given.
+
+Options:
+  --apply       perform the renames (default is a dry run)
+  --force       renumber even when folders are already numbered, restarting
+                the sequence at 001 in date order
+  -h, --help    show this message
+EOF
+}
+
+die() {
+  echo "specclaw-renumber-changes: $*" >&2
+  exit 2
+}
+warn() { echo "specclaw-renumber-changes: WARN: $*" >&2; }
+
+# ─── Argument parsing ────────────────────────────────────────────────────────
+
+case "${1:-}" in
+  -h | --help | '')
+    usage
+    exit 0
+    ;;
+esac
+
+SPECCLAW_DIR="$1"
+shift
+
+APPLY=0
+FORCE=0
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --apply) APPLY=1; shift ;;
+    --force) FORCE=1; shift ;;
+    -h | --help) usage; exit 0 ;;
+    *) die "unknown option: $1
+
+$(usage)" ;;
+  esac
+done
+
+[ -d "$SPECCLAW_DIR" ] || die "no such specclaw dir: ${SPECCLAW_DIR}"
+# Absolute, so git pathspecs and `set-phase` calls do not depend on the caller's
+# working directory.
+SPECCLAW_DIR="$(cd "$SPECCLAW_DIR" && pwd)"
+
+CHANGES_DIR="${SPECCLAW_DIR}/changes"
+ARCHIVE_DIR="${CHANGES_DIR}/archive"
+
+# ─── Git context ─────────────────────────────────────────────────────────────
+
+# Empty when the specclaw dir is not inside a working tree (edge case 11): the
+# renames then use plain `mv` (FR14) and the mid-build check (FR12) has nothing
+# to inspect, which is correct — there are no worktrees or branches to conflict.
+GIT_ROOT="$(git -C "$SPECCLAW_DIR" rev-parse --show-toplevel 2>/dev/null || true)"
+
+# ─── Shared helpers ──────────────────────────────────────────────────────────
+
+# is_numbered <name> — the FR5a rule, identical to specclaw-next-change-number.
+# `^[0-9]+-` and NOT the full `YYYY-MM-DD` shape. The exclusion is deliberately
+# narrow: a genuine ordinal such as `2026-some-slug` still counts as numbered
+# (AC6b), so excluding every four-digit run would be wrong.
+is_numbered() {
+  local name="$1"
+  [[ "$name" =~ ^[0-9]+- ]] || return 1
+  if [[ "$name" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2} ]]; then
+    return 1
+  fi
+  return 0
+}
+
+# state_field <file> <dotted.path> — the read path, copied from
+# `specclaw-set-phase` so the two agree on what a field contains. jq when
+# installed, else python3; both are CI dependencies, neither is required. Any
+# failure — no file, bad JSON, absent key — prints nothing and exits 0, so a
+# broken state file degrades to "no recorded state" instead of an error.
+state_field() {
+  local file="$1" path="$2"
+  [ -f "$file" ] || return 0
+  if command -v jq >/dev/null 2>&1; then
+    jq -rc ".${path} // empty" "$file" 2>/dev/null || true
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import json, sys
+try:
+    v = json.load(open(sys.argv[1]))
+    for k in sys.argv[2].split("."):
+        v = v[k]
+except Exception:
+    sys.exit(0)
+if v is None:
+    sys.exit(0)
+sys.stdout.write(v if isinstance(v, str) else json.dumps(v, separators=(",", ":"), ensure_ascii=False))
+' "$file" "$path" 2>/dev/null || true
+  fi
+}
+
+# ─── Phase 1: plan (FR10) ────────────────────────────────────────────────────
+
+# created_date <dir> — precedence 1. Anchored at line start and required to be
+# followed by a date, because proposal *prose* in this repo quotes the string
+# "**Created:**" mid-document; an unanchored grep would read that sentence as the
+# folder's date.
+created_date() {
+  local file="$1/proposal.md" line
+  [ -f "$file" ] || return 0
+  line="$(grep -m1 -E '^[[:space:]]*\*\*Created:\*\*[[:space:]]*[0-9]{4}-[0-9]{2}-[0-9]{2}' "$file" 2>/dev/null || true)"
+  [ -n "$line" ] || return 0
+  if [[ "$line" =~ ([0-9]{4}-[0-9]{2}-[0-9]{2}) ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
+  fi
+}
+
+# git_added_date <dir> — precedence 2, the date the folder first appeared in
+# history. `--reverse` streams oldest-first and `head -1` closes the pipe, so the
+# whole pipeline is wrapped in `|| true`: SIGPIPE (141) here is expected, not a
+# failure. An untracked folder yields nothing and falls through.
+git_added_date() {
+  local dir="$1"
+  [ -n "$GIT_ROOT" ] || return 0
+  git -C "$SPECCLAW_DIR" log --diff-filter=A --format=%ad --date=short --reverse -- "$dir" 2>/dev/null | head -n 1 || true
+}
+
+# prefix_date <name> — precedence 3, the legacy archive prefix. Last resort, and
+# only for folders with no proposal at all.
+prefix_date() {
+  local name="$1"
+  if [[ "$name" =~ ^([0-9]{4}-[0-9]{2}-[0-9]{2})- ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
+  fi
+}
+
+resolve_date() {
+  local dir="$1" name="$2" d
+  d="$(created_date "$dir")"
+  [ -n "$d" ] || d="$(git_added_date "$dir")"
+  [ -n "$d" ] || d="$(prefix_date "$name")"
+  [ -n "$d" ] || d="$NO_DATE"
+  printf '%s' "$d"
+}
+
+# slug_of <name> — the new name's tail. Any leading ordinal (under --force) or
+# legacy `YYYY-MM-DD-` prefix is dropped, so renumbering is idempotent and the
+# archive date does not survive into the new name (edge case 7). Without the
+# ordinal strip, `--force` would turn `001-foo` into `002-001-foo`.
+slug_of() {
+  local name="$1"
+  if is_numbered "$name"; then
+    printf '%s' "${name#*-}"
+  elif [[ "$name" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}-(.+)$ ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
+  else
+    printf '%s' "$name"
+  fi
+}
+
+# collect <parent> <rel> — emit one `<date>\t<name>\t<rel>` row per change
+# folder. A missing or empty parent is a non-event: `changes/archive/` does not
+# exist in a fresh project (edge case 2), and an empty `changes/` leaves the glob
+# unexpanded as a literal that `[ -d ]` rejects (edge case 1).
+collect() {
+  local parent="$1" rel="$2" d name date
+  for d in "$parent"/*/; do
+    [ -d "$d" ] || continue
+    name="${d%/}"
+    name="${name##*/}"
+    # `archive` is the reserved container, never a change. Equality, so that
+    # `archive-cleanup` stays an ordinary change (edge case 5).
+    [ "$name" = "archive" ] && continue
+    date="$(resolve_date "${d%/}" "$name")"
+    printf '%s\t%s\t%s\n' "$date" "$name" "$rel"
+  done
+}
+
+# Tab-delimited and sorted under LC_ALL=C: the collation must not vary with the
+# ambient locale or two runs on the same repo could disagree (AC10). `-k1,1`
+# then `-k2,2` is date-then-name, the FR10 tie-break.
+ENTRIES="$( { collect "$CHANGES_DIR" ""; collect "$ARCHIVE_DIR" "archive"; } | LC_ALL=C sort -t $'\t' -k1,1 -k2,2 )"
+
+PLAN_OLD=()      # absolute source path
+PLAN_NEW=()      # absolute target path
+PLAN_LABEL_OLD=() # display path, relative to the specclaw dir
+PLAN_LABEL_NEW=()
+PLAN_CHANGE=()   # set-phase's `<change>` argument; empty for archived (FR15b)
+PLAN_NAME_OLD=()
+NUMBERED=()
+
+COUNTER=0
+while IFS=$'\t' read -r date name rel; do
+  [ -n "$name" ] || continue
+  COUNTER=$((COUNTER + 1))
+  if is_numbered "$name"; then
+    NUMBERED+=("$name")
+  fi
+  new_name="$(printf '%03d' "$COUNTER")-$(slug_of "$name")"
+  if [ -n "$rel" ]; then
+    parent_dir="${CHANGES_DIR}/${rel}"
+    label_parent="changes/${rel}"
+    # Deliberately empty: an archived folder is renamed, but its state.json is
+    # left exactly as the archive skill wrote it (FR15b). set-phase resolves
+    # `<specclaw_dir>/changes/<change>`, so reaching an archived folder means
+    # passing `archive/<name>` — and that is then what lands in the record:
+    # `"change": "archive/001-foo"`, a *path* rather than the change's identity,
+    # disagreeing with the bare name the archive skill writes moments before the
+    # move. Nor is there anything to gain by it: archived state is terminal and
+    # read by nothing, as specclaw-update-status says at its own archive loop —
+    # "archived rows are terminal, so it is deliberately not read here — nothing
+    # under archive/ can affect this listing, malformed or not." A refresh here
+    # would buy nothing and write a wrong-looking value, so there is none.
+    change_arg=""
+  else
+    parent_dir="$CHANGES_DIR"
+    label_parent="changes"
+    change_arg="$new_name"
+  fi
+  PLAN_OLD+=("${parent_dir}/${name}")
+  PLAN_NEW+=("${parent_dir}/${new_name}")
+  PLAN_LABEL_OLD+=("${label_parent}/${name}")
+  PLAN_LABEL_NEW+=("${label_parent}/${new_name}")
+  PLAN_CHANGE+=("$change_arg")
+  PLAN_NAME_OLD+=("$name")
+done <<<"$ENTRIES"
+
+if [ "${#PLAN_OLD[@]}" -eq 0 ]; then
+  echo "No change folders found under ${CHANGES_DIR} — nothing to renumber."
+  exit 0
+fi
+
+# ─── Phase 2: validate — every refusal before the first move ─────────────────
+
+# FR11. Note what this does *not* fire on: the 26 `2026-07-22-*` archives in this
+# repo are unnumbered per FR5a, so a first backfill runs clean.
+if [ "${#NUMBERED[@]}" -gt 0 ] && [ "$FORCE" -eq 0 ]; then
+  {
+    echo "specclaw-renumber-changes: refusing to run: ${#NUMBERED[@]} change folder(s) are already numbered:"
+    for n in "${NUMBERED[@]}"; do
+      # The only arithmetic on a disk-derived digit run in this script, and it
+      # forces base ten: `$((08))` is a syntax error, not a zero.
+      [[ "$n" =~ ^([0-9]+)- ]] && echo "  ${n} (number $((10#${BASH_REMATCH[1]})))"
+    done
+    echo
+    echo "Renumbering them would reassign numbers that are already referenced in commit"
+    echo "messages and branch names. Pass --force to renumber every folder from 001 in"
+    echo "date order."
+  } >&2
+  exit 3
+fi
+
+# FR12. A live worktree or the checked-out branch still points at the old path,
+# so a rename underneath an in-flight build corrupts it (edge case 12). Both
+# haystacks are searched for the folder name as a literal substring — quoted
+# inside the case pattern, so a name full of glob metacharacters cannot widen
+# the match (edge case 9).
+if [ -n "$GIT_ROOT" ]; then
+  WORKTREES="$(git -C "$SPECCLAW_DIR" worktree list 2>/dev/null || true)"
+  CUR_BRANCH="$(git -C "$SPECCLAW_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  BUSY=()
+  # Branch first: `git worktree list` also reports the *main* worktree with its
+  # branch in brackets, so a name matched there is usually the checked-out branch
+  # and deserves the more precise message.
+  for name in "${PLAN_NAME_OLD[@]}"; do
+    case "$CUR_BRANCH" in *"$name"*) BUSY+=("$name (checked-out branch ${CUR_BRANCH})"); continue ;; esac
+    case "$WORKTREES" in *"$name"*) BUSY+=("$name (live git worktree)") ;; esac
+  done
+  if [ "${#BUSY[@]}" -gt 0 ]; then
+    {
+      echo "specclaw-renumber-changes: refusing to run: ${#BUSY[@]} change(s) look mid-build:"
+      for b in "${BUSY[@]}"; do echo "  ${b}"; done
+      echo
+      echo "A live worktree or checked-out branch still references the old folder path."
+      echo "Finish or remove those first, then re-run."
+    } >&2
+    exit 4
+  fi
+fi
+
+# FR13. A target that already exists would be clobbered or nested into by `mv`,
+# so the run stops before the first rename (AC12). A folder already sitting at
+# its planned name is a no-op, not a collision — that is what makes a re-run
+# after an interrupted `--apply` converge instead of refusing (edge case 8).
+COLLISIONS=()
+for i in "${!PLAN_OLD[@]}"; do
+  [ "${PLAN_OLD[$i]}" = "${PLAN_NEW[$i]}" ] && continue
+  if [ -e "${PLAN_NEW[$i]}" ]; then
+    COLLISIONS+=("${PLAN_LABEL_OLD[$i]} → ${PLAN_LABEL_NEW[$i]} (target exists)")
+  fi
+done
+if [ "${#COLLISIONS[@]}" -gt 0 ]; then
+  {
+    echo "specclaw-renumber-changes: aborting before any rename: ${#COLLISIONS[@]} planned target(s) already exist:"
+    for c in "${COLLISIONS[@]}"; do echo "  ${c}"; done
+    echo
+    echo "Nothing has been moved. Resolve the conflicting paths and re-run."
+  } >&2
+  exit 5
+fi
+
+# ─── Phase 3: execute (FR9, FR14, FR15) ──────────────────────────────────────
+
+RENAMES=0
+for i in "${!PLAN_OLD[@]}"; do
+  [ "${PLAN_OLD[$i]}" = "${PLAN_NEW[$i]}" ] || RENAMES=$((RENAMES + 1))
+done
+
+if [ "$APPLY" -eq 0 ]; then
+  for i in "${!PLAN_OLD[@]}"; do
+    if [ "${PLAN_OLD[$i]}" = "${PLAN_NEW[$i]}" ]; then
+      printf '%s → %s (unchanged)\n' "${PLAN_LABEL_OLD[$i]}" "${PLAN_LABEL_NEW[$i]}"
+    else
+      printf '%s → %s\n' "${PLAN_LABEL_OLD[$i]}" "${PLAN_LABEL_NEW[$i]}"
+    fi
+  done
+  echo
+  echo "Dry run: ${#PLAN_OLD[@]} change folder(s) planned, ${RENAMES} rename(s). Nothing was modified."
+  echo "Re-run with --apply to perform them."
+  exit 0
+fi
+
+# set-phase is looked up beside this script first, then on PATH — the same
+# resolution set-phase itself uses for specclaw-status-row.
+SET_PHASE="${SCRIPT_DIR}/specclaw-set-phase"
+[ -x "$SET_PHASE" ] || SET_PHASE="$(command -v specclaw-set-phase 2>/dev/null || true)"
+
+# refresh_state <new_dir> <change_arg> — FR15, active folders only. The recorded
+# `change` field is stale after a rename. Re-invoke the sanctioned writer at the
+# change's *current* phase and status rather than editing state.json; an
+# equal-rank transition is allowed, so no `--force` is needed. A folder with no
+# state.json predates set-phase entirely: skip, never fail (edge case 10).
+#
+# The current phase's `verdict`, `url` and `tasks` are read back and passed
+# through. They are not decoration: set-phase rebuilds the record from its
+# arguments, so omitting them *deletes* them — a rename would silently drop the
+# PASS verdict off a verified change and stamp a fresh `at` on it. Round-tripping
+# them makes the rebuilt record byte-identical to the old one, which is exactly
+# the condition under which set-phase preserves the original timestamp. AC13
+# requires the record to be otherwise unchanged, and this is what earns it.
+refresh_state() {
+  local new_dir="$1" change_arg="$2" state phase status verdict url t_done t_total t_failed
+  local args=()
+  state="${new_dir}/state.json"
+  [ -f "$state" ] || return 0
+  if [ -z "$SET_PHASE" ]; then
+    warn "specclaw-set-phase not found; ${change_arg} renamed but state.json still names the old folder"
+    return 0
+  fi
+  phase="$(state_field "$state" phase)"
+  [ -n "$phase" ] || { warn "no recorded phase in ${state}; skipping the change-field refresh"; return 0; }
+  status="$(state_field "$state" "phases.${phase}.status")"
+  [ -n "$status" ] || status="unknown"
+  verdict="$(state_field "$state" "phases.${phase}.verdict")"
+  url="$(state_field "$state" "phases.${phase}.url")"
+  t_done="$(state_field "$state" "phases.${phase}.tasks.done")"
+  t_total="$(state_field "$state" "phases.${phase}.tasks.total")"
+  t_failed="$(state_field "$state" "phases.${phase}.tasks.failed")"
+  [ -n "$verdict" ] && args+=(--verdict "$verdict")
+  [ -n "$url" ] && args+=(--url "$url")
+  if [ -n "$t_done" ] && [ -n "$t_total" ] && [ -n "$t_failed" ]; then
+    args+=(--tasks "${t_done}/${t_total}/${t_failed}")
+  fi
+  # `${args[@]+...}` rather than a bare `"${args[@]}"`: an empty array under
+  # `set -u` is an unbound variable on bash before 4.4.
+  "$SET_PHASE" "$SPECCLAW_DIR" "$change_arg" "$phase" "$status" ${args[@]+"${args[@]}"} >/dev/null ||
+    warn "could not refresh state.json for ${change_arg} (the rename succeeded)"
+}
+
+for i in "${!PLAN_OLD[@]}"; do
+  old="${PLAN_OLD[$i]}"
+  new="${PLAN_NEW[$i]}"
+  if [ "$old" = "$new" ]; then
+    continue
+  fi
+  if [ -n "$GIT_ROOT" ]; then
+    # An untracked folder has nothing for `git mv` to rewrite in the index, so it
+    # fails there and succeeds under plain `mv` (FR14). Falling back keeps a
+    # half-committed repo working instead of aborting on it.
+    if ! git -C "$SPECCLAW_DIR" mv -- "$old" "$new" 2>/dev/null; then
+      warn "git mv failed for ${PLAN_LABEL_OLD[$i]}; falling back to mv"
+      mv -- "$old" "$new" || die "failed to rename ${PLAN_LABEL_OLD[$i]} → ${PLAN_LABEL_NEW[$i]}"
+    fi
+  else
+    mv -- "$old" "$new" || die "failed to rename ${PLAN_LABEL_OLD[$i]} → ${PLAN_LABEL_NEW[$i]}"
+  fi
+  printf '%s → %s\n' "${PLAN_LABEL_OLD[$i]}" "${PLAN_LABEL_NEW[$i]}"
+  # Empty only for archived folders, which are renamed but never refreshed — the
+  # plan loop carries the reasoning (FR15b). Spelled as an `if` rather than a
+  # `&&` chain because a false `&&` at the tail of a loop body trips `set -e`.
+  if [ -n "${PLAN_CHANGE[$i]}" ]; then
+    refresh_state "$new" "${PLAN_CHANGE[$i]}"
+  fi
+done
+
+echo
+echo "Renumbered ${RENAMES} of ${#PLAN_OLD[@]} change folder(s)."

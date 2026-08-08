@@ -26,14 +26,14 @@ Two new `bin/` scripts, a numeric sort threaded into two existing ones, skill wi
 
 ### Wave 2 — Backfill and wiring
 
-- [ ] `T3` — `specclaw-renumber-changes`
+- [x] `T3` — `specclaw-renumber-changes`
   - Files: `plugins/specclaw/bin/specclaw-renumber-changes` (create)
   - Estimate: large
   - Kind: migration
   - Depends: T1
   - Notes: Three phases, strictly ordered — plan, validate, execute — with every refusal before the first rename, so a failure stops early rather than clobbering halfway. Plan: resolve each folder's date from `**Created:**` in `proposal.md`, else git first-commit date, else a leading `YYYY-MM-DD-` on the name, else sort last; tie-break by name for determinism. Strip any leading `YYYY-MM-DD-` when forming the new slug, or the backfill preserves the misleading prefix this change exists to remove. Validate: refuse if any folder is already numbered (unless `--force`), if any change is mid-build per `git worktree list` / current branch, or if any planned target already exists. Execute only under `--apply`: `git mv` in a working tree, `mv` outside one. After each rename, if `state.json` exists, refresh its `change` field by re-invoking `specclaw-set-phase <dir> <new-name> <current-phase> <current-status>` — read phase and status back from the file first. **Never edit `state.json` directly**; `set-phase` is the only sanctioned writer, equal-rank transitions are allowed so no `--force` is needed, and it preserves `at` timestamps. Satisfies FR8–FR15.
 
-- [ ] `T4` — Skill wiring
+- [x] `T4` — Skill wiring
   - Files: `plugins/specclaw/skills/propose/SKILL.md`, `plugins/specclaw/skills/archive/SKILL.md`, `plugins/specclaw/skills/status/SKILL.md`, `plugins/specclaw/skills/renumber/SKILL.md` (create)
   - Estimate: medium
   - Kind: docs
