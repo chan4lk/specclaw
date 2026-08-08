@@ -45,18 +45,18 @@ In any project:
   Initializes .specclaw/ in the current project.
 
 > /specclaw:propose "add dark mode support"
-  Drafts .specclaw/changes/add-dark-mode/proposal.md.
+  Drafts .specclaw/changes/001-add-dark-mode/proposal.md.
 
-> /specclaw:plan add-dark-mode
+> /specclaw:plan 001-add-dark-mode
   Generates spec.md, design.md, tasks.md.
 
-> /specclaw:build add-dark-mode
+> /specclaw:build 001-add-dark-mode
   Executes tasks wave-by-wave, committing each.
 
-> /specclaw:verify add-dark-mode
+> /specclaw:verify 001-add-dark-mode
   Validates implementation against the spec.
 
-> /specclaw:pr add-dark-mode
+> /specclaw:pr 001-add-dark-mode
   Opens the PR.
 ```
 
@@ -106,7 +106,7 @@ When initialized in a project, SpecClaw creates:
 ├── STATUS.md            # Cross-change dashboard
 ├── patterns.md          # Recurring pattern registry
 └── changes/
-    └── <change-name>/
+    └── <NNN>-<change-name>/
         ├── proposal.md      # Problem + solution + scope
         ├── spec.md          # Requirements + acceptance criteria
         ├── design.md        # Technical approach + file map

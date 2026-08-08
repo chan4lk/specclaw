@@ -49,6 +49,8 @@ All executable scripts live in `bin/`. Key ones:
 | `specclaw-reconcile` | Detect (and `--fix`) drift between `state.json` and observed reality |
 | `specclaw-update-status` | Regenerate `.specclaw/STATUS.md` dashboard (renders the recorded phase; resolves PR state on the recorded branch) |
 | `specclaw-status-row` | Upsert one row of a change's `status.md` Progress table (awk — the table's pipes make `sed` unsafe) |
+| `specclaw-next-change-number` | Print the next change number (`001`), derived from disk on every call — see below |
+| `specclaw-renumber-changes` | Backfill ordinals onto unnumbered change folders (dry run unless `--apply`) |
 | `specclaw-gh-sync` | GitHub Issues sync |
 | `specclaw-pr` | Create GitHub PR (enforces test policy, triggers context update) |
 | `specclaw-validate-change` | Check phase prerequisites |
@@ -81,6 +83,40 @@ to checkbox inference with a warning, so pre-existing changes keep working untou
 failure is `unknown`, never `no PR` — `--fix` skips unknowns and downgrades and reports how many
 findings it declined, so exit 0 can never be misread as clean.
 
+## Change numbering: the directory name *is* the number
+
+Change folders are `NNN-<slug>` — `001-init-repo` — assigned once by
+`specclaw-next-change-number` at propose time and carried through archival unchanged, so
+`ls changes/` reads chronologically rather than alphabetically.
+
+**Three digits, not two.** At this repo's rate two digits exhaust inside a year, and the overflow
+fails *silently*: `100-foo` sorts before `99-foo` lexically, breaking the exact ordering the
+numbering exists to provide. One extra character removes the failure mode outright.
+
+**Derived, never stored.** The number is the maximum found on disk plus one, recomputed on every
+call. There is deliberately no counter file — a counter is a second copy of a fact the directory
+name already holds, and a second copy is a thing that drifts. Gaps are therefore permanent: deleting
+`002` retires that number rather than reissuing it, so a number in a branch name or a commit message
+always means the same change.
+
+**What counts as numbered.** A folder qualifies only if its name matches `^[0-9]+-` and **not**
+`^[0-9]{4}-[0-9]{2}-[0-9]{2}`. The second clause excludes the legacy `YYYY-MM-DD-` archive prefix,
+whose leading digit run is a *year*, not an ordinal. Without it, this repo's 26 archived folders put
+the maximum at 2026 and the next proposal would have been `2027-<slug>` — poisoning the sequence
+permanently. The exclusion is narrow by design, firing only on the full date shape, so a genuine
+ordinal like `2026-some-slug` still counts.
+
+**Backfill is opt-in.** Upgrading specclaw renames nothing. `specclaw-renumber-changes` is a dry run
+by default and needs `--apply` to move anything; `--force` renumbers from `001` when folders are
+already numbered, which is also the documented recovery from an interrupted run. Mixed numbered and
+unnumbered folders is a supported steady state, not an error — a repo that never backfills keeps
+working indefinitely.
+
+**Archived folders keep their number and gain no date prefix.** The old `YYYY-MM-DD-` prefix was the
+*archive* date, not the change's, and a single bulk run here stamped 24 folders with one identical
+date — ordering by it was actively misleading. The archive date lives in `state.json`, where it is
+accurate.
+
 ## Tests
 
 Suites live in `tests/`, are bash + coreutils only (no jq in the suites themselves; `run-parser-tests.sh` shells out to it), and **every one must be registered in `.github/workflows/ci.yml`** — an unregistered suite silently never runs, which has happened twice.
@@ -95,6 +131,7 @@ Suites live in `tests/`, are bash + coreutils only (no jq in the suites themselv
 | `run-status-row-tests.sh` | `status-row` upserts, and the two sed defects it replaced |
 | `run-phase-state-tests.sh` | `set-phase` transitions and `reconcile` drift detection |
 | `run-loop-gate-tests.sh` | `loop gates` report readers — BLOCK counting and verdict extraction |
+| `run-change-numbering-tests.sh` | `next-change-number` derivation, `renumber-changes` plan/refusals/backfill |
 
 `shellcheck-gate.sh` fails CI on any shellcheck finding absent from `shellcheck-baseline.txt` (pairs of `<path> <SCxxxx>`, no line numbers, so unrelated edits do not churn it). Fix a new finding or add a targeted `# shellcheck disable=SCxxxx` with a rationale — never silence one by appending to the baseline. It skips with exit 0 when shellcheck is not installed, so the suite still runs locally.
 

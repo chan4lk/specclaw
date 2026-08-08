@@ -42,14 +42,14 @@ Two new `bin/` scripts, a numeric sort threaded into two existing ones, skill wi
 
 ### Wave 3 — Verification and documentation
 
-- [ ] `T5` — Test suite plus CI registration
+- [x] `T5` — Test suite plus CI registration
   - Files: `plugins/specclaw/tests/run-change-numbering-tests.sh` (create), `.github/workflows/ci.yml`
   - Estimate: large
   - Kind: test
   - Depends: T1, T2, T3
   - Notes: Cover AC1–AC18. Priority cases: empty `changes/` → `001`; active+archive max with a gap → `008`; `008-a` present → `009` (the octal trap); `999-a` → `1000`; folders named `archive` and `archive-cleanup`; dry-run leaves the tree byte-identical; `--apply` orders by date not name; a proposal with no `Created:` line; two folders sharing a date ordering stably; already-numbered refusal and its `--force` override; target-collision abort; `state.json` `change` field updated with phase records otherwise intact and the file still parsing; `reconcile` reporting zero drift afterwards; `STATUS.md` ordering `002-b`, `010-a`, `unnumbered-c`. Bash and coreutils only — no `jq` in the suite itself. **Register the suite in `.github/workflows/ci.yml`** in the same commit; an unregistered suite silently never runs, which has happened twice in this repo. Confirm `bash plugins/specclaw/tests/shellcheck-gate.sh` exits 0 with `shellcheck-baseline.txt` unmodified.
 
-- [ ] `T6` — Docs and version bump
+- [x] `T6` — Docs and version bump
   - Files: `plugins/specclaw/CLAUDE.md`, `README.md`, `docs/index.md`, `plugins/specclaw/.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`
   - Estimate: small
   - Kind: docs

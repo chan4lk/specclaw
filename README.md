@@ -32,7 +32,7 @@ AI coding agents are powerful but lose context fast. SpecClaw gives every change
 - **`verify-report.md`** — evidence the implementation meets the spec
 - **GitHub / Azure DevOps / Jira sync** — keep external trackers up to date
 
-Each change lives in `.specclaw/changes/<name>/` in your repo. The plugin operates on your project's CWD; nothing is hidden inside the plugin install.
+Each change lives in `.specclaw/changes/<NNN>-<name>/` in your repo. The plugin operates on your project's CWD; nothing is hidden inside the plugin install.
 
 ## Installation
 
@@ -52,19 +52,19 @@ Future plugins by the same owner ship in the same `chan4lk` marketplace — you 
   Initializes .specclaw/ in the current project, generates config.yaml, creates the dashboard.
 
 > /specclaw:propose "add dark mode support"
-  Drafts .specclaw/changes/add-dark-mode/proposal.md for your review.
+  Drafts .specclaw/changes/001-add-dark-mode/proposal.md for your review.
 
-> /specclaw:plan add-dark-mode
+> /specclaw:plan 001-add-dark-mode
   Generates spec.md, design.md, tasks.md once the proposal is approved.
   Append --author-spec to author spec.md interactively via the spec-author subagent, with an approval gate before design.md / tasks.md.
 
-> /specclaw:build add-dark-mode
+> /specclaw:build 001-add-dark-mode
   Executes tasks wave-by-wave, committing each.
 
-> /specclaw:verify add-dark-mode
+> /specclaw:verify 001-add-dark-mode
   Runs tests/lint/build, evaluates against acceptance criteria, writes verify-report.md.
 
-> /specclaw:pr add-dark-mode
+> /specclaw:pr 001-add-dark-mode
   Opens a GitHub PR using the spec + verify report as the description.
 ```
 
@@ -78,7 +78,7 @@ When initialized in a project, SpecClaw creates:
 ├── STATUS.md            # Cross-change dashboard
 ├── patterns.md          # Recurring pattern registry (cross-change)
 └── changes/
-    └── <change-name>/
+    └── <NNN>-<change-name>/
         ├── proposal.md      # Problem + solution + scope
         ├── spec.md          # Requirements + acceptance criteria
         ├── design.md        # Technical approach + file map
