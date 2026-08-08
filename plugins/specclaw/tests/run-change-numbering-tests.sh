@@ -428,8 +428,12 @@ if [ -d "${REPO_ROOT}/.specclaw/changes" ]; then
   run "$NEXT_NUM" "${REPO_ROOT}/.specclaw"
   assert_eq "AC6a-4 the real .specclaw resolves cleanly" "0" "$RC"
   assert_ne "AC6a-5 and never yields 2027 (FR5a on 26 legacy archives)" "2027" "$OUT"
-  if [[ "$OUT" =~ ^0[0-9][0-9]$ ]]; then
-    pass "AC6a-6 the real answer is a three-digit ordinal (= '$OUT')"
+  # `{3,}` rather than exactly three digits: FR2 widens past 999 instead of
+  # truncating, so pinning the length to three would turn correct behaviour into
+  # a CI failure the moment this repo passes 99 numbered changes. The year-vs-
+  # ordinal invariant this case exists for is carried by AC6a-5 above.
+  if [[ "$OUT" =~ ^[0-9]{3,}$ ]]; then
+    pass "AC6a-6 the real answer is a zero-padded ordinal (= '$OUT')"
   else
     fail "AC6a-6 the real answer looks derived from a year, not an ordinal: '$OUT'"
   fi
@@ -699,17 +703,37 @@ run "$RENUMBER" "$S" --apply
 assert_eq "FR12g off that branch the same fixture applies cleanly" "0" "$RC"
 assert_dir "FR12h and the rename happened" "$S/changes/001-gamma-delta"
 
-# A live worktree for a change is the other half of FR12.
+# A live worktree for a change is the other half of FR12. specclaw creates them
+# at `.specclaw/worktrees/<change>`, so the path's last segment IS the change
+# name — that is what the refusal keys on.
 REPO12B="$WORK/gitwt"
 init_repo "$REPO12B"
 S="$REPO12B/.specclaw"
 mkdir -p "$S/changes"
 mkchange "$S" "sidebranch-work" "2026-01-01"
 commit_all "$REPO12B" "add sidebranch-work"
-git -C "$REPO12B" worktree add -q -b wt-topic "$WORK/wt-sidebranch-work" >/dev/null 2>&1
+git -C "$REPO12B" worktree add -q -b wt-topic "$WORK/worktrees/sidebranch-work" >/dev/null 2>&1
 run "$RENUMBER" "$S"
 assert_eq "FR12i a live worktree naming the change refuses" "4" "$RC"
 assert_contains "FR12j and says which" "sidebranch-work" "$ERR"
+
+# ...and the matching is on whole path segments, not a substring. A worktree at
+# `wt-sidebranch-work` merely *contains* the change name; it is not that
+# change's worktree, and refusing on it would block a backfill that was safe.
+# The same asymmetry applies to branches: `specclaw/foo-bar` does not name the
+# change `foo`. On a repo whose changes share name stems, a substring test
+# refuses on most of them.
+REPO12C="$WORK/gitwt-near"
+init_repo "$REPO12C"
+S="$REPO12C/.specclaw"
+mkdir -p "$S/changes"
+mkchange "$S" "sidebranch" "2026-01-01"
+commit_all "$REPO12C" "add sidebranch"
+git -C "$REPO12C" worktree add -q -b wt-topic "$WORK/worktrees/wt-sidebranch-work" >/dev/null 2>&1
+git -C "$REPO12C" checkout -q -b "specclaw/sidebranch-work"
+run "$RENUMBER" "$S"
+assert_eq "FR12k a near-miss worktree and branch do not refuse" "0" "$RC"
+assert_contains "FR12l and the plan is produced" "001-sidebranch" "$OUT"
 
 # ─── Edge 9: a name full of shell and regex metacharacters ───────────────────
 S="$(spec_dir meta)"

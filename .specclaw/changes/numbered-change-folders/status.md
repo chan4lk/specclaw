@@ -12,7 +12,7 @@
 | Spec | ⚪ Pending | |
 | Design | ⚪ Pending | |
 | Tasks | ✅ Done | 19 FRs, 20 ACs, 6 tasks, 3 waves |
-| Build | 🔨 In-progress |  |
+| Build | ✅ Done | 6/6 tasks |
 | Verify | ⚪ Pending | |
 
 ## Task Progress

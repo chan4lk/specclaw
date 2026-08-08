@@ -321,20 +321,41 @@ if [ "${#NUMBERED[@]}" -gt 0 ] && [ "$FORCE" -eq 0 ]; then
 fi
 
 # FR12. A live worktree or the checked-out branch still points at the old path,
-# so a rename underneath an in-flight build corrupts it (edge case 12). Both
-# haystacks are searched for the folder name as a literal substring — quoted
-# inside the case pattern, so a name full of glob metacharacters cannot widen
-# the match (edge case 9).
+# so a rename underneath an in-flight build corrupts it (edge case 12).
+#
+# The match is on whole path segments, not a substring. A substring test reads
+# `specclaw/foo-bar` as a reference to the change `foo` and refuses a backfill
+# that was perfectly safe — and on a repo whose changes share name stems that is
+# not a rare collision, it is most of them. So a candidate matches only when it
+# equals the folder name outright or ends in `/<name>`, which is what a branch
+# prefix (`specclaw/001-foo`) or a worktree path (`.specclaw/worktrees/001-foo`)
+# actually looks like. Comparison is `=` on whole strings throughout, so a name
+# full of glob metacharacters still cannot widen the match (edge case 9).
+names_change() {
+  # names_change <candidate> <change-name>
+  [ "$1" = "$2" ] || [ "${1##*/}" = "$2" ]
+}
 if [ -n "$GIT_ROOT" ]; then
-  WORKTREES="$(git -C "$SPECCLAW_DIR" worktree list 2>/dev/null || true)"
   CUR_BRANCH="$(git -C "$SPECCLAW_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  # `git worktree list` prints `<path> <sha> [<branch>]`; collect both the path
+  # and the bracketed branch per line, so either can identify the change.
+  WT_REFS="$(git -C "$SPECCLAW_DIR" worktree list 2>/dev/null |
+    sed -e 's/ *\[\(.*\)\]$/\n\1/' -e 's/ .*$//' | grep -v '^$' || true)"
   BUSY=()
   # Branch first: `git worktree list` also reports the *main* worktree with its
   # branch in brackets, so a name matched there is usually the checked-out branch
   # and deserves the more precise message.
   for name in "${PLAN_NAME_OLD[@]}"; do
-    case "$CUR_BRANCH" in *"$name"*) BUSY+=("$name (checked-out branch ${CUR_BRANCH})"); continue ;; esac
-    case "$WORKTREES" in *"$name"*) BUSY+=("$name (live git worktree)") ;; esac
+    if names_change "$CUR_BRANCH" "$name"; then
+      BUSY+=("$name (checked-out branch ${CUR_BRANCH})")
+      continue
+    fi
+    while IFS= read -r ref; do
+      if names_change "$ref" "$name"; then
+        BUSY+=("$name (live git worktree)")
+        break
+      fi
+    done <<< "$WT_REFS"
   done
   if [ "${#BUSY[@]}" -gt 0 ]; then
     {
@@ -431,6 +452,11 @@ refresh_state() {
   if [ -n "$t_done" ] && [ -n "$t_total" ] && [ -n "$t_failed" ]; then
     args+=(--tasks "${t_done}/${t_total}/${t_failed}")
   fi
+  # `--branch` is deliberately absent: `set-phase` falls back to the branch
+  # already recorded in the file when the flag is omitted, so the round trip is
+  # complete without it. Passing it would mean re-reading a value only to hand
+  # it straight back.
+  #
   # `${args[@]+...}` rather than a bare `"${args[@]}"`: an empty array under
   # `set -u` is an unbound variable on bash before 4.4.
   "$SET_PHASE" "$SPECCLAW_DIR" "$change_arg" "$phase" "$status" ${args[@]+"${args[@]}"} >/dev/null ||
