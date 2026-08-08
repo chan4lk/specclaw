@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# specclaw-next-change-number — print the next change number, zero-padded to 3.
+# Usage: specclaw-next-change-number <specclaw_dir>
+#
+# Change folders carry a permanent ordinal prefix — `changes/001-init-repo/` —
+# so `ls` reads chronologically instead of alphabetically. The number lives in
+# exactly one place, the directory name, and is re-derived from disk on every
+# call. There is deliberately no counter file: a counter is a second source of
+# truth that drifts from the filesystem the first time someone deletes a folder
+# by hand, and this repo has already spent two changes removing that class of
+# duplication.
+#
+# Four things carry the whole script:
+#
+#   1. Base ten is forced everywhere. `$((08))` is a bash *syntax error* — an
+#      invalid octal constant, not a zero — so a folder named `008-foo` would
+#      abort an unguarded script rather than mis-sort. Every numeric use goes
+#      through `10#`, and AC4 pins it with a real `008-a` fixture.
+#
+#   2. Both `changes/*/` and `changes/archive/*/` are scanned, and the maximum
+#      wins — not the count. Gaps are permanent: deleting `002` retires that
+#      number rather than handing it to the next change, so a number in a commit
+#      message or a branch name always means the same change forever.
+#
+#   3. Names that do not begin with `<digits>-` are skipped, never rejected —
+#      and neither is the legacy `YYYY-MM-DD-` archive prefix a number, for the
+#      reason spelled out at the exclusion below. Mixed numbered and unnumbered
+#      folders is a supported steady state (FR5, FR5a, NFR5): a repo that never
+#      runs the backfill must keep working indefinitely, so there is no input
+#      this script treats as an error.
+#
+#   4. `printf '%03d'` sets a *minimum* width, so 1000 widens to `1000` rather
+#      than truncating or wrapping (AC5). Lexical ordering only breaks at four
+#      digits, which is decades out at any plausible rate — documented here, not
+#      defended against.
+
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: specclaw-next-change-number <specclaw_dir>
+
+  specclaw_dir  path to the .specclaw directory
+
+Prints the next change number zero-padded to three digits (e.g. 007), derived
+from the highest leading integer across changes/ and changes/archive/.
+Prints 001 when no numbered folder exists anywhere.
+
+Options:
+  -h, --help    show this message
+EOF
+}
+
+die() {
+  echo "specclaw-next-change-number: $*" >&2
+  exit 2
+}
+
+# ─── Argument parsing ────────────────────────────────────────────────────────
+
+case "${1:-}" in
+  -h | --help | '')
+    usage
+    exit 0
+    ;;
+esac
+
+SPECCLAW_DIR="$1"
+shift
+[ "$#" -eq 0 ] || die "unexpected argument: $1
+
+$(usage)"
+
+[ -d "$SPECCLAW_DIR" ] || die "no such specclaw dir: ${SPECCLAW_DIR}"
+
+# ─── Scan ────────────────────────────────────────────────────────────────────
+
+MAX=0
+
+# scan_dir <parent> — fold every numbered child of <parent> into MAX.
+# A missing parent and an empty one are the same non-event: `changes/archive/`
+# does not exist in a fresh project, and an empty `changes/` leaves the glob
+# unexpanded as the literal string `…/changes/*/`, which `[ -d ]` rejects.
+scan_dir() {
+  local parent="$1" d name n
+  for d in "$parent"/*/; do
+    [ -d "$d" ] || continue
+    # Parameter expansion rather than `basename`: the glob appends a trailing
+    # slash, and this saves a fork per folder on a repo with hundreds of them.
+    name="${d%/}"
+    name="${name##*/}"
+    # `archive` is the reserved container, never a change. Compared for equality
+    # so `archive-cleanup` stays an ordinary (unnumbered) change.
+    [ "$name" = "archive" ] && continue
+    [[ "$name" =~ ^([0-9]+)- ]] || continue
+    # Captured before the next `=~`, which clobbers BASH_REMATCH on a failed
+    # match as surely as on a successful one.
+    n="${BASH_REMATCH[1]}"
+    # The legacy archive prefix `YYYY-MM-DD-` opens with a digit run that is a
+    # *year*, not an ordinal. Counted, this repo's 26 archived folders would put
+    # the maximum at 2026 and make the next proposal `2027-<slug>` — poisoning
+    # the sequence permanently, since the number is re-derived from that folder
+    # forever after (FR5a, edge case 7). The test is deliberately the full date
+    # shape and nothing broader: a genuine ordinal like `2026-some-slug` must
+    # still count (AC6b), so excluding every four-digit run would be wrong.
+    [[ "$name" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2} ]] && continue
+    # `10#` on both sides of the comparison, per note 1 above.
+    if [ "$((10#$n))" -gt "$MAX" ]; then
+      MAX="$((10#$n))"
+    fi
+  done
+}
+
+scan_dir "${SPECCLAW_DIR}/changes"
+scan_dir "${SPECCLAW_DIR}/changes/archive"
+
+printf '%03d\n' "$((MAX + 1))"

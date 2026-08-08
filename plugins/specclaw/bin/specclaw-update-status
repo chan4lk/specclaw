@@ -165,18 +165,67 @@ pr_state_for() {
   printf '%s' "$rendered"
 }
 
+# ─── Folder ordering (FR5a, FR16) ────────────────────────────────────────────
+# Glob order is lexical, so `010-a` is listed before `002-b`. Emit basenames in
+# numeric order by their leading `NNN-` prefix instead, and put unnumbered
+# folders *after* every numbered one rather than interleaving them at position
+# zero — mid-migration a reader expects legacy folders last, not first (AC17).
+#
+# FR5a — a leading digit run is an ordinal only when the name does NOT also
+# match `YYYY-MM-DD-`. The legacy archive prefix `2026-07-22-build-engine`
+# otherwise reads as change number 2026 and sorts ahead of every real ordinal;
+# this repo has 26 such folders, so getting it wrong reorders the whole archive.
+# The exclusion is deliberately narrow — the full date shape only — so a genuine
+# ordinal like `2026-some-slug` still counts as numbered.
+#
+# The prefix is only ever handed to `sort -n`, never to `$(( ))`: `$((08))` is a
+# bash syntax error, and a sort-based ordering sidesteps that trap entirely.
+#
+# This function is duplicated verbatim in specclaw-update-status and
+# specclaw-reconcile — keep the two byte-identical so a diff proves they agree.
+ordered_dir_names() {
+  local dir="$1" d name numbered="" unnumbered=""
+  for d in "$dir"/*/; do
+    [ -d "$d" ] || continue
+    name=$(basename "$d")
+    if [[ "$name" =~ ^[0-9]+- ]] && ! [[ "$name" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2} ]]; then
+      numbered="${numbered}${name}"$'\n'
+    else
+      unnumbered="${unnumbered}${name}"$'\n'
+    fi
+  done
+  # `-k2` after the numeric key so equal numbers order by name: same input,
+  # same listing, every run.
+  [ -n "$numbered" ] && printf '%s' "$numbered" | LC_ALL=C sort -t- -k1,1n -k2
+  [ -n "$unnumbered" ] && printf '%s' "$unnumbered" | LC_ALL=C sort
+  return 0
+}
+
 ACTIVE_COUNT=0
 COMPLETED_COUNT=0
+UNNUMBERED_COUNT=0
 ACTIVE_LINES=""
 PENDING_LINES=""
 COMPLETED_LINES=""
 
-# Scan active changes
-for change_dir in "$CHANGES_DIR"/*/; do
+# Scan active changes. The ordering is collected up front rather than piped in:
+# the loop body accumulates the counters and line buffers above, which a
+# subshell drops, and its `gh`/`az` calls keep an untouched stdin.
+ORDERED_CHANGES=()
+while IFS= read -r name; do ORDERED_CHANGES+=("$name"); done \
+  < <(ordered_dir_names "$CHANGES_DIR")
+for change_name in "${ORDERED_CHANGES[@]+"${ORDERED_CHANGES[@]}"}"; do
+  change_dir="$CHANGES_DIR/$change_name/"
   [ -d "$change_dir" ] || continue
   [ "$(basename "$change_dir")" = "archive" ] && continue
 
-  change_name=$(basename "$change_dir")
+  # FR17: an unnumbered folder is a supported steady state, so this is counted
+  # for a hint below, never treated as an error. Same FR5a test as
+  # ordered_dir_names above — a `2026-07-22-` legacy prefix is a date, not an
+  # ordinal, so such a folder is unnumbered and belongs in this count.
+  if ! [[ "$change_name" =~ ^[0-9]+- ]] || [[ "$change_name" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2} ]]; then
+    UNNUMBERED_COUNT=$((UNNUMBERED_COUNT + 1))
+  fi
 
   # FR7: a state file that exists but cannot be read is reported once and then
   # ignored — this loop must degrade, never abort (the script exits 0 either way).
@@ -245,9 +294,18 @@ done
 # (edge case 7); archived rows are terminal, so it is deliberately not read here
 # — nothing under archive/ can affect this listing, malformed or not.
 if [ -d "$ARCHIVE_DIR" ]; then
-  for arch_dir in "$ARCHIVE_DIR"/*/; do
-    [ -d "$arch_dir" ] || continue
-    arch_name=$(basename "$arch_dir")
+  ORDERED_ARCHIVED=()
+  while IFS= read -r name; do ORDERED_ARCHIVED+=("$name"); done \
+    < <(ordered_dir_names "$ARCHIVE_DIR")
+  for arch_name in "${ORDERED_ARCHIVED[@]+"${ORDERED_ARCHIVED[@]}"}"; do
+    [ -d "$ARCHIVE_DIR/$arch_name" ] || continue
+    # FR8 backfills archive/ too, so an unnumbered archived folder is part of
+    # what /specclaw:renumber would fix and belongs in the FR17 count. On this
+    # repo that is 26 `YYYY-MM-DD-` folders the FR5a rule correctly calls
+    # unnumbered; counting only active changes would under-report by that much.
+    if ! [[ "$arch_name" =~ ^[0-9]+- ]] || [[ "$arch_name" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2} ]]; then
+      UNNUMBERED_COUNT=$((UNNUMBERED_COUNT + 1))
+    fi
     COMPLETED_LINES="${COMPLETED_LINES}\n- ✅ **$arch_name**"
     COMPLETED_COUNT=$((COMPLETED_COUNT + 1))
   done
@@ -255,11 +313,23 @@ fi
 
 TOTAL=$((ACTIVE_COUNT + COMPLETED_COUNT))
 
+# FR17: one hint, only while there is something to hint about. Zero unnumbered
+# folders emits nothing at all — not a blank line, not a placeholder (AC18) —
+# and a backfill therefore clears it without any "already asked" flag.
+HINT_LINE=""
+HINT_TEXT=""
+if [ "$UNNUMBERED_COUNT" -gt 0 ]; then
+  noun="changes"
+  [ "$UNNUMBERED_COUNT" -eq 1 ] && noun="change"
+  HINT_TEXT="${UNNUMBERED_COUNT} unnumbered ${noun} · run \`/specclaw:renumber\` to order them"
+  HINT_LINE=$'\n\n'"_${HINT_TEXT}_"
+fi
+
 cat > "$STATUS_FILE" << EOF
 # 🦞 SpecClaw Dashboard
 
 **Project:** $PROJECT_NAME
-**Last Updated:** $(date -u +"%Y-%m-%d %H:%M UTC")
+**Last Updated:** $(date -u +"%Y-%m-%d %H:%M UTC")$HINT_LINE
 
 ## Active Changes
 
@@ -281,3 +351,7 @@ $([ -n "$COMPLETED_LINES" ] && echo -e "$COMPLETED_LINES" || echo "_None._")
 EOF
 
 echo "OK: Updated $STATUS_FILE"
+# The hint also goes to stdout so `/specclaw:status` surfaces it whether it
+# reads the file or the run's output. Silent when the count is zero (AC18).
+[ -n "$HINT_TEXT" ] && echo "$HINT_TEXT"
+exit 0

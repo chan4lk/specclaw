@@ -1,0 +1,10 @@
+{
+  "change": "numbered-change-folders",
+  "phase": "build",
+  "branch": "specclaw/numbered-change-folders",
+  "phases": {
+    "proposal": {"status":"approved","at":"2026-08-08T20:05:17Z"},
+    "tasks": {"status":"done","at":"2026-08-08T20:09:45Z"},
+    "build": {"status":"in-progress","at":"2026-08-08T20:10:34Z"}
+  }
+}

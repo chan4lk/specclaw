@@ -587,6 +587,42 @@ reconcile_one() {
   return 0
 }
 
+# ─── Folder ordering (FR5a, FR16) ────────────────────────────────────────────
+# Glob order is lexical, so `010-a` is listed before `002-b`. Emit basenames in
+# numeric order by their leading `NNN-` prefix instead, and put unnumbered
+# folders *after* every numbered one rather than interleaving them at position
+# zero — mid-migration a reader expects legacy folders last, not first (AC17).
+#
+# FR5a — a leading digit run is an ordinal only when the name does NOT also
+# match `YYYY-MM-DD-`. The legacy archive prefix `2026-07-22-build-engine`
+# otherwise reads as change number 2026 and sorts ahead of every real ordinal;
+# this repo has 26 such folders, so getting it wrong reorders the whole archive.
+# The exclusion is deliberately narrow — the full date shape only — so a genuine
+# ordinal like `2026-some-slug` still counts as numbered.
+#
+# The prefix is only ever handed to `sort -n`, never to `$(( ))`: `$((08))` is a
+# bash syntax error, and a sort-based ordering sidesteps that trap entirely.
+#
+# This function is duplicated verbatim in specclaw-update-status and
+# specclaw-reconcile — keep the two byte-identical so a diff proves they agree.
+ordered_dir_names() {
+  local dir="$1" d name numbered="" unnumbered=""
+  for d in "$dir"/*/; do
+    [ -d "$d" ] || continue
+    name=$(basename "$d")
+    if [[ "$name" =~ ^[0-9]+- ]] && ! [[ "$name" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2} ]]; then
+      numbered="${numbered}${name}"$'\n'
+    else
+      unnumbered="${unnumbered}${name}"$'\n'
+    fi
+  done
+  # `-k2` after the numeric key so equal numbers order by name: same input,
+  # same listing, every run.
+  [ -n "$numbered" ] && printf '%s' "$numbered" | LC_ALL=C sort -t- -k1,1n -k2
+  [ -n "$unnumbered" ] && printf '%s' "$unnumbered" | LC_ALL=C sort
+  return 0
+}
+
 # ─── Drive ───────────────────────────────────────────────────────────────────
 
 echo "specclaw-reconcile: ${SPECCLAW_DIR}${ONLY_CHANGE:+ (change: ${ONLY_CHANGE})}"
@@ -599,7 +635,14 @@ if [ -n "$ONLY_CHANGE" ]; then
   [ -d "${CHANGES_DIR}/${ONLY_CHANGE}" ] || die "no such change: ${ONLY_CHANGE}"
   reconcile_one "${CHANGES_DIR}/${ONLY_CHANGE}"
 else
-  for d in "$CHANGES_DIR"/*/; do
+  # Collected up front rather than piped: reconcile_one updates the EXAMINED /
+  # DRIFTED / FIX_* counters read by the summary below, which a subshell drops,
+  # and it leaves the loop body's stdin alone for the `gh` calls inside it.
+  ORDERED_NAMES=()
+  while IFS= read -r name; do ORDERED_NAMES+=("$name"); done \
+    < <(ordered_dir_names "$CHANGES_DIR")
+  for name in "${ORDERED_NAMES[@]+"${ORDERED_NAMES[@]}"}"; do
+    d="$CHANGES_DIR/$name/"
     [ -d "$d" ] || continue
     # Edge case 7: archived changes are terminal. state.json travels with the
     # directory but nothing under archive/ is worth auditing.
