@@ -1,11 +1,12 @@
 {
   "change": "numbered-change-folders",
-  "phase": "verify",
+  "phase": "pr",
   "branch": "specclaw/numbered-change-folders",
   "phases": {
     "proposal": {"status":"approved","at":"2026-08-08T20:05:17Z"},
     "tasks": {"status":"done","at":"2026-08-08T20:09:45Z"},
     "build": {"status":"done","at":"2026-08-08T21:03:36Z","tasks":{"done":6,"total":6,"failed":0}},
-    "verify": {"status":"passed","at":"2026-08-08T21:20:44Z","verdict":"PASS"}
+    "verify": {"status":"passed","at":"2026-08-08T21:20:44Z","verdict":"PASS"},
+    "pr": {"status":"raised","at":"2026-08-10T13:15:42Z","url":"https://github.com/chan4lk/specclaw/pull/60"}
   }
 }

@@ -1,7 +1,7 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** specclaw
-**Last Updated:** 2026-08-10 13:10 UTC
+**Last Updated:** 2026-08-10 13:15 UTC
 
 _31 unnumbered changes · run `/specclaw:renumber` to order them_
 
@@ -9,7 +9,7 @@ _31 unnumbered changes · run `/specclaw:renumber` to order them_
 
 
 - 🔨 **memory-aware-parallelism** — 5/6 tasks (83%) | 0 failed | PR #46 merged
-- 🔍 **numbered-change-folders** — verify PASS | 6/7 tasks (85%) | 0 failed
+- 🔀 **numbered-change-folders** — pr raised | 6/7 tasks (85%) | 0 failed | PR #60 open
 - 🔀 **tracker-state-integrity** — pr raised | 7/7 tasks (100%) | 0 failed | PR #57 merged
 
 ## Pending Proposals
