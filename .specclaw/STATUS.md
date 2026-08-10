@@ -1,13 +1,16 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** specclaw
-**Last Updated:** 2026-08-01 13:38 UTC
+**Last Updated:** 2026-08-08 21:20 UTC
+
+_31 unnumbered changes · run `/specclaw:renumber` to order them_
 
 ## Active Changes
 
 
 - 🔨 **memory-aware-parallelism** — 5/6 tasks (83%) | 0 failed | PR #46 merged
-- 🔀 **tracker-state-integrity** — pr raised | 7/7 tasks (100%) | 0 failed | PR #57 open
+- 🔍 **numbered-change-folders** — verify PASS | 6/7 tasks (85%) | 0 failed
+- 🔀 **tracker-state-integrity** — pr raised | 7/7 tasks (100%) | 0 failed | PR #57 merged
 
 ## Pending Proposals
 
@@ -25,8 +28,8 @@
 - ✅ **2026-07-22-claude-plugin-packaging**
 - ✅ **2026-07-22-discoverability-indexing**
 - ✅ **2026-07-22-dynamic-subagents-for-build**
-- ✅ **2026-07-22-github-issues-sync**
 - ✅ **2026-07-22-git-worktrees**
+- ✅ **2026-07-22-github-issues-sync**
 - ✅ **2026-07-22-grounded-context**
 - ✅ **2026-07-22-karpathy-build-guardrails**
 - ✅ **2026-07-22-learn-command**
@@ -47,6 +50,6 @@
 
 ## Stats
 
-- **Total changes:** 28
-- **Active:** 2
+- **Total changes:** 29
+- **Active:** 3
 - **Completed:** 26
