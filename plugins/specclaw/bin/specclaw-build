@@ -471,15 +471,14 @@ cmd_finalize() {
     fi
   fi
 
-  # Record build completion with the task counts (FR5). Counts come from the
-  # tasks.md markers — the same greps specclaw-update-status uses — so the Build
-  # row stops depending on a model remembering to edit prose.
+  # Record build completion with the task counts (FR5). Counts come from
+  # `parse-tasks --count`, the one counter every caller shares, so the Build row
+  # stops depending on a model remembering to edit prose.
   local tasks_file="$specclaw_dir/changes/$change_name/tasks.md"
   local t_total=0 t_done=0 t_failed=0
   if [[ -f "$tasks_file" ]]; then
-    t_total=$(grep -c '^\- \[' "$tasks_file" 2>/dev/null || true)
-    t_done=$(grep -c '^\- \[x\]' "$tasks_file" 2>/dev/null || true)
-    t_failed=$(grep -c '^\- \[!\]' "$tasks_file" 2>/dev/null || true)
+    read -r t_done t_total t_failed \
+      <<<"$("$SCRIPT_DIR/specclaw-parse-tasks" --count "$tasks_file" || echo '0 0 0')"
     t_total=${t_total:-0}
     t_done=${t_done:-0}
     t_failed=${t_failed:-0}

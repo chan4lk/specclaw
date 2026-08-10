@@ -54,6 +54,31 @@ All executable scripts live in `bin/`. Key ones:
 | `specclaw-gh-sync` | GitHub Issues sync |
 | `specclaw-pr` | Create GitHub PR (enforces test policy, triggers context update) |
 | `specclaw-validate-change` | Check phase prerequisites |
+| `specclaw-parse-tasks` | Parse `tasks.md` → JSON; **the only task counter** (`--count`) — see below |
+
+## Task counting: `specclaw-parse-tasks --count` is the only counter
+
+`specclaw-parse-tasks --count <tasks.md>` prints `<done> <total> <failed>` — three integers, no
+`jq` needed. `reconcile`, `build`, `update-status`, and `validate-change` all read it. **Nothing may
+count tasks with `grep`**, and `run-parser-tests.sh` fails if any `bin/` script tries.
+
+A task is a top-level checkbox line carrying a backtick-wrapped `` `T<n>` `` id, **outside** any
+```` ``` ```` fence. Both halves of that rule matter, and fences are the half that kept getting
+dropped: `tasks.md` ships a template snippet containing `` - [ ] `T<n>` — <title> ``, and any
+example with a numeric id — `` `T9` `` — read as a real task. The fence rule was written four
+times; `validate-change` had it, three callers used `grep -c '^- \['`, and `parse-tasks` itself,
+which every other reader is built on, had none.
+
+The counting drift was the visible half: a finished change rendered `5/6 tasks (83%)` on the
+dashboard forever. The expensive half was `specclaw-loop` gate 1, which reads `--status pending` —
+a fenced `` - [ ] `T9` `` surfaced as an incomplete task that does not exist and cannot be
+completed, so the loop spent every iteration failing to close it.
+
+**A bare `- [x] T1` is not a task.** `reconcile`, `build`, and `update-status` used to count it
+because `grep` cannot tell an id from prose; they no longer do. Since dropping a real task is worse
+than counting a fake one, `--count` writes one summary line to stderr naming how many checkboxes it
+skipped, and **no caller suppresses it** — a file of un-backticked checkboxes reads `0 0 0` out
+loud, never quietly.
 
 ## Phase state: `specclaw-set-phase` is the only writer
 

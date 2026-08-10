@@ -8,6 +8,9 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PARSE_TASKS="$SCRIPT_DIR/specclaw-parse-tasks"
+
 # --- Help ---
 usage() {
   cat <<'EOF'
@@ -132,43 +135,23 @@ fail() {
   FAILURES+=("$1")
 }
 
-# Count tasks in tasks.md, mirroring specclaw-parse-tasks:
-#   - tracks ``` code fences and ignores lines inside them
-#   - only counts top-level checkbox lines with a backtick-wrapped `T[0-9]+` id
-count_tasks() {
-  local file="$1" marker="$2"
-  local n
-  n=$(awk -v m="$marker" '
-    /^```/ { in_fence = !in_fence; next }
-    in_fence { next }
-    $0 ~ ("^- \\[" m "\\].*`T[0-9]+`") { c++ }
-    END { print c+0 }
-  ' "$file" 2>/dev/null) || true
-  echo "${n:-0}"
+# Task counts come from `parse-tasks --count`, which is the only counter in
+# specclaw — it tracks ``` fences and requires a backtick-wrapped `T[0-9]+` id.
+# These three used to hold their own awk copy of those rules; four copies of one
+# rule is how three of them ended up fence-blind.
+count_fields() {
+  local file="$1" out
+  out=$("$PARSE_TASKS" --count "$file") || out=""
+  echo "${out:-0 0 0}"
 }
 
+# Every marker other than `x` is incomplete, so incomplete = total - complete.
+count_total()      { local d t f; read -r d t f <<<"$(count_fields "$1")"; echo "${t:-0}"; }
+count_complete()   { local d t f; read -r d t f <<<"$(count_fields "$1")"; echo "${d:-0}"; }
 count_incomplete() {
-  local file="$1"
-  local n
-  n=$(awk '
-    /^```/ { in_fence = !in_fence; next }
-    in_fence { next }
-    /^- \[( |~|!)\].*`T[0-9]+`/ { c++ }
-    END { print c+0 }
-  ' "$file" 2>/dev/null) || true
-  echo "${n:-0}"
-}
-
-count_total() {
-  local file="$1"
-  local n
-  n=$(awk '
-    /^```/ { in_fence = !in_fence; next }
-    in_fence { next }
-    /^- \[.\].*`T[0-9]+`/ { c++ }
-    END { print c+0 }
-  ' "$file" 2>/dev/null) || true
-  echo "${n:-0}"
+  local d t f
+  read -r d t f <<<"$(count_fields "$1")"
+  echo "$(( ${t:-0} - ${d:-0} ))"
 }
 
 # --- Status subcommand ---
@@ -184,7 +167,7 @@ if [[ "$PHASE" == "status" ]]; then
     phase_label="verified"
   elif [[ -f "$CHANGE_DIR/tasks.md" ]]; then
     total=$(count_total "$CHANGE_DIR/tasks.md")
-    complete=$(count_tasks "$CHANGE_DIR/tasks.md" "x")
+    complete=$(count_complete "$CHANGE_DIR/tasks.md")
     incomplete=$(count_incomplete "$CHANGE_DIR/tasks.md")
     if [[ "$incomplete" -eq 0 && "$total" -gt 0 ]]; then
       phase_label="build-complete"
@@ -227,7 +210,7 @@ if [[ "$PHASE" == "status" ]]; then
   # tasks.md (with completion count)
   if [[ -f "$CHANGE_DIR/tasks.md" ]]; then
     total=$(count_total "$CHANGE_DIR/tasks.md")
-    complete=$(count_tasks "$CHANGE_DIR/tasks.md" "x")
+    complete=$(count_complete "$CHANGE_DIR/tasks.md")
     echo "  ✅ tasks.md ($complete/$total complete)"
   else
     echo "  ❌ tasks.md"

@@ -452,6 +452,114 @@ done
 echo
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Case 10 — fence-aware task counting, one counter for every caller.
+#
+# parse-tasks itself had no fence tracking, so `- [ ] `T9`` inside a ``` block
+# was emitted as a real task. Two consequences, both silent: task totals ran one
+# high (`5/6 done` on a finished change), and `specclaw-loop` gate 1 — which
+# reads `--status pending` — reported an incomplete task that does not exist and
+# could never be completed, so the loop burned every iteration on it.
+#
+# All asserts here are jq-free: they read the JSON text directly so the case
+# runs on a runner without jq, which is exactly where a regression would hide.
+# ─────────────────────────────────────────────────────────────────────────────
+echo "--- Case 10: fenced tasks excluded from parse, count, and filters ---"
+FENCED="$FIXTURES_DIR/tasks-fenced-id.md"
+
+# --count prints "<done> <total> <failed>". Real tasks: T1 [x], T2 [ ].
+assert_eq "10a --count ignores fenced T9/T8" "1 2 0" \
+  "$("$PARSE_TASKS" --count "$FENCED" 2>/dev/null)"
+
+# The JSON must not carry the fenced ids either — the loop reads this, not the count.
+fenced_json="$("$PARSE_TASKS" "$FENCED" 2>/dev/null)"
+assert_eq "10b JSON task count excludes fence" "2" "$(grep -c '"id":' <<<"$fenced_json")"
+for ghost in T9 T8; do
+  if grep -q "\"id\":\"$ghost\"" <<<"$fenced_json"; then
+    fail "10b fenced id leaked into JSON: $ghost"
+  else
+    pass "10b fenced id absent from JSON: $ghost"
+  fi
+done
+
+# The loop-gate path: a fenced pending task must not surface as incomplete.
+pending_json="$("$PARSE_TASKS" --status pending "$FENCED" 2>/dev/null)"
+assert_eq "10c --status pending sees only the real pending task" "1" \
+  "$(grep -c '"id":' <<<"$pending_json")"
+if grep -q '"id":"T9"' <<<"$pending_json"; then
+  fail "10c fenced T9 reported pending (loop gate 1 can never go green)"
+else
+  pass "10c fenced T9 not reported pending"
+fi
+
+# All four markers tally correctly, with a fenced example present.
+c10="$WORK/changes/c10-markers"
+mkdir -p "$c10"
+{
+  printf '# tasks\n\n'
+  printf -- '- [x] `T1` — done\n'
+  printf -- '- [ ] `T2` — pending\n'
+  printf -- '- [!] `T3` — failed\n'
+  printf -- '- [~] `T4` — in progress\n\n'
+  printf 'Template:\n\n```\n'
+  printf -- '- [ ] `T99` — fenced example\n'
+  printf '```\n'
+} > "$c10/tasks.md"
+assert_eq "10d all four markers, fence excluded" "1 4 1" \
+  "$("$PARSE_TASKS" --count "$c10/tasks.md" 2>/dev/null)"
+
+# A `### Wave` heading inside a fence must not bump the wave counter.
+c10w="$WORK/changes/c10-wave"
+mkdir -p "$c10w"
+{
+  printf '# tasks\n\n### Wave 1\n\n'
+  printf -- '- [ ] `T1` — real\n\n'
+  printf '```\n### Wave 9\n- [ ] `T50` — example\n```\n'
+} > "$c10w/tasks.md"
+w10="$("$PARSE_TASKS" "$c10w/tasks.md" 2>/dev/null | grep -o '"wave":[0-9]*' | sort -u | tr '\n' ' ')"
+assert_eq "10e fenced Wave heading does not shift waves" '"wave":1 ' "$w10"
+
+# --count reports the whole file; combining it with a filter would let a caller
+# read "3/3 done" off one wave and call the change finished.
+if "$PARSE_TASKS" --count --wave 1 "$FENCED" >/dev/null 2>&1; then
+  fail "10f --count rejects --wave"
+else
+  pass "10f --count rejects --wave"
+fi
+
+# Regression guard: the naive counter must not come back. Four copies of the
+# fence rule is what put three call sites out of sync in the first place.
+# A checkbox with a bare `T1` (no backticks) is not a task, and reading "0/0
+# done" off a whole file of them must not be silent — the count goes to stdout,
+# one summary warning to stderr. Callers deliberately do not suppress it.
+c10b="$WORK/changes/c10-bare"
+mkdir -p "$c10b"
+printf -- '# tasks\n\n- [x] T1 one\n- [x] T2 two\n' > "$c10b/tasks.md"
+assert_eq "10h bare ids are not counted" "0 0 0" \
+  "$("$PARSE_TASKS" --count "$c10b/tasks.md" 2>/dev/null)"
+bare_warn="$("$PARSE_TASKS" --count "$c10b/tasks.md" 2>&1 >/dev/null)"
+if grep -q 'not counted' <<<"$bare_warn"; then
+  pass "10h skipped checkboxes warn on stderr (= '$bare_warn')"
+else
+  fail "10h skipped checkboxes warn on stderr (got '$bare_warn')"
+fi
+# One summary, not one line per task.
+assert_eq "10h warning is a single summary line" "1" "$(grep -c . <<<"$bare_warn")"
+# A clean file stays silent.
+assert_eq "10h well-formed file emits no warning" "" \
+  "$("$PARSE_TASKS" --count "$c10/tasks.md" 2>&1 >/dev/null)"
+
+naive="$(grep -rln "grep -c '\^\\\\- \\\\\[" "$BIN_DIR" 2>/dev/null | tr '\n' ' ')"
+assert_eq "10g no bin script counts tasks with grep" "" "$naive"
+for caller in specclaw-reconcile specclaw-build specclaw-update-status specclaw-validate-change; do
+  if grep -q -- '--count' "$BIN_DIR/$caller"; then
+    pass "10g $caller delegates to parse-tasks --count"
+  else
+    fail "10g $caller delegates to parse-tasks --count"
+  fi
+done
+echo
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Summary
 # ─────────────────────────────────────────────────────────────────────────────
 echo "=================================================="

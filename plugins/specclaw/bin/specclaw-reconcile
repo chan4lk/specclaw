@@ -181,9 +181,8 @@ obs_tasks() {
   T_DONE=0 T_TOTAL=0 T_FAILED=0 T_PRESENT=0
   [ -f "$f" ] || return 0
   T_PRESENT=1
-  T_TOTAL=$(grep -c '^\- \[' "$f" 2>/dev/null || true)
-  T_DONE=$(grep -c '^\- \[x\]' "$f" 2>/dev/null || true)
-  T_FAILED=$(grep -c '^\- \[!\]' "$f" 2>/dev/null || true)
+  read -r T_DONE T_TOTAL T_FAILED \
+    <<<"$("$SCRIPT_DIR/specclaw-parse-tasks" --count "$f" || echo '0 0 0')"
   T_TOTAL=${T_TOTAL:-0} T_DONE=${T_DONE:-0} T_FAILED=${T_FAILED:-0}
 }
 

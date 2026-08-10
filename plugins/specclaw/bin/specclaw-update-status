@@ -4,6 +4,9 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PARSE_TASKS="$SCRIPT_DIR/specclaw-parse-tasks"
+
 SPECCLAW_DIR="$1"
 CHANGES_DIR="$SPECCLAW_DIR/changes"
 ARCHIVE_DIR="$CHANGES_DIR/archive"
@@ -248,9 +251,7 @@ for change_name in "${ORDERED_CHANGES[@]+"${ORDERED_CHANGES[@]}"}"; do
   pr_state="$(pr_state_for "$change_name" "$state_branch")"
 
   if [ -f "$change_dir/tasks.md" ]; then
-    total=$(grep -c '^\- \[' "$change_dir/tasks.md" 2>/dev/null || true)
-    done=$(grep -c '^\- \[x\]' "$change_dir/tasks.md" 2>/dev/null || true)
-    failed=$(grep -c '^\- \[!\]' "$change_dir/tasks.md" 2>/dev/null || true)
+    read -r done total failed <<<"$("$PARSE_TASKS" --count "$change_dir/tasks.md" || echo '0 0 0')"
     total=${total:-0}
     done=${done:-0}
     failed=${failed:-0}

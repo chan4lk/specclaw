@@ -582,12 +582,15 @@ make_status_project() {
 
 # add_change <project_dir> <name> [--proposal-only]
 # Default shape is a fully-built change: proposal.md + tasks.md with all [x].
+# The ids are backtick-wrapped because that is the shape templates/tasks.md ships
+# and the only shape `parse-tasks --count` counts; a bare `T1` here used to work
+# only because update-status counted checkboxes with grep.
 add_change() {
   local d="$1" name="$2" mode="${3:-}"
   mkdir -p "$d/.specclaw/changes/$name"
   printf '# Proposal\n' > "$d/.specclaw/changes/$name/proposal.md"
   [[ "$mode" == "--proposal-only" ]] && return 0
-  printf -- '- [x] T1 one\n- [x] T2 two\n' > "$d/.specclaw/changes/$name/tasks.md"
+  printf -- '- [x] `T1` one\n- [x] `T2` two\n' > "$d/.specclaw/changes/$name/tasks.md"
 }
 
 # stub_bin <dir> <name> <body> — an executable stub on a PATH shim directory.

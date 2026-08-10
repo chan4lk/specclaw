@@ -1,15 +1,15 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** specclaw
-**Last Updated:** 2026-08-10 13:15 UTC
+**Last Updated:** 2026-08-10 14:09 UTC
 
 _31 unnumbered changes · run `/specclaw:renumber` to order them_
 
 ## Active Changes
 
 
-- 🔨 **memory-aware-parallelism** — 5/6 tasks (83%) | 0 failed | PR #46 merged
-- 🔀 **numbered-change-folders** — pr raised | 6/7 tasks (85%) | 0 failed | PR #60 open
+- ✅ **memory-aware-parallelism** — 5/5 tasks (100%) | 0 failed | PR #46 merged
+- 🔀 **numbered-change-folders** — pr raised | 6/6 tasks (100%) | 0 failed | PR #60 merged
 - 🔀 **tracker-state-integrity** — pr raised | 7/7 tasks (100%) | 0 failed | PR #57 merged
 
 ## Pending Proposals
