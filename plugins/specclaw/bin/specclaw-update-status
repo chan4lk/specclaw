@@ -251,13 +251,16 @@ for change_name in "${ORDERED_CHANGES[@]+"${ORDERED_CHANGES[@]}"}"; do
   pr_state="$(pr_state_for "$change_name" "$state_branch")"
 
   if [ -f "$change_dir/tasks.md" ]; then
-    read -r done total failed <<<"$("$PARSE_TASKS" --count "$change_dir/tasks.md" || echo '0 0 0')"
+    # `t_done`, not `done`: `read -r done ...` reads to shellcheck as the `done`
+    # loop keyword (SC1010), and a variable that shadows a keyword is a trap
+    # waiting for the next editor of this block.
+    read -r t_done total failed <<<"$("$PARSE_TASKS" --count "$change_dir/tasks.md" || echo '0 0 0')"
     total=${total:-0}
-    done=${done:-0}
+    t_done=${t_done:-0}
     failed=${failed:-0}
 
     if [ "$total" -gt 0 ]; then
-      pct=$((done * 100 / total))
+      pct=$((t_done * 100 / total))
     else
       pct=0
     fi
@@ -271,11 +274,11 @@ for change_name in "${ORDERED_CHANGES[@]+"${ORDERED_CHANGES[@]}"}"; do
     else
       status_emoji="🔨"
       [ "$failed" -gt 0 ] && status_emoji="⚠️"
-      [ "$done" -eq "$total" ] && [ "$total" -gt 0 ] && status_emoji="✅"
+      [ "$t_done" -eq "$total" ] && [ "$total" -gt 0 ] && status_emoji="✅"
       phase_prefix=""
     fi
 
-    ACTIVE_LINES="${ACTIVE_LINES}\n- $status_emoji **$change_name** — $phase_prefix$done/$total tasks ($pct%) ${failed:+| $failed failed}${pr_state:+ | $pr_state}"
+    ACTIVE_LINES="${ACTIVE_LINES}\n- $status_emoji **$change_name** — $phase_prefix$t_done/$total tasks ($pct%) ${failed:+| $failed failed}${pr_state:+ | $pr_state}"
     ACTIVE_COUNT=$((ACTIVE_COUNT + 1))
   elif [ -n "$phase" ]; then
     # Phase recorded before tasks.md exists (mid-plan), or a PR on a change that
