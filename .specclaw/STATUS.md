@@ -1,7 +1,7 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** specclaw
-**Last Updated:** 2026-08-08 21:20 UTC
+**Last Updated:** 2026-08-10 13:10 UTC
 
 _31 unnumbered changes · run `/specclaw:renumber` to order them_
 
