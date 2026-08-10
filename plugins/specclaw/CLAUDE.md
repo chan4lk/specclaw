@@ -94,6 +94,7 @@ Suites live in `tests/`, are bash + coreutils only (no jq in the suites themselv
 | `run-shellcheck-gate-tests.sh` | the shellcheck gate itself |
 | `run-status-row-tests.sh` | `status-row` upserts, and the two sed defects it replaced |
 | `run-phase-state-tests.sh` | `set-phase` transitions and `reconcile` drift detection |
+| `run-loop-gate-tests.sh` | `loop gates` report readers — BLOCK counting and verdict extraction |
 
 `shellcheck-gate.sh` fails CI on any shellcheck finding absent from `shellcheck-baseline.txt` (pairs of `<path> <SCxxxx>`, no line numbers, so unrelated edits do not churn it). Fix a new finding or add a targeted `# shellcheck disable=SCxxxx` with a rationale — never silence one by appending to the baseline. It skips with exit 0 when shellcheck is not installed, so the suite still runs locally.
 

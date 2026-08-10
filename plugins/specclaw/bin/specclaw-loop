@@ -159,10 +159,21 @@ cmd_init() {
 
 # Extract a normalized PASS/FAIL/PARTIAL verdict token from a report file.
 # Prints the token (PASS|FAIL|PARTIAL|UNKNOWN) to stdout.
+#
+# Reads the `**Verdict:** X` line that templates/verify-report.md emits, rather
+# than the first verdict-shaped word anywhere in the file: report prose says
+# things like "all criteria pass" and "the lint gate did not fail", and a
+# whole-file scan lets whichever of those appears first decide the gate.
 extract_verdict() {
   local file="$1"
   local raw
-  raw=$(grep -ioE '\b(PASS|FAIL|PARTIAL)\b' "$file" 2>/dev/null | head -1 | tr '[:lower:]' '[:upper:]') || true
+  raw=$(grep -iE '^\*\*Verdict:\*\*' "$file" 2>/dev/null | head -1 \
+        | grep -ioE '\b(PASS|FAIL|PARTIAL)\b' | head -1 | tr '[:lower:]' '[:upper:]') || true
+  # Reports predating the template have no Verdict line; fall back to the
+  # whole-file scan so they keep resolving as they did before.
+  if [ -z "$raw" ] && ! grep -qiE '^\*\*Verdict:\*\*' "$file" 2>/dev/null; then
+    raw=$(grep -ioE '\b(PASS|FAIL|PARTIAL)\b' "$file" 2>/dev/null | head -1 | tr '[:lower:]' '[:upper:]') || true
+  fi
   [ -z "$raw" ] && raw="UNKNOWN"
   printf '%s' "$raw"
 }
@@ -272,14 +283,24 @@ ${cmd_name}_command failed (exit ${rc}): ${snippet}"
       g4_green=true
     fi
   else
+    # Count BLOCK *finding headings* only. agents/code-reviewer.md also prints
+    # BLOCK in its "N findings: X BLOCK, Y WARN, Z NOTE" summary and again in the
+    # verdict rationale, so a whole-file word scan reads a clean report as two
+    # blockers and pins this gate red for every report the reviewer can write.
     local block_count
-    block_count=$(grep -oE '\bBLOCK\b' "$review_file" 2>/dev/null | wc -l | tr -d ' ') || true
+    block_count=$(grep -cE '^### \[BLOCK\]' "$review_file" 2>/dev/null) || true
     [ -z "$block_count" ] && block_count=0
-    if [ "$block_count" -eq 0 ]; then
-      g4_green=true
-    else
+    local review_verdict
+    review_verdict=$(grep -iE '^\*\*Verdict:\*\*' "$review_file" 2>/dev/null | head -1) || true
+    if [ "$block_count" -gt 0 ]; then
       g4_green=false
       g4_errors="${block_count} BLOCK-severity finding(s)"
+    elif printf '%s' "$review_verdict" | grep -q 'CHANGES_REQUESTED'; then
+      # Verdict is authoritative: honour it even if the findings list is malformed.
+      g4_green=false
+      g4_errors="review verdict: CHANGES_REQUESTED"
+    else
+      g4_green=true
     fi
   fi
 
