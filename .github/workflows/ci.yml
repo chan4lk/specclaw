@@ -31,6 +31,8 @@ jobs:
         run: bash plugins/specclaw/tests/run-loop-gate-tests.sh
       - name: Run change-numbering tests
         run: bash plugins/specclaw/tests/run-change-numbering-tests.sh
+      - name: Run party-mode tests
+        run: bash plugins/specclaw/tests/run-party-tests.sh
 
   shellcheck:
     name: ShellCheck bin scripts

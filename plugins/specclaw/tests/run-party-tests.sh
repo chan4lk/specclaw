@@ -276,6 +276,35 @@ runp "$D" --json
 assert_eq "AC3 exit 0" "0" "$RC"
 assert_eq "AC3 seats" "party-po,party-architect,party-security" "$(seats_of)"
 assert_eq "AC3 domains recorded" "security" "$(jget "','.join(d['domains'])" < "$OUT")"
+
+# Deferred defect (b), found during T-wave 3: the domain match was `grep -qx`,
+# exact and case-sensitive. `domains` is written by a model, and a model asked
+# for "security" will sooner or later answer "Security" or "SECURITY" — on which
+# spelling the specialist was silently not seated and the panel still looked
+# like a working thin one. Only the roster would have shown it, and only to
+# someone who knew what to expect.
+echo "--- AC3 (defect b): a capitalised domain still seats the specialist ---"
+for spelling in Security SECURITY SeCurItY; do
+  D="$WORK/ac3-case-$spelling"; mkfixture "$D"
+  stub_classifier "$D" <<EOF
+{"tier": "thin", "domains": ["$spelling"], "rationale": "Small, but touches the token path."}
+EOF
+  runp "$D" --json
+  assert_eq "AC3 domains: [\"$spelling\"] seats party-security" \
+    "party-po,party-architect,party-security" "$(seats_of)"
+done
+# The domain string is recorded as the classifier spelled it — matching is
+# case-insensitive, the audit trail is verbatim.
+assert_eq "AC3 the domain is recorded as written, not normalised" "SeCurItY" \
+  "$(jget "','.join(d['domains'])" < "$OUT")"
+# The other half of the contract: case-insensitive is not substring-insensitive.
+D="$WORK/ac3-nonmatch"; mkfixture "$D"
+stub_classifier "$D" <<'EOF'
+{"tier": "thin", "domains": ["insecurity"], "rationale": "A different word."}
+EOF
+runp "$D" --json
+assert_eq "AC3 a domain that merely contains 'security' does not seat it" \
+  "party-po,party-architect" "$(seats_of)"
 echo
 
 # ── AC4 — fail loud, never quiet; never `thin` ────────────────────────────────
@@ -427,6 +456,43 @@ if [[ -e "$D/changes/$CHANGE/party/.classifier-requested" ]]; then
 else
   pass "AC7 fixed requested no classifier turn"
 fi
+
+# Deferred defect (a), found during T-wave 3: `fixed` means "the roster is in
+# the config", so an empty or absent party.panel leaves nothing to seat — and
+# the min_seats growth then rebuilds the head of the tier order. The result is a
+# two-seat panel, which is exactly what a legitimate `thin` classification
+# produces, so the operator cannot tell the typo from the judgement. It ran, it
+# cost money, and it read as a deliberate choice nobody made. The behaviour is
+# unchanged (a panel still convenes); what changed is that it now says so, and
+# names the key rather than the symptom.
+echo "--- AC7 (defect a): panel_mode: fixed with no roster warns and names the key ---"
+D="$WORK/ac7c"; mkfixture "$D" panel_mode=fixed panel="[]"
+runp "$D" --json
+assert_eq "AC7 empty party.panel still exits 0" "0" "$RC"
+assert_grep "AC7 empty party.panel names party.panel_mode" "party\.panel_mode is 'fixed'" "$ERR"
+assert_grep "AC7 empty party.panel names the missing key" \
+  "party\.panel is missing or empty" "$ERR"
+assert_grep "AC7 empty party.panel names the config file" "config\.yaml" "$ERR"
+assert_grep "AC7 empty party.panel says what the fallback roster is" \
+  "party\.min_seats" "$ERR"
+assert_eq "AC7 empty party.panel still yields the min_seats-grown roster" \
+  "party-po,party-architect" "$(seats_of)"
+
+echo "--- AC7 (defect a): the same warning when party.panel is absent entirely ---"
+D="$WORK/ac7d"; mkfixture "$D" panel_mode=fixed
+grep -v '^  panel: ' "$D/config.yaml" > "$D/config.yaml.new" && mv "$D/config.yaml.new" "$D/config.yaml"
+assert_eq "AC7 the fixture really has no party.panel key" "0" \
+  "$(grep -c '^  panel: ' "$D/config.yaml")"
+runp "$D" --json
+assert_eq "AC7 absent party.panel still exits 0" "0" "$RC"
+assert_grep "AC7 absent party.panel warns too" "party\.panel is missing or empty" "$ERR"
+assert_eq "AC7 absent party.panel yields the same 2-seat roster" \
+  "party-po,party-architect" "$(seats_of)"
+# The control: a fixed panel that IS configured must stay silent.
+D="$WORK/ac7e"; mkfixture "$D" panel_mode=fixed panel="[party-po, party-security]"
+runp "$D" --json
+assert_no_grep "AC7 a populated party.panel does not warn" \
+  "party\.panel is missing or empty" "$ERR"
 echo
 
 # ── AC8 / Edge Case 9 — the cache is keyed on the proposal, not the clock ─────

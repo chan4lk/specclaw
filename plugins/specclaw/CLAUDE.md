@@ -34,6 +34,131 @@ When `loop.enabled: true` (the default), `/specclaw:loop` closes the build→ver
 
 **Config** — the `loop:` block (seeded default-on by `specclaw-init`): `enabled`, `max_iterations` (5), `no_progress_limit` (2), `guard_action` (`revert-tests`), `test_paths` ([]), `ci_gate` (false), `ci_max_iterations` (3), `ci_timeout_seconds` (1200). Set `loop.enabled: false` for the single-pass path — build/verify/pr behave exactly as their SKILL.md documents, no loop, no extra files.
 
+## Party mode (an adversarial panel inside `propose`)
+
+When `party.enabled: true`, `/specclaw:propose` inserts one step between writing `proposal.md` and
+presenting it: a panel of role-specialised subagents (`party-po`, `party-architect`, `party-ba`,
+`party-visionary`, `party-security`) critiques the proposal from non-overlapping angles, rebuts each
+other in a second round, and `specclaw-party` tallies a verdict into
+`changes/<change>/party-report.md`.
+
+**It is a step, not a phase.** There is no `party` rank in
+`proposal spec design tasks build verify pr archived`, `specclaw-set-phase` is never called for it,
+and `state.json` never mentions it. A change that ran a panel and one that did not are the same shape
+on disk apart from one extra report. A phase would have meant a lifecycle rank that most changes
+skip, and a `validate-change` prerequisite for a thing whose entire contract is that it is optional
+and advisory: **the panel informs, the operator decides.** `CHANGES_REQUESTED` blocks nothing unless
+`party.block: true`, which ships `false`.
+
+### A model judges; a script decides
+
+| Layer | Owner | Party-mode instance |
+|-------|-------|---------------------|
+| Judgement | model | `party-classifier` picks a depth tier; the panelists write findings |
+| Arithmetic / state | bash | `specclaw-party` resolves seats, clamps them, tallies the verdict, writes `panel.json` |
+
+The line is drawn where re-running the same input must give the same answer. "Is this proposal deep?"
+and "is this objection worth raising?" have no closed form — every proxy for them (word counts,
+keyword lists) was gameable by the same model that wrote the proposal, so they are irreducibly model
+work. Seat resolution, tail-order clamping, the `≥1 BLOCK` / `≥2 roles WARN` rule and the BLOCK count
+have exactly one correct answer, and arithmetic performed by a model is arithmetic that drifts
+between two runs on identical input. This is the same split as `specclaw-loop` (the controller
+evaluates the gates; the fix agent writes the diff) and `specclaw-parse-tasks --count`.
+
+Concretely: `tally_counts` in `bin/specclaw-party` is the only place the verdict rule is written
+down, no prompt anywhere asks a model what the verdict is, and `skills/propose/SKILL.md` reads the
+printed token — *"never recompute or second-guess it"*. `tally` and `report` also share one findings
+scanner, so the two can never disagree about what a finding is.
+
+Bash cannot spawn subagents, so the handshake runs the other way: `panel` prints the classifier
+prompt and exits **10**, meaning "I need a model turn"; the skill spawns `party-classifier`, writes
+its answer to `party/classification.json`, and re-runs the same command. Lifted from
+`skills/build/SKILL.md` and `specclaw-build synth-agent`.
+
+### The panel is sized to the proposal
+
+`party-classifier` (`haiku`, `tools: [Read]`) returns a tier and domain flags; `panel` turns that
+into a roster with no further model involvement:
+
+| Tier | Seats |
+|------|-------|
+| `thin` | `party-po`, `party-architect` |
+| `standard` | `party-po`, `party-architect`, `party-ba` |
+| `deep` | `party-po`, `party-architect`, `party-ba`, `party-visionary` |
+| any tier | `+ party-security` when the tier is `deep` **or** `security ∈ domains` |
+
+The domain match is **case-insensitive**. `domains` is model-written, and a model asked for
+`security` will eventually answer `Security`; an exact match would drop the specialist on that
+spelling alone and leave a roster that still reads like a working thin panel.
+
+Then: union `party.always`, drop seats with no `agents/<seat>.md` (warn, record it), and clamp to
+`[min_seats, max_seats]` — dropping from the **tail** of the tier order, so Visionary and Security go
+before Architect and PO, and every drop is named in `panel.json`. The roster is cached on a `cksum`
+of `proposal.md`, so a retry cannot draw a different panel — and a different bill — from an unedited
+proposal; an edited one re-classifies, and `--repanel` forces it.
+
+Two overrides skip the classifier spawn entirely: `--panel <tier>` (`tier_source: override`) and
+`panel_mode: fixed`, which takes `party.panel` verbatim (`tier_source: fixed`). **`fixed` with an
+empty or absent `party.panel` warns and names the key**, because the roster it would otherwise build
+in silence is the two-seat head of the tier order — indistinguishable from a deliberate `thin`
+classification, so a config typo would read back as a decision nobody made.
+
+### The fallback is `standard`, and never `thin`
+
+A classifier that errors, exits non-zero, emits unparseable output, or names an unknown tier yields
+tier `standard`, `tier_source: fallback`, a warning on stderr, and **exit 0**.
+
+Never `thin`, because the failure mode of a cheap classifier is a *silent downgrade*, and a two-seat
+panel looks exactly like a working one. Erring upward costs a couple of spawns; erring downward costs
+the review itself and leaves a green-looking report on a proposal nobody actually argued with — the
+one failure that would never be noticed, because its output is indistinguishable from success. So it
+is made visible three ways: stderr, `tier_source` in `panel.json`, and the `**Tier:**` line of the
+report.
+
+That matters more than an error path usually would, because **the fallback is the automatic behaviour
+of any caller that does not implement the exit-10 handshake.** A mis-wired caller therefore stamps
+`"tier_source": "fallback"` into every `panel.json` it writes, rather than into none of them.
+
+**Config** — the `party:` block (seeded by `specclaw-init`, shipped **inert**): `enabled` (true),
+`default` (false — ask once, quoting the roster and the per-model spawn count, before spending),
+`on_loop_halt` (false), `rounds` (2; `1` skips rebuttal and halves the bill), `block` (false),
+`panel_mode` (`dynamic`), `panel` (the roster `fixed` uses), `always` ([]), `min_seats` (2),
+`max_seats` (6), and `models` (per-seat; a seat left out falls through to its charter's own `model:`).
+`default`, `block` and `on_loop_halt` all ship `false`, so upgrading changes no existing `propose`
+run — the same one-release rollout `workflow.code_review_block` took. `enabled: false` is a total
+off switch: no prompt, no files, no spawns.
+
+## Party config reads: `party_val` is the only reader of the `party:` block
+
+`yaml_val` (`bin/specclaw-loop:87-102`) reduces a dotted path to its **last component** —
+`field="${key##*.}"` — and then greps the whole file for the first `<field>:` line. `config.yaml`
+already carries a top-level `models:` block. So:
+
+```
+yaml_val "$config" party.models           # greps `models:`     → the top-level block
+yaml_val "$config" party.enabled          # greps `enabled:`    → build.dynamic_agents.enabled — false
+yaml_val "$config" party.models.party-po  # greps `party-po:`   → right answer, by luck alone
+```
+
+Not an error, not empty: **the wrong block, silently, with a plausible value in it.** The second line
+is the shipped config as it stands — `party.enabled` reads `false` off a block seventy lines above
+the one asked for, so party mode would be off while the config plainly says `true`. The third line is
+the more dangerous one, because it is *correct today*: nothing above `party:` currently has a
+`party-po:` key, so the whole-file grep lands on the right line and every test passes — until some
+future block gains a key of that name, and the panel quietly starts spawning on a model nobody chose.
+
+`bin/specclaw-party` therefore ships `party_val` (and `party_list` for the `[a, b]` and `- a` list
+forms), modelled on `da_val` (`bin/specclaw-build:557-574`): seek to the column-0 `party:` line, read
+only until the next column-0 key, and resolve the dotted path inside **that window**. **No party
+config value may be read any other way** — not with `yaml_val`, not with a `grep` in a SKILL.md, not
+with a one-off `sed`.
+
+`run-party-tests.sh` pins this, and the fixture is the interesting half: its `config.yaml` carries
+both blocks, the top-level `models:` block carries decoy `party-visionary:` / `party-po:` keys, and a
+decoy block above `party:` carries every scalar key the script reads. Without those decoys a
+regression to `yaml_val` passes by luck — nothing in the fixture would collide — while the shipped
+`config.yaml` silently reads the wrong section. The decoys *are* the test; do not tidy them away.
+
 ## Scripts
 
 All executable scripts live in `bin/`. Key ones:
@@ -55,6 +180,7 @@ All executable scripts live in `bin/`. Key ones:
 | `specclaw-pr` | Create GitHub PR (enforces test policy, triggers context update) |
 | `specclaw-validate-change` | Check phase prerequisites |
 | `specclaw-parse-tasks` | Parse `tasks.md` → JSON; **the only task counter** (`--count`) — see below |
+| `specclaw-party` | Adversarial proposal panel: `panel` (resolve the roster) / `tally` (compute the verdict) / `report` (assemble `party-report.md`) — see below |
 
 ## Task counting: `specclaw-parse-tasks --count` is the only counter
 
@@ -157,6 +283,7 @@ Suites live in `tests/`, are bash + coreutils only (no jq in the suites themselv
 | `run-phase-state-tests.sh` | `set-phase` transitions and `reconcile` drift detection |
 | `run-loop-gate-tests.sh` | `loop gates` report readers — BLOCK counting and verdict extraction |
 | `run-change-numbering-tests.sh` | `next-change-number` derivation, `renumber-changes` plan/refusals/backfill |
+| `run-party-tests.sh` | party seat resolution and clamping, the fail-loud fallback, the panel cache, the verdict tally, the report grammar, and the `party_val` config-collision regression |
 
 `shellcheck-gate.sh` fails CI on any shellcheck finding absent from `shellcheck-baseline.txt` (pairs of `<path> <SCxxxx>`, no line numbers, so unrelated edits do not churn it). Fix a new finding or add a targeted `# shellcheck disable=SCxxxx` with a rationale — never silence one by appending to the baseline. It skips with exit 0 when shellcheck is not installed, so the suite still runs locally.
 

@@ -118,7 +118,7 @@ one reviewer with a checklist, and W2–W4 should not be built at all.
     upheld/withdrawn (FR11; `party.rounds: 1` skips it). Then `tally`, `report`, append findings to
     the proposal's **Open Questions** and nothing else.
 
-- [ ] `T8` — Config seeding, docs, CI registration
+- [x] `T8` — Config seeding, docs, CI registration
   - Files: `plugins/specclaw/bin/specclaw-init`, `plugins/specclaw/templates/config.yaml`, `plugins/specclaw/CLAUDE.md`, `.github/workflows/ci.yml`
   - Estimate: medium
   - Kind: config

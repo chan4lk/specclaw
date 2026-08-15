@@ -124,6 +124,29 @@ loop:
   ci_max_iterations: 3     # CI outer loop cap
   ci_timeout_seconds: 1200 # per-cycle CI wall-clock before halt
 
+# Party mode — an adversarial panel that argues a proposal before it becomes a plan
+# A haiku classifier sizes the panel to the proposal; role-specialised subagents
+# critique it from non-overlapping angles and `specclaw-party` tallies the verdict.
+# Ships inert: seated but opt-in per run, and never blocking.
+party:
+  enabled: true            # false = /specclaw:propose behaves exactly as before — no prompt, no files, no spawns
+  default: false           # true = convene without asking; false = ask once, quoting the roster and the spawn count
+  on_loop_halt: false      # true = also convene the panel when /specclaw:loop halts, against the halt
+  rounds: 2                # 2 = findings then a rebuttal round; 1 = no rebuttal, roughly halves the bill
+  block: false             # true = a CHANGES_REQUESTED verdict is a hard stop for /specclaw:plan
+  panel_mode: dynamic      # dynamic = the classifier picks the tier; fixed = use `panel` below verbatim, no classifier call
+  panel: [party-po, party-architect, party-ba, party-visionary]  # the roster panel_mode: fixed takes verbatim
+  always: []               # seats forced onto every panel whatever the tier, e.g. [party-security]
+  min_seats: 2             # floor — a short panel is grown along the tier order
+  max_seats: 6             # ceiling — surplus seats drop from the tail (Visionary/Security before Architect/PO)
+  models:                  # per-seat model; a seat left out falls through to its agent charter's own `model:`
+    party-classifier: haiku
+    party-visionary: fable
+    party-architect: opus
+    party-security: opus
+    party-ba: sonnet
+    party-po: sonnet
+
 # Automation
 automation:
   auto_mode: false

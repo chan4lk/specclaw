@@ -375,6 +375,15 @@ cmd_panel() {
     while IFS= read -r s; do
       if [[ -n "$s" ]]; then seats+=("$s"); fi
     done <<< "$fixed_seats"
+    # `fixed` means "the roster is in the config", so an absent or empty
+    # party.panel leaves nothing to seat — and the min_seats growth below then
+    # quietly rebuilds the head of the tier order. A two-seat panel is a
+    # legitimate result of `thin`, so the operator cannot tell the typo from the
+    # judgement; the config would read as a deliberate choice it never made.
+    # Name the missing key rather than the symptom.
+    if [[ "${#seats[@]}" -eq 0 ]]; then
+      warn "party.panel_mode is 'fixed' but party.panel is missing or empty in $config — there is no roster to take verbatim. Falling back to the default seats grown to party.min_seats; set party.panel, or set party.panel_mode: dynamic to let the classifier size the panel."
+    fi
   else
     case "$tier" in
       thin) seats=(party-po party-architect) ;;
@@ -382,7 +391,11 @@ cmd_panel() {
       *)    seats=(party-po party-architect party-ba) ;;
     esac
     # Security is seated by a domain flag OR by depth, independently (AC2/AC3).
-    if [[ "$tier" == "deep" ]] || printf '%s\n' "$domains" | grep -qx 'security'; then
+    # The match is case-insensitive (-i): `domains` comes from a model, and a
+    # model that has been asked for "security" will eventually answer
+    # "Security". An exact match drops the specialist on that spelling alone,
+    # and drops it silently — the roster still looks like a working thin panel.
+    if [[ "$tier" == "deep" ]] || printf '%s\n' "$domains" | grep -qix 'security'; then
       seats+=(party-security)
     fi
   fi
