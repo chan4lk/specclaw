@@ -51,7 +51,7 @@ one reviewer with a checklist, and W2–W4 should not be built at all.
     line, stop at the next column-0 key, resolve the dotted path inside that window. Model on `da_val`
     (`specclaw-build:557-574`). Wrong here = silently wrong model on every seat.
 
-- [ ] `T3` — `specclaw-party tally` and `report`
+- [x] `T3` — `specclaw-party tally` and `report`
   - Files: `plugins/specclaw/bin/specclaw-party`
   - Estimate: medium
   - Kind: impl

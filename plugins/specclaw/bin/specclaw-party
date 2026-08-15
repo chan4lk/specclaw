@@ -11,6 +11,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 PANEL_SCHEMA_VERSION=1
 
+# Temp files an EXIT trap must be able to remove. The trap runs in the global
+# scope, where a function-`local` is invisible and `set -u` aborts the cleanup
+# itself — so these are script-global, and empty until claimed.
+STREAM=""
+REPORT_TMP=""
+PANEL_TMP=""
+
 # Canonical tier order. max_seats clamping drops from the TAIL, so Visionary and
 # Security go before Architect and PO (FR4). Seats that are not in this list
 # (custom names from party.always) rank after it and drop first.
@@ -28,11 +35,13 @@ Subcommands:
           Resolve the review roster for a proposal, write
           changes/<change_name>/party/panel.json, print a human summary.
 
-  tally   <specclaw_dir> <change_name>
-          Apply the verdict rule to the round-2 findings. (not implemented)
+  tally   <specclaw_dir> <change_name> [--json]
+          Apply the verdict rule to the round-2 findings (round-1 when
+          party.rounds is 1) and print the verdict token.
 
   report  <specclaw_dir> <change_name>
-          Assemble party-report.md from the findings and the tally. (not implemented)
+          Assemble changes/<change_name>/party-report.md from the findings
+          and the tally.
 
 Options (panel):
   --panel <tier>              Force thin|standard|deep. Skips the classifier
@@ -46,6 +55,7 @@ Options (panel):
 
 Exit codes:
   0    success — including the fallback path
+  1    tally verdict CHANGES_REQUESTED, and only when party.block is true
   2    usage error, or a missing/empty artifact
   10   a classifier model turn is required (the handshake, below)
 
@@ -176,6 +186,14 @@ json_pick_array() {
   printf '%s' "$1" | tr '\n\t' '  ' \
     | grep -o "\"$2\"[[:space:]]*:[[:space:]]*\[[^]]*\]" | head -1 \
     | grep -o '"[^"]*"' | sed -E 's/^"//; s/"$//' | tail -n +2 || true
+}
+
+# Seats from our own panel.json, one `role(model)` per line. panel.json is
+# written by this script one seat per line, so a line-wise sed is enough and no
+# JSON parser is needed to read back what we wrote.
+panel_seats() {
+  [[ -f "$1" ]] || return 0
+  sed -n 's/.*"role": "\([^"]*\)", "model": "\([^"]*\)".*/\1(\2)/p' "$1"
 }
 
 # Read a scalar string field out of our own panel.json.
@@ -427,9 +445,12 @@ cmd_panel() {
 
   # ── Write panel.json atomically (the specclaw-set-phase pattern) ────────────
   mkdir -p "$party_dir"
-  local tmpfile
-  tmpfile="$(mktemp "$party_dir/.panel.json.XXXXXX")" || die "cannot create a temp file in $party_dir"
-  trap 'rm -f "$tmpfile"' EXIT
+  # Script-global, not local: the EXIT trap runs in the global scope where a
+  # function-local is invisible, and under `set -u` the cleanup would abort with
+  # "unbound variable" on any die() between here and the trap's release.
+  PANEL_TMP="$(mktemp "$party_dir/.panel.json.XXXXXX")" || die "cannot create a temp file in $party_dir"
+  local tmpfile="$PANEL_TMP"
+  trap 'rm -f "$PANEL_TMP"' EXIT
 
   local seats_json="" dropped_json="" domains_json="" sep="" m
   for s in "${seats[@]+"${seats[@]}"}"; do
@@ -486,7 +507,7 @@ print_panel() {
   local tier src seats dropped rationale
   tier="$(panel_field "$file" tier)"
   src="$(panel_field "$file" tier_source)"
-  seats="$(sed -n 's/.*"role": "\([^"]*\)", "model": "\([^"]*\)".*/\1(\2)/p' "$file")"
+  seats="$(panel_seats "$file")"
   dropped="$(sed -n 's/.*"role": "\([^"]*\)", "reason": "\([^"]*\)".*/\1(\2)/p' "$file" | tr '\n' ' ')"
   rationale="$(panel_field "$file" rationale)"
 
@@ -496,16 +517,286 @@ print_panel() {
   [[ -z "$rationale" ]] || echo "  rationale: ${rationale}"
 }
 
-# ─── tally / report ───────────────────────────────────────────────────────────
+# ─── Findings: one parser, two readers ───────────────────────────────────────
+# tally and report must never disagree about what a finding is, so they share a
+# single scan and neither greps the findings files itself — the same rule
+# `specclaw-parse-tasks --count` enforces for tasks.
 
-cmd_tally() {
-  echo "ERROR: tally is not implemented yet" >&2
-  exit 2
+# round_dir <change_dir> <rounds> → the findings directory the tally reads.
+# rounds: 1 skips rebuttal, so round 1 IS the final word (Edge Case 7).
+round_dir() {
+  local change_dir="$1" rounds="$2"
+  if [[ "$rounds" == "1" ]]; then printf '%s' "$change_dir/party/findings-r1"
+  else printf '%s' "$change_dir/party/findings-r2"; fi
 }
 
+# force_upheld <rounds> → 1 when nobody was given the chance to withdraw.
+force_upheld() { if [[ "$1" == "1" ]]; then echo 1; else echo 0; fi; }
+
+# party_rounds <config> → the configured round count, always a number. A typo
+# here would otherwise pick the wrong findings directory silently and land
+# unquoted in the --json output.
+party_rounds() {
+  local r
+  r="$(party_val "$1" "rounds")"; r="${r:-2}"
+  if [[ "$r" =~ ^[0-9]+$ ]]; then printf '%s' "$r"
+  else warn "party.rounds is not a number ('$r') — using 2"; printf '2'; fi
+}
+
+# scan_findings <dir> <force_upheld:0|1> → a record stream, one finding as:
+#   FINDING<TAB><role><TAB><severity><TAB><status>
+#   BODY<TAB><verbatim line>     (repeated; the first BODY line is the heading)
+#
+# The role is the findings file's own name, not the role written in the heading:
+# a seat marks *its own* findings upheld or withdrawn (FR11), so the file is the
+# authority on authorship and a mistyped heading cannot invent a distinct role
+# for the ≥2-roles rule. The heading is still copied verbatim into the report.
+#
+# Fences are tracked because a panelist quoting the report grammar in **Quotes:**
+# would otherwise open a second finding inside its own evidence — the same defect
+# that made fenced `- [ ] `T9`` template lines count as real tasks (#61).
+# A finding with no **Status:** line counts as upheld: an objection that nobody
+# withdrew still stands.
+scan_findings() {
+  local dir="$1" force="$2" f role
+  [[ -d "$dir" ]] || return 0
+  for f in "$dir"/*.md; do
+    [[ -f "$f" && -s "$f" ]] || continue
+    role="$(basename "$f" .md)"
+    awk -v role="$role" -v force="$force" '
+      function flush(  i) {
+        if (!inf) return
+        while (nb > 0 && body[nb] ~ /^[[:space:]]*$/) nb--
+        if (force == "1" || status == "") status = "upheld"
+        printf "FINDING\t%s\t%s\t%s\n", role, sev, status
+        for (i = 1; i <= nb; i++) printf "BODY\t%s\n", body[i]
+        inf = 0; nb = 0; status = ""
+      }
+      /^[[:space:]]*```/ { fence = !fence; if (inf) body[++nb] = $0; next }
+      fence            { if (inf) body[++nb] = $0; next }
+      /^### \[(BLOCK|WARN|NOTE)\]/ {
+        flush(); inf = 1
+        sev = $0; sub(/^### \[/, "", sev); sub(/\].*$/, "", sev)
+        body[++nb] = $0; next
+      }
+      /^#/ { flush(); next }
+      inf {
+        if ($0 ~ /^\*\*Status:\*\*/) {
+          s = $0; sub(/^\*\*Status:\*\*[[:space:]]*/, "", s)
+          status = (s ~ /^[Ww]ithdrawn/) ? "withdrawn" : "upheld"
+        }
+        body[++nb] = $0
+      }
+      END { flush() }
+    ' "$f"
+  done
+}
+
+# tally_counts <stream file> → "<verdict> <total> <block> <warn> <note> <withdrawn>"
+# FR12, and the only place the verdict rule is written down. BLOCK/WARN/NOTE
+# counts are of *upheld* findings; withdrawn ones never count toward a verdict.
+tally_counts() {
+  awk -F'\t' '
+    $1 == "FINDING" {
+      total++
+      if ($4 == "withdrawn") { wd++; next }
+      if ($3 == "BLOCK")     b++
+      else if ($3 == "WARN") { w++; rolewarn[$2]++ }
+      else                   n++
+    }
+    END {
+      roles = 0; most = 0
+      for (r in rolewarn) { roles++; if (rolewarn[r] > most) most = rolewarn[r] }
+      if (b > 0)                        v = "CHANGES_REQUESTED"
+      else if (roles >= 2 || most >= 3) v = "APPROVED_WITH_NOTES"
+      else                              v = "APPROVED"
+      printf "%s %d %d %d %d %d\n", v, total, b, w, n, wd
+    }
+  ' "$1"
+}
+
+# emit_findings <stream file> <upheld|withdrawn> → the verbatim heading blocks.
+#
+# Withdrawn headings are rewritten `### [BLOCK]` → `### [WITHDRAWN BLOCK]`. The
+# report carries Findings and Dissent in one file, and `grep -cE '^### \[BLOCK\]'`
+# (specclaw-loop:291) counts the whole file — so a withdrawn BLOCK left in the
+# original grammar would be counted as a live blocker from the Dissent section,
+# breaking AC12. Demoting the token, rather than the heading level or the
+# indentation, keeps the severity legible to a human and keeps the line a real
+# markdown heading. The cost: Dissent is deliberately NOT in the Findings
+# grammar, so anything parsing dissent by severity must expect the prefix.
+#
+# The same problem arrives from the other direction: a panelist quoting the report
+# grammar in its **Quotes:** evidence emits a fenced, column-0 `### [BLOCK]`. This
+# scanner ignores it (fences), but specclaw-loop's grep does not, and a WARN report
+# would pin that gate red forever. Any `### [` line *after* the heading is fenced
+# by construction — an unfenced one would have opened a new finding — so indenting
+# it two spaces defuses the anchor and costs the quote only its left margin.
+emit_findings() {
+  awk -F'\t' -v want="$2" '
+    $1 == "FINDING" { keep = ($4 == want); first = 1; if (keep && seen++) print ""; next }
+    $1 == "BODY" && keep {
+      line = substr($0, 6)
+      if (first && want == "withdrawn") sub(/^### \[/, "### [WITHDRAWN ", line)
+      else if (!first && line ~ /^### \[/) line = "  " line
+      first = 0
+      print line
+    }
+  ' "$1"
+}
+
+# unheard_seats <panel.json> <findings dir> → seats that filed nothing.
+# Edge Case 6: a spawn that returned nothing is recorded, and the tally proceeds
+# on the seats that did speak rather than blocking on the one that did not.
+unheard_seats() {
+  local panel_file="$1" dir="$2" role
+  [[ -f "$panel_file" ]] || return 0
+  while IFS= read -r role; do
+    role="${role%%(*}"
+    [[ -n "$role" ]] || continue
+    [[ -s "$dir/$role.md" ]] || printf '%s\n' "$role"
+  done < <(panel_seats "$panel_file")
+}
+
+# ─── tally ────────────────────────────────────────────────────────────────────
+
+cmd_tally() {
+  local specclaw_dir="" change="" as_json=false
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --json) as_json=true; shift ;;
+      -*)     die "unknown option: $1" ;;
+      *)
+        if [[ -z "$specclaw_dir" ]]; then specclaw_dir="$1"
+        elif [[ -z "$change" ]]; then change="$1"
+        else die "unexpected argument: $1"
+        fi
+        shift ;;
+    esac
+  done
+  [[ -n "$specclaw_dir" && -n "$change" ]] || die "tally requires: <specclaw_dir> <change_name>"
+
+  local config="$specclaw_dir/config.yaml"
+  local change_dir="$specclaw_dir/changes/$change"
+  [[ -d "$change_dir" ]] || die "Change not found: $change_dir"
+
+  local rounds fdir
+  rounds="$(party_rounds "$config")"
+  fdir="$(round_dir "$change_dir" "$rounds")"
+  [[ -d "$fdir" ]] || warn "no findings directory at $fdir — tallying an empty panel"
+
+  STREAM="$(mktemp)" || die "cannot create a temp file"
+  trap 'rm -f "$STREAM"' EXIT
+  scan_findings "$fdir" "$(force_upheld "$rounds")" > "$STREAM"
+
+  local verdict total block warn_c note withdrawn
+  read -r verdict total block warn_c note withdrawn < <(tally_counts "$STREAM")
+
+  if [[ "$as_json" == true ]]; then
+    local unheard_json="" sep="" u
+    while IFS= read -r u; do
+      [[ -n "$u" ]] || continue
+      unheard_json="${unheard_json}${sep}$(json_str "$u")"; sep=", "
+    done < <(unheard_seats "$change_dir/party/panel.json" "$fdir")
+    printf '{"verdict": %s, "rounds": %s, "findings": %s, "block": %s, "warn": %s, "note": %s, "withdrawn": %s, "unheard": [%s]}\n' \
+      "$(json_str "$verdict")" "$rounds" "$total" "$block" "$warn_c" "$note" "$withdrawn" "$unheard_json"
+  else
+    printf '%s\n' "$verdict"
+  fi
+
+  # Policy lives in config, not in the caller: the exit code is a gate only when
+  # the operator asked for one (FR14 — party mode informs, it does not block).
+  local block_policy
+  block_policy="$(party_val "$config" "block")"
+  if [[ "$verdict" == "CHANGES_REQUESTED" && "$block_policy" == "true" ]]; then
+    return 1
+  fi
+  return 0
+}
+
+# ─── report ───────────────────────────────────────────────────────────────────
+
 cmd_report() {
-  echo "ERROR: report is not implemented yet" >&2
-  exit 2
+  local specclaw_dir="" change=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -*) die "unknown option: $1" ;;
+      *)
+        if [[ -z "$specclaw_dir" ]]; then specclaw_dir="$1"
+        elif [[ -z "$change" ]]; then change="$1"
+        else die "unexpected argument: $1"
+        fi
+        shift ;;
+    esac
+  done
+  [[ -n "$specclaw_dir" && -n "$change" ]] || die "report requires: <specclaw_dir> <change_name>"
+
+  local config="$specclaw_dir/config.yaml"
+  local change_dir="$specclaw_dir/changes/$change"
+  local panel_file="$change_dir/party/panel.json"
+  local report_file="$change_dir/party-report.md"
+  [[ -d "$change_dir" ]] || die "Change not found: $change_dir"
+
+  local rounds fdir
+  rounds="$(party_rounds "$config")"
+  fdir="$(round_dir "$change_dir" "$rounds")"
+
+  STREAM="$(mktemp)" || die "cannot create a temp file"
+  REPORT_TMP="$(mktemp "$change_dir/.party-report.md.XXXXXX")" || die "cannot create a temp file in $change_dir"
+  trap 'rm -f "$STREAM" "$REPORT_TMP"' EXIT
+  scan_findings "$fdir" "$(force_upheld "$rounds")" > "$STREAM"
+
+  local verdict total block warn_c note withdrawn
+  read -r verdict total block warn_c note withdrawn < <(tally_counts "$STREAM")
+
+  local tier src rationale panel_line unheard
+  if [[ -f "$panel_file" ]]; then
+    tier="$(panel_field "$panel_file" tier)"
+    src="$(panel_field "$panel_file" tier_source)"
+    rationale="$(panel_field "$panel_file" rationale)"
+    # `paste -d ', '` would cycle the two delimiters; join on one and space after.
+    panel_line="$(panel_seats "$panel_file" | paste -sd ',' - | sed 's/,/, /g')"
+  else
+    warn "no panel.json at $panel_file — tier and panel lines will read 'unknown'"
+    tier="unknown"; src="unknown"; rationale="No panel.json was found."; panel_line="unknown"
+  fi
+  unheard="$(unheard_seats "$panel_file" "$fdir" | paste -sd ',' - | sed 's/,/, /g')"
+
+  {
+    printf '# Party Report: %s\n\n' "$change"
+    printf '**Reviewed:** %s\n' "$(date -u +%Y-%m-%d)"
+    printf '**Tier:** %s (%s) — %s\n' "$tier" "$src" "${rationale:-no rationale recorded}"
+    printf '**Panel:** %s\n' "${panel_line:-none}"
+    printf '**Verdict:** %s\n\n' "$verdict"
+
+    printf '## Summary\n\n'
+    printf '%s findings: %s BLOCK, %s WARN, %s NOTE upheld — %s withdrawn\n' \
+      "$total" "$block" "$warn_c" "$note" "$withdrawn"
+    [[ -z "$unheard" ]] || printf '\n**Unheard:** %s — no findings returned; the tally proceeded on the remaining seats.\n' "$unheard"
+    printf '\n## Findings\n\n'
+    if [[ "$block" -eq 0 && "$warn_c" -eq 0 && "$note" -eq 0 ]]; then
+      printf 'No upheld findings.\n'
+    else
+      emit_findings "$STREAM" upheld
+    fi
+
+    printf '\n## Dissent\n\n'
+    if [[ "$rounds" == "1" ]]; then
+      printf '_Rebuttal was disabled (party.rounds: 1) — every round-1 finding counts as upheld and nothing could be withdrawn._\n'
+    elif [[ "$withdrawn" -eq 0 ]]; then
+      printf 'No withdrawals.\n'
+    else
+      printf '_Withdrawn findings. The severity token is prefixed WITHDRAWN so these do not count as live findings._\n\n'
+      emit_findings "$STREAM" withdrawn
+    fi
+  } > "$REPORT_TMP" || die "failed to build party-report.md"
+
+  chmod 644 "$REPORT_TMP" 2>/dev/null || true
+  mv "$REPORT_TMP" "$report_file" || die "failed to install $report_file"
+  rm -f "$STREAM"
+  trap - EXIT
+
+  echo "OK: wrote $report_file — verdict $verdict"
 }
 
 # ─── Main dispatch ────────────────────────────────────────────────────────────

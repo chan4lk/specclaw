@@ -1,11 +1,12 @@
 {
   "change": "032-party-mode",
-  "phase": "tasks",
-  "branch": "",
+  "phase": "build",
+  "branch": "specclaw/032-party-mode",
   "phases": {
     "proposal": {"status":"approved","at":"2026-08-15T16:24:40Z"},
     "spec": {"status":"done","at":"2026-08-15T16:28:27Z"},
     "design": {"status":"done","at":"2026-08-15T16:30:15Z"},
-    "tasks": {"status":"done","at":"2026-08-15T16:31:07Z"}
+    "tasks": {"status":"done","at":"2026-08-15T16:31:07Z"},
+    "build": {"status":"in-progress","at":"2026-08-15T16:41:58Z"}
   }
 }
