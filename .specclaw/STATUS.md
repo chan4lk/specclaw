@@ -1,55 +1,54 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** specclaw
-**Last Updated:** 2026-08-10 14:09 UTC
-
-_31 unnumbered changes · run `/specclaw:renumber` to order them_
+**Last Updated:** 2026-08-15 16:31 UTC
 
 ## Active Changes
 
 
-- ✅ **memory-aware-parallelism** — 5/5 tasks (100%) | 0 failed | PR #46 merged
-- 🔀 **numbered-change-folders** — pr raised | 6/6 tasks (100%) | 0 failed | PR #60 merged
-- 🔀 **tracker-state-integrity** — pr raised | 7/7 tasks (100%) | 0 failed | PR #57 merged
+- 🔨 **027-memory-aware-parallelism** — 5/6 tasks (83%) | 0 failed
+- ✅ **030-tracker-state-integrity** — 7/7 tasks (100%) | 0 failed
+- 🔨 **031-numbered-change-folders** — 6/7 tasks (85%) | 0 failed
+- 🔨 **032-party-mode** — 0/10 tasks (0%) | 0 failed
 
 ## Pending Proposals
 
 
-- 📋 **phase-time-accounting** — proposal ready, awaiting planning
-- 📋 **staged-files-auditor** — proposal ready, awaiting planning
+- 📋 **028-phase-time-accounting** — proposal ready, awaiting planning
+- 📋 **029-staged-files-auditor** — proposal ready, awaiting planning
 
 ## Recently Completed
 
 
-- ✅ **2026-07-21-code-reviewer-agent**
-- ✅ **2026-07-22-azure-boards-integration**
-- ✅ **2026-07-22-build-engine**
-- ✅ **2026-07-22-build-error-journal**
-- ✅ **2026-07-22-claude-plugin-packaging**
-- ✅ **2026-07-22-discoverability-indexing**
-- ✅ **2026-07-22-dynamic-subagents-for-build**
-- ✅ **2026-07-22-git-worktrees**
-- ✅ **2026-07-22-github-issues-sync**
-- ✅ **2026-07-22-grounded-context**
-- ✅ **2026-07-22-karpathy-build-guardrails**
-- ✅ **2026-07-22-learn-command**
-- ✅ **2026-07-22-lifecycle-bug-fixes**
-- ✅ **2026-07-22-living-project-context**
-- ✅ **2026-07-22-loop-engineering**
-- ✅ **2026-07-22-pattern-detection**
-- ✅ **2026-07-22-phase-validation**
-- ✅ **2026-07-22-post-build-review**
-- ✅ **2026-07-22-pr-command**
-- ✅ **2026-07-22-prompt-hardening**
-- ✅ **2026-07-22-smart-base-branch**
-- ✅ **2026-07-22-spec-author-agent**
-- ✅ **2026-07-22-update-check**
-- ✅ **2026-07-22-verification-engine**
-- ✅ **2026-07-22-verify-glob-oom-fix**
-- ✅ **2026-07-25-long-running-test-orchestration**
+- ✅ **001-build-engine**
+- ✅ **002-build-error-journal**
+- ✅ **003-github-issues-sync**
+- ✅ **004-learn-command**
+- ✅ **005-pattern-detection**
+- ✅ **006-phase-validation**
+- ✅ **007-post-build-review**
+- ✅ **008-verification-engine**
+- ✅ **009-pr-command**
+- ✅ **010-azure-boards-integration**
+- ✅ **011-claude-plugin-packaging**
+- ✅ **012-karpathy-build-guardrails**
+- ✅ **013-spec-author-agent**
+- ✅ **014-lifecycle-bug-fixes**
+- ✅ **015-code-reviewer-agent**
+- ✅ **016-living-project-context**
+- ✅ **017-loop-engineering**
+- ✅ **018-grounded-context**
+- ✅ **019-prompt-hardening**
+- ✅ **020-smart-base-branch**
+- ✅ **021-update-check**
+- ✅ **022-discoverability-indexing**
+- ✅ **023-verify-glob-oom-fix**
+- ✅ **024-dynamic-subagents-for-build**
+- ✅ **025-git-worktrees**
+- ✅ **026-long-running-test-orchestration**
 
 ## Stats
 
-- **Total changes:** 29
-- **Active:** 3
+- **Total changes:** 30
+- **Active:** 4
 - **Completed:** 26

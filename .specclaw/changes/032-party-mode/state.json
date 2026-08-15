@@ -1,0 +1,11 @@
+{
+  "change": "032-party-mode",
+  "phase": "tasks",
+  "branch": "",
+  "phases": {
+    "proposal": {"status":"approved","at":"2026-08-15T16:24:40Z"},
+    "spec": {"status":"done","at":"2026-08-15T16:28:27Z"},
+    "design": {"status":"done","at":"2026-08-15T16:30:15Z"},
+    "tasks": {"status":"done","at":"2026-08-15T16:31:07Z"}
+  }
+}
