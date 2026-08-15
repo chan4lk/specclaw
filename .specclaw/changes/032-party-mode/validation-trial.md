@@ -67,7 +67,65 @@ bucket stops blocking. Its fix — read policy from the base ref, `suspicious` s
 - **Three seats, one artifact.** Divergence on one proposal is evidence, not proof. The classifier's
   tier calibration against the full 31-proposal corpus is still the cheap next check.
 
+---
+
+# Trial 2 — does `fable` earn the Visionary seat?
+
+**Spec Open Question 7**, run the way it asked: the same charter, the same artifact
+(`029-staged-files-auditor`), round 1, once at `fable` and once at `sonnet`. Nothing else differs.
+
+## Result: yes, on a visible margin.
+
+| | `fable` | `sonnet` |
+|---|---|---|
+| Findings | 5 WARN, 1 NOTE | 1 BLOCK, 2 WARN, 1 NOTE |
+| Tokens | 39.9k | 32.3k |
+| Wall clock | 146s | 84s |
+
+**Two subjects overlapped** — the artifact set becoming a third hand-synced copy, and the
+`junk_patterns` list — and even there the claims differed:
+
+- On `junk_patterns`, `sonnet` found that the project-level list is *append-only*, so a project that
+  legitimately commits `*.log` cannot override a shipped default. Concrete, local, correct.
+  `fable` found that the list becomes **a shadow `.gitignore` that specclaw curates forever**, and
+  that the day the gate merges, Open Question 6 gets answered by default rather than decided.
+- On the artifact set, `sonnet` filed the omission of `staged-files-report.md`. `fable` filed the
+  same omission and observed that **the proposal is itself the next change that trips on the
+  duplication it introduces** — the general form of the specific bug.
+
+**Two findings `sonnet` did not reach**, and both are the reason the seat exists:
+
+1. *The config-key mirror teaches a template.* This is the second gate built as
+   agent + report + `<x>_audit`/`<x>_block` pair + ship-with-block-false, and the proposal cites the
+   first as justification. Two copies make a pattern; the contributor who builds the third copies it
+   without reading a footnote. Config keys are the sticky part — once projects set
+   `staged_files_audit`, consolidating gates means migrating keys specclaw does not control. *"Each
+   copy is cheap; the family of copies forecloses the framework."*
+2. *`--strict` publishes a contract before deciding it.* The flag is designed for CI systems outside
+   specclaw's release cadence, and Open Question 1 (should `undeclared` block?) changes the exit
+   status of every pipeline that adopted it. Deciding that question after adoption is no longer a
+   config change; it is a breaking release.
+
+Both are claims about **precedent and compounding**, not about this diff — which is exactly the
+mandate boundary the charter draws ("Architect's horizon ends at the merge commit; Visionary's begins
+there").
+
+**Mandate discipline also differed.** `sonnet`'s single BLOCK — `staged-files-report.md` is missing
+from the mandatory set — is a duplicated-fact/contract-specification finding, which the partition
+assigns to the Architect. `fable` filed the same observation inside a future-change frame and stayed
+in lane. A cheaper model on this seat does not just find less; it drifts into the seat next to it,
+which is precisely the convergence the partition exists to prevent.
+
+## Caveat
+
+One artifact, one run, no rebuttal round. The margin is visible but not large, and `sonnet`'s output
+was not weak — a cost-constrained project setting `party.models.party-visionary: sonnet` would still
+get a useful seat. The finding is that `fable` earns the *default*, not that `sonnet` is unusable.
+
+---
+
 ## Consequence for this change
 
 W3 wiring proceeds. The panel produces distinct, evidence-anchored, actionable findings from
-non-overlapping mandates, which is the premise the rest of the change rests on.
+non-overlapping mandates, which is the premise the rest of the change rests on. The `fable` default
+for `party-visionary` stands, with Open Question 7 answered on evidence rather than intuition.
