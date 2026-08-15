@@ -104,7 +104,7 @@ one reviewer with a checklist, and W2–W4 should not be built at all.
 
 ### Wave 3 — Wiring
 
-- [ ] `T7` — `/specclaw:propose` integration
+- [x] `T7` — `/specclaw:propose` integration
   - Files: `plugins/specclaw/skills/propose/SKILL.md`
   - Estimate: medium
   - Kind: docs

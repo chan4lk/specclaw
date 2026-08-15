@@ -332,12 +332,6 @@ cmd_panel() {
     tier_source="fixed"
     rationale="panel_mode: fixed — seats taken verbatim from party.panel."
     fixed_seats="$(party_list "$config" "panel")"
-  elif [[ "$emit_request" == true ]]; then
-    mkdir -p "$party_dir"
-    : > "$requested_marker"
-    echo "target: $class_file"
-    classifier_prompt "$proposal" "$class_file"
-    exit 10
   elif [[ -s "$class_file" ]]; then
     local raw
     raw="$(cat "$class_file")"
@@ -357,8 +351,12 @@ cmd_panel() {
         rationale="Classifier output was unusable; defaulted to standard."
         ;;
     esac
-  elif [[ ! -f "$requested_marker" ]]; then
+  elif [[ "$emit_request" == true || ! -f "$requested_marker" ]]; then
     # The handshake: bash cannot spawn the classifier, so ask for a model turn.
+    # An existing answer wins over the flag — the branch above already took it —
+    # so --emit-classifier-request re-asks a question that went unanswered and
+    # is a no-op once answered. Ordered the other way it re-emitted forever on
+    # every call, and a caller passing it unconditionally would never converge.
     mkdir -p "$party_dir"
     : > "$requested_marker"
     echo "target: $class_file"
