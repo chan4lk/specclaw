@@ -2,11 +2,11 @@
 
 **Change:** 032-party-mode
 **Created:** 2026-08-15
-**Total Tasks:** 9
+**Total Tasks:** 8 (+1 deferred — see Wave 4)
 
 ## Summary
 
-Nine tasks in four waves.
+Eight tasks in three waves, plus a fourth wave deliberately deferred.
 
 **W1** builds the script and its tests together — seat resolution, the fallback, the cache, the
 tally, and the `party_val` config reader that keeps `party.models` from resolving to the top-level
@@ -19,12 +19,15 @@ they parallelise; the anti-convergence check (AC14) is a task, not a hope.
 **W3** wires the surfaces: `/specclaw:propose` (the handshake, the confirm prompt, round dispatch),
 config seeding, docs, and CI registration.
 
-**W4** is the loop-halt surface, sequenced last so it can be dropped without unpicking anything —
-see design D9.
+**W4** is the loop-halt surface, sequenced last so it could be dropped without unpicking anything —
+see design D9. It was dropped; the reasoning is recorded at the wave itself.
 
-**Validation gate before W2 is worth the tokens:** run two panelist charters by hand against
-`029-staged-files-auditor` and compare their findings. If the roles converge, the correct outcome is
-one reviewer with a checklist, and W2–W4 should not be built at all.
+**Validation gate — run, and passed.** Three charters were run by hand against
+`029-staged-files-auditor` after W2: 17 findings, no duplicate claim, and the two subjects touched by
+more than one seat split along the axis the partition was designed on. A second trial answered spec
+Open Question 7 — the Visionary at `fable` produced two precedent-level findings `sonnet` did not
+reach, and stayed inside its mandate where `sonnet` drifted into the Architect's. Both trials are
+recorded in `validation-trial.md`.
 
 ## Tasks
 
@@ -130,18 +133,23 @@ one reviewer with a checklist, and W2–W4 should not be built at all.
     silently never run twice in this repo. Confirm `shellcheck-gate.sh` reports no new findings
     (NFR3); fix them or add a targeted disable with a rationale, never append to the baseline.
 
-### Wave 4 — Loop-halt surface (droppable)
+### Wave 4 — Loop-halt surface — **DEFERRED, not built**
 
-- [ ] `T9` — Panel on loop halt
-  - Files: `plugins/specclaw/skills/loop/SKILL.md`, `plugins/specclaw/bin/specclaw-loop`
-  - Estimate: medium
-  - Kind: impl
-  - Depends: T7
-  - Notes: FR15. When `decide` returns `halt` and `party.on_loop_halt: true`, run the panel against
-    the halt — inputs are the failing gates, `loop-log.md`, and the failure-signature history; the
-    question is whether the design, the gate, or the fix approach is wrong. **One round only.**
-    `escalate` attaches `party-report.md` to the escalation note when present; its signature does not
-    change. Per D9 this wave is the clean cut line — if W1–W3 run long, drop T9 and ship without it.
+Design decision D9 named this wave the clean cut line, and it was taken. **T9 is deliberately not in
+this change** and is deliberately not counted as an incomplete task: the change ships 8/8.
+
+**Why cut, stated so a reader does not have to guess:** the propose surface has two validation trials
+behind it (the roles diverge; `fable` earns its seat) and 138 green assertions. The loop surface has
+none — no trial, no fixture, and a different input shape (failing gates, `loop-log.md`, the
+failure-signature history) whose charters would need re-pointing from "argue this proposal" to "argue
+why this loop cannot converge". Shipping it on the strength of the propose surface's evidence would
+be borrowing confidence the loop surface has not earned.
+
+It costs nothing to add later: it shares the agents, the report, and the tally, and touches only
+`skills/loop/SKILL.md` and `specclaw-loop escalate`. `party.on_loop_halt` ships in the config block
+as `false` and is currently read by nothing — the one loose end, and the follow-up's entry point.
+
+Carried forward as spec FR15 and spec Open Question 9.
 
 ---
 

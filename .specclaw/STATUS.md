@@ -1,15 +1,15 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** specclaw
-**Last Updated:** 2026-08-15 16:31 UTC
+**Last Updated:** 2026-08-15 17:59 UTC
 
 ## Active Changes
 
 
-- 🔨 **027-memory-aware-parallelism** — 5/6 tasks (83%) | 0 failed
-- ✅ **030-tracker-state-integrity** — 7/7 tasks (100%) | 0 failed
-- 🔨 **031-numbered-change-folders** — 6/7 tasks (85%) | 0 failed
-- 🔨 **032-party-mode** — 0/10 tasks (0%) | 0 failed
+- ✅ **027-memory-aware-parallelism** — 5/5 tasks (100%) | 0 failed
+- 🔀 **030-tracker-state-integrity** — pr raised | 7/7 tasks (100%) | 0 failed | PR #57 merged
+- 🔀 **031-numbered-change-folders** — pr raised | 6/6 tasks (100%) | 0 failed | PR #60 merged
+- 🔨 **032-party-mode** — build in-progress | 8/8 tasks (100%) | 0 failed
 
 ## Pending Proposals
 
