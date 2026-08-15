@@ -238,7 +238,8 @@ classifier_prompt() {
 You are party-classifier. Read the proposal at:
   $proposal
 
-Classify its review depth and write ONLY this JSON object to:
+Classify its review depth and return ONLY this JSON object as your final
+message. You have no Write tool: the calling skill persists your answer to
   $target
 
 {"tier": "thin|standard|deep",

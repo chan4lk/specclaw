@@ -76,7 +76,7 @@ one reviewer with a checklist, and W2–W4 should not be built at all.
 
 ### Wave 2 — The charters
 
-- [ ] `T5` — `party-classifier` agent
+- [x] `T5` — `party-classifier` agent
   - Files: `plugins/specclaw/agents/party-classifier.md`
   - Estimate: medium
   - Kind: docs
@@ -89,7 +89,7 @@ one reviewer with a checklist, and W2–W4 should not be built at all.
     `{tier, domains, rationale, signals}` object, rationale one sentence — it is quoted verbatim in
     the operator's confirm prompt.
 
-- [ ] `T6` — Five panelist agents with non-overlapping mandates
+- [x] `T6` — Five panelist agents with non-overlapping mandates
   - Files: `plugins/specclaw/agents/party-ba.md`, `plugins/specclaw/agents/party-po.md`, `plugins/specclaw/agents/party-architect.md`, `plugins/specclaw/agents/party-security.md`, `plugins/specclaw/agents/party-visionary.md`
   - Estimate: large
   - Kind: docs
