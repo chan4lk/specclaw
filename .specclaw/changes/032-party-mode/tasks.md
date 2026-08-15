@@ -30,7 +30,7 @@ one reviewer with a checklist, and W2–W4 should not be built at all.
 
 ### Wave 1 — The script, with its tests
 
-- [ ] `T1` — `specclaw-party panel`: classification handshake, seat resolution, cache
+- [x] `T1` — `specclaw-party panel`: classification handshake, seat resolution, cache
   - Files: `plugins/specclaw/bin/specclaw-party`
   - Estimate: large
   - Kind: impl
@@ -41,7 +41,7 @@ one reviewer with a checklist, and W2–W4 should not be built at all.
     `specclaw-build:669-681` and the JSON escaping from `specclaw-build:108-113` / `:537-544`. Write
     `panel.json` atomically (temp → `mv`), the `specclaw-set-phase` pattern. Edge cases 1–4, 9, 10.
 
-- [ ] `T2` — `party_val`: block-scoped config reader
+- [x] `T2` — `party_val`: block-scoped config reader
   - Files: `plugins/specclaw/bin/specclaw-party`
   - Estimate: small
   - Kind: impl
