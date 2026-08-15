@@ -645,16 +645,24 @@ emit_findings() {
   ' "$1"
 }
 
-# unheard_seats <panel.json> <findings dir> → seats that filed nothing.
+# unheard_seats <panel.json> <stream_file> → seats that filed no finding.
 # Edge Case 6: a spawn that returned nothing is recorded, and the tally proceeds
 # on the seats that did speak rather than blocking on the one that did not.
+#
+# Judged on the scan stream, not on file size. A panelist that answers "I have
+# no objections, honestly." writes a non-empty file containing no finding, so a
+# `-s` test calls it heard while scan_findings yields nothing for it — the panel
+# silently shrinks by a seat with no trace in the report. That is exactly the
+# silence FR10 forbids, so the same parser that counts findings decides who
+# spoke.
 unheard_seats() {
-  local panel_file="$1" dir="$2" role
+  local panel_file="$1" stream="$2" role
   [[ -f "$panel_file" ]] || return 0
   while IFS= read -r role; do
     role="${role%%(*}"
     [[ -n "$role" ]] || continue
-    [[ -s "$dir/$role.md" ]] || printf '%s\n' "$role"
+    awk -F'\t' -v r="$role" '$1=="FINDING" && $2==r {found=1; exit} END{exit !found}' \
+      "$stream" 2>/dev/null || printf '%s\n' "$role"
   done < <(panel_seats "$panel_file")
 }
 
@@ -697,7 +705,7 @@ cmd_tally() {
     while IFS= read -r u; do
       [[ -n "$u" ]] || continue
       unheard_json="${unheard_json}${sep}$(json_str "$u")"; sep=", "
-    done < <(unheard_seats "$change_dir/party/panel.json" "$fdir")
+    done < <(unheard_seats "$change_dir/party/panel.json" "$STREAM")
     printf '{"verdict": %s, "rounds": %s, "findings": %s, "block": %s, "warn": %s, "note": %s, "withdrawn": %s, "unheard": [%s]}\n' \
       "$(json_str "$verdict")" "$rounds" "$total" "$block" "$warn_c" "$note" "$withdrawn" "$unheard_json"
   else
@@ -760,7 +768,7 @@ cmd_report() {
     warn "no panel.json at $panel_file — tier and panel lines will read 'unknown'"
     tier="unknown"; src="unknown"; rationale="No panel.json was found."; panel_line="unknown"
   fi
-  unheard="$(unheard_seats "$panel_file" "$fdir" | paste -sd ',' - | sed 's/,/, /g')"
+  unheard="$(unheard_seats "$panel_file" "$STREAM" | paste -sd ',' - | sed 's/,/, /g')"
 
   {
     printf '# Party Report: %s\n\n' "$change"

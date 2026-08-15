@@ -62,7 +62,7 @@ one reviewer with a checklist, and W2–W4 should not be built at all.
     `## Dissent`, silent seats → `unheard`. Exit 1 on `CHANGES_REQUESTED` **only** when
     `party.block: true`. Edge cases 5, 6, 7.
 
-- [ ] `T4` — `run-party-tests.sh`
+- [x] `T4` — `run-party-tests.sh`
   - Files: `plugins/specclaw/tests/run-party-tests.sh`
   - Estimate: large
   - Kind: test
