@@ -18,10 +18,21 @@ STREAM=""
 REPORT_TMP=""
 PANEL_TMP=""
 
-# Canonical tier order. max_seats clamping drops from the TAIL, so Visionary and
-# Security go before Architect and PO (FR4). Seats that are not in this list
-# (custom names from party.always) rank after it and drop first.
-TIER_ORDER=(party-po party-architect party-ba party-visionary party-security)
+# Canonical tier order. max_seats clamping drops from the TAIL, so the Visionary
+# goes first and PO/Architect last (FR4). Seats that are not in this list (custom
+# names from party.always) rank after it and drop before any of them.
+#
+# Security sits AHEAD of the Visionary deliberately. It is the one seat that is
+# never on the roster by default: it arrives only because the classifier flagged
+# a trust boundary or because the tier is `deep`, so a config ceiling that drops
+# it is discarding the single seat something specifically asked for — and
+# discarding it silently, on the panel that needed it. The Visionary's mandate
+# (does this compound?) is the one that survives being deferred to the next
+# review; a fail-open in the token path does not.
+#
+# The same array orders the min_seats growth loop, so a panel grown to a floor
+# fills in the same order it would empty.
+TIER_ORDER=(party-po party-architect party-ba party-security party-visionary)
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -31,7 +42,7 @@ Usage: specclaw-party <subcommand> [options]
 
 Subcommands:
   panel   <specclaw_dir> <change_name> [--panel thin|standard|deep] [--repanel]
-                                       [--json] [--emit-classifier-request]
+                                       [--json]
           Resolve the review roster for a proposal, write
           changes/<change_name>/party/panel.json, print a human summary.
 
@@ -43,13 +54,18 @@ Subcommands:
           Assemble changes/<change_name>/party-report.md from the findings
           and the tally.
 
+  get     <specclaw_dir> <key> [--default <value>]
+          Print one value from the `party:` block of config.yaml. THE only
+          supported way to read party config from outside this script.
+
 Options (panel):
-  --panel <tier>              Force thin|standard|deep. Skips the classifier
-                              entirely; recorded as tier_source "override".
-  --repanel                   Ignore a cached panel.json and re-resolve.
-  --json                      Print panel.json instead of the human summary.
-  --emit-classifier-request   Print the classifier prompt and the path its answer
-                              belongs at, then exit 10.
+  --panel <tier>   Force thin|standard|deep. Skips the classifier entirely;
+                   recorded as tier_source "override".
+  --repanel        Ignore a cached panel.json and re-resolve.
+  --json           Print panel.json instead of the human summary.
+
+Options (get):
+  --default <value>  Print this when the key is absent or empty.
 
   -h, --help   Show this help message
 
@@ -69,6 +85,15 @@ warning on stderr, exit 0. The fallback is never "thin".
 Agent definitions are looked up in <specclaw_dir>/agents/<seat>.md first, then in
 the plugin's own agents/ directory. A seat with no definition anywhere is dropped
 with a warning rather than aborting the panel.
+
+`get` reads the `party:` block and nothing else, so it cannot return a value from
+a same-named key in another block — which a whole-file `grep enabled:` does, and
+does silently. Keys are the dotted paths under `party:`: `enabled`, `default`,
+`rounds`, `block`, `panel_mode`, `min_seats`, `max_seats`, `models.party-po`.
+The list-valued keys `panel` and `always` print ONE ITEM PER LINE (no brackets,
+no quotes, nothing on an empty list) whichever YAML form the config used; every
+other key prints a single line. Exit 0 even when the key is absent — use
+--default to distinguish "unset" from a set-but-empty value.
 EOF
 }
 
@@ -157,10 +182,67 @@ party_list() {
       !inparty { next }
       $0 ~ "^  " key ":[[:space:]]*$" { inlist=1; next }
       inlist && $0 ~ /^  [a-zA-Z_]/ { inlist=0 }
-      inlist && $0 ~ /^[[:space:]]+-[[:space:]]+/ { line=$0; sub(/^[[:space:]]+-[[:space:]]+/,"",line); print line }
+      # `-` at column 0 is the form yq and ruamel emit by default, and it is
+      # valid YAML: a sequence under a mapping key need not be indented. The
+      # item regex used to demand indentation, so that config read as an EMPTY
+      # list — which for party.always silently disables the operator escape
+      # hatch on the run that needed it. The block guard above is what keeps
+      # this safe: /^[a-zA-Z_]/ has already left the party window, so a column-0
+      # `-` can only be an item of THIS list.
+      inlist && $0 ~ /^[[:space:]]*-[[:space:]]+/ { line=$0; sub(/^[[:space:]]*-[[:space:]]+/,"",line); print line }
     ' "$config" | sed -E 's/[[:space:]]*#.*$//; s/[[:space:]]+$//; s/^"(.*)"$/\1/; s/^'\''(.*)'\''$/\1/' \
       | grep -v '^$' || true
   fi
+}
+
+# The keys whose value is a list. `get` needs to know which reader to use, and
+# guessing from the value would make the output shape depend on the config: an
+# `always: [party-security]` would print one line and an `always: []` would print
+# one empty line, so a caller could not tell a one-seat list from an empty one.
+# The set is closed and small; it lives here so `get`'s contract is a property of
+# the key, not of what happens to be in the file.
+PARTY_LIST_KEYS=(panel always)
+
+# ─── get ──────────────────────────────────────────────────────────────────────
+# The only supported reader of the `party:` block from outside this script.
+#
+# CLAUDE.md states that no party config value may be read any other way — not
+# with yaml_val, not with a grep in a SKILL.md, not with a one-off sed — because
+# yaml_val reduces `party.enabled` to `enabled:` and greps the whole file, which
+# in the shipped config finds build.dynamic_agents.enabled (false) seventy lines
+# above the key that was asked for. That rule shipped with no mechanism behind
+# it: `propose` was told to read party.enabled and given nothing to read it
+# with. This is that mechanism.
+cmd_get() {
+  local specclaw_dir="" key="" default="" k
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --default) [[ $# -ge 2 ]] || die "--default requires a value"; default="$2"; shift 2 ;;
+      -*)        die "unknown option: $1" ;;
+      *)
+        if [[ -z "$specclaw_dir" ]]; then specclaw_dir="$1"
+        elif [[ -z "$key" ]]; then key="$1"
+        else die "unexpected argument: $1"
+        fi
+        shift ;;
+    esac
+  done
+  [[ -n "$specclaw_dir" && -n "$key" ]] || die "get requires: <specclaw_dir> <key>"
+
+  local config="$specclaw_dir/config.yaml"
+  [[ -f "$config" ]] || die "Config not found: $config"
+
+  local out
+  if in_list "$key" "${PARTY_LIST_KEYS[@]}"; then
+    out="$(party_list "$config" "$key")"
+  else
+    out="$(party_val "$config" "$key")"
+  fi
+  if [[ -z "$out" ]]; then
+    [[ -z "$default" ]] || printf '%s\n' "$default"
+    return 0
+  fi
+  printf '%s\n' "$out"
 }
 
 # ─── jq-free JSON field readers ──────────────────────────────────────────────
@@ -264,14 +346,13 @@ EOF
 }
 
 cmd_panel() {
-  local specclaw_dir="" change="" tier_override="" repanel=false as_json=false emit_request=false
+  local specclaw_dir="" change="" tier_override="" repanel=false as_json=false
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --panel)   [[ $# -ge 2 ]] || die "--panel requires a tier"; tier_override="$2"; shift 2 ;;
       --repanel) repanel=true; shift ;;
       --json)    as_json=true; shift ;;
-      --emit-classifier-request) emit_request=true; shift ;;
       -*)        die "unknown option: $1" ;;
       *)
         if [[ -z "$specclaw_dir" ]]; then specclaw_dir="$1"
@@ -341,6 +422,24 @@ cmd_panel() {
         tier_source="classifier"
         rationale="$(json_pick "$raw" rationale)"
         domains="$(json_pick_array "$raw" domains)"
+        # `"domains": "security"` — a bare string where the charter asked for an
+        # array. json_pick_array requires a literal `[`, so the string form read
+        # as NO domains and the specialist was silently not seated: the roster
+        # still looked like a working thin panel and panel.json recorded
+        # `"domains": []`, i.e. the audit trail said the classifier flagged
+        # nothing. `domains` is model-written and a model asked for a one-element
+        # list will sometimes return the element — the same failure class as the
+        # case-sensitive match below, arriving from the other direction. Accept
+        # it, and say so: silently repairing model output teaches nobody.
+        if [[ -z "$domains" ]]; then
+          local dstr
+          dstr="$(json_pick "$raw" domains)"
+          if [[ -n "$dstr" ]]; then
+            warn "classification.json gave \"domains\" as a bare string (\"$dstr\") where an array was asked for — reading it as a one-element list. Fix party-classifier's charter if this recurs."
+            domains="$(printf '%s' "$dstr" | tr ',' '\n' \
+              | sed -E 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -v '^$' || true)"
+          fi
+        fi
         ;;
       *)
         # FR5 — unparseable output or an unknown tier fails loud, never quiet,
@@ -351,12 +450,12 @@ cmd_panel() {
         rationale="Classifier output was unusable; defaulted to standard."
         ;;
     esac
-  elif [[ "$emit_request" == true || ! -f "$requested_marker" ]]; then
+  elif [[ ! -f "$requested_marker" ]]; then
     # The handshake: bash cannot spawn the classifier, so ask for a model turn.
-    # An existing answer wins over the flag — the branch above already took it —
-    # so --emit-classifier-request re-asks a question that went unanswered and
-    # is a no-op once answered. Ordered the other way it re-emitted forever on
-    # every call, and a caller passing it unconditionally would never converge.
+    # The marker is what makes the SECOND call fall back instead of asking
+    # again — without it a caller that never writes classification.json exits 10
+    # forever, which is the one shape that cannot converge. It is cleared on a
+    # successful panel write and on --repanel.
     mkdir -p "$party_dir"
     : > "$requested_marker"
     echo "target: $class_file"
@@ -433,6 +532,14 @@ cmd_panel() {
   local min_seats max_seats
   min_seats="$(party_val "$config" "min_seats")"; min_seats="${min_seats:-2}"
   max_seats="$(party_val "$config" "max_seats")"; max_seats="${max_seats:-6}"
+  # Force base 10 before ANY arithmetic. Bash reads a leading zero as octal, so
+  # `max_seats: 08` — a shape a human writes and a YAML formatter emits — makes
+  # every later `-gt`/`-ge` abort with "value too great for base", and an aborted
+  # comparison is a FALSE one: the clamp is skipped, the config error goes
+  # unreported, and the panel is sized by neither the config nor the defaults.
+  # The regex gate runs first so 10#$x can never be handed a non-number.
+  if [[ "$min_seats" =~ ^[0-9]+$ ]]; then min_seats=$((10#$min_seats)); fi
+  if [[ "$max_seats" =~ ^[0-9]+$ ]]; then max_seats=$((10#$max_seats)); fi
   if ! [[ "$min_seats" =~ ^[0-9]+$ && "$max_seats" =~ ^[0-9]+$ ]] || [[ "$min_seats" -gt "$max_seats" ]]; then
     # Edge Case 4 — a config error, not a panel error.
     warn "party.min_seats ($min_seats) > party.max_seats ($max_seats) or non-numeric — using the defaults 2/6"
@@ -545,13 +652,36 @@ round_dir() {
 # force_upheld <rounds> → 1 when nobody was given the chance to withdraw.
 force_upheld() { if [[ "$1" == "1" ]]; then echo 1; else echo 0; fi; }
 
+# r2_dispatch_broken <change_dir> <rounds> <r2_stream_file> → 0 when round 2 was
+# configured, produced nothing, and round 1 produced something.
+#
+# That combination is a round-2 spawn that failed after round 1 succeeded — not
+# an empty panel. The two are indistinguishable to the tally, which read the
+# empty findings-r2 and printed APPROVED over live BLOCKs sitting on disk one
+# directory away. SKILL.md tells the caller "read the token; never recompute or
+# second-guess it", so the token is the authority and it was wrong, with only a
+# "tallying an empty panel" warning between the operator and a clean verdict on
+# a proposal nobody's objections were heard on.
+r2_dispatch_broken() {
+  local change_dir="$1" rounds="$2" stream="$3" r1="$1/party/findings-r1"
+  [[ "$rounds" != "1" ]]      || return 1
+  [[ ! -s "$stream" ]]        || return 1
+  [[ -d "$r1" ]]              || return 1
+  [[ -n "$(scan_findings "$r1" 1 | head -1)" ]] || return 1
+  return 0
+}
+
 # party_rounds <config> → the configured round count, always a number. A typo
 # here would otherwise pick the wrong findings directory silently and land
 # unquoted in the --json output.
 party_rounds() {
   local r
   r="$(party_val "$1" "rounds")"; r="${r:-2}"
-  if [[ "$r" =~ ^[0-9]+$ ]]; then printf '%s' "$r"
+  # 10# for the same reason as min/max_seats, plus one of its own: `rounds: 01`
+  # would otherwise fail the `== "1"` test in round_dir (so round 1 would read
+  # findings-r2) and land as a bare `01` in the --json output, which is not
+  # valid JSON.
+  if [[ "$r" =~ ^[0-9]+$ ]]; then printf '%s' "$((10#$r))"
   else warn "party.rounds is not a number ('$r') — using 2"; printf '2'; fi
 }
 
@@ -709,6 +839,10 @@ cmd_tally() {
   trap 'rm -f "$STREAM"' EXIT
   scan_findings "$fdir" "$(force_upheld "$rounds")" > "$STREAM"
 
+  if r2_dispatch_broken "$change_dir" "$rounds" "$STREAM"; then
+    die "party.rounds is 2 but $fdir is missing or empty while $change_dir/party/findings-r1 holds findings — round 2 was not dispatched. Refusing to print a verdict: an empty round 2 tallies as APPROVED, over round-1 objections nobody was asked to uphold or withdraw. Re-run round 2, or set party.rounds: 1 to make round 1 the final word."
+  fi
+
   local verdict total block warn_c note withdrawn
   read -r verdict total block warn_c note withdrawn < <(tally_counts "$STREAM")
 
@@ -765,6 +899,13 @@ cmd_report() {
   REPORT_TMP="$(mktemp "$change_dir/.party-report.md.XXXXXX")" || die "cannot create a temp file in $change_dir"
   trap 'rm -f "$STREAM" "$REPORT_TMP"' EXIT
   scan_findings "$fdir" "$(force_upheld "$rounds")" > "$STREAM"
+
+  # `report` still writes — the report is the audit trail, and refusing to
+  # assemble it would delete the only record of what round 1 said. But it says
+  # so, on the same terms `tally` refuses on.
+  if r2_dispatch_broken "$change_dir" "$rounds" "$STREAM"; then
+    warn "party.rounds is 2 but $fdir is missing or empty while $change_dir/party/findings-r1 holds findings — round 2 was not dispatched. This report tallies an empty round 2; the round-1 findings are NOT in it."
+  fi
 
   local verdict total block warn_c note withdrawn
   read -r verdict total block warn_c note withdrawn < <(tally_counts "$STREAM")
@@ -828,5 +969,6 @@ case "$1" in
   panel)     shift; cmd_panel "$@" ;;
   tally)     shift; cmd_tally "$@" ;;
   report)    shift; cmd_report "$@" ;;
+  get)       shift; cmd_get "$@" ;;
   *)         echo "ERROR: unknown subcommand: $1" >&2; usage >&2; exit 2 ;;
 esac

@@ -3,9 +3,16 @@
 #
 # Covers the arithmetic half of party mode — the half a model must never decide:
 # seat resolution (AC1-AC3, AC5, AC6), the fail-loud fallback (AC4), the
-# override/cache paths (AC7, AC8), the block-scoped config reader (AC15), the
-# verdict tally (AC9, AC10) and the report grammar the existing parsers read
-# (AC11, AC12), plus Edge Cases 1-7, 9 and 10.
+# override/cache paths (AC7, AC8), the block-scoped config reader (AC15) and the
+# `get` subcommand that is its only public door, the charters and their models
+# (AC13), the verdict tally (AC9, AC10) and the report grammar the existing
+# parsers read (AC11, AC12), plus Edge Cases 1-7, 9 and 10.
+#
+# And the review findings closed after the fact, each with the defect named in a
+# comment above its case: the FR4 drop order (Security is not the first seat
+# sacrificed), zero-padded config integers read as octal, a bare-string
+# `domains`, a column-0 `party.always` list, and a round-2 dispatch that failed
+# after round 1 succeeded.
 #
 # The regression this suite exists to pin (AC15 / FR17):
 #   the shared yaml_val (specclaw-loop:87-102) reduces a dotted path `a.b.c` to
@@ -82,12 +89,12 @@ RC=0                 # last exit code
 # charters carry a sentinel `model:` so a test can tell "resolved from
 # party.models" apart from "fell through to the charter frontmatter".
 #
-# Recognised keys: panel_mode, panel, always, always_block, min_seats,
-# max_seats, rounds, block.
+# Recognised keys: panel_mode, panel, always, always_block, always_col0,
+# min_seats, max_seats, rounds, block.
 mkfixture() {
   local dir="$1"; shift
   local panel_mode="dynamic" panel="[party-po, party-architect, party-ba, party-visionary]"
-  local always="[]" always_block="" min_seats="2" max_seats="6" rounds="2" block="false"
+  local always="[]" always_block="" always_col0="" min_seats="2" max_seats="6" rounds="2" block="false"
   local kv
   for kv in "$@"; do
     case "$kv" in
@@ -95,6 +102,7 @@ mkfixture() {
       panel=*)        panel="${kv#*=}" ;;
       always=*)       always="${kv#*=}" ;;
       always_block=*) always_block="${kv#*=}" ;;
+      always_col0=*)  always_col0="${kv#*=}" ;;
       min_seats=*)    min_seats="${kv#*=}" ;;
       max_seats=*)    max_seats="${kv#*=}" ;;
       rounds=*)       rounds="${kv#*=}" ;;
@@ -153,6 +161,8 @@ EOF
     # block-scoped party_val back to the shared yaml_val turns most cases in
     # this file red instead of quietly reading the wrong block.
     printf 'decoy:\n'
+    printf '  enabled: false\n'
+    printf '  default: true\n'
     printf '  rounds: 99\n'
     printf '  block: true\n'
     printf '  panel_mode: fixed\n'
@@ -173,6 +183,14 @@ EOF
       local a items=()
       read -r -a items <<< "$always_block"
       for a in "${items[@]}"; do printf '    - %s\n' "$a"; done
+    elif [[ -n "$always_col0" ]]; then
+      # The third list form: a sequence at column 0 under an indented key. Valid
+      # YAML, and what yq and ruamel emit by default — so an operator who runs
+      # their config through a formatter gets this shape without asking for it.
+      printf '  always:\n'
+      local a items=()
+      read -r -a items <<< "$always_col0"
+      for a in "${items[@]}"; do printf -- '- %s\n' "$a"; done
     else
       printf '  always: %s\n' "$always"
     fi
@@ -262,7 +280,7 @@ EOF
 runp "$D" --json
 assert_eq "AC2 exit 0" "0" "$RC"
 assert_eq "AC2 seats (Security seated by depth alone)" \
-  "party-po,party-architect,party-ba,party-visionary,party-security" "$(seats_of)"
+  "party-po,party-architect,party-ba,party-security,party-visionary" "$(seats_of)"
 assert_eq "AC2 domains stayed empty" "" "$(jget "','.join(d['domains'])" < "$OUT")"
 echo
 
@@ -373,6 +391,16 @@ assert_eq "EC2 prose-wrapped JSON tier_source" "classifier" "$(field_of tier_sou
 echo
 
 # ── AC5 — max_seats clamps from the tail ──────────────────────────────────────
+# The drop ORDER is asserted seat by seat, not as "visionary before architect".
+# The order shipped in the first cut of this change was
+#   po, architect, ba, visionary, security
+# which drops the SECURITY specialist first — the one seat that is never on the
+# roster by default. It is there because the classifier flagged a trust boundary
+# or because the tier is deep, so a max_seats ceiling was discarding the seat
+# something specifically asked for, first, silently, on the panel that needed it.
+# FR4 said "Visionary first, PO/Architect last" and the code did the opposite;
+# the old assertion (visionary dropped before architect) held under both orders
+# and so pinned neither. This one names every drop, in order.
 echo "--- AC5: max_seats: 3 on deep drops from the tail and records why ---"
 D="$WORK/ac5"; mkfixture "$D" max_seats=3
 stub_classifier "$D" <<'EOF'
@@ -383,9 +411,30 @@ assert_eq "AC5 exit 0" "0" "$RC"
 assert_eq "AC5 three seats survive" "3" "$(count_of)"
 assert_eq "AC5 the survivors are the head of the tier order" \
   "party-po,party-architect,party-ba" "$(seats_of)"
-# Tail-first: Security then Visionary go before Architect is ever considered.
-assert_eq "AC5 dropped names the seats and the reason" \
-  "party-security:max_seats,party-visionary:max_seats" "$(dropped_of)"
+# Tail-first, and in this exact order: Visionary goes, then Security, and only
+# then would BA be considered. Architect and PO are last, always.
+assert_eq "AC5 dropped names the seats, the reason, and the order" \
+  "party-visionary:max_seats,party-security:max_seats" "$(dropped_of)"
+
+echo "--- AC5: max_seats: 4 on deep drops the Visionary and KEEPS the specialist ---"
+D="$WORK/ac5b"; mkfixture "$D" max_seats=4
+stub_classifier "$D" <<'EOF'
+{"tier": "deep", "rationale": "Five subsystems."}
+EOF
+runp "$D" --json
+assert_eq "AC5 one seat over the ceiling drops exactly one" \
+  "party-visionary:max_seats" "$(dropped_of)"
+assert_eq "AC5 the security specialist survives the first drop" \
+  "party-po,party-architect,party-ba,party-security" "$(seats_of)"
+
+echo "--- AC5: the same order when the specialist came from a domain flag ---"
+D="$WORK/ac5c"; mkfixture "$D" max_seats=3
+stub_classifier "$D" <<'EOF'
+{"tier": "deep", "domains": ["security"], "rationale": "Deep, and it touches the token path."}
+EOF
+runp "$D" --json
+assert_eq "AC5 a domain-flagged specialist is still not the first sacrifice" \
+  "party-visionary:max_seats,party-security:max_seats" "$(dropped_of)"
 echo
 
 # ── AC6 — min_seats is never violated; party.always seats a specialist ────────
@@ -432,7 +481,7 @@ assert_eq "AC7 --panel exit 0" "0" "$RC"
 assert_eq "AC7 --panel tier wins over the stub" "deep" "$(field_of tier)"
 assert_eq "AC7 --panel tier_source" "override" "$(field_of tier_source)"
 assert_eq "AC7 --panel roster is the deep roster" \
-  "party-po,party-architect,party-ba,party-visionary,party-security" "$(seats_of)"
+  "party-po,party-architect,party-ba,party-security,party-visionary" "$(seats_of)"
 assert_no_grep "AC7 --panel did not adopt the stub's rationale" "must be ignored" "$OUT"
 if [[ -e "$D/changes/$CHANGE/party/.classifier-requested" ]]; then
   fail "AC7 --panel left a classifier-request marker"
@@ -775,7 +824,7 @@ assert_eq "EC6 the tally proceeds on the seats that spoke" "APPROVED" "$(cat "$O
 assert_eq "EC6 exit 0 — an unheard seat does not block" "0" "$RC"
 unheard="$( "$PARTY" tally "$D" "$CHANGE" --json 2>/dev/null | jget "','.join(d['unheard'])" )"
 assert_eq "EC6 --json names every silent seat" \
-  "party-architect,party-ba,party-visionary,party-security" "$unheard"
+  "party-architect,party-ba,party-security,party-visionary" "$unheard"
 runr "$D"
 REPORT="$D/changes/$CHANGE/party-report.md"
 assert_grep "EC6 the report records the unheard seats" '^\*\*Unheard:\*\* .*party-visionary' "$REPORT"
@@ -819,6 +868,388 @@ assert_eq "EC7 the round-1 BLOCK is a live finding in the report" "1" \
   "$(grep -cE '^### \[BLOCK\]' "$REPORT")"
 assert_grep "EC7 Dissent says rebuttal was disabled" "Rebuttal was disabled" "$REPORT"
 assert_no_grep "EC7 the round-2 file was not read" "This round must not be read" "$REPORT"
+echo
+
+# ── `get` — the reader CLAUDE.md's invariant requires (the BLOCK) ─────────────
+# CLAUDE.md: "No party config value may be read any other way — not with
+# yaml_val, not with a grep in a SKILL.md, not with a one-off sed." That rule
+# shipped with no mechanism behind it: propose/SKILL.md was told to read
+# party.enabled and given nothing to read it with, so the only available reading
+# was a whole-file one — and in the shipped template the first `enabled:` in the
+# file is build.dynamic_agents.enabled, which is `false`. Party mode would be off
+# while the config plainly said `true`, and the failure is indistinguishable from
+# the operator having switched it off.
+#
+# Same fixture shape as AC15: the decoy block above `party:` declares every
+# scalar key `get` is asked for, with the opposite value.
+echo "--- get: every key resolves inside the party block, past an earlier decoy ---"
+rung() { "$PARTY" get "$@" >"$OUT" 2>"$ERR"; RC=$?; }
+D="$WORK/get"; mkfixture "$D"
+
+# The trap is real: prove a whole-file first-hit reader would answer `false`.
+assert_eq "get the fixture really traps a whole-file reader on enabled" "false" \
+  "$(grep -m1 -E '^[[:space:]]*enabled:' "$D/config.yaml" | sed -E 's/.*:[[:space:]]*//')"
+
+rung "$D" enabled
+assert_eq "get enabled exit 0" "0" "$RC"
+assert_eq "get enabled → the party block's value, not the decoy" "true" "$(cat "$OUT")"
+rung "$D" default
+assert_eq "get default → the party block's value, not the decoy" "false" "$(cat "$OUT")"
+rung "$D" rounds
+assert_eq "get rounds → 2, not the decoy's 99" "2" "$(cat "$OUT")"
+rung "$D" block
+assert_eq "get block → false, not the decoy's true" "false" "$(cat "$OUT")"
+rung "$D" panel_mode
+assert_eq "get panel_mode → dynamic, not the decoy's fixed" "dynamic" "$(cat "$OUT")"
+rung "$D" min_seats
+assert_eq "get min_seats → 2, not the decoy's 9" "2" "$(cat "$OUT")"
+rung "$D" models.party-visionary
+assert_eq "get models.<seat> → the party block, not the top-level models:" "fable" "$(cat "$OUT")"
+
+echo "--- get: list keys print one item per line, whichever YAML form ---"
+rung "$D" panel
+assert_eq "get panel prints one seat per line (inline [a, b] form)" \
+  "party-po
+party-architect
+party-ba
+party-visionary" "$(cat "$OUT")"
+D="$WORK/get-list"; mkfixture "$D" always_block="party-security party-ba"
+rung "$D" always
+assert_eq "get always prints one seat per line (block '- a' form)" \
+  "party-security
+party-ba" "$(cat "$OUT")"
+
+echo "--- get: absent and empty keys, and --default ---"
+D="$WORK/get-empty"; mkfixture "$D"
+rung "$D" always
+assert_eq "get on an empty list exits 0" "0" "$RC"
+assert_eq "get on an empty list prints nothing" "" "$(cat "$OUT")"
+rung "$D" always --default none
+assert_eq "get --default fills an empty list" "none" "$(cat "$OUT")"
+rung "$D" no_such_key
+assert_eq "get on an absent key exits 0" "0" "$RC"
+assert_eq "get on an absent key prints nothing" "" "$(cat "$OUT")"
+rung "$D" no_such_key --default 7
+assert_eq "get --default fills an absent key" "7" "$(cat "$OUT")"
+
+echo "--- get: argument errors are exit 2, never a silent empty answer ---"
+rung "$D" enabled --bogus
+assert_eq "get rejects an unknown option" "2" "$RC"
+rung "$D"
+assert_eq "get without a key exits 2" "2" "$RC"
+assert_grep "get without a key says what it needs" "get requires" "$ERR"
+rung "$WORK/no-such-dir" enabled
+assert_eq "get on a missing config exits 2" "2" "$RC"
+assert_grep "get names the missing config" "Config not found" "$ERR"
+echo
+
+# ── Zero-padded config integers ───────────────────────────────────────────────
+# `max_seats: 08` is a shape a human writes and a YAML formatter emits. Bash
+# reads a leading zero as octal, so `[[ 08 -gt 5 ]]` aborted with "value too
+# great for base" — and an aborted comparison is a FALSE one, so the clamp was
+# skipped, the min>max config error went unreported, and the panel was sized by
+# neither the config nor the defaults.
+echo "--- 10#: min_seats: 09 > max_seats: 08 is still caught as a config error ---"
+D="$WORK/pad-a"; mkfixture "$D" min_seats=09 max_seats=08
+stub_classifier "$D" <<'EOF'
+{"tier": "deep", "rationale": "Deep."}
+EOF
+runp "$D" --json
+assert_eq "10# padded min>max exits 0" "0" "$RC"
+assert_no_grep "10# no octal error reaches stderr" "value too great for base" "$ERR"
+assert_grep "10# padded min>max is caught and named" "using the defaults 2/6" "$ERR"
+assert_eq "10# padded min>max falls back to the 2/6 defaults" "5" "$(count_of)"
+
+echo "--- 10#: min_seats: 08 / max_seats: 09 are read as 8 and 9, not as errors ---"
+D="$WORK/pad-b"; mkfixture "$D" min_seats=08 max_seats=09
+stub_classifier "$D" <<'EOF'
+{"tier": "deep", "rationale": "Deep."}
+EOF
+runp "$D" --json
+assert_eq "10# a padded, valid range exits 0" "0" "$RC"
+assert_no_grep "10# no octal error on a valid padded range" "value too great for base" "$ERR"
+assert_no_grep "10# a valid padded range is not mistaken for min>max" "using the defaults" "$ERR"
+assert_eq "10# min_seats: 08 grows the panel to every definable seat" "5" "$(count_of)"
+
+echo "--- 10#: max_seats: 03 still clamps, padded ---"
+D="$WORK/pad-c"; mkfixture "$D" max_seats=03
+stub_classifier "$D" <<'EOF'
+{"tier": "deep", "rationale": "Deep."}
+EOF
+runp "$D" --json
+assert_eq "10# a padded max_seats clamps like an unpadded one" \
+  "party-po,party-architect,party-ba" "$(seats_of)"
+
+echo "--- 10#: rounds: 01 is round 1, and lands in --json as valid JSON ---"
+D="$WORK/pad-d"; mkfixture "$D" rounds=01
+add_finding "$D" 1 party-security BLOCK "withdrawn — nobody could have withdrawn this" \
+  "The token is logged in plaintext."
+runt "$D"
+assert_eq "10# rounds: 01 reads findings-r1" "CHANGES_REQUESTED" "$(cat "$OUT")"
+assert_eq "10# rounds: 01 is normalised to 1 in --json" "1" \
+  "$( "$PARTY" tally "$D" "$CHANGE" --json 2>/dev/null | jget "d['rounds']" )"
+echo
+
+# ── A bare-string `domains` ───────────────────────────────────────────────────
+# json_pick_array requires a literal `[`, so `"domains": "security"` read as NO
+# domains: the specialist was silently not seated, the roster still looked like a
+# working thin panel, and panel.json recorded `"domains": []` — an audit trail
+# saying the classifier flagged nothing. `domains` is model-written and a model
+# asked for a one-element list will sometimes return the element. Accept it, and
+# warn: silently repairing model output teaches nobody, and the charter is the
+# thing that then needs fixing.
+echo "--- domains: a bare string seats the specialist AND warns ---"
+D="$WORK/dom-str"; mkfixture "$D"
+stub_classifier "$D" <<'EOF'
+{"tier": "thin", "domains": "security", "rationale": "Small, but touches the token path."}
+EOF
+runp "$D" --json
+assert_eq "domains-as-string exit 0" "0" "$RC"
+assert_eq "domains-as-string still seats party-security" \
+  "party-po,party-architect,party-security" "$(seats_of)"
+assert_eq "domains-as-string is recorded in panel.json" "security" \
+  "$(jget "','.join(d['domains'])" < "$OUT")"
+assert_grep "domains-as-string warns loudly on stderr" \
+  'WARN: .*"domains" as a bare string' "$ERR"
+assert_grep "domains-as-string names the value it read" 'security' "$ERR"
+
+echo "--- domains: a comma-separated string is read as a list ---"
+D="$WORK/dom-str2"; mkfixture "$D"
+stub_classifier "$D" <<'EOF'
+{"tier": "thin", "domains": "data, security", "rationale": "Two dimensions, one string."}
+EOF
+runp "$D" --json
+assert_eq "a comma-separated domains string seats the specialist" \
+  "party-po,party-architect,party-security" "$(seats_of)"
+assert_eq "a comma-separated domains string records both dimensions" "data,security" \
+  "$(jget "','.join(d['domains'])" < "$OUT")"
+
+echo "--- domains: the array form is unchanged and stays silent ---"
+D="$WORK/dom-arr"; mkfixture "$D"
+stub_classifier "$D" <<'EOF'
+{"tier": "thin", "domains": ["security"], "rationale": "The documented form."}
+EOF
+runp "$D" --json
+assert_eq "the array form still seats the specialist" \
+  "party-po,party-architect,party-security" "$(seats_of)"
+assert_no_grep "the array form does not warn" 'bare string' "$ERR"
+
+echo "--- domains: an empty array is still no domains, and still silent ---"
+D="$WORK/dom-empty"; mkfixture "$D"
+stub_classifier "$D" <<'EOF'
+{"tier": "thin", "domains": [], "rationale": "Nothing flagged."}
+EOF
+runp "$D" --json
+assert_eq "an empty domains array seats no specialist" "party-po,party-architect" "$(seats_of)"
+assert_no_grep "an empty domains array does not warn about a bare string" 'bare string' "$ERR"
+echo
+
+# ── party.always as a column-0 list ───────────────────────────────────────────
+# The item regex demanded an indented `-`, so a column-0 sequence — valid YAML,
+# and the form yq and ruamel emit by default — read as an EMPTY list. party.always
+# is the operator's escape hatch for a classifier that under-read the proposal
+# (design.md:282), so a silently empty `always` disabled the mitigation on the
+# one run that needed it. The party_val window is what makes this safe to accept:
+# /^[a-zA-Z_]/ has already left the block, so a column-0 `-` can only be an item.
+echo "--- always: a column-0 list seats the forced seat ---"
+D="$WORK/always-col0"; mkfixture "$D" always_col0="party-security"
+assert_eq "the fixture really writes the list at column 0" "1" \
+  "$(grep -c '^- party-security$' "$D/config.yaml")"
+stub_classifier "$D" <<'EOF'
+{"tier": "thin", "rationale": "Small."}
+EOF
+runp "$D" --json
+assert_eq "column-0 always exit 0" "0" "$RC"
+assert_eq "column-0 always seats Security at thin" \
+  "party-po,party-architect,party-security" "$(seats_of)"
+
+echo "--- always: a column-0 list with two items, both seated and ranked ---"
+D="$WORK/always-col0b"; mkfixture "$D" always_col0="party-security party-visionary"
+stub_classifier "$D" <<'EOF'
+{"tier": "thin", "rationale": "Small."}
+EOF
+runp "$D" --json
+assert_eq "column-0 always seats every item, in tier order" \
+  "party-po,party-architect,party-security,party-visionary" "$(seats_of)"
+
+echo "--- always: panel_mode fixed reads a column-0 party.panel too ---"
+D="$WORK/panel-col0"; mkfixture "$D" panel_mode=fixed
+# Same list form, on the other key the block branch backs.
+python3 - "$D/config.yaml" <<'PY'
+import sys
+p = sys.argv[1]
+src = open(p).read().replace(
+    "  panel: [party-po, party-architect, party-ba, party-visionary]\n",
+    "  panel:\n- party-po\n- party-security\n")
+open(p, "w").write(src)
+PY
+runp "$D" --json
+assert_eq "a column-0 party.panel is taken verbatim, not warned away" \
+  "party-po,party-security" "$(seats_of)"
+assert_no_grep "a column-0 party.panel does not read as missing" \
+  "party\.panel is missing or empty" "$ERR"
+echo
+
+# ── A round-2 dispatch that failed after round 1 succeeded ────────────────────
+# `tally` read the empty findings-r2, counted nothing, and printed APPROVED over
+# live BLOCKs on disk one directory away. SKILL.md says "read the token; never
+# recompute or second-guess it", so the token is the authority — and here it was
+# wrong, with only a "tallying an empty panel" warning between the operator and a
+# clean verdict on a proposal whose objections were never heard.
+echo "--- r2: rounds 2, findings-r2 missing, findings-r1 live → refuse, do not approve ---"
+D="$WORK/r2a"; mkfixture "$D"
+add_finding "$D" 1 party-security BLOCK upheld "The token is logged in plaintext."
+runt "$D"
+assert_eq "r2 a failed round-2 dispatch exits 2" "2" "$RC"
+assert_eq "r2 no verdict token is printed at all" "" "$(cat "$OUT")"
+assert_no_grep "r2 APPROVED is never printed over live round-1 findings" "APPROVED" "$OUT"
+assert_grep "r2 the error names findings-r2" "findings-r2" "$ERR"
+assert_grep "r2 the error names findings-r1" "findings-r1" "$ERR"
+assert_grep "r2 the error names the condition, not just the symptom" \
+  "round 2 was not dispatched" "$ERR"
+assert_grep "r2 the error offers the two ways out" "party\.rounds: 1" "$ERR"
+
+echo "--- r2: the same when findings-r2 exists but is empty ---"
+D="$WORK/r2b"; mkfixture "$D"
+add_finding "$D" 1 party-po WARN upheld "The do-nothing option is not costed."
+mkdir -p "$D/changes/$CHANGE/party/findings-r2"
+runt "$D"
+assert_eq "r2 an empty findings-r2 directory is the same failure" "2" "$RC"
+assert_eq "r2 an empty findings-r2 prints no verdict" "" "$(cat "$OUT")"
+
+echo "--- r2: --json refuses too — the JSON caller must not see a clean verdict ---"
+runt "$D" --json
+assert_eq "r2 --json exits 2" "2" "$RC"
+assert_eq "r2 --json prints no document" "" "$(cat "$OUT")"
+
+echo "--- r2: report still writes the audit trail, and says round 2 is missing ---"
+runr "$D"
+assert_eq "r2 report still exits 0 — the report is the record" "0" "$RC"
+assert_grep "r2 report warns that round 2 did not run" "round 2 was not dispatched" "$ERR"
+if [[ -f "$D/changes/$CHANGE/party-report.md" ]]; then
+  pass "r2 report was still written"
+else
+  fail "r2 report was still written"
+fi
+
+echo "--- r2: the controls — a genuinely empty panel and a complete round 2 ---"
+D="$WORK/r2c"; mkfixture "$D"
+runt "$D"
+assert_eq "r2 a panel with no findings anywhere is still APPROVED" "APPROVED" "$(cat "$OUT")"
+assert_eq "r2 a genuinely empty panel still exits 0" "0" "$RC"
+assert_grep "r2 an empty panel still warns it is empty" "tallying an empty panel" "$ERR"
+
+D="$WORK/r2d"; mkfixture "$D"
+add_finding "$D" 1 party-po WARN upheld "The do-nothing option is not costed."
+add_finding "$D" 2 party-po WARN "withdrawn — costed in the appendix" \
+  "The do-nothing option is not costed."
+runt "$D"
+assert_eq "r2 a complete round 2 tallies normally" "APPROVED" "$(cat "$OUT")"
+assert_eq "r2 a complete round 2 exits 0" "0" "$RC"
+
+D="$WORK/r2e"; mkfixture "$D" rounds=1
+add_finding "$D" 1 party-po WARN upheld "The do-nothing option is not costed."
+runt "$D"
+assert_eq "r2 rounds: 1 is untouched — round 1 IS the final word" "APPROVED" "$(cat "$OUT")"
+assert_eq "r2 rounds: 1 exits 0" "0" "$RC"
+
+D="$WORK/r2f"; mkfixture "$D"
+mkdir -p "$D/changes/$CHANGE/party/findings-r1"
+printf 'I have no objections, honestly.\n' > "$D/changes/$CHANGE/party/findings-r1/party-po.md"
+runt "$D"
+assert_eq "r2 a round-1 file with no findings in it is not a failed dispatch" "APPROVED" "$(cat "$OUT")"
+assert_eq "r2 a prose-only round 1 exits 0" "0" "$RC"
+echo
+
+# ── --emit-classifier-request is gone; the marker it shared is not ────────────
+# The flag had no caller, no test, and propose/SKILL.md's only mention of it was
+# an instruction never to use it. The `.classifier-requested` marker it consulted
+# is load-bearing and stays: it is the whole reason the SECOND panel call falls
+# back to `standard` instead of exiting 10 again forever.
+echo "--- the removed flag: rejected as an unknown option, gone from the usage ---"
+D="$WORK/flag"; mkfixture "$D"
+runp "$D" --emit-classifier-request
+assert_eq "--emit-classifier-request is rejected" "2" "$RC"
+assert_grep "--emit-classifier-request is rejected as an unknown option" \
+  "unknown option: --emit-classifier-request" "$ERR"
+assert_eq "the usage text no longer advertises the flag" "0" \
+  "$( "$PARTY" --help | grep -c 'emit-classifier-request' )"
+
+echo "--- the marker survives: the handshake still converges in exactly two calls ---"
+D="$WORK/marker"; mkfixture "$D"
+MARK="$D/changes/$CHANGE/party/.classifier-requested"
+runp "$D" --json
+assert_eq "marker: the first call asks for a classifier turn" "10" "$RC"
+if [[ -f "$MARK" ]]; then pass "marker: the request left the marker"
+else fail "marker: the request left the marker"; fi
+runp "$D" --json
+assert_eq "marker: the second call falls back rather than asking again" "0" "$RC"
+assert_eq "marker: the fallback tier" "standard" "$(field_of tier)"
+assert_eq "marker: the fallback source" "fallback" "$(field_of tier_source)"
+if [[ -f "$MARK" ]]; then fail "marker: a successful panel clears the marker"
+else pass "marker: a successful panel clears the marker"; fi
+# --repanel clears it, so the handshake can be re-run deliberately.
+D="$WORK/marker2"; mkfixture "$D"
+runp "$D" --json
+runp "$D" --repanel --json
+assert_eq "marker: --repanel re-asks for a classifier turn" "10" "$RC"
+echo
+
+# ── AC13 — the six real charters, read by a test for the first time ───────────
+# Every other fixture charter in this file is synthetic, so the shipped agents/
+# files were never opened by the suite. seat_model falls through to a charter's
+# frontmatter for any seat absent from party.models, so a typo in a `model:` line
+# spawns that seat on the wrong model with no error anywhere — the suite even
+# asserted the ABSENCE of that fallthrough (AC15) without ever checking what it
+# would produce.
+echo "--- AC13: the shipped charters parse, and carry the models the spec names ---"
+AGENTS_DIR="$(cd "$SCRIPT_DIR/../agents" && pwd)"
+
+# fm_val <file> <key> — the frontmatter reader, the same shape seat_model uses.
+fm_val() {
+  awk -v k="$2" 'NR==1 && /^---[[:space:]]*$/ {fm=1; next}
+       fm && /^---[[:space:]]*$/ {exit}
+       fm && $0 ~ "^" k ":" {sub("^" k ":[[:space:]]*",""); print; exit}' "$1" \
+    | sed -E 's/[[:space:]]*#.*$//; s/[[:space:]]+$//; s/^"(.*)"$/\1/; s/^'\''(.*)'\''$/\1/'
+}
+
+# The six charters and the models AC13 names, in spec order.
+for pair in party-classifier:haiku party-po:sonnet party-ba:sonnet \
+            party-architect:opus party-security:opus party-visionary:fable; do
+  seat="${pair%%:*}"; want="${pair##*:}"
+  f="$AGENTS_DIR/$seat.md"
+  if [[ -f "$f" ]]; then pass "AC13 $seat.md exists"; else fail "AC13 $seat.md exists"; continue; fi
+  assert_eq "AC13 $seat opens with a frontmatter delimiter" "---" "$(head -1 "$f")"
+  assert_eq "AC13 $seat closes its frontmatter" "1" \
+    "$(awk 'NR>1 && /^---[[:space:]]*$/ {print "1"; exit}' "$f")"
+  assert_eq "AC13 $seat name matches its filename" "$seat" "$(fm_val "$f" name)"
+  for k in description tools; do
+    if [[ -n "$(fm_val "$f" "$k")" ]]; then pass "AC13 $seat has a $k"
+    else fail "AC13 $seat has a $k"; fi
+  done
+  assert_eq "AC13 $seat model" "$want" "$(fm_val "$f" model)"
+done
+
+# The fallthrough itself, against a real charter: no local agents/<seat>.md and
+# no party.models entry leaves the shipped charter as the only source. The
+# fixture's own charters carry a `charter-<seat>` sentinel, so `fable` here can
+# only have come from plugins/specclaw/agents/party-visionary.md.
+echo "--- AC13: seat_model falls through to a REAL charter's frontmatter ---"
+D="$WORK/ac13-fall"; mkfixture "$D"
+rm -f "$D/agents/party-visionary.md"
+grep -v '^    party-visionary: ' "$D/config.yaml" > "$D/config.yaml.new"
+mv "$D/config.yaml.new" "$D/config.yaml"
+assert_eq "AC13 the fixture really has no party.models.party-visionary" "0" \
+  "$(grep -c '^    party-visionary: ' "$D/config.yaml")"
+stub_classifier "$D" <<'EOF'
+{"tier": "deep", "rationale": "Every seat."}
+EOF
+runp "$D" --json
+assert_eq "AC13 the seat survives on the plugin's own charter" "5" "$(count_of)"
+assert_eq "AC13 its model comes from the real charter's frontmatter" "fable" \
+  "$(models_of party-visionary)"
+assert_eq "AC13 the seats that DO have party.models are unaffected" "opus" \
+  "$(models_of party-architect)"
 echo
 
 # ── Summary ───────────────────────────────────────────────────────────────────

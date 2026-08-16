@@ -92,8 +92,20 @@ The domain match is **case-insensitive**. `domains` is model-written, and a mode
 spelling alone and leave a roster that still reads like a working thin panel.
 
 Then: union `party.always`, drop seats with no `agents/<seat>.md` (warn, record it), and clamp to
-`[min_seats, max_seats]` — dropping from the **tail** of the tier order, so Visionary and Security go
-before Architect and PO, and every drop is named in `panel.json`. The roster is cached on a `cksum`
+`[min_seats, max_seats]` — dropping from the **tail** of the tier order
+`po, architect, ba, security, visionary`, so the Visionary goes first and PO/Architect last, and
+every drop is named in `panel.json`.
+
+**Security sits ahead of the Visionary on purpose.** It is the one seat that is never on the roster
+by default — it arrives only because the classifier flagged a trust boundary or because the tier is
+`deep` — so a ceiling that drops it first is discarding the seat something specifically asked for,
+on the panel that asked for it. The Visionary's mandate (does this compound?) survives being deferred
+to the next review; a fail-open in the token path does not. The first cut of this change ordered them
+the other way and its test asserted only "Visionary before Architect", which held under both orders
+and so pinned neither; the suite now names every drop in sequence.
+
+The same array orders the `min_seats` growth loop, so a panel grown to a floor fills in the order it
+would empty. The roster is cached on a `cksum`
 of `proposal.md`, so a retry cannot draw a different panel — and a different bill — from an unedited
 proposal; an edited one re-classifies, and `--repanel` forces it.
 
@@ -147,11 +159,29 @@ the more dangerous one, because it is *correct today*: nothing above `party:` cu
 `party-po:` key, so the whole-file grep lands on the right line and every test passes — until some
 future block gains a key of that name, and the panel quietly starts spawning on a model nobody chose.
 
-`bin/specclaw-party` therefore ships `party_val` (and `party_list` for the `[a, b]` and `- a` list
-forms), modelled on `da_val` (`bin/specclaw-build:557-574`): seek to the column-0 `party:` line, read
-only until the next column-0 key, and resolve the dotted path inside **that window**. **No party
+`bin/specclaw-party` therefore ships `party_val` (and `party_list` for the `[a, b]`, indented `- a`
+and **column-0 `- a`** list forms — the last is what `yq` and `ruamel` emit by default, and reading
+it as an empty list silently disabled `party.always`, the operator's escape hatch, on the run that
+needed it), modelled on `da_val` (`bin/specclaw-build:557-574`): seek to the column-0 `party:` line,
+read only until the next column-0 key, and resolve the dotted path inside **that window**. **No party
 config value may be read any other way** — not with `yaml_val`, not with a `grep` in a SKILL.md, not
 with a one-off `sed`.
+
+**A rule needs a mechanism, or it is a comment.** That invariant first shipped alongside its own
+first violation: `skills/propose/SKILL.md` was told to read `party.enabled` and given nothing to read
+it with, so the only available reading was a whole-file one — which returns `false` off
+`build.dynamic_agents.enabled`, seventy lines above the key asked for, producing a `propose` run
+indistinguishable from party mode being correctly switched off. The mechanism is:
+
+```
+specclaw-party get <specclaw_dir> <key> [--default <value>]
+```
+
+a thin wrapper on `party_val`, and on `party_list` for the closed set of list-valued keys
+(`panel`, `always`), which print **one item per line** whichever YAML form the config used. Every
+other key prints a single line; an absent key prints nothing and exits 0, so `--default` is how a
+caller distinguishes unset from set-but-empty. Argument errors exit 2 — never a silent empty answer.
+Any skill or script outside `specclaw-party` reads party config through `get` or not at all.
 
 `run-party-tests.sh` pins this, and the fixture is the interesting half: its `config.yaml` carries
 both blocks, the top-level `models:` block carries decoy `party-visionary:` / `party-po:` keys, and a
@@ -180,7 +210,7 @@ All executable scripts live in `bin/`. Key ones:
 | `specclaw-pr` | Create GitHub PR (enforces test policy, triggers context update) |
 | `specclaw-validate-change` | Check phase prerequisites |
 | `specclaw-parse-tasks` | Parse `tasks.md` → JSON; **the only task counter** (`--count`) — see below |
-| `specclaw-party` | Adversarial proposal panel: `panel` (resolve the roster) / `tally` (compute the verdict) / `report` (assemble `party-report.md`) — see below |
+| `specclaw-party` | Adversarial proposal panel: `panel` (resolve the roster) / `tally` (compute the verdict) / `report` (assemble `party-report.md`) / `get` (**the only reader of the `party:` block**) — see below |
 
 ## Task counting: `specclaw-parse-tasks --count` is the only counter
 

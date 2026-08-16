@@ -69,8 +69,26 @@ bash, with no further model involvement:
 | any tier | `+ party-security` when `security ∈ domains` **or** tier is `deep` |
 
 Then: union with `party.always`, clamp to `party.min_seats` (default 2) and `party.max_seats`
-(default 6). Clamping drops seats from the tail of the tier order (Visionary first, PO/Architect
-last) and records what it dropped.
+(default 6). Clamping drops seats from the tail of the canonical tier order
+
+```
+party-po  party-architect  party-ba  party-security  party-visionary
+```
+
+— Visionary first, then Security, then BA; PO and Architect last — and records what it dropped.
+Security precedes the Visionary because it is the only seat that is never on the roster by default:
+it is seated because the classifier flagged a trust boundary or because the tier is `deep`, so a
+ceiling that drops it first discards the seat something specifically asked for, on the panel that
+asked for it. The same order fills the panel when `min_seats` grows it.
+
+Every config integer on this path (`min_seats`, `max_seats`, `rounds`) is read in **base 10**. A
+leading zero — `max_seats: 08`, which a human writes and a YAML formatter emits — is a decimal 8,
+not an octal error: an arithmetic abort here evaluates as a false comparison, so the clamp is skipped
+and the config error goes unreported.
+
+`domains` is model-written, so `panel` accepts `"domains": "security"` (a bare string, optionally
+comma-separated) as well as the documented array, and **warns on stderr** when it does. The value is
+recorded in `panel.json` as the classifier spelled it.
 
 **FR5 — Fail loud, never quiet.** If the classifier errors, exits non-zero, emits unparseable JSON,
 or returns an unknown tier, `panel` uses tier `standard`, sets `"tier_source": "fallback"` in
