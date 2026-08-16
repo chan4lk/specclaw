@@ -104,8 +104,16 @@ EOF
     }
     { print }
     END { if (!done) exit 3 }
-  ' "$CONFIG_FILE" > "$CONFIG_FILE.tmp" && mv "$CONFIG_FILE.tmp" "$CONFIG_FILE" \
-    || { rm -f "$CONFIG_FILE.tmp"; echo "Error: could not set teach.$key" >&2; exit 1; }
+  ' "$CONFIG_FILE" > "$CONFIG_FILE.tmp" || {
+    rm -f "$CONFIG_FILE.tmp"
+    echo "Error: could not set teach.$key" >&2
+    exit 1
+  }
+  mv "$CONFIG_FILE.tmp" "$CONFIG_FILE" || {
+    rm -f "$CONFIG_FILE.tmp"
+    echo "Error: could not install $CONFIG_FILE" >&2
+    exit 1
+  }
 }
 
 ensure_profile() {
