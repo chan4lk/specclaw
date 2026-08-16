@@ -86,8 +86,59 @@ When initialized in a project, SpecClaw creates:
         ├── status.md        # Per-change progress tracking
         ├── errors.md        # Build error journal (auto-generated on failures)
         ├── learnings.md     # Build learnings (spec gaps, patterns, insights)
+        ├── teaching.md      # What the human learned (teaching mode only)
         └── verify-report.md # Verification results
 ```
+
+## Teaching mode (optional)
+
+Off by default. When enabled, the lifecycle **explains while it builds** — for onboarding, upskilling,
+or an unfamiliar stack. Companion to `/specclaw:learn`: that one records what the *machine* learned
+(spec gaps, patterns); this one records what the *human* learned.
+
+```bash
+/specclaw:teach          # assess, show the plan, suggest how to start
+```
+
+Enable it in `.specclaw/config.yaml`:
+
+```yaml
+teach:
+  enabled: true
+  depth: "brief"      # minimal | brief | full
+  gate_builds: true
+```
+
+A bare `/specclaw:teach` runs five steps:
+
+1. **Show the whole stack** the change touches, as a table — libraries included, not just categories,
+   with what each is for *in this project*
+2. **Ask your level on every row** — (a) never used it / (b) theory only / (c) shipped with it /
+   (d) deep — spot-checking (c)/(d) claims and correcting silently
+3. **Show the level map back**, with what each level means for where your time goes
+4. **Generate `knowledge/learning-plan.md`** — separate Learn (briefs, each tied to the task that
+   needs it), Explain (decisions that are yours), PoC, and Implementation sections
+5. **Suggest one concrete opening move**
+
+Then each phase gains teaching behaviour:
+
+| Phase | With teach mode |
+|-------|-----------------|
+| `propose` | Names the stack, asks your level per technology |
+| `plan` | Design decisions become 2–4 scored options with costs; **you** choose, your reason is recorded verbatim in `design.md` |
+| `build` | Gates each wave using an unfamiliar technology — a 3-minute brief, then one decision, then it builds without narration |
+| `verify` | Asks for a prediction before revealing numbers (`depth: full`) |
+| `pr` | Debriefs: every decision with alternatives and **what it cost**, and how you'd build it from scratch |
+
+Two principles it enforces: **you make the decisions, the agent writes the code** — hand-typing
+boilerplate teaches nothing, choosing between designs with the costs visible is the skill. And **one
+artifact at a time** — documents are written at the step that needs them, never as a reading pile up
+front, and every reply ends with exactly one next action.
+
+**No cheatsheet library by design.** Concept briefs are generated from the recipe in
+`references/teaching-mode.md` and cached per project under `.specclaw/knowledge/briefs/`. A file per
+technology is a coverage promise no plugin can keep, and static files go stale while model knowledge
+does not.
 
 ## Commands
 
@@ -101,6 +152,7 @@ All commands are namespaced under `/specclaw:`. Most are model-invokable — Cla
 | `/specclaw:author-spec <change>` | Author `spec.md` interactively via the `spec-author` subagent (5 Whys, JTBD, Inversion, Pre-mortem, MoSCoW) |
 | `/specclaw:build <change>` | Execute tasks wave-by-wave |
 | `/specclaw:learn <change> "..."` | Record a spec gap, design miss, or pattern |
+| `/specclaw:teach` | Toggle teaching mode, record what you already know, generate concept briefs |
 | `/specclaw:patterns` | Inspect the cross-change pattern registry |
 | `/specclaw:verify <change>` | Validate implementation against spec |
 | `/specclaw:pr <change>` | Open a GitHub PR |

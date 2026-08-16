@@ -1,0 +1,245 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage:
+  specclaw-teach <specclaw_dir> status
+  specclaw-teach <specclaw_dir> assess
+  specclaw-teach <specclaw_dir> enable [--depth minimal|brief|full]
+  specclaw-teach <specclaw_dir> disable
+  specclaw-teach <specclaw_dir> level <technology> <a|b|c|d> [self|assumed]
+  specclaw-teach <specclaw_dir> levels
+  specclaw-teach <specclaw_dir> plan-path
+  specclaw-teach <specclaw_dir> <change_name> log <kind> "<detail>"
+  specclaw-teach <specclaw_dir> <change_name> --list
+
+Modes:
+  status          Print teach config as JSON (enabled, depth, gate_builds)
+  assess          Print what still needs asking: counts plus the list of levels
+                  recorded as "assumed" rather than self-reported. Drives the
+                  assessment step of /specclaw:teach
+  enable/disable  Toggle teach mode in config.yaml
+  level           Record a level. The 4th argument marks provenance:
+                    self    - the learner answered (default)
+                    assumed - inferred; MUST be confirmed before it is trusted
+  levels          Show the learner profile
+  plan-path       Print the canonical path for the learning plan
+  log             Append an entry to a change's teaching.md
+  --list          Show a change's teaching record
+
+Levels:  a = never used it | b = theory only | c = shipped with it | d = deep
+Kinds:   brief | decision | prediction | checkpoint | debrief
+
+Levels are project-wide and live in <specclaw_dir>/knowledge/learner-profile.md.
+Per-change teaching records live in <specclaw_dir>/changes/<change>/teaching.md.
+Nothing is ever written to the plugin itself.
+EOF
+  exit 0
+}
+
+for arg in "$@"; do
+  [[ "$arg" == "--help" || "$arg" == "-h" ]] && usage
+done
+
+[[ $# -lt 2 ]] && { echo "Error: Not enough arguments. Use --help for usage." >&2; exit 1; }
+
+SPECCLAW_DIR="$1"; shift
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+TEMPLATE_DIR="$PLUGIN_ROOT/templates"
+CONFIG_FILE="$SPECCLAW_DIR/config.yaml"
+KNOWLEDGE_DIR="$SPECCLAW_DIR/knowledge"
+PROFILE_FILE="$KNOWLEDGE_DIR/learner-profile.md"
+
+VALID_KINDS="brief decision prediction checkpoint debrief"
+VALID_LEVELS="a b c d"
+VALID_DEPTHS="minimal brief full"
+VALID_SOURCES="self assumed"
+PLAN_FILE="$KNOWLEDGE_DIR/learning-plan.md"
+
+# Read a scalar from the `teach:` block of config.yaml. Absent block or key -> default.
+read_teach_key() {
+  local key="$1" default="$2"
+  [[ -f "$CONFIG_FILE" ]] || { echo "$default"; return; }
+  awk -v k="$key" -v d="$default" '
+    /^teach:[[:space:]]*$/ { inblock=1; next }
+    inblock && /^[^[:space:]#]/ { inblock=0 }
+    inblock {
+      line=$0
+      sub(/#.*$/, "", line)
+      if (match(line, "^[[:space:]]+" k "[[:space:]]*:")) {
+        val=line; sub("^[[:space:]]+" k "[[:space:]]*:[[:space:]]*", "", val)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", val); gsub(/^"|"$/, "", val)
+        if (val != "") { print val; found=1; exit }
+      }
+    }
+    END { if (!found) print d }
+  ' "$CONFIG_FILE"
+}
+
+set_teach_key() {
+  local key="$1" value="$2"
+  [[ -f "$CONFIG_FILE" ]] || { echo "Error: $CONFIG_FILE not found. Run /specclaw:init first." >&2; exit 1; }
+  if ! grep -qE '^teach:[[:space:]]*$' "$CONFIG_FILE"; then
+    cat >> "$CONFIG_FILE" <<EOF
+
+# Teaching mode (opt-in). When enabled, lifecycle phases explain before they
+# implement, surface design choices as decisions for the human, and record what
+# was taught in changes/<change>/teaching.md. Absent or false -> phases behave
+# exactly as before.
+teach:
+  enabled: false
+  depth: "brief"       # minimal | brief | full
+  gate_builds: true    # pause before each build wave for an unfamiliar technology
+EOF
+  fi
+  awk -v k="$key" -v v="$value" '
+    /^teach:[[:space:]]*$/ { print; inblock=1; next }
+    inblock && /^[^[:space:]#]/ { inblock=0 }
+    inblock && match($0, "^([[:space:]]+)" k "[[:space:]]*:") {
+      indent=$0; sub(/[^[:space:]].*$/, "", indent)
+      comment=""; if (match($0, /#.*$/)) comment="   " substr($0, RSTART, RLENGTH)
+      print indent k ": " v comment; done=1; next
+    }
+    { print }
+    END { if (!done) exit 3 }
+  ' "$CONFIG_FILE" > "$CONFIG_FILE.tmp" || {
+    rm -f "$CONFIG_FILE.tmp"
+    echo "Error: could not set teach.$key" >&2
+    exit 1
+  }
+  mv "$CONFIG_FILE.tmp" "$CONFIG_FILE" || {
+    rm -f "$CONFIG_FILE.tmp"
+    echo "Error: could not install $CONFIG_FILE" >&2
+    exit 1
+  }
+}
+
+ensure_profile() {
+  mkdir -p "$KNOWLEDGE_DIR"
+  [[ -f "$PROFILE_FILE" ]] && return
+  if [[ -f "$TEMPLATE_DIR/knowledge/learner-profile.md" ]]; then
+    cp "$TEMPLATE_DIR/knowledge/learner-profile.md" "$PROFILE_FILE"
+  else
+    cat > "$PROFILE_FILE" <<'EOF'
+# Learner Profile
+
+Self-rated levels. Drives how much explanation each phase gives.
+
+**Scale:** a = never used it | b = theory / tutorials only | c = shipped something real | d = deep
+
+| Technology | Level | Recorded | Notes |
+|------------|-------|----------|-------|
+EOF
+  fi
+}
+
+ensure_teaching() {
+  local change="$1"
+  local dir="$SPECCLAW_DIR/changes/$change"
+  local file="$dir/teaching.md"
+  [[ -d "$dir" ]] || { echo "Error: change '$change' not found at $dir" >&2; exit 1; }
+  if [[ ! -f "$file" ]]; then
+    mkdir -p "$dir"
+    if [[ -f "$TEMPLATE_DIR/teaching.md" ]]; then
+      sed "s/{{change_name}}/$change/g" "$TEMPLATE_DIR/teaching.md" > "$file"
+    else
+      printf '# Teaching: %s\n\nWhat the human learned during this change.\n\n---\n' "$change" > "$file"
+    fi
+  fi
+  echo "$file"
+}
+
+CMD="${1:-}"
+
+case "$CMD" in
+  status)
+    printf '{"enabled":%s,"depth":"%s","gate_builds":%s,"profile":"%s"}\n' \
+      "$(read_teach_key enabled false)" \
+      "$(read_teach_key depth brief)" \
+      "$(read_teach_key gate_builds true)" \
+      "$PROFILE_FILE"
+    ;;
+
+  enable|disable)
+    depth=""
+    if [[ "$CMD" == "enable" && "${2:-}" == "--depth" ]]; then
+      depth="${3:-}"
+      grep -qw -- "$depth" <<<"$VALID_DEPTHS" || { echo "Error: depth must be one of: $VALID_DEPTHS" >&2; exit 1; }
+    fi
+    set_teach_key enabled "$([[ "$CMD" == "enable" ]] && echo true || echo false)"
+    [[ -n "$depth" ]] && set_teach_key depth "\"$depth\""
+    ensure_profile
+    echo "teach mode $CMD""d${depth:+ (depth: $depth)}"
+    ;;
+
+  level)
+    tech="${2:-}"; lvl="${3:-}"; src="${4:-self}"
+    [[ -n "$tech" && -n "$lvl" ]] || { echo "Error: usage: level <technology> <a|b|c|d> [self|assumed]" >&2; exit 1; }
+    grep -qw -- "$lvl" <<<"$VALID_LEVELS" || { echo "Error: level must be one of: $VALID_LEVELS" >&2; exit 1; }
+    grep -qw -- "$src" <<<"$VALID_SOURCES" || { echo "Error: source must be one of: $VALID_SOURCES" >&2; exit 1; }
+    ensure_profile
+    if grep -qiE "^\| *$tech *\|" "$PROFILE_FILE"; then
+      awk -v t="$tech" -v l="$lvl" -v s="$src" -v d="$(date -u +%Y-%m-%d)" '
+        BEGIN{IGNORECASE=1}
+        $0 ~ "^\\| *" t " *\\|" { printf "| %s | %s | %s | %s |\n", t, l, s, d; next }
+        { print }' "$PROFILE_FILE" > "$PROFILE_FILE.tmp" && mv "$PROFILE_FILE.tmp" "$PROFILE_FILE"
+      echo "updated $tech -> $lvl ($src)"
+    else
+      printf '| %s | %s | %s | %s |\n' "$tech" "$lvl" "$src" "$(date -u +%Y-%m-%d)" >> "$PROFILE_FILE"
+      echo "recorded $tech -> $lvl ($src)"
+    fi
+    ;;
+
+  levels)
+    [[ -f "$PROFILE_FILE" ]] || { echo "No learner profile yet. Record one with: level <technology> <a|b|c|d>"; exit 0; }
+    cat "$PROFILE_FILE"
+    ;;
+
+  # What still needs asking. An "assumed" level is one nobody confirmed — trusting it silently is
+  # how a learner ends up either bored or lost, so the skill must re-ask before relying on it.
+  assess)
+    ensure_profile
+    rows=$(grep -cE '^\| *[^|# ][^|]* *\| *[abcd] *\|' "$PROFILE_FILE" 2>/dev/null || true)
+    assumed=$(awk -F'|' '/^\| *[^|# ]/ && $3 ~ /^ *[abcd] *$/ && $4 ~ /assumed/ {gsub(/^ +| +$/,"",$2); printf "%s ", $2}' "$PROFILE_FILE")
+    selfn=$(awk -F'|' '/^\| *[^|# ]/ && $3 ~ /^ *[abcd] *$/ && $4 ~ /self/ {n++} END{print n+0}' "$PROFILE_FILE")
+    legacy=$(awk -F'|' '/^\| *[^|# ]/ && $3 ~ /^ *[abcd] *$/ && $4 !~ /self|assumed/ {gsub(/^ +| +$/,"",$2); printf "%s ", $2}' "$PROFILE_FILE")
+    printf '{"recorded":%s,"self_reported":%s,"needs_confirmation":[%s],"unknown_provenance":[%s],"profile":"%s","plan":"%s","plan_exists":%s}\n' \
+      "${rows:-0}" "$selfn" \
+      "$(for t in $assumed; do printf '"%s",' "$t"; done | sed 's/,$//')" \
+      "$(for t in $legacy; do printf '"%s",' "$t"; done | sed 's/,$//')" \
+      "$PROFILE_FILE" "$PLAN_FILE" \
+      "$([[ -f "$PLAN_FILE" ]] && echo true || echo false)"
+    ;;
+
+  plan-path)
+    mkdir -p "$KNOWLEDGE_DIR"
+    echo "$PLAN_FILE"
+    ;;
+
+  *)
+    # Per-change modes: <change_name> log|--list
+    CHANGE="$CMD"; shift || true
+    SUB="${1:-}"
+    case "$SUB" in
+      log)
+        kind="${2:-}"; detail="${3:-}"
+        [[ -n "$kind" && -n "$detail" ]] || { echo "Error: usage: <change> log <kind> \"<detail>\"" >&2; exit 1; }
+        grep -qw -- "$kind" <<<"$VALID_KINDS" || { echo "Error: kind must be one of: $VALID_KINDS" >&2; exit 1; }
+        file="$(ensure_teaching "$CHANGE")"
+        printf '\n### %s — %s\n\n%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$kind" "$detail" >> "$file"
+        echo "logged $kind to $file"
+        ;;
+      --list)
+        file="$SPECCLAW_DIR/changes/$CHANGE/teaching.md"
+        [[ -f "$file" ]] || { echo "No teaching record for '$CHANGE' yet."; exit 0; }
+        cat "$file"
+        ;;
+      *)
+        echo "Error: unknown command '$CMD'. Use --help for usage." >&2
+        exit 1
+        ;;
+    esac
+    ;;
+esac

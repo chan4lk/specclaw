@@ -41,6 +41,15 @@ Outputs JSON: `[{"id":"T1","title":"...","wave":1,"depends":[],"files":[...],"es
 
 **Retry:** to re-run failed tasks, parse with `--status failed`, reset each to `pending` via `specclaw-update-task-status .specclaw/changes/<change>/tasks.md <TASK_ID> pending`, then re-parse with `--status pending`.
 
+## Step 2.5 — Teaching gate (if `teach.enabled: true`)
+
+Run `specclaw-teach .specclaw status`. If `enabled` and `gate_builds` are true, **stop here before
+spawning any agent** and gate the first wave — see the Teaching mode section at the end of this skill
+for the gate format. Re-gate at the top of each subsequent wave.
+
+This step exists at this position on purpose: tasks must be parsed (Step 2) before you can gate on
+them, and the gate is worthless after Step 3 has already built everything.
+
 ## Step 3 — Wave loop
 
 For each wave number (1, 2, 3, ...):
@@ -168,3 +177,14 @@ Send a final **build summary**:
 - **Fail-fast on dependencies** — if a task fails, all dependents are immediately marked failed.
 - **Agent guardrails** — every coding agent is auto-prepended four behavioral rules (Think Before Coding, Simplicity First, Surgical Changes, Goal-Driven Execution), vendored verbatim from Andrej Karpathy's CLAUDE.md. See `references/agent-guardrails.md`. Injection happens inside `specclaw-build-context`; no config flag.
 - **Loop-aware** — when `loop.enabled: true` (the default), this build is one turn of the autonomous loop driven by `/specclaw:loop`, which re-runs verify+review and fixes the smallest diff until every gate is green or a guardrail halts. Build produces the first implementation; the loop remediates it. When `loop.enabled: false`, build behaves single-pass exactly as documented above — no loop, no extra files.
+
+## Teaching mode (if `teach.enabled: true`)
+
+Check with `specclaw-teach .specclaw status`. When enabled with `gate_builds: true`, before each wave that uses a technology the learner profile rates **a** or **b**:
+
+1. **Gate** — state where they are in one line, offer a 3-minute concept brief, offer a quick PoC or straight-in, and ask for the **one decision** this wave needs (with a recommendation and what it costs). Then stop.
+2. **Build** at full speed with no narration. Fix your own bugs — do not walk the user through debugging.
+3. **After the wave**, give exactly **one** verify command, with what they should see and what it means.
+4. Log briefs given: `specclaw-teach .specclaw <change> log brief "<topic and key points>"`.
+
+Generate briefs from the recipe in `references/teaching-mode.md` — there is deliberately no cheatsheet library. Cache each at `.specclaw/knowledge/briefs/<topic>.md`. Never ask the user to type code "to learn"; ask them to decide, predict, or explain.

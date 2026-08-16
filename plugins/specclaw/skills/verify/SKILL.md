@@ -18,6 +18,12 @@ If it fails (tasks not all complete), report and stop.
 
 **If `.specclaw/context.md` exists**, read it before evaluating — the verifier must check that the implementation respects the project's coding rules, patterns, and constraints documented there, in addition to the spec's acceptance criteria.
 
+## Step 0.5 — Prediction (if `teach.enabled` and `depth: full`)
+
+Run `specclaw-teach .specclaw status`. If `depth` is `full`, ask the user to predict the headline
+numbers **before** Step 1 runs anything — a prediction offered after the results are on screen is
+worthless. See the Teaching mode section at the end of this skill.
+
 ## Step 1 — Collect evidence
 
 ```bash
@@ -124,3 +130,17 @@ When `loop.enabled: false`, remediation is manual. If verdict is FAIL or PARTIAL
 1. List the failed acceptance criteria.
 2. Suggest creating remediation tasks targeting the gaps.
 3. The user can re-plan just the failed criteria or manually fix and re-verify.
+
+## Teaching mode (if `teach.enabled: true`)
+
+Check with `specclaw-teach .specclaw status`. When `depth: full`, ask for a **prediction before revealing any number**:
+
+> "Sustained 150 rps across 4 shards — what p95 do you expect?"
+
+Then compare explicitly and log it:
+
+```bash
+specclaw-teach .specclaw <change> log prediction "Predicted <x>; measured <y>; gap = <cause>"
+```
+
+A wrong prediction is the most valuable event in the change — it marks exactly where the user's mental model diverges from the system. It costs fifteen seconds; never skip it to save time.

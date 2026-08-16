@@ -11,6 +11,7 @@ Create a GitHub PR for a verified change. Requires `verify-report.md` (build + v
 1. **Code review block (conditional):** Read `workflow.code_review_block` from `.specclaw/config.yaml`. If `true`:
    - Check if `.specclaw/changes/<change>/review-report.md` exists. If it does not exist, warn: "code_review_block is enabled but no review-report.md found — run /specclaw:verify first" and continue.
    - If `review-report.md` exists and verdict is `CHANGES_REQUESTED`, **abort** with: "PR blocked: code review verdict is CHANGES_REQUESTED. Fix BLOCK findings in review-report.md then re-run /specclaw:verify." List all BLOCK findings from the report before aborting.
+1.5. **Teaching debrief** (if `teach.enabled: true`, via `specclaw-teach .specclaw status`): run the debrief **before** the PR is created — once `specclaw-pr` has run, the PR is open and the debrief is a postscript. See the Teaching mode section at the end of this skill.
 2. **Validate:** `specclaw-validate-change .specclaw <change> pr`. Exits with a warning (exit 0) if a PR already exists for this change. Fails if `verify-report.md` is missing.
 2. **Run:** `specclaw-pr .specclaw <change>` — **always** create the PR through this script, never hand-roll `gh pr create`. `specclaw-pr` stages and commits the full `.specclaw/changes/<change>/` planning trail (proposal, spec, design, tasks, status, verify-report) into the branch and **aborts if any of it is left uncommitted** — a raw `gh pr create` skips this and ships a PR missing the proposal artifacts.
    - **First run:** prompts for test policy (`none|unit|e2e|both`), saves it to `config.yaml` under `pr.test_policy`. Never prompts again.
@@ -33,3 +34,14 @@ Create a GitHub PR for a verified change. Requires `verify-report.md` (build + v
 4. Report the PR URL to the user.
 
 **CI outer loop (if `loop.ci_gate: true`):** once the PR branch is pushed, the CI tier of `/specclaw:loop` (Step 3 / `specclaw-loop ci-poll`) polls GitHub Actions checks and iterates fixes until they are green, or `loop.ci_max_iterations` / `loop.ci_timeout_seconds` halts and escalates. This is a cross-reference only — PR creation above is unchanged, and nothing extra runs when `loop.ci_gate` is false.
+
+## Teaching mode (if `teach.enabled: true`)
+
+Check with `specclaw-teach .specclaw status`. When enabled, run the **debrief before opening the PR**:
+
+1. **What was built** — component map, one line each, flagging pure plumbing so attention isn't wasted.
+2. **Every decision**, in a table where the *costs us* column is mandatory: decision | chose | alternatives | why | costs us | reversibility | forced by the spec?
+3. **If you built this from scratch** — the *order*, and the decision faced at each step. Not the code. Plus what you'd do differently in production, and what was deliberately left out.
+4. **Two questions:** *"Explain to a sceptical reviewer why we <key decision>, when they think <obvious alternative> is better."* and **"Which decision above do you think is wrong or over-engineered?"** If they say "none", push once — there is always a weakest one.
+
+Log it: `specclaw-teach .specclaw <change> log debrief "<summary>"`. The debrief, not the code, is the deliverable of teaching mode.

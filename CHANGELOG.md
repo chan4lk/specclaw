@@ -4,6 +4,71 @@ All notable changes to specclaw are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.8] — 2026-08-16
+
+### Added
+- **Teaching mode (`/specclaw:teach`).** Opt-in mode that makes the lifecycle
+  explain while it builds, for onboarding, upskilling, and unfamiliar stacks.
+  Off by default; when `teach.enabled` is false nothing changes anywhere.
+  - `propose` names the technologies a change touches and asks the user's level
+    per technology — (a) never used it / (b) theory only / (c) shipped with it /
+    (d) deep — stored in `.specclaw/knowledge/learner-profile.md`.
+  - `plan` surfaces design decisions as 2–4 scored options with pros, cons and
+    costs, including one deliberately simpler than the recommendation. The user
+    chooses; their reason is recorded verbatim in `design.md`.
+  - `build` gates each wave that uses an unfamiliar technology, offering a
+    3-minute concept brief, then builds without narration and returns exactly
+    one verify command.
+  - `verify` asks for a prediction before revealing numbers (`depth: full`).
+  - `pr` runs a debrief: what was built, every decision with its alternatives
+    and costs, and how the user would build it from scratch.
+  - New `teaching.md` per change — the human-facing companion to `learnings.md`.
+    Same change, two directions: one records what the machine learned, the
+    other what the human learned.
+  - **No cheatsheet library by design.** Concept briefs are generated from a
+    recipe in `references/teaching-mode.md` and cached per project under
+    `.specclaw/knowledge/briefs/`. A file per technology is a coverage promise
+    no plugin can keep, and static files rot while model knowledge does not.
+  - **Assessment is the default action.** A bare `/specclaw:teach` now runs a
+    five-step flow — work out which technologies the change touches, ask for any
+    level not self-reported, show the level map back, generate the learning plan,
+    end with one next action. Previously it printed config and stopped, so a
+    pre-populated profile meant the user was never actually assessed.
+  - **Gates are inline in each phase's numbered flow, not appended.** An earlier
+    iteration put the teaching section at the end of each skill, following the
+    existing `loop.ci_gate` cross-reference pattern. That is correct for a
+    cross-reference and wrong for behaviour that must interleave: in `build` the
+    section landed after Step 3's wave loop, so a model working through the steps
+    in order would spawn every coding agent and finish the build before reading
+    the gate. Same class of bug in `verify` (prediction after the tests ran),
+    `plan` (options after `design.md` was written) and `pr` (debrief after the PR
+    was opened). Each skill now carries a short gate at the only position where it
+    works — `build` Step 2.5 (after tasks are parsed, before agents spawn),
+    `verify` Step 0.5, `plan` step 3.5, `pr` step 1.5 — with the detail still at
+    the end for reference.
+  - **Stack table before any question.** The assessment now opens by showing every
+    technology the change touches — libraries included, not just categories —
+    with what each is for *in this project* and where it appears, then asks about
+    every row. Previously it discovered technologies silently and only asked about
+    gaps, so a learner never saw the surface area of the work and specific
+    libraries (the Kafka client, the tracing propagation API, the trace UI) went
+    unassessed while their parent category looked covered.
+  - **Ends with one concrete opening move**, naming the first task, why it is
+    first, which brief it opens with, and the exact words to reply — not a menu.
+  - **Level provenance.** `specclaw-teach level <tech> <a|b|c|d> [self|assumed]`.
+    `assumed` levels are listed by the new `assess` subcommand and must be
+    re-asked before any phase trusts them — an inherited profile is not an
+    assessment.
+  - **Learning plan artifact** at `.specclaw/knowledge/learning-plan.md`, derived
+    from the level map: separate Learn (briefs, each tied to the task that needs
+    it), Explain (decisions that are the user's), PoC (only where watching a
+    mechanism fail beats reading), and Implementation sections, plus predictions
+    and an explicit not-learning-this-time list.
+  - New `assess` and `plan-path` subcommands; `templates/knowledge/learning-plan.md`.
+  - New `bin/specclaw-teach` (status / enable / disable / level / levels / log),
+    `templates/teaching.md`, `templates/knowledge/learner-profile.md`,
+    `references/teaching-mode.md`, and a `teach:` block in `templates/config.yaml`.
+
 ## [0.5.5] — 2026-07-17
 
 ### Added

@@ -68,3 +68,13 @@ Create a new proposal for a change.
 9. **Once the user approves the proposal**, record the phase: `specclaw-set-phase .specclaw <change-name> proposal approved`. `specclaw-set-phase` is the only writer of phase state — it records `state.json` and upserts the Proposal row in `status.md`. Never hand-edit those rows. Until approval the template's `🟡 Draft` row stands.
 
 Do not proceed to `/specclaw:plan` until the user has approved the proposal.
+
+## Teaching mode (if `teach.enabled: true`)
+
+Check with `specclaw-teach .specclaw status`. When enabled, after presenting the proposal:
+
+1. Show a **stack table** of every technology this change touches — libraries included, not just categories (`kafka` and `kafkajs` are different things to know) — with what each is for *in this project* and where it appears. Mark which parts are learning surface versus plumbing.
+2. Ask for the user's level on **every row**: **(a)** never used it, **(b)** theory only, **(c)** shipped with it, **(d)** deep — via `AskUserQuestion`, batched 4 at a time in first-needed order. Record each: `specclaw-teach .specclaw level <tech> <a|b|c|d> self`. Being asked is not overhead — it's how the user sees the surface area of the work.
+3. Spot-check every (c)/(d) claim with one specific question and correct it silently if it doesn't hold.
+
+Never assume a level in either direction. Protocol: `references/teaching-mode.md`.
