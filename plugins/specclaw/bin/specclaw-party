@@ -214,7 +214,7 @@ PARTY_LIST_KEYS=(panel always)
 # it: `propose` was told to read party.enabled and given nothing to read it
 # with. This is that mechanism.
 cmd_get() {
-  local specclaw_dir="" key="" default="" k
+  local specclaw_dir="" key="" default=""
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --default) [[ $# -ge 2 ]] || die "--default requires a value"; default="$2"; shift 2 ;;
