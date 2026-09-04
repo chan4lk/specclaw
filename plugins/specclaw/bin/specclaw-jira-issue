@@ -145,11 +145,14 @@ get_issue_type() {
 
 jiraapi_post() {
   local path="$1" data="$2"
-  curl -sf -X POST "${JIRA_URL}/rest/api/3/${path}" \
+  # Pipe the JSON via stdin. Passing a large JSON blob as an argv element is
+  # corrupted by MSYS argument conversion on Windows (Git Bash), which returns
+  # "error parsing JSON" from Jira for a body that is perfectly valid.
+  printf '%s' "$data" | curl -sf -X POST "${JIRA_URL}/rest/api/3/${path}" \
     -u "${JIRA_EMAIL}:${JIRA_TOKEN}" \
     -H "Accept: application/json" \
     -H "Content-Type: application/json" \
-    -d "$data"
+    --data-binary @-
 }
 
 json_escape() {

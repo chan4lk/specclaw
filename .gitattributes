@@ -1,3 +1,4 @@
 * text=auto
 plugins/specclaw/bin/* text eol=lf
+plugins/specclaw/bin/*.cmd text eol=crlf
 *.sh text eol=lf

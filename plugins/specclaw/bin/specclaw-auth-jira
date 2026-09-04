@@ -46,8 +46,35 @@ if ! { : </dev/tty; } 2>/dev/null; then
   else
     SPECCLAW_ABS="$(pwd)/${1:-.specclaw}"
   fi
-  cat >&2 <<EOF
-ERROR: specclaw-auth-jira needs an interactive terminal — /dev/tty is not available here.
+  CMD_NAME="$(basename "${SCRIPT_PATH}")"
+  # On Windows the plugin's bin is not on PATH, and the MSYS-style path below is
+  # unusable in PowerShell — so emit a ready-to-paste PowerShell block as well.
+  if [[ -n "${MSYSTEM:-}" || "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ]] \
+     && command -v cygpath >/dev/null 2>&1; then
+    WIN_BIN="$(cygpath -w "$(dirname "${SCRIPT_PATH}")")"
+    WIN_CWD="$(cygpath -w "$(pwd)")"
+    WIN_SPECCLAW="$(cygpath -w "${SPECCLAW_ABS}")"
+    cat >&2 <<EOF
+ERROR: ${CMD_NAME} needs an interactive terminal — /dev/tty is not available here.
+
+The setup prompts for an Atlassian API token; pasting that through an agent
+is unsafe. Open your own terminal and run these commands.
+
+PowerShell:
+
+  \$env:PATH = "${WIN_BIN};\$env:PATH"
+  cd "${WIN_CWD}"
+  ${CMD_NAME} "${WIN_SPECCLAW}"
+
+Git Bash:
+
+  "${SCRIPT_PATH}" "${SPECCLAW_ABS}"
+
+After it completes, return to your agent session and continue.
+EOF
+  else
+    cat >&2 <<EOF
+ERROR: ${CMD_NAME} needs an interactive terminal — /dev/tty is not available here.
 
 The setup prompts for an Atlassian API token; pasting that through an agent
 is unsafe. Open your own terminal and run this exact command (it includes
@@ -58,6 +85,7 @@ normal PATH):
 
 After it completes, return to your agent session and continue.
 EOF
+  fi
   exit 1
 fi
 
@@ -96,11 +124,26 @@ yaml_set_jira() {
 }
 
 ensure_gitignored() {
-  local gitignore
-  gitignore="$(cd "$SPECCLAW_DIR/.." && git rev-parse --show-toplevel 2>/dev/null)/.gitignore"
-  if [[ -f "$gitignore" ]] && ! grep -q '\.specclaw/\.env' "$gitignore" 2>/dev/null; then
-    echo ".specclaw/.env" >> "$gitignore"
+  local root gitignore
+  root="$(cd "$SPECCLAW_DIR/.." && git rev-parse --show-toplevel 2>/dev/null)" || return 0
+  [[ -n "$root" ]] || return 0
+  gitignore="$root/.gitignore"
+  grep -qs '\.specclaw/\.env' "$gitignore" && return 0
+  # Create .gitignore when the repo has none - the old guard skipped silently
+  # here while the caller still reported the token as gitignored.
+  if [[ -s "$gitignore" ]] && [[ -n "$(tail -c1 "$gitignore")" ]]; then
+    printf '\n' >> "$gitignore"
   fi
+  printf '%s\n' ".specclaw/.env" >> "$gitignore"
+}
+
+# Strip CR (Windows paste/CRLF) plus leading/trailing whitespace. Console pastes
+# routinely carry these, and an untrimmed token fails auth with an opaque 401.
+trim() {
+  local s="${1//$'\r'/}"
+  s="${s#"${s%%[![:space:]]*}"}"
+  s="${s%"${s##*[![:space:]]}"}"
+  printf '%s' "$s"
 }
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
@@ -113,20 +156,24 @@ main() {
 
   echo -n "Jira domain (e.g. 'mycompany.atlassian.net'): "
   read -r DOMAIN </dev/tty
+  DOMAIN="$(trim "$DOMAIN")"
   [[ -n "$DOMAIN" ]] || die "Domain required"
   DOMAIN="${DOMAIN#https://}"; DOMAIN="${DOMAIN#http://}"; DOMAIN="${DOMAIN%/}"
 
   echo -n "Atlassian account email: "
   read -r EMAIL </dev/tty
+  EMAIL="$(trim "$EMAIL")"
   [[ -n "$EMAIL" ]] || die "Email required"
 
   echo -n "Jira project key (e.g. 'PROJ' — shown in issue IDs like PROJ-123): "
   read -r PROJECT_KEY </dev/tty
+  PROJECT_KEY="$(trim "$PROJECT_KEY")"
   [[ -n "$PROJECT_KEY" ]] || die "Project key required"
   PROJECT_KEY="$(echo "$PROJECT_KEY" | tr '[:lower:]' '[:upper:]')"
 
   echo -n "Default issue type [Story]: "
   read -r ISSUE_TYPE </dev/tty
+  ISSUE_TYPE="$(trim "$ISSUE_TYPE")"
   ISSUE_TYPE="${ISSUE_TYPE:-Story}"
 
   echo ""
@@ -144,6 +191,7 @@ main() {
   echo ""
   echo -n "Paste your API token here (hidden): "
   read -rs TOKEN </dev/tty
+  TOKEN="$(trim "$TOKEN")"
   echo ""
   [[ -n "$TOKEN" ]] || die "Token required"
 
@@ -171,6 +219,33 @@ main() {
     404) die "Project '${PROJECT_KEY}' not found — check the project key" ;;
     *)   die "Project check failed (HTTP ${HTTP_CODE})" ;;
   esac
+
+  echo "Checking issue type '${ISSUE_TYPE}'..."
+  TYPES_JSON="$(curl -s \
+    -u "${EMAIL}:${TOKEN}" \
+    -H "Accept: application/json" \
+    "https://${DOMAIN}/rest/api/3/issue/createmeta/${PROJECT_KEY}/issuetypes")" || true
+  AVAILABLE_TYPES="$(printf '%s' "$TYPES_JSON" | tr ',' '\n' \
+    | sed -n 's/.*"name":"\([^"]*\)".*/\1/p' | sort -u)"
+
+  if [[ -z "$AVAILABLE_TYPES" ]]; then
+    echo "⚠️  Could not list issue types for '${PROJECT_KEY}' — skipping this check."
+    echo "    If issue creation later fails with HTTP 400, '${ISSUE_TYPE}' is the first thing to check."
+  elif printf '%s\n' "$AVAILABLE_TYPES" | grep -qxF "$ISSUE_TYPE"; then
+    echo "✅ Issue type '${ISSUE_TYPE}' confirmed"
+  else
+    {
+      echo ""
+      echo "ERROR: Issue type '${ISSUE_TYPE}' does not exist in project '${PROJECT_KEY}'."
+      echo ""
+      echo "Available issue types in '${PROJECT_KEY}':"
+      printf '%s\n' "$AVAILABLE_TYPES" | sed 's/^/  - /'
+      echo ""
+      echo "Re-run this command and enter one of the above at the"
+      echo "'Default issue type' prompt. Nothing has been saved."
+    } >&2
+    exit 1
+  fi
 
   yaml_set_jira "enabled"     "true"
   yaml_set_jira "domain"      "$DOMAIN"

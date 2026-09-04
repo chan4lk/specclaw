@@ -48,8 +48,35 @@ if ! { : </dev/tty; } 2>/dev/null; then
   else
     SPECCLAW_ABS="$(pwd)/${1:-.specclaw}"
   fi
-  cat >&2 <<EOF
-ERROR: specclaw-auth-azdo needs an interactive terminal — /dev/tty is not available here.
+  CMD_NAME="$(basename "${SCRIPT_PATH}")"
+  # On Windows the plugin's bin is not on PATH, and the MSYS-style path below is
+  # unusable in PowerShell — so emit a ready-to-paste PowerShell block as well.
+  if [[ -n "${MSYSTEM:-}" || "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ]] \
+     && command -v cygpath >/dev/null 2>&1; then
+    WIN_BIN="$(cygpath -w "$(dirname "${SCRIPT_PATH}")")"
+    WIN_CWD="$(cygpath -w "$(pwd)")"
+    WIN_SPECCLAW="$(cygpath -w "${SPECCLAW_ABS}")"
+    cat >&2 <<EOF
+ERROR: ${CMD_NAME} needs an interactive terminal — /dev/tty is not available here.
+
+The setup prompts for a Personal Access Token; pasting that through an agent
+is unsafe. Open your own terminal and run these commands.
+
+PowerShell:
+
+  \$env:PATH = "${WIN_BIN};\$env:PATH"
+  cd "${WIN_CWD}"
+  ${CMD_NAME} "${WIN_SPECCLAW}"
+
+Git Bash:
+
+  "${SCRIPT_PATH}" "${SPECCLAW_ABS}"
+
+After it completes, return to your agent session and continue.
+EOF
+  else
+    cat >&2 <<EOF
+ERROR: ${CMD_NAME} needs an interactive terminal — /dev/tty is not available here.
 
 The setup prompts for a Personal Access Token; pasting that through an agent
 is unsafe. Open your own terminal and run this exact command (it includes
@@ -60,6 +87,7 @@ normal PATH):
 
 After it completes, return to your agent session and continue.
 EOF
+  fi
   exit 1
 fi
 
@@ -98,11 +126,26 @@ yaml_set_azdo() {
 }
 
 ensure_gitignored() {
-  local gitignore
-  gitignore="$(cd "$SPECCLAW_DIR/.." && git rev-parse --show-toplevel 2>/dev/null)/.gitignore"
-  if [[ -f "$gitignore" ]] && ! grep -q '\.specclaw/\.env' "$gitignore" 2>/dev/null; then
-    echo ".specclaw/.env" >> "$gitignore"
+  local root gitignore
+  root="$(cd "$SPECCLAW_DIR/.." && git rev-parse --show-toplevel 2>/dev/null)" || return 0
+  [[ -n "$root" ]] || return 0
+  gitignore="$root/.gitignore"
+  grep -qs '\.specclaw/\.env' "$gitignore" && return 0
+  # Create .gitignore when the repo has none - the old guard skipped silently
+  # here while the caller still reported the token as gitignored.
+  if [[ -s "$gitignore" ]] && [[ -n "$(tail -c1 "$gitignore")" ]]; then
+    printf '\n' >> "$gitignore"
   fi
+  printf '%s\n' ".specclaw/.env" >> "$gitignore"
+}
+
+# Strip CR (Windows paste/CRLF) plus leading/trailing whitespace. Console pastes
+# routinely carry these, and an untrimmed token fails auth with an opaque 401.
+trim() {
+  local s="${1//$'\r'/}"
+  s="${s#"${s%%[![:space:]]*}"}"
+  s="${s%"${s##*[![:space:]]}"}"
+  printf '%s' "$s"
 }
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
@@ -115,14 +158,17 @@ main() {
 
   echo -n "Azure DevOps org name (part after dev.azure.com/ — e.g. 'mycompany'): "
   read -r ORG </dev/tty
+  ORG="$(trim "$ORG")"
   [[ -n "$ORG" ]] || die "Org name required"
 
   echo -n "Project name (e.g. 'MyProject'): "
   read -r PROJECT </dev/tty
+  PROJECT="$(trim "$PROJECT")"
   [[ -n "$PROJECT" ]] || die "Project name required"
 
   echo -n "Repository name (e.g. 'my-repo'): "
   read -r REPO </dev/tty
+  REPO="$(trim "$REPO")"
   [[ -n "$REPO" ]] || die "Repository name required"
 
   echo ""
@@ -144,6 +190,7 @@ main() {
   echo ""
   echo -n "Paste your PAT here (hidden): "
   read -rs TOKEN </dev/tty
+  TOKEN="$(trim "$TOKEN")"
   echo ""
   [[ -n "$TOKEN" ]] || die "Token required"
 
