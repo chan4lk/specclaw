@@ -4,7 +4,7 @@
 
 ### _"I have a proposal."_
 
-**Spec-driven development for Claude Code.** Turn a plain-English idea into merged, production-ready code through a fully automated SDLC.
+**Spec-driven development for Claude Code and Codex.** Turn a plain-English idea into merged, production-ready code through a fully automated SDLC.
 
 ![SpecClaw — the "I have a proposal" SDLC workflow](docs/assets/specclaw-hero.png)
 
@@ -44,6 +44,14 @@ Requires [Claude Code](https://claude.com/claude-code) v2.1 or later.
 ```
 
 Future plugins by the same owner ship in the same `chan4lk` marketplace — you only register it once.
+
+### Codex (repository-local)
+
+Codex discovers the adapter included in this checkout at
+`.agents/skills/specclaw/`. Start Codex from the repository root (or a
+descendant), then invoke **`$specclaw`** for SpecClaw lifecycle work. The
+adapter delegates to the existing plugin assets under `plugins/specclaw/`; it
+does not install a global skill or duplicate the Claude plugin.
 
 ## Quickstart
 
@@ -255,6 +263,7 @@ This repo is the `chan4lk` plugin marketplace. The specclaw plugin lives at `plu
 ```
 specclaw/                            ← chan4lk marketplace root
 ├── .claude-plugin/marketplace.json
+├── .agents/skills/specclaw/SKILL.md ← Codex repository-local adapter
 └── plugins/
     └── specclaw/
         ├── .claude-plugin/plugin.json

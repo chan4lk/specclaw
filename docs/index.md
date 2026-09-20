@@ -5,7 +5,7 @@ title: SpecClaw — Spec-driven development for Claude Code
 
 # 🦞 SpecClaw
 
-**Spec-driven development for Claude Code.** Just say _"I have a proposal"_ — SpecClaw is a Claude Code plugin that turns a plain-English idea into merged, production-ready code through an automated **propose → plan → build → verify → pr** lifecycle. Every change gets a paper trail: proposal → spec → design → ordered task list → verified PR.
+**Spec-driven development for Claude Code and Codex.** Just say _"I have a proposal"_ — SpecClaw turns a plain-English idea into merged, production-ready code through an automated **propose → plan → build → verify → pr** lifecycle. Every change gets a paper trail: proposal → spec → design → ordered task list → verified PR.
 
 [View on GitHub](https://github.com/chan4lk/specclaw){: .btn .btn-primary}
 [Install instructions](#installation){: .btn}
@@ -35,6 +35,13 @@ Requires [Claude Code](https://claude.com/claude-code) v2.1 or later.
 ```
 
 Future plugins by the same owner ship in the same `chan4lk` marketplace — you only register it once.
+
+### Codex (repository-local)
+
+This checkout includes `.agents/skills/specclaw/SKILL.md`, which Codex discovers
+when started from the repository root or a descendant. Invoke **`$specclaw`**
+to route lifecycle work to the canonical assets in `plugins/specclaw/`. This is
+not a global installation and does not replace the Claude Code plugin.
 
 ## Quickstart
 
@@ -124,6 +131,7 @@ This repo doubles as the `chan4lk` plugin marketplace. The specclaw plugin lives
 ```text
 specclaw/
 ├── .claude-plugin/marketplace.json   ← chan4lk marketplace catalog
+├── .agents/skills/specclaw/SKILL.md  ← Codex repository-local adapter
 └── plugins/
     └── specclaw/
         ├── .claude-plugin/plugin.json

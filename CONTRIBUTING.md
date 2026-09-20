@@ -39,6 +39,11 @@ The plugin lives in `plugins/specclaw/` (skills, agents, templates, references, 
 
 Then run the workflow (`/specclaw:init`, `/specclaw:propose`, ...) in a scratch project.
 
+For Codex development, start Codex from this checkout (or a descendant). It
+discovers `.agents/skills/specclaw/SKILL.md`; invoke `$specclaw` to use the
+repository-local adapter. The adapter reuses `plugins/specclaw/` and does not
+install a global skill.
+
 ### What We Need Help With
 
 - **Templates** — Better proposal/spec/design templates
