@@ -1,0 +1,11 @@
+{
+  "change": "040-codex-skill-packaging",
+  "phase": "build",
+  "branch": "specclaw/040-codex-skill-packaging",
+  "size": "bounded",
+  "phases": {
+    "spec": {"status":"done","at":"2026-09-20T05:45:27Z"},
+    "tasks": {"status":"done","at":"2026-09-20T05:45:28Z"},
+    "build": {"status":"done","at":"2026-09-20T05:52:07Z","tasks":{"done":4,"total":4,"failed":0}}
+  }
+}

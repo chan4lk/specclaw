@@ -1,7 +1,7 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** specclaw
-**Last Updated:** 2026-09-20 05:17 UTC
+**Last Updated:** 2026-09-20 05:52 UTC
 
 _4 unnumbered changes · run `/specclaw:renumber` to order them_
 
@@ -11,16 +11,17 @@ _4 unnumbered changes · run `/specclaw:renumber` to order them_
 - ✅ **027-memory-aware-parallelism** — 5/5 tasks (100%) | 0 failed
 - 🔨 **028-phase-time-accounting** ▣ — build complete | 5/5 tasks (100%) | 0 failed
 - 🔨 **029-staged-files-auditor** ▣ — build complete | 5/5 tasks (100%) | 0 failed
-- 🔀 **030-tracker-state-integrity** — pr raised | 7/7 tasks (100%) | 0 failed | PR #57 merged
-- 🔀 **031-numbered-change-folders** — pr raised | 6/6 tasks (100%) | 0 failed | PR #60 merged
-- 🔨 **032-party-mode** — build in-progress | 8/8 tasks (100%) | 0 failed | PR #63 merged
+- 🔀 **030-tracker-state-integrity** — pr raised | 7/7 tasks (100%) | 0 failed
+- 🔀 **031-numbered-change-folders** — pr raised | 6/6 tasks (100%) | 0 failed
+- 🔨 **032-party-mode** — build in-progress | 8/8 tasks (100%) | 0 failed
 - 🔨 **033-session-bootstrap-router** ▣ — build complete | 5/5 tasks (100%) | 0 failed
 - 🔨 **034-systematic-debug-skill** — build complete | 6/6 tasks (100%) | 0 failed
 - 🔨 **035-task-review-gate** ▣ — build complete | 5/5 tasks (100%) | 0 failed
 - 🔨 **036-right-sized-change-paths** ▣ — build complete | 6/6 tasks (100%) | 0 failed
 - 🔨 **037-skill-trigger-evals** ▣ — build complete | 5/5 tasks (100%) | 0 failed
-- 🔍 **038-change-concurrency-lock-and-review-budget** — verify PASS | 15/15 tasks (100%) | 0 failed | PR #78 merged
+- 🔍 **038-change-concurrency-lock-and-review-budget** — verify PASS | 15/15 tasks (100%) | 0 failed
 - 🔨 **039-model-invocation-opt-out** ▣ — build done | 9/9 tasks (100%) | 0 failed | 1h30m
+- 🔨 **040-codex-skill-packaging** ▫ — build done | 4/4 tasks (100%) | 0 failed | 8m
 - ✅ **analyze-command** — 5/5 tasks (100%) | 0 failed
 - ✅ **architecture-command** — 6/6 tasks (100%) | 0 failed
 - ✅ **domain-command** — 6/6 tasks (100%) | 0 failed
@@ -62,6 +63,6 @@ _None._
 
 ## Stats
 
-- **Total changes:** 43
-- **Active:** 17
+- **Total changes:** 44
+- **Active:** 18
 - **Completed:** 26

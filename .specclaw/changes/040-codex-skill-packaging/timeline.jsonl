@@ -1,0 +1,16 @@
+{"ev":"start","span":"plan","kind":"phase","label":"plan","at":"2026-09-20T05:43:24Z","ts":1789883004}
+{"ev":"stop","span":"plan","at":"2026-09-20T05:45:39Z","ts":1789883139,"status":"ok"}
+{"ev":"start","span":"W1","kind":"wave","label":"wave 1","at":"2026-09-20T05:48:50Z","ts":1789883330}
+{"ev":"start","span":"T1","kind":"task","label":"Add failing validation for the Codex skill adapter","parent":"W1","model":"anthropic/claude-sonnet-5","attempt":"1","at":"2026-09-20T05:48:50Z","ts":1789883330}
+{"ev":"stop","span":"T1","at":"2026-09-20T05:50:04Z","ts":1789883404,"status":"ok"}
+{"ev":"stop","span":"W1","at":"2026-09-20T05:50:04Z","ts":1789883404,"status":"ok"}
+{"ev":"start","span":"W2","kind":"wave","label":"wave 2","at":"2026-09-20T05:50:25Z","ts":1789883425}
+{"ev":"start","span":"T2","kind":"task","label":"Create the repository-local Codex SpecClaw adapter","parent":"W2","model":"anthropic/claude-sonnet-5","attempt":"1","at":"2026-09-20T05:50:25Z","ts":1789883425}
+{"ev":"stop","span":"T2","at":"2026-09-20T05:50:47Z","ts":1789883447,"status":"ok"}
+{"ev":"stop","span":"W2","at":"2026-09-20T05:50:47Z","ts":1789883447,"status":"ok"}
+{"ev":"start","span":"W3","kind":"wave","label":"wave 3","at":"2026-09-20T05:50:55Z","ts":1789883455}
+{"ev":"start","span":"T3","kind":"task","label":"Document Codex checkout-local installation and use","parent":"W3","model":"anthropic/claude-sonnet-5","attempt":"1","at":"2026-09-20T05:50:55Z","ts":1789883455}
+{"ev":"start","span":"T4","kind":"task","label":"Register and run the Codex adapter validation","parent":"W3","model":"anthropic/claude-sonnet-5","attempt":"1","at":"2026-09-20T05:50:55Z","ts":1789883455}
+{"ev":"stop","span":"T3","at":"2026-09-20T05:51:55Z","ts":1789883515,"status":"ok"}
+{"ev":"stop","span":"T4","at":"2026-09-20T05:51:55Z","ts":1789883515,"status":"ok"}
+{"ev":"stop","span":"W3","at":"2026-09-20T05:51:55Z","ts":1789883515,"status":"ok"}
