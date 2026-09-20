@@ -70,6 +70,8 @@ jobs:
         run: bash plugins/specclaw/tests/run-staged-files-tests.sh
       - name: Run narration-gate tests
         run: bash plugins/specclaw/tests/run-narration-gate-tests.sh
+      - name: Run Codex skill adapter tests
+        run: bash plugins/specclaw/tests/run-codex-skill-tests.sh
       - name: Lint skill descriptions (no new offences)
         run: bash plugins/specclaw/tests/run-description-lint-tests.sh
 
