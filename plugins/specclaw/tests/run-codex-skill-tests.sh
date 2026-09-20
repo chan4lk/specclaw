@@ -8,6 +8,7 @@ PLUGIN_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO_ROOT="$(cd "$PLUGIN_DIR/../.." && pwd)"
 SKILL_DIR="$REPO_ROOT/.agents/skills/specclaw"
 SKILL_FILE="$SKILL_DIR/SKILL.md"
+WORKFLOW_FILE="$REPO_ROOT/.github/workflows/ci.yml"
 
 failed=0
 
@@ -40,6 +41,18 @@ if [ -f "$SKILL_FILE" ]; then
   grep -Fq 'CLAUDE_PLUGIN_ROOT' "$SKILL_FILE" \
     && pass "adapter documents canonical resource-root compatibility" \
     || fail "adapter documents canonical resource-root compatibility"
+
+  grep -Fq 'git rev-parse --show-toplevel' "$SKILL_FILE" \
+    && pass "adapter resolves the checkout root at runtime" \
+    || fail "adapter resolves the checkout root at runtime"
+
+  grep -Fq 'SPECCLAW_PLUGIN_ROOT="$REPO_ROOT/plugins/specclaw"' "$SKILL_FILE" \
+    && pass "adapter derives the canonical plugin root" \
+    || fail "adapter derives the canonical plugin root"
+
+  grep -Fq '$SPECCLAW_PLUGIN_ROOT/skills/<verb>/SKILL.md' "$SKILL_FILE" \
+    && pass "adapter routes verbs through canonical skill directories" \
+    || fail "adapter routes verbs through canonical skill directories"
 fi
 
 for verb_dir in "$PLUGIN_DIR"/skills/*; do
@@ -55,6 +68,18 @@ for duplicate in skills bin templates references; do
     && pass "adapter does not duplicate $duplicate" \
     || fail "adapter does not duplicate $duplicate"
 done
+
+[ -f "$WORKFLOW_FILE" ] || fail "CI workflow exists"
+if [ -f "$WORKFLOW_FILE" ]; then
+  grep -Fq 'run: bash plugins/specclaw/tests/run-codex-skill-tests.sh' "$WORKFLOW_FILE" \
+    && pass "CI runs the Codex adapter validation" \
+    || fail "CI runs the Codex adapter validation"
+fi
+
+adapter_files="$(find "$SKILL_DIR" -type f -print | sed "s|$SKILL_DIR/||" | sort)"
+[ "$adapter_files" = 'SKILL.md' ] \
+  && pass "adapter contains only its entry-point file" \
+  || fail "adapter contains only its entry-point file"
 
 [ "$failed" -eq 0 ] || exit 1
 printf 'All Codex skill adapter checks passed.\n'
