@@ -1,32 +1,31 @@
 # Verification Report: 040-codex-skill-packaging
 
 **Verified:** 2026-09-20
-**Verdict:** PARTIAL
+**Verdict:** PASS
 
 ## Evidence
 
-- `bash plugins/specclaw/tests/run-codex-skill-tests.sh` — PASS; 35 canonical targets and no copied asset trees.
+- `bash plugins/specclaw/tests/run-codex-skill-tests.sh` — PASS in 0.12 seconds.
 - `bash plugins/specclaw/tests/shellcheck-gate.sh` — exit 0; no new findings.
 - `bash plugins/specclaw/tests/run-description-lint-tests.sh` — exit 0; no new offences.
-- `git diff --exit-code 4fd3a51..HEAD -- .claude-plugin/marketplace.json plugins/specclaw/.claude-plugin/plugin.json plugins/specclaw/skills` — exit 0.
-- `.github/workflows/ci.yml` invokes `bash plugins/specclaw/tests/run-codex-skill-tests.sh`.
+- `bash -n plugins/specclaw/tests/run-codex-skill-tests.sh` — exit 0.
 - `git diff --check 4fd3a51..HEAD` — clean.
+- The diff against the merge base has no changes to `.claude-plugin/`, `plugins/specclaw/.claude-plugin/`, or `plugins/specclaw/skills/`.
 
 ## Acceptance Criteria
 
 | AC | Verdict | Evidence |
 |---|---|---|
-| AC1 | PASS | `.agents/skills/specclaw/SKILL.md` exists with `name: specclaw` and a non-empty description. |
-| AC2 | PASS | The adapter resolves the Git repository root, derives `plugins/specclaw`, dynamically routes `skills/<verb>/SKILL.md`, and rejects an absent verb directory. |
-| AC3 | PASS | The adapter directs helpers to `$SPECCLAW_PLUGIN_ROOT/bin/`; the adapter directory contains only `SKILL.md`, with no copied skills, binaries, templates, or references. |
-| AC4 | PASS | The adapter explicitly maps `CLAUDE_PLUGIN_ROOT` resource references to `$SPECCLAW_PLUGIN_ROOT`. |
-| AC5 | PASS | The change has no diff in the marketplace manifest, Claude plugin manifest, or canonical Claude skill documents. |
-| AC6 | PARTIAL | The focused validation passes locally and is registered in CI, but that validator does not inspect the CI workflow. It cannot detect removal of its own CI registration. |
-| AC7 | PASS | README, site documentation, and contributor guidance document checkout-local Codex discovery and `$specclaw`, retain the Claude install commands, and state that no global Codex skill is installed. |
+| AC1 | PASS | The one repository-local adapter has `name: specclaw` and a non-empty description. |
+| AC2 | PASS | It resolves the Git root, derives `plugins/specclaw`, and dynamically routes canonical verb skills. |
+| AC3 | PASS | It directs helpers to the canonical `bin/` path and the adapter contains only `SKILL.md`; no assets are copied. |
+| AC4 | PASS | It maps `CLAUDE_PLUGIN_ROOT` references to the canonical plugin root. |
+| AC5 | PASS | Claude marketplace/plugin manifests and canonical skill documents are unchanged. |
+| AC6 | PASS | The focused validator asserts its CI registration and adapter boundary; the CI workflow invokes it. |
+| AC7 | PASS | Documentation includes the checkout-local Codex path alongside the retained Claude installation path. |
 
-## Required Remediation
+## Remediation
 
-Extend `plugins/specclaw/tests/run-codex-skill-tests.sh` to assert that
-`.github/workflows/ci.yml` invokes the suite. Strengthen the suite to enforce
-the root/verb-resolution and protected-Claude-asset invariants it is intended
-to guard, then rerun verification.
+The prior partial result was resolved in `55c9484`: the validation suite now
+asserts CI registration, runtime root resolution, canonical plugin-root
+derivation, dynamic verb routing, and the one-file adapter boundary.

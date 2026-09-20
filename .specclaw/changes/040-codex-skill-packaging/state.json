@@ -7,6 +7,6 @@
     "spec": {"status":"done","at":"2026-09-20T05:45:27Z"},
     "tasks": {"status":"done","at":"2026-09-20T05:45:28Z"},
     "build": {"status":"done","at":"2026-09-20T05:52:07Z","tasks":{"done":4,"total":4,"failed":0}},
-    "verify": {"status":"partial","at":"2026-09-20T05:56:51Z","verdict":"PARTIAL"}
+    "verify": {"status":"passed","at":"2026-09-20T06:03:21Z","verdict":"PASS"}
   }
 }

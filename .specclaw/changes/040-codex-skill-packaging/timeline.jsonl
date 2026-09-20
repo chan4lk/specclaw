@@ -16,3 +16,5 @@
 {"ev":"stop","span":"W3","at":"2026-09-20T05:51:55Z","ts":1789883515,"status":"ok"}
 {"ev":"start","span":"verify-1789883672","kind":"phase","label":"verify","at":"2026-09-20T05:54:32Z","ts":1789883672}
 {"ev":"stop","span":"verify-1789883672","at":"2026-09-20T05:57:10Z","ts":1789883830,"status":"partial"}
+{"ev":"start","span":"verify-1789884084","kind":"phase","label":"verify","at":"2026-09-20T06:01:24Z","ts":1789884084}
+{"ev":"stop","span":"verify-1789884084","at":"2026-09-20T06:03:43Z","ts":1789884223,"status":"ok"}
