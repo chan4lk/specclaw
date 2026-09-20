@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-09-20 — change-concurrency-lock-and-review-budget_
+_Last updated: 2026-09-20 — codex-skill-packaging_
 
 ## Architecture Overview
 
@@ -13,6 +13,9 @@ specclaw is a Claude Code plugin that drives a spec-first change lifecycle:
   lifecycle live here, one rule per script, so skills call them rather than reimplementing them.
 - `plugins/specclaw/skills/` — one `SKILL.md` per lifecycle phase. Markdown wiring only; it
   invokes `bin/` helpers instead of restating their logic.
+- `.agents/skills/specclaw/SKILL.md` — the repository-local Codex adapter. It resolves the
+  checkout root at runtime and delegates every lifecycle verb to the canonical
+  `plugins/specclaw/` skills and executables; it owns no lifecycle implementation or state.
 - `plugins/specclaw/templates/` — seed files copied into a new project's `.specclaw/`
   (including `context.md`).
 - `plugins/specclaw/tests/` — bash test suites, each registered in `.github/workflows/ci.yml`.
@@ -46,6 +49,9 @@ re-checks it. This is orthogonal to `git.strategy`.
   jq-free (`run-parser-tests.sh` is the one exception and shells out to it).
 - **Every test suite must be registered in `.github/workflows/ci.yml`.** An unregistered suite
   silently never runs — this has happened twice in this repo.
+- **Codex adapter validation is a focused CI gate.**
+  `tests/run-codex-skill-tests.sh` verifies CI registration, runtime root and plugin-root
+  resolution, dynamic verb routing, and the adapter's one-file boundary.
 - **`tests/shellcheck-gate.sh` must pass with `shellcheck-baseline.txt` unmodified.** Fix a new
   finding or add a targeted `# shellcheck disable=SCxxxx` with a written rationale.
 - **Force base ten on any digit run read from disk**: `$((10#$n))`. `$((08))` is a bash syntax
@@ -148,6 +154,9 @@ re-checks it. This is orthogonal to `git.strategy`.
   events that have no other home, not a derivable fact.)
 - **Never silence a shellcheck finding by appending to `shellcheck-baseline.txt`.**
 - **Never add a test suite without registering it in `.github/workflows/ci.yml`.**
+- **Never copy canonical SpecClaw skills, scripts, templates, or references into the Codex
+  adapter.** `.agents/skills/specclaw/` contains only `SKILL.md`; the adapter delegates to
+  `plugins/specclaw/` so Claude and Codex share one lifecycle implementation.
 - **Never rename or migrate a user's change folders automatically.** Backfills require an
   explicit `--apply` and an explicit yes.
 - **Never rename a change while it is mid-build** (live git worktree or checked-out branch) —
@@ -168,19 +177,18 @@ re-checks it. This is orthogonal to `git.strategy`.
    (`specclaw-change-lock`) now guards `plan`/`build`/`verify`/`pr` against concurrent dispatch,
    anchored at each phase's real dispatch boundary (never at a `bin/` subcommand also used
    read-only) and judged stale by wall-clock age alone.
-2. **2026-09-20 — change-concurrency-lock-and-review-budget:** `specclaw-parse-tasks` gained a
+2. **2026-09-20 — codex-skill-packaging:** Codex discovers a repository-local adapter at
+   `.agents/skills/specclaw/SKILL.md`; it derives the checkout root at runtime and delegates
+   lifecycle routing and bare commands to the canonical `plugins/specclaw/` implementation,
+   leaving the Claude skill package untouched.
+3. **2026-09-20 — codex-skill-packaging:** the adapter remains exactly one file rather than a
+   forked asset tree. Its CI validation pins registration, root resolution, dynamic routing, and
+   the no-duplication boundary so the two agent surfaces cannot drift independently.
+4. **2026-09-20 — change-concurrency-lock-and-review-budget:** `specclaw-parse-tasks` gained a
    fifth task marker, `[>]` deferred, excluded from `specclaw-validate-change`'s incomplete-task
    gate; its shared `--count` counter grew a 4th field, requiring every existing caller to be
    updated in the same change to avoid `read` silently corrupting the `failed` count.
-3. **2026-09-20 — change-concurrency-lock-and-review-budget:** `party.session_spawn_cap` bounds
+5. **2026-09-20 — change-concurrency-lock-and-review-budget:** `party.session_spawn_cap` bounds
    cumulative daily party-panel spawns across all changes via a new top-level, append-only
    `party/session-spawns.jsonl` ledger; once set, it forces the "confirm before spending" ask
    even under `party.default: true`.
-4. **2026-08-10 — numbered-change-folders:** change folders carry a permanent three-digit
-   ordinal (`NNN-<slug>`) assigned at propose time and kept through archival; the number is
-   derived from disk (max + 1) on every call, with no counter file, so gaps are permanent and a
-   number always means the same change.
-5. **2026-08-10 — numbered-change-folders:** the backfill (`specclaw-renumber-changes`) is
-   opt-in — dry-run by default, `--apply` required, `--force` to renumber already-numbered
-   folders and to recover from an interrupted run — and mixed numbered/unnumbered repos are a
-   supported steady state.
