@@ -1,7 +1,7 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** specclaw
-**Last Updated:** 2026-09-20 05:52 UTC
+**Last Updated:** 2026-09-20 05:57 UTC
 
 _4 unnumbered changes · run `/specclaw:renumber` to order them_
 
@@ -21,7 +21,7 @@ _4 unnumbered changes · run `/specclaw:renumber` to order them_
 - 🔨 **037-skill-trigger-evals** ▣ — build complete | 5/5 tasks (100%) | 0 failed
 - 🔍 **038-change-concurrency-lock-and-review-budget** — verify PASS | 15/15 tasks (100%) | 0 failed
 - 🔨 **039-model-invocation-opt-out** ▣ — build done | 9/9 tasks (100%) | 0 failed | 1h30m
-- 🔨 **040-codex-skill-packaging** ▫ — build done | 4/4 tasks (100%) | 0 failed | 8m
+- 🔍 **040-codex-skill-packaging** ▫ — verify PARTIAL | 4/4 tasks (100%) | 0 failed | 11m
 - ✅ **analyze-command** — 5/5 tasks (100%) | 0 failed
 - ✅ **architecture-command** — 6/6 tasks (100%) | 0 failed
 - ✅ **domain-command** — 6/6 tasks (100%) | 0 failed
