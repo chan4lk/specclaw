@@ -244,10 +244,27 @@ scenario_block_title() {
 
 # Extract a single-line "- **<Label>:** value" field (Seam, Business rules
 # pinned, Verifies backlog item, Kind).
+#
+# An ABSENT field reads as empty, never as a failure. grep exits 1 on no match,
+# and under this script's `set -euo pipefail` that status propagated out of an
+# unguarded `x="$(scenario_block_field …)"` and killed the run — with no output
+# at all, because the death came before anything was printed. Two ways that
+# fired, both routine: a WITHDRAWN tombstone declares no Seam layer (and
+# `merge-scenarios` creates tombstones itself, so `collect` broke on the very
+# next run), and a live scenario omitting an optional field took `record` down
+# the same way.
+#
+# It is the READER's job to say what the line holds, not to judge whether
+# holding nothing is acceptable — that is decided per field by the caller, and
+# `record` already hard-fails on a missing Seam layer with a message naming the
+# valid values. That check sits AFTER this call, so the unguarded version was
+# what kept it from ever running. Do not "tidy" the `|| true` away: it restores
+# validation rather than suppressing it. Same `{ …; } || true` shape
+# scenario_block_modules below already uses.
 scenario_block_field() {
   local file="$1" label="$2"
-  grep -m1 -- "^- \*\*${label}:\*\*" "$file" 2>/dev/null \
-    | sed -E "s/^- \*\*${label}:\*\* *//" | sed -E 's/[[:space:]]+$//'
+  { grep -m1 -- "^- \*\*${label}:\*\*" "$file" 2>/dev/null \
+    | sed -E "s/^- \*\*${label}:\*\* *//" | sed -E 's/[[:space:]]+$//'; } || true
 }
 
 # Every MOD-### token in a scenario's own "- **Modules:**" field, comma-
@@ -289,6 +306,115 @@ read_module_map_status() {
   [ -f "$map_file" ] || { printf ''; return 0; }
   { grep -m1 -- '^\*\*Status:\*\*' "$map_file" 2>/dev/null \
     | sed -E 's/^\*\*Status:\*\* *//' | sed -E 's/[[:space:]]+$//'; } || true
+}
+
+# The module-map counterpart of scenario_block_title. Same em-dash guard: the
+# separator alternation must NOT be a bracket expression, for the reason given
+# above scenario_block_title. `tr -d '\r'` is what the record path already
+# applies to this heading, and is load-bearing here: on a CRLF module map a
+# WITHDRAWN heading otherwise reads as a live title and the tombstone is
+# processed as a real module.
+module_block_title() {
+  head -1 "$1" | sed -E 's/^### MOD-[0-9]+[[:space:]]*(—|-)[[:space:]]*//' | tr -d '\r'
+}
+
+# The subset of <MOD-*.md file>... whose heading is not a WITHDRAWN tombstone.
+#
+# Co-ownership is a claim a LIVE module makes. A withdrawn module's
+# "(co-owned with MOD-###)" is a stale claim left behind by a module that no
+# longer exists, and honouring it makes the named live module accountable for
+# a rule that nothing owns any more -- it reaches manifest.json's module_ids,
+# which is what /specclaw:bf-replay --module joins on, so the live module is
+# then asked to replay a rule its own section never mentions.
+#
+# One function, both callers: collect and record each filter their file list
+# through this before coowned_pairs sees it, so the two paths cannot drift
+# apart on which modules are eligible to declare co-ownership. The per-module
+# WITHDRAWN tests further down each path are left exactly as they were.
+non_withdrawn_module_files() { # <MOD-*.md file>...
+  local nwf
+  for nwf in "$@"; do
+    case "$(module_block_title "$nwf")" in
+      WITHDRAWN*) ;;
+      *) printf '%s\n' "$nwf" ;;
+    esac
+  done
+}
+
+# For every "(co-owned with MOD-###)" annotation across a set of split
+# MOD-###.md files, print "<named-module> <DR-id>" — one line per annotation.
+# Each annotation pairs with the NEAREST DR-### to its LEFT on the same line:
+# "DR-001 and DR-002 (co-owned with MOD-002)" must yield DR-002, the id right
+# next to it, not DR-001 — a single regex spanning both cannot express
+# "nearest", so this walks left from the annotation and stops at the first
+# DR-### it finds.
+#
+# Shared by `collect` and `record`'s fallback module derivation: a rule
+# co-owned by two modules is written on only ONE module's line (the
+# documented, minimum-required form), so the OTHER module's own text never
+# mentions it — a plain per-module grep would silently miss it there. Fixing
+# this once, here, means both callers see the same rule attribution.
+coowned_pairs() { # <MOD-*.md file>...
+  local cf
+  for cf in "$@"; do
+    # Scoped to the "Business rules" line, for the same reason the per-module
+    # rule grep above it is: a `DR-###` appearing anywhere else in the block
+    # (e.g. "Depends on: MOD-001 (needs the invoice balance, DR-001)") is a
+    # citation, not an ownership claim. Scanning every line made one sentence
+    # mean two things — the citing module correctly did NOT own the rule,
+    # while a `(co-owned with MOD-###)` on that same sentence still handed it
+    # to the named module. An ownership claim is only legible where ownership
+    # is declared.
+    awk -v src="$(basename "$cf" .md)" '
+      /^- \*\*Business rules:\*\*/ {
+        line = $0
+        # `pos` is a scan offset into the UNMODIFIED line, never a truncation
+        # of it. Consuming the line (line = substr(line, st + ln)) would throw
+        # away the text to the LEFT of each annotation, so a second annotation
+        # on the same line had no DR-### left of it to pair with and was
+        # dropped in silence -- "DR-020 (co-owned with MOD-002, co-owned with
+        # MOD-004)" attributed MOD-002 and lost MOD-004 entirely. Keeping the
+        # line whole preserves the nearest-DR-to-the-left rule for EVERY
+        # annotation, which is what pairs the two ids on
+        # "DR-001 (co-owned with MOD-002), DR-002 (co-owned with MOD-003)"
+        # separately rather than giving both the same rule.
+        pos = 1
+        while (match(substr(line, pos), /co-owned with MOD-[0-9][0-9][0-9]/)) {
+          st = pos + RSTART - 1
+          ln = RLENGTH
+          ann = substr(line, st, ln)
+          mod = substr(ann, length(ann) - 6)
+          before = substr(line, 1, st - 1)
+          dr = ""; tmp = before
+          while (match(tmp, /DR-[0-9][0-9][0-9]/)) {
+            dr = substr(tmp, RSTART, RLENGTH)
+            tmp = substr(tmp, RSTART + RLENGTH)
+          }
+          if (dr != "" && mod != src) print mod, dr
+          pos = st + ln
+        }
+      }
+    ' "$cf" 2>/dev/null || true
+  # One pair per MOD/DR combination however many times it is declared: the
+  # same annotation repeated on two lines, or both modules naming each other,
+  # is one ownership fact, not two. Same `!seen[$0]++` idiom the rule greps
+  # in this file already use.
+  done | awk '!seen[$0]++'
+}
+
+# Add the DR-### ids another module declared co-owned with <mod_id> to its
+# existing comma-joined rule list, skipping any already present. Reads the
+# pairs coowned_pairs() produced, filtered to this module.
+apply_coowned_rules() { # <mod_id> <existing-csv-rules> <coowned-pairs-file>
+  local mod_id="$1" rules="$2" pairs_file="$3" extra
+  while IFS= read -r extra; do
+    [ -n "$extra" ] || continue
+    case ",${rules}," in
+      *",${extra},"*) ;;
+      *) rules="${rules:+${rules},}${extra}" ;;
+    esac
+  done < <(awk -v m="$mod_id" '$1 == m { print $2 }' "$pairs_file" | awk '!seen[$0]++')
+  printf '%s' "$rules"
 }
 
 # Fingerprint of a scenario's own defining content — used only to detect
@@ -425,16 +551,38 @@ cmd_collect() {
     shopt -s nullglob
     local -a mod_files=("$mworkdir"/MOD-*.md)
     shopt -u nullglob
+    # Co-ownership is reciprocal by construction, not by transcription.
+    # "(co-owned with MOD-###)" is the analyst's declaration that the named
+    # module owns the rule too, so that module's rule set carries it here
+    # whether or not its own section happens to repeat the id. This roster is
+    # what scenarios are tagged from and what /specclaw:bf-replay --module
+    # signs off against, so deriving the pair from the declaration is what
+    # stops a module being signed off without replaying a rule it implements.
+    # A one-sided note is no longer a silent single-owner attribution.
+    local coown_file="$mworkdir/.coowned"
+    local lmf
+    local -a live_mod_files=()
+    while IFS= read -r lmf; do
+      if [ -n "$lmf" ]; then live_mod_files+=("$lmf"); fi
+    done < <(non_withdrawn_module_files ${mod_files[@]+"${mod_files[@]}"})
+    coowned_pairs ${live_mod_files[@]+"${live_mod_files[@]}"} > "$coown_file"
+
     local mf mid mname mrules
     for mf in "${mod_files[@]}"; do
       mid="$(basename "$mf" .md)"
       mname="$(head -1 "$mf" | sed -E 's/^### MOD-[0-9]+[[:space:]]*(—|-)[[:space:]]*//')"
       case "$mname" in WITHDRAWN*) ;; *) known_mods+=("$mid") ;; esac
-      mrules="$({ grep -oE 'DR-[0-9]{3}' "$mf" 2>/dev/null | awk '!seen[$0]++' | paste -sd, -; } || true)"
+      # Scoped to the "Business rules" line alone, not the whole block: a
+      # `DR-###` cited elsewhere (e.g. "Depends on: MOD-006 (session gate,
+      # DR-008)") is a citation, not an ownership claim, and must not be
+      # attributed to this module.
+      mrules="$({ scenario_block_field "$mf" "Business rules" | grep -oE 'DR-[0-9]{3}' | awk '!seen[$0]++' | paste -sd, -; } || true)"
+      mrules="$(apply_coowned_rules "$mid" "$mrules" "$coown_file")"
       if $mfirst; then mfirst=false; else modules_json="${modules_json},"; fi
       modules_json="${modules_json}
     {\"mod_id\": \"$(json_escape "$mid")\", \"name\": \"$(json_escape "$mname")\", \"rules\": [$(csv_to_json_array "$mrules")]}"
     done
+
     rm -rf "$mworkdir"
   fi
 
@@ -719,12 +867,28 @@ cmd_record() {
     shopt -s nullglob
     local -a mr_files=("$mrworkdir"/MOD-*.md)
     shopt -u nullglob
+    # Reciprocal, same as collect's module_map.modules[].rules: a rule
+    # co-owned with this module but only written on the OTHER module's line
+    # must still count as this module's too, or a scenario left to this
+    # fallback would derive only the annotating module and never its
+    # declared co-owner.
+    local mr_coown_file="$mrworkdir/.coowned"
+    local mrlf
+    local -a mr_live_files=()
+    while IFS= read -r mrlf; do
+      if [ -n "$mrlf" ]; then mr_live_files+=("$mrlf"); fi
+    done < <(non_withdrawn_module_files ${mr_files[@]+"${mr_files[@]}"})
+    coowned_pairs ${mr_live_files[@]+"${mr_live_files[@]}"} > "$mr_coown_file"
     local mrf mrid mrtitle mrrules
     for mrf in "${mr_files[@]}"; do
       mrid="$(basename "$mrf" .md)"
       mrtitle="$(head -1 "$mrf" | sed -E 's/^### MOD-[0-9]+[[:space:]]*(—|-)[[:space:]]*//' | tr -d '\r')"
       case "$mrtitle" in WITHDRAWN*) continue ;; esac
-      mrrules="$({ grep -oE 'DR-[0-9]{3}' "$mrf" | awk '!seen[$0]++' | paste -sd, -; } || true)"
+      # Scoped to the "Business rules" line alone — see the matching comment
+      # in cmd_collect above; a DR-### cited only in this module's own
+      # "Depends on" rationale is not this module's rule.
+      mrrules="$({ scenario_block_field "$mrf" "Business rules" | grep -oE 'DR-[0-9]{3}' | awk '!seen[$0]++' | paste -sd, -; } || true)"
+      mrrules="$(apply_coowned_rules "$mrid" "$mrrules" "$mr_coown_file")"
       [ -n "$mrrules" ] && MOD_RULES["$mrid"]="$mrrules"
     done
     rm -rf "$mrworkdir"

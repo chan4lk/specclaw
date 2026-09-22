@@ -1,0 +1,951 @@
+#!/usr/bin/env bash
+# specclaw-bf-e2e-run — executes the E2E tests bf-e2e-architect just generated
+# and mechanically patches the Execution Results section of
+# .specclaw/e2e/e2e-report.md with real Pass/Fail/Skipped counts, a pass
+# percentage, and wall-clock execution time. Also collects whatever on-failure
+# screenshots/video the run produced (run-config.json's "artifacts_dir") into
+# .specclaw/e2e/artifacts/ and lists them in the report's Artifacts section.
+# Finally renders .specclaw/e2e/e2e-report.html — a standalone, Bootstrap-via-
+# CDN styled page (stat cards, a pass-rate progress bar, data tables, inline
+# screenshot/video previews) mechanically transformed from the now-finished
+# markdown report, for stakeholders who'd rather open a styled page than read
+# markdown.
+#
+# Before the test command runs, it also brings up every background service
+# run-config.json declares (dependency/backend/frontend) that its own
+# check_cmd says is not already running — a database, a backend API, a
+# frontend dev server, whatever the E2E surface actually needs — one at a
+# time, waiting for each to report ready before starting the next. Anything
+# already running when this script starts is left alone; only what this
+# script itself started is torn down when it exits.
+#
+# Why this is bash, not the agent: the agent that wrote e2e-report.md has no
+# test results to report — the tests it just generated have not run yet.
+# Writing a "predicted" pass/fail count would be exactly the kind of fabricated
+# verdict this plugin refuses to produce elsewhere (see bf-quality-collect's
+# report_blocks). So the Execution Results section is bash-owned: this script
+# is the only thing that ever writes between its two anchors, and it does so
+# by actually running the generated command and reading what happened.
+#
+# Never fabricates: a test-runner output this script cannot parse is reported
+# as "NOT MEASURED", never as a guessed zero. A service that never becomes
+# ready is a recorded "not executed" reason, never a guess at whether the
+# tests would have passed anyway.
+#
+# Bash + coreutils. jq required to read run-config.json — its absence degrades
+# to a recorded "not executed" reason rather than failing the run, matching
+# this plugin's existing jq-optional degradation pattern (see specclaw-bf-status).
+set -uo pipefail
+
+BEGIN_ANCHOR="<!-- e2e-report:execution-results:begin -->"
+END_ANCHOR="<!-- e2e-report:execution-results:end -->"
+ARTIFACTS_BEGIN="<!-- e2e-report:artifacts:begin -->"
+ARTIFACTS_END="<!-- e2e-report:artifacts:end -->"
+
+usage() {
+  cat <<'EOF'
+Usage: specclaw-bf-e2e-run run <specclaw_dir> [--timeout SECONDS]
+
+Reads <specclaw_dir>/e2e/run-config.json (written by bf-e2e-architect),
+runs install_cmd, brings up every declared service not already running
+(services[], each gated by its own check_cmd), then runs test_cmd and
+patches the Execution Results section of <specclaw_dir>/e2e/e2e-report.md
+with the real Pass/Fail/Skipped counts, a Pass Percentage, and the
+wall-clock Execution Time. Every service this script itself started is torn
+down before it exits; anything already running beforehand is left alone.
+
+Also collects whatever on-failure screenshots/video the run produced
+(run-config.json's "artifacts_dir") into <specclaw_dir>/e2e/artifacts/ and
+lists them in the report's Artifacts section, then renders
+<specclaw_dir>/e2e/e2e-report.html — a standalone styled page mechanically
+transformed from the finished markdown report.
+
+Run from the repository root — commands in run-config.json are relative to
+its own "working_dir" field, which is itself relative to the current directory.
+
+Never fails the caller's run over a test failure or a missing precondition:
+a non-zero exit here means this script itself could not proceed (bad
+arguments, no report to patch). An E2E suite that fails, or that cannot be
+run at all, is still recorded in the report and this script still exits 0.
+
+Options:
+  --timeout SECONDS   Kill the test command after this many seconds (default: 900).
+  -h, --help          Show this help message.
+EOF
+}
+
+die() { echo "ERROR: $*" >&2; exit 1; }
+warn() { echo "WARN: $*" >&2; }
+
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+  run) shift ;;
+  "") usage >&2; echo >&2; echo "ERROR: subcommand 'run' is required." >&2; exit 2 ;;
+  *) die "Unknown subcommand: $1. Run specclaw-bf-e2e-run --help for usage." ;;
+esac
+
+SPECCLAW_DIR="${1:-}"
+[ -n "$SPECCLAW_DIR" ] || { usage >&2; echo >&2; die "<specclaw_dir> is required."; }
+shift
+
+TIMEOUT_SECONDS=900
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --timeout)
+      TIMEOUT_SECONDS="${2:-}"
+      [ -n "$TIMEOUT_SECONDS" ] || die "--timeout requires a value."
+      shift 2 ;;
+    *) die "Unknown option: $1" ;;
+  esac
+done
+
+[ -d "$SPECCLAW_DIR" ] || die "'$SPECCLAW_DIR' does not exist or is not a directory."
+
+RUN_CONFIG="$SPECCLAW_DIR/e2e/run-config.json"
+REPORT="$SPECCLAW_DIR/e2e/e2e-report.md"
+
+[ -f "$REPORT" ] || die "no report at ${REPORT}. Run /specclaw:bf-e2e first — this script only executes what that command already generated."
+
+grep -qF "$BEGIN_ANCHOR" "$REPORT" ||
+  die "no Execution Results anchors in ${REPORT} — it may predate this feature. Re-run /specclaw:bf-e2e to regenerate it."
+
+# ─── Report patching ──────────────────────────────────────────────────────────
+
+# Replace everything strictly between <begin> and <end> (both anchor lines
+# themselves are kept, untouched) with the contents of <content_file>. Plain
+# POSIX awk (getline < file), so this runs the same under gawk, mawk, and the
+# awk Git-for-Windows bundles — no external templating dependency. Used for
+# both anchored regions (Execution Results, Artifacts) via the anchor pair
+# passed in, so the two can never drift into two different substitution rules.
+inject_block() {
+  local file="$1" begin="$2" end="$3" content_file="$4"
+  awk -v b="$begin" -v e="$end" -v rf="$content_file" '
+    BEGIN { while ((getline line < rf) > 0) rep = rep line "\n" }
+    index($0, b) == 1 { print; printf "%s", rep; inb=1; next }
+    index($0, e) == 1 { inb=0; print; next }
+    inb { next }
+    { print }
+  ' "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
+}
+
+# write_result <executed_line> <pass> <fail> <skip> <pct> <time>
+write_result() {
+  local tmp; tmp="$(mktemp)"
+  {
+    echo "**Executed:** $1"
+    echo "**Pass Count:** $2"
+    echo "**Fail Count:** $3"
+    echo "**Skipped Count:** $4"
+    echo "**Pass Percentage:** $5"
+    echo "**Execution Time:** $6"
+  } > "$tmp"
+  inject_block "$REPORT" "$BEGIN_ANCHOR" "$END_ANCHOR" "$tmp"
+  rm -f "$tmp"
+}
+
+# write_artifacts <content_file> — a report predating this feature (no
+# Artifacts anchors) degrades to a warning rather than a hard failure; the
+# Execution Results patch above still succeeds either way.
+write_artifacts() {
+  if grep -qF "$ARTIFACTS_BEGIN" "$REPORT" 2>/dev/null; then
+    inject_block "$REPORT" "$ARTIFACTS_BEGIN" "$ARTIFACTS_END" "$1"
+  else
+    warn "no Artifacts anchors in ${REPORT} (older report?) — skipping artifact section update"
+  fi
+}
+
+write_artifacts_none() {
+  local tmp; tmp="$(mktemp)"
+  echo "None — $1" > "$tmp"
+  write_artifacts "$tmp"
+  rm -f "$tmp"
+}
+
+not_executed() {
+  local reason="$1"
+  write_result "no — ${reason}" "—" "—" "—" "—" "—"
+  write_artifacts_none "no tests ran (${reason})"
+  generate_html_report
+  echo "NOT EXECUTED: ${reason}" >&2
+  exit 0
+}
+
+# ─── HTML report ──────────────────────────────────────────────────────────────
+#
+# A mechanical markdown-to-HTML transform of the now-finalized e2e-report.md —
+# never a second place agent content is authored. This runs LAST, after every
+# markdown edit above, and reads the .md fresh as its sole source of truth, so
+# the two files can never disagree about what happened. Bootstrap 5 via CDN
+# gives the stat cards / progress bar / tables for free; everything dynamic is
+# inserted with `printf '%s'`, never an unquoted heredoc, specifically because
+# agent-authored prose (code fences, `$VAR`, backticks) must never be
+# evaluated by the shell while assembling this file.
+
+# extract_section <file> <heading> — everything between "## <heading>" and the
+# next "## " line (or EOF), exclusive of both. The template's headings are a
+# fixed contract (the agent may not invent or omit sections), so an exact-line
+# match is reliable without needing a real markdown parser.
+extract_section() {
+  local file="$1" heading="$2"
+  awk -v h="## ${heading}" '
+    $0 == h { infound=1; next }
+    infound && /^## / { exit }
+    infound { print }
+  ' "$file"
+}
+
+# er_field <section_text> <label> — one `**<label>:** value` line out of the
+# bash-owned Execution Results section, same convention specclaw-bf-status's
+# doc_date/map_status_of readers use for their own single-line fields.
+er_field() {
+  printf '%s\n' "$1" | grep -m1 -- "^\*\*${2}:\*\*" | sed -E "s/^\*\*${2}:\*\* *//" | sed -E 's/[[:space:]]+$//'
+}
+
+# HTML-escape a single-line string. Built via a runtime-concatenated backslash
+# (not a literal "\&" in the awk source) — gawk mis-parses a literal "\&" in a
+# gsub replacement's source text (drops the backslash, silently corrupting the
+# output — verified empirically, not merely a cosmetic warning), so the
+# backslash byte is constructed with sprintf and concatenated at runtime
+# instead. This exact construction is reused by every escaper below.
+html_escape() {
+  awk '{
+    BS = sprintf("%c", 92)
+    gsub(/&/, BS "&amp;", $0)
+    gsub(/</, BS "&lt;", $0)
+    gsub(/>/, BS "&gt;", $0)
+    print
+  }' <<< "$1"
+}
+
+# md_table_to_html — reads a markdown pipe-table (header + `|---|---|` +
+# rows) from stdin, prints a Bootstrap-styled HTML table. An empty/absent
+# table prints "No data." rather than emitting an empty <table>.
+md_table_to_html() {
+  awk '
+    function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
+    function esc(s,    BS) {
+      BS = sprintf("%c", 92)
+      gsub(/&/, BS "&amp;", s)
+      gsub(/</, BS "&lt;", s)
+      gsub(/>/, BS "&gt;", s)
+      while (match(s, /`[^`]+`/)) {
+        pre = substr(s, 1, RSTART-1)
+        code = substr(s, RSTART+1, RLENGTH-2)
+        post = substr(s, RSTART+RLENGTH)
+        s = pre "<code>" code "</code>" post
+      }
+      return s
+    }
+    BEGIN { sep = sprintf("%c", 1); nrows = 0 }
+    /^\|/ {
+      line = $0
+      sub(/^\|/, "", line); sub(/\|[ \t]*$/, "", line)
+      n = split(line, cells, "|")
+      is_sep = 1
+      for (i = 1; i <= n; i++) { c = trim(cells[i]); if (c !~ /^-+$/) is_sep = 0 }
+      if (is_sep) next
+      nrows++
+      row = ""
+      for (i = 1; i <= n; i++) row = row sep esc(trim(cells[i]))
+      rowtext[nrows] = row
+    }
+    END {
+      if (nrows == 0) { print "<p class=\"text-muted fst-italic\">No data.</p>"; exit }
+      print "<div class=\"table-wrap\"><table class=\"table table-striped table-hover align-middle data-table\">"
+      print "<thead class=\"table-light\"><tr>"
+      n = split(rowtext[1], parts, sep)
+      for (i = 2; i <= n; i++) printf "<th>%s</th>", parts[i]
+      print "</tr></thead><tbody>"
+      for (r = 2; r <= nrows; r++) {
+        n = split(rowtext[r], parts, sep)
+        printf "<tr>"
+        for (i = 2; i <= n; i++) printf "<td>%s</td>", parts[i]
+        print "</tr>"
+      }
+      print "</tbody></table></div>"
+    }
+  '
+}
+
+# md_prose_to_html — a small, deliberately non-exhaustive markdown-to-HTML
+# converter for the agent-authored prose sections (Detection Summary, Setup /
+# Execution Commands, Gaps): paragraphs, ```-fenced code blocks, top-level
+# `- `/`* ` bullet lists, **bold**, and `inline code`. Good enough for "clear
+# and readable"; not a CommonMark implementation.
+md_prose_to_html() {
+  awk '
+    function esc(s,    BS) {
+      BS = sprintf("%c", 92)
+      gsub(/&/, BS "&amp;", s)
+      gsub(/</, BS "&lt;", s)
+      gsub(/>/, BS "&gt;", s)
+      return s
+    }
+    function inline(s) {
+      s = esc(s)
+      while (match(s, /\*\*[^*]+\*\*/)) {
+        pre = substr(s,1,RSTART-1); mid = substr(s,RSTART+2,RLENGTH-4); post = substr(s,RSTART+RLENGTH)
+        s = pre "<strong>" mid "</strong>" post
+      }
+      while (match(s, /`[^`]+`/)) {
+        pre = substr(s,1,RSTART-1); mid = substr(s,RSTART+1,RLENGTH-2); post = substr(s,RSTART+RLENGTH)
+        s = pre "<code>" mid "</code>" post
+      }
+      return s
+    }
+    BEGIN { infence=0; inlist=0; inpara=0 }
+    /^```/ {
+      if (infence) { print "</code></pre>"; infence=0; next }
+      if (inlist) { print "</ul>"; inlist=0 }
+      if (inpara) { print "</p>"; inpara=0 }
+      print "<pre><code>"; infence=1; next
+    }
+    infence { print esc($0); next }
+    /^[ \t]*[-*][ \t]+/ {
+      if (inpara) { print "</p>"; inpara=0 }
+      if (!inlist) { print "<ul>"; inlist=1 }
+      line=$0; sub(/^[ \t]*[-*][ \t]+/, "", line)
+      print "<li>" inline(line) "</li>"
+      next
+    }
+    /^[ \t]*$/ {
+      if (inlist) { print "</ul>"; inlist=0 }
+      if (inpara) { print "</p>"; inpara=0 }
+      next
+    }
+    {
+      if (inlist) { print "</ul>"; inlist=0 }
+      if (!inpara) { print "<p>"; inpara=1 } else { print "<br>" }
+      print inline($0)
+    }
+    END {
+      if (infence) print "</code></pre>"
+      if (inlist) print "</ul>"
+      if (inpara) print "</p>"
+    }
+  '
+}
+
+# artifacts_section_to_html <section_text> — the Artifacts section is either
+# "None — <reason>" or a Type|Path table; a populated table renders each row
+# as an inline thumbnail/video card, with the path also made clickable. Paths
+# are stored relative to the repo root (".specclaw/e2e/artifacts/..."); since
+# this HTML file itself lives at .specclaw/e2e/e2e-report.html, stripping the
+# ".specclaw/e2e/" prefix gives the correct relative href/src from where the
+# page actually is.
+artifacts_section_to_html() {
+  local sec="$1" first_line
+  first_line="$(printf '%s\n' "$sec" | sed -n '/[^[:space:]]/{p;q}')"
+  case "$first_line" in
+    None*|none*)
+      printf '<p class="text-muted fst-italic">%s</p>\n' "$(html_escape "$first_line")"
+      return
+      ;;
+  esac
+  printf '%s\n' "$sec" | awk '
+    function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
+    function esc(s,    BS) {
+      BS = sprintf("%c", 92)
+      gsub(/&/, BS "&amp;", s)
+      gsub(/</, BS "&lt;", s)
+      gsub(/>/, BS "&gt;", s)
+      return s
+    }
+    BEGIN { sep = sprintf("%c", 1); nrows = 0 }
+    /^\|/ {
+      line = $0
+      sub(/^\|/, "", line); sub(/\|[ \t]*$/, "", line)
+      n = split(line, cells, "|")
+      is_sep = 1
+      for (i = 1; i <= n; i++) { c = trim(cells[i]); if (c !~ /^-+$/) is_sep = 0 }
+      if (is_sep) next
+      nrows++
+      types[nrows] = trim(cells[1])
+      p = trim(cells[2]); gsub(/`/, "", p); paths[nrows] = p
+    }
+    END {
+      if (nrows <= 1) { print "<p class=\"text-muted fst-italic\">No artifacts.</p>"; exit }
+      print "<div class=\"row g-3\">"
+      for (r = 2; r <= nrows; r++) {
+        type = types[r]; path = paths[r]
+        rel = path
+        sub(/^\.specclaw\/e2e\//, "", rel)
+        print "<div class=\"col-6 col-md-4 col-lg-3\"><div class=\"card h-100 shadow-sm\"><div class=\"card-body p-2 text-center\">"
+        if (type == "Screenshot") {
+          print "<a href=\"" esc(rel) "\" target=\"_blank\"><img src=\"" esc(rel) "\" class=\"img-fluid rounded\" alt=\"screenshot\" loading=\"lazy\"></a>"
+        } else if (type == "Video") {
+          print "<video controls class=\"w-100 rounded\"><source src=\"" esc(rel) "\"></video>"
+        } else {
+          print "<a href=\"" esc(rel) "\" target=\"_blank\">" esc(path) "</a>"
+        }
+        print "<div class=\"small text-muted mt-1 text-truncate\" title=\"" esc(path) "\">" esc(path) "</div>"
+        print "</div></div></div>"
+      }
+      print "</div>"
+    }
+  '
+}
+
+# nested_scenarios_to_html <nested_bullets via stdin> — the everyone-can-read
+# rendering of "Test Scripts Generated": grouped under `### Module: <name>`
+# headings (a plain business-feature grouping — bf-e2e-architect's Task 5
+# never lets a raw file path stand as the grouping or the headline), each
+# with its scenario bullets (`- `) and, nested under each, the individual
+# checks/assertions that scenario's test makes (`  - `). Rendered as one
+# module block per heading, one scenario card per top-level bullet inside it,
+# with its checks listed underneath — so a reader can see for themselves why
+# a test-runner's aggregate pass count (32) is larger than the number of
+# named scenarios (12): each scenario is several individual checks, not one.
+# A scenario bullet with no `### Module:` heading above it (an older report,
+# or an agent that didn't comply) still renders — grouped into one implicit,
+# untitled module — rather than being dropped. Never called on an empty
+# section — the caller checks the bullet count first and substitutes a plain
+# "no scenarios" message instead, so this function can assume at least one
+# top-level bullet exists.
+#
+# `Evidence:` / `Test file:` sub-bullets (the last things Task 5 puts under
+# each scenario) get a muted, de-emphasized style distinct from the real
+# checks above them — visible for traceability, but never competing with the
+# plain-language checks for a non-technical reader's attention.
+nested_scenarios_to_html() {
+  awk '
+    function esc(s,    BS) {
+      BS = sprintf("%c", 92)
+      gsub(/&/, BS "&amp;", s)
+      gsub(/</, BS "&lt;", s)
+      gsub(/>/, BS "&gt;", s)
+      return s
+    }
+    function inline(s) {
+      s = esc(s)
+      while (match(s, /\*\*[^*]+\*\*/)) {
+        pre = substr(s,1,RSTART-1); mid = substr(s,RSTART+2,RLENGTH-4); post = substr(s,RSTART+RLENGTH)
+        s = pre "<strong>" mid "</strong>" post
+      }
+      while (match(s, /`[^`]+`/)) {
+        pre = substr(s,1,RSTART-1); mid = substr(s,RSTART+1,RLENGTH-2); post = substr(s,RSTART+RLENGTH)
+        s = pre "<code>" mid "</code>" post
+      }
+      return s
+    }
+    BEGIN { print "<div class=\"scenario-groups\">"; in_module=0; open_sub=0; started=0 }
+    /^###[ \t]+Module:/ {
+      line = $0; sub(/^###[ \t]+Module:[ \t]*/, "", line)
+      if (open_sub) { print "</ul>"; open_sub=0 }
+      if (started) { print "</div></li>"; started=0 }
+      if (in_module) print "</ul></div>"
+      print "<div class=\"scenario-module\"><h3 class=\"module-title\">📦 " inline(line) "</h3><ul class=\"list-group list-group-flush scenario-list\">"
+      in_module=1
+      next
+    }
+    /^-[ \t]+/ {
+      line = $0; sub(/^-[ \t]+/, "", line)
+      if (!in_module) { print "<div class=\"scenario-module\"><ul class=\"list-group list-group-flush scenario-list\">"; in_module=1 }
+      if (open_sub) { print "</ul>"; open_sub=0 }
+      if (started) print "</div></li>"
+      started=1
+      print "<li class=\"list-group-item scenario-item\">"
+      print "<div class=\"scenario-headline\"><span class=\"scenario-icon\">🎯</span> " inline(line) "</div><div>"
+      next
+    }
+    /^[ \t]+-[ \t]+/ {
+      line = $0; sub(/^[ \t]+-[ \t]+/, "", line)
+      if (!started) next
+      if (!open_sub) { print "<ul class=\"subtask-list\">"; open_sub=1 }
+      if (line ~ /^(Evidence|Test file):/) {
+        print "<li class=\"meta-item\">" inline(line) "</li>"
+      } else {
+        print "<li>" inline(line) "</li>"
+      }
+      next
+    }
+    /^[ \t]*$/ { next }
+    { if (started) print "<div>" inline($0) "</div>" }
+    END {
+      if (open_sub) print "</ul>"
+      if (started) print "</div></li>"
+      if (in_module) print "</ul></div>"
+      print "</div>"
+    }
+  '
+}
+
+# generate_html_report — writes .specclaw/e2e/e2e-report.html from the
+# now-complete e2e-report.md. Total = Pass + Fail + Skipped when both Pass and
+# Fail are real numbers; any non-numeric state (not executed, NOT MEASURED)
+# renders every stat card as "—" plus a banner, never a fabricated 0. Gaps is
+# a count of top-level bullets under "## Gaps" (bf-e2e-architect's Task 5
+# requires bullet formatting for exactly this reason) — a lone "None — ..."
+# bullet counts as zero.
+generate_html_report() {
+  local html="$SPECCLAW_DIR/e2e/e2e-report.html"
+
+  local title path_analyzed date_generated
+  title="$(grep -m1 '^# E2E Test Report:' "$REPORT" | sed -E 's/^# E2E Test Report: *//')"
+  path_analyzed="$(grep -m1 -- '^\*\*Path analyzed:\*\*' "$REPORT" | sed -E 's/^\*\*Path analyzed:\*\* *//')"
+  date_generated="$(grep -m1 -- '^\*\*Date generated:\*\*' "$REPORT" | sed -E 's/^\*\*Date generated:\*\* *//')"
+  [ -n "$title" ] || title="E2E Test Report"
+
+  local det_sec setup_sec pobj_sec tscript_sec exec_sec art_sec gaps_sec
+  det_sec="$(extract_section "$REPORT" "Detection Summary")"
+  setup_sec="$(extract_section "$REPORT" "Setup / Execution Commands")"
+  pobj_sec="$(extract_section "$REPORT" "Page Objects Generated")"
+  tscript_sec="$(extract_section "$REPORT" "Test Scripts Generated")"
+  exec_sec="$(extract_section "$REPORT" "Execution Results")"
+  art_sec="$(extract_section "$REPORT" "Artifacts")"
+  gaps_sec="$(extract_section "$REPORT" "Gaps")"
+
+  local ex_executed ex_pass ex_fail ex_skip ex_pct ex_time
+  ex_executed="$(er_field "$exec_sec" "Executed")"
+  ex_pass="$(er_field "$exec_sec" "Pass Count")"
+  ex_fail="$(er_field "$exec_sec" "Fail Count")"
+  ex_skip="$(er_field "$exec_sec" "Skipped Count")"
+  ex_pct="$(er_field "$exec_sec" "Pass Percentage")"
+  ex_time="$(er_field "$exec_sec" "Execution Time")"
+
+  local total_display pass_display fail_display pct_display not_run_banner skip_n
+  not_run_banner=""
+  if [[ "$ex_pass" =~ ^[0-9]+$ ]] && [[ "$ex_fail" =~ ^[0-9]+$ ]]; then
+    skip_n=0
+    [[ "$ex_skip" =~ ^[0-9]+$ ]] && skip_n="$ex_skip"
+    total_display=$((ex_pass + ex_fail + skip_n))
+    pass_display="$ex_pass"
+    fail_display="$ex_fail"
+  else
+    total_display="—"; pass_display="—"; fail_display="—"
+    not_run_banner="1"
+  fi
+  if [[ "$ex_pct" =~ ^([0-9]+)% ]]; then
+    pct_display="$ex_pct"
+  else
+    pct_display="N/A"
+  fi
+
+  local gaps_html gaps_count
+  gaps_html="$(printf '%s\n' "$gaps_sec" | md_prose_to_html)"
+  gaps_count="$(printf '%s\n' "$gaps_html" | grep -c '<li>' || true)"
+  if [ "$gaps_count" -eq 1 ] && printf '%s\n' "$gaps_html" | grep -qi '<li>none\b'; then
+    gaps_count=0
+  fi
+
+  local det_html setup_html pobj_html art_html scenario_html
+  det_html="$(printf '%s\n' "$det_sec" | md_prose_to_html)"
+  setup_html="$(printf '%s\n' "$setup_sec" | md_prose_to_html)"
+  pobj_html="$(printf '%s\n' "$pobj_sec" | md_table_to_html)"
+  art_html="$(artifacts_section_to_html "$art_sec")"
+
+  # scenario_count = top-level `- ` bullets (one per test script); subtask_count
+  # = indented `  - ` bullets underneath them (the individual checks each
+  # script makes). Counted straight from the raw markdown, not from rendered
+  # HTML, so the numbers can't drift from what nested_scenarios_to_html parses.
+  local scenario_count subtask_count scenario_badge
+  scenario_count="$(printf '%s\n' "$tscript_sec" | grep -cE '^-[[:space:]]+' || true)"
+  subtask_count="$(printf '%s\n' "$tscript_sec" | grep -cE '^[[:space:]]+-[[:space:]]+' || true)"
+  if [ "$scenario_count" -eq 0 ]; then
+    scenario_html='<p class="text-muted fst-italic">No test scenarios were generated.</p>'
+    scenario_badge="0 scenarios"
+  else
+    scenario_html="$(printf '%s\n' "$tscript_sec" | nested_scenarios_to_html)"
+    if [ "$subtask_count" -gt 0 ]; then
+      scenario_badge="${scenario_count} scenario(s) · ${subtask_count} checks"
+    else
+      scenario_badge="${scenario_count} scenario(s)"
+    fi
+  fi
+
+  local title_e path_e date_e executed_e time_e
+  title_e="$(html_escape "$title")"
+  path_e="$(html_escape "$path_analyzed")"
+  date_e="$(html_escape "$date_generated")"
+  executed_e="$(html_escape "$ex_executed")"
+  time_e="$(html_escape "$ex_time")"
+
+  # ── Plain-language verdict + a CSS-only (no chart library) donut chart ────
+  #
+  # The stat cards and tables below are for a developer who wants specifics;
+  # this banner and donut are the "any non-technical stakeholder glances at
+  # this for five seconds" summary — one big icon, one plain sentence, one
+  # visual. total_n=0 covers both "not executed" and the rare "executed but
+  # reported zero tests" case identically: no gradient, a neutral grey ring.
+  local total_n=0
+  [[ "$total_display" =~ ^[0-9]+$ ]] && total_n="$total_display"
+
+  local verdict_bg verdict_text verdict_icon verdict_headline verdict_summary donut_style
+  local pass_pct_n=0 fail_pct_n=0 skip_pct_n=0
+
+  if [ -n "$not_run_banner" ]; then
+    verdict_bg="bg-secondary"; verdict_text="text-white"; verdict_icon="🕒"
+    verdict_headline="Not Run Yet"
+    verdict_summary="This E2E suite has not produced results yet (${executed_e})."
+    donut_style="background: conic-gradient(#dee2e6 0% 100%);"
+  elif [ "$total_n" -eq 0 ]; then
+    verdict_bg="bg-secondary"; verdict_text="text-white"; verdict_icon="❔"
+    verdict_headline="No Tests Ran"
+    verdict_summary="The suite executed but reported zero tests."
+    donut_style="background: conic-gradient(#dee2e6 0% 100%);"
+  else
+    pass_pct_n=$(( ex_pass * 100 / total_n ))
+    fail_pct_n=$(( ex_fail * 100 / total_n ))
+    skip_pct_n=$(( 100 - pass_pct_n - fail_pct_n ))
+    [ "$skip_pct_n" -lt 0 ] && skip_pct_n=0
+    local fail_end=$(( pass_pct_n + fail_pct_n ))
+    donut_style="background: conic-gradient(#198754 0% ${pass_pct_n}%, #dc3545 ${pass_pct_n}% ${fail_end}%, #adb5bd ${fail_end}% 100%);"
+    if [ "$ex_fail" -eq 0 ]; then
+      verdict_bg="bg-success"; verdict_text="text-white"; verdict_icon="✅"
+      verdict_headline="All Good!"
+      verdict_summary="${ex_pass} of ${total_n} checks passed. Nothing failed."
+    elif [ "$ex_fail" -lt "$ex_pass" ]; then
+      verdict_bg="bg-warning"; verdict_text="text-dark"; verdict_icon="⚠️"
+      verdict_headline="Needs Attention"
+      verdict_summary="${ex_pass} of ${total_n} checks passed, but ${ex_fail} failed."
+    else
+      verdict_bg="bg-danger"; verdict_text="text-white"; verdict_icon="❌"
+      verdict_headline="Action Required"
+      verdict_summary="${ex_fail} of ${total_n} checks failed — only ${ex_pass} passed."
+    fi
+  fi
+
+  local gaps_body
+  if [ "$gaps_count" -eq 0 ]; then
+    gaps_body='<p class="mb-0">✅ Every flow that was considered could be turned into an automated test.</p>'
+  else
+    gaps_body="<p class=\"text-muted\">These flows could not be turned into automated tests:</p>${gaps_html}"
+  fi
+
+  # Every dynamic value below goes through printf '%s' — never an unquoted
+  # heredoc — specifically so agent-authored content containing `$VAR` or
+  # `` ` `` is inserted as inert text, never evaluated by this shell.
+  {
+    cat <<'HTML_A'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+HTML_A
+    printf '<title>E2E Test Report — %s</title>\n' "$title_e"
+    cat <<'HTML_B'
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+  body { background:#f5f7fa; }
+  .verdict-banner { border-radius:1rem; border:none; }
+  .verdict-icon { font-size:3rem; line-height:1; }
+  .stat-card { border-radius:.75rem; border:none; transition:transform .15s ease, box-shadow .15s ease; }
+  .stat-card:hover { transform:translateY(-3px); box-shadow:0 .5rem 1rem rgba(0,0,0,.1)!important; }
+  .stat-value { font-size:2.25rem; font-weight:700; line-height:1; }
+  .stat-total  { color:#0d6efd; }
+  .stat-pass   { color:#198754; }
+  .stat-fail   { color:#dc3545; }
+  .stat-gaps   { color:#fd7e14; }
+  .donut { width:150px; height:150px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .donut-hole { width:104px; height:104px; border-radius:50%; background:#fff; display:flex; align-items:center; justify-content:center; flex-direction:column; }
+  .legend-dot { display:inline-block; width:.75rem; height:.75rem; border-radius:50%; margin-right:.4rem; }
+  .scenario-module { margin-bottom:1.5rem; }
+  .scenario-module:last-child { margin-bottom:0; }
+  .module-title { font-size:1rem; font-weight:700; color:#0d6efd; margin-bottom:.6rem; padding-bottom:.35rem; border-bottom:2px solid #e9ecef; }
+  .scenario-list .list-group-item { border-left:3px solid #0d6efd; margin-bottom:.6rem; border-radius:.4rem; }
+  .scenario-icon { font-size:1.1rem; }
+  .scenario-headline { font-weight:600; margin-bottom:.35rem; }
+  .subtask-list { list-style:none; padding-left:1.75rem; margin:.25rem 0 0; }
+  .subtask-list li { color:#495057; font-size:.925rem; margin-bottom:.2rem; }
+  .subtask-list li::before { content:"✔️ "; }
+  .subtask-list li.meta-item { color:#adb5bd; font-style:italic; font-size:.825rem; }
+  .subtask-list li.meta-item::before { content:"📎 "; }
+  .table-wrap { overflow-x:auto; }
+  pre { background:#212529; color:#e9ecef; padding:1rem; border-radius:.5rem; overflow-x:auto; }
+  code { background:#eef1f4; padding:.1rem .35rem; border-radius:.25rem; }
+  pre code { background:transparent; padding:0; }
+  .section-card { margin-bottom:1.5rem; }
+  details.tech-details summary { cursor:pointer; font-weight:600; list-style:none; }
+  details.tech-details summary::-webkit-details-marker { display:none; }
+  details.tech-details summary::before { content:"▸ "; }
+  details.tech-details[open] summary::before { content:"▾ "; }
+  details.tech-details > div { margin-top:1rem; }
+</style>
+</head>
+<body>
+<nav class="navbar navbar-dark bg-dark mb-4">
+  <div class="container"><span class="navbar-brand mb-0 h1">🧪 E2E Test Report</span></div>
+</nav>
+<div class="container pb-5">
+HTML_B
+    printf '<div class="mb-4"><h1 class="h3">%s</h1><p class="text-muted mb-0">Path analyzed: <code>%s</code> &middot; Generated: %s</p></div>\n' \
+      "$title_e" "$path_e" "$date_e"
+
+    printf '<div class="card verdict-banner shadow-sm mb-4 %s %s"><div class="card-body d-flex align-items-center gap-3 p-4">' "$verdict_bg" "$verdict_text"
+    printf '<div class="verdict-icon">%s</div><div><div class="fs-3 fw-bold">%s</div><div class="fs-6">%s</div></div>' \
+      "$verdict_icon" "$verdict_headline" "$verdict_summary"
+    echo '</div></div>'
+
+    cat <<'HTML_C'
+<div class="row g-3 mb-4">
+HTML_C
+    printf '<div class="col-6 col-md-3"><div class="card stat-card shadow-sm text-center p-3"><div class="stat-value stat-total">%s</div><div class="text-muted">🧪 Total Tests</div></div></div>\n' "$total_display"
+    printf '<div class="col-6 col-md-3"><div class="card stat-card shadow-sm text-center p-3"><div class="stat-value stat-pass">%s</div><div class="text-muted">✅ Passed</div></div></div>\n' "$pass_display"
+    printf '<div class="col-6 col-md-3"><div class="card stat-card shadow-sm text-center p-3"><div class="stat-value stat-fail">%s</div><div class="text-muted">❌ Failed</div></div></div>\n' "$fail_display"
+    printf '<div class="col-6 col-md-3"><div class="card stat-card shadow-sm text-center p-3"><div class="stat-value stat-gaps">%s</div><div class="text-muted">⚠️ Gaps</div></div></div>\n' "$gaps_count"
+    echo '</div>'
+
+    printf '<div class="card section-card shadow-sm"><div class="card-body"><h2 class="h5">Pass Rate</h2><div class="d-flex flex-wrap align-items-center gap-4">'
+    printf '<div class="donut pass-rate-donut" style="%s"><div class="donut-hole"><div class="fs-4 fw-bold">%s</div><div class="small text-muted">pass rate</div></div></div>' \
+      "$donut_style" "$pct_display"
+    printf '<div><div class="legend-passed mb-1"><span class="legend-dot" style="background:#198754"></span>Passed: %s (%s%%)</div>' "$pass_display" "$pass_pct_n"
+    printf '<div class="legend-failed mb-1"><span class="legend-dot" style="background:#dc3545"></span>Failed: %s (%s%%)</div>' "$fail_display" "$fail_pct_n"
+    printf '<div class="legend-skipped mb-1"><span class="legend-dot" style="background:#adb5bd"></span>Skipped: %s (%s%%)</div>' "$ex_skip" "$skip_pct_n"
+    printf '<div class="text-muted small mt-2">Execution time: %s</div></div>' "$time_e"
+    echo '</div></div></div>'
+
+    printf '<div class="card section-card shadow-sm"><div class="card-body"><h2 class="h5">🎯 Test Scenarios <span class="badge bg-primary">%s</span></h2><p class="text-muted">What was actually tested, and the individual checks each scenario makes:</p>%s</div></div>\n' "$scenario_badge" "$scenario_html"
+    printf '<div class="card section-card shadow-sm"><div class="card-body"><h2 class="h5">📸 Evidence</h2>%s</div></div>\n' "$art_html"
+    printf '<div class="card section-card shadow-sm"><div class="card-body"><h2 class="h5">⚠️ What Could Not Be Automated <span class="badge bg-warning text-dark">%s</span></h2>%s</div></div>\n' "$gaps_count" "$gaps_body"
+
+    printf '<details class="tech-details card section-card shadow-sm p-3"><summary class="h5 mb-0">🔧 Technical Details (for developers)</summary><div>'
+    printf '<h3 class="h6 mt-3">Platform &amp; Stack</h3>%s\n' "$det_html"
+    printf '<h3 class="h6 mt-3">How to Run These Tests</h3>%s\n' "$setup_html"
+    printf '<h3 class="h6 mt-3">Screens Automated</h3>%s\n' "$pobj_html"
+    echo '</div></details>'
+
+    cat <<'HTML_E'
+<p class="text-muted small mt-4">Generated by <code>specclaw-bf-e2e-run</code> from <code>.specclaw/e2e/e2e-report.md</code> — the markdown file is the source of truth; re-run <code>specclaw-bf-e2e-run run .specclaw</code> to refresh both.</p>
+</div>
+</body>
+</html>
+HTML_E
+  } > "$html"
+
+  echo "Wrote HTML report: ${html}" >&2
+}
+
+[ -f "$RUN_CONFIG" ] || not_executed "no .specclaw/e2e/run-config.json was generated for this run"
+
+command -v jq >/dev/null 2>&1 || not_executed "jq is not installed — cannot read run-config.json"
+
+jq -e . "$RUN_CONFIG" >/dev/null 2>&1 || die "${RUN_CONFIG} is not valid JSON."
+
+WORKING_DIR="$(jq -r '.working_dir // "."' "$RUN_CONFIG")"
+INSTALL_CMD="$(jq -r '.install_cmd // ""' "$RUN_CONFIG")"
+TEST_CMD="$(jq -r '.test_cmd // ""' "$RUN_CONFIG")"
+ARTIFACTS_DIR="$(jq -r '.artifacts_dir // ""' "$RUN_CONFIG")"
+
+[ -n "$TEST_CMD" ] || not_executed "run-config.json has no test_cmd"
+[ -d "$WORKING_DIR" ] || die "working_dir '${WORKING_DIR}' from run-config.json does not exist."
+
+# ─── Install ──────────────────────────────────────────────────────────────────
+
+if [ -n "$INSTALL_CMD" ]; then
+  echo "Running install: ${INSTALL_CMD}" >&2
+  INSTALL_LOG="$(mktemp)"
+  if ! ( cd "$WORKING_DIR" && eval "$INSTALL_CMD" ) >"$INSTALL_LOG" 2>&1; then
+    warn "install command failed — last 30 lines of its output:"
+    tail -30 "$INSTALL_LOG" >&2
+    rm -f "$INSTALL_LOG"
+    not_executed "install command failed (\`${INSTALL_CMD}\`)"
+  fi
+  rm -f "$INSTALL_LOG"
+fi
+
+# ─── Services (dependencies, backend APIs, frontend apps — optional) ────────
+#
+# Each entry in .specclaw/e2e/run-config.json's "services" array is started in
+# array order, one at a time, only if its own check_cmd says it is not already
+# running — a dependency a human already has running locally (a local
+# postgres, an already-running dev server) is left exactly as it is. Only
+# services THIS script started are ever torn down, and only ones this script
+# itself started go into STARTED_PIDS.
+#
+# check_cmd does double duty: "is it already up" before starting, and "has it
+# become ready yet" while polling after starting. A service with no check_cmd
+# cannot be verified either way — it gets an unconditional fixed wait instead
+# of a poll, which is strictly worse, hence the agent is told to always supply
+# one where the service exposes any observable signal.
+
+STARTED_PIDS=()
+STARTED_NAMES=()
+
+cleanup_services() {
+  local i
+  for (( i=${#STARTED_PIDS[@]}-1; i>=0; i-- )); do
+    kill "${STARTED_PIDS[$i]}" >/dev/null 2>&1 || true
+    wait "${STARTED_PIDS[$i]}" 2>/dev/null || true
+  done
+}
+trap cleanup_services EXIT
+
+# Run <cmd> from <dir>, capped at a short wall-clock ceiling so a hanging
+# check_cmd (e.g. a curl against a filtered port) cannot stall the whole
+# service-startup loop indefinitely.
+run_check() {
+  local dir="$1" cmd="$2"
+  if command -v timeout >/dev/null 2>&1; then
+    ( cd "$dir" 2>/dev/null && timeout 5 bash -c "$cmd" ) >/dev/null 2>&1
+  else
+    ( cd "$dir" 2>/dev/null && eval "$cmd" ) >/dev/null 2>&1
+  fi
+}
+
+SERVICE_FAILURE=""
+SERVICES_JSON="$(jq -c '.services[]? // empty' "$RUN_CONFIG" 2>/dev/null || true)"
+if [ -n "$SERVICES_JSON" ]; then
+  while IFS= read -r SVC; do
+    [ -n "$SVC" ] || continue
+
+    SVC_NAME="$(jq -r '.name // "service"' <<<"$SVC")"
+    SVC_START="$(jq -r '.start_cmd // ""' <<<"$SVC")"
+    SVC_CHECK="$(jq -r '.check_cmd // ""' <<<"$SVC")"
+    SVC_DIR="$(jq -r '.working_dir // empty' <<<"$SVC")"
+    [ -n "$SVC_DIR" ] || SVC_DIR="$WORKING_DIR"
+    SVC_TIMEOUT="$(jq -r 'if (.ready_timeout_seconds | type) == "number" then .ready_timeout_seconds else 30 end' <<<"$SVC")"
+    SVC_POLL="$(jq -r 'if (.poll_interval_seconds | type) == "number" then .poll_interval_seconds else 2 end' <<<"$SVC")"
+
+    if [ -z "$SVC_START" ]; then
+      warn "service '${SVC_NAME}' has no start_cmd — skipping it"
+      continue
+    fi
+    if [ ! -d "$SVC_DIR" ]; then
+      SERVICE_FAILURE="service '${SVC_NAME}': working_dir '${SVC_DIR}' does not exist"
+      break
+    fi
+
+    if [ -n "$SVC_CHECK" ] && run_check "$SVC_DIR" "$SVC_CHECK"; then
+      echo "Service '${SVC_NAME}' is already running — not starting it." >&2
+      continue
+    fi
+
+    echo "Starting service '${SVC_NAME}': ${SVC_START}" >&2
+    ( cd "$SVC_DIR" && eval "$SVC_START" ) >/dev/null 2>&1 &
+    STARTED_PIDS+=("$!")
+    STARTED_NAMES+=("$SVC_NAME")
+
+    if [ -n "$SVC_CHECK" ]; then
+      SVC_ELAPSED=0
+      SVC_READY=0
+      while [ "$SVC_ELAPSED" -lt "$SVC_TIMEOUT" ]; do
+        if run_check "$SVC_DIR" "$SVC_CHECK"; then SVC_READY=1; break; fi
+        sleep "$SVC_POLL"
+        SVC_ELAPSED=$((SVC_ELAPSED + SVC_POLL))
+      done
+      if [ "$SVC_READY" -eq 0 ]; then
+        SERVICE_FAILURE="service '${SVC_NAME}' did not become ready within ${SVC_TIMEOUT}s (check_cmd: \`${SVC_CHECK}\`)"
+        break
+      fi
+      echo "Service '${SVC_NAME}' is ready (after up to ${SVC_ELAPSED}s)." >&2
+    else
+      warn "service '${SVC_NAME}' has no check_cmd — waiting ${SVC_TIMEOUT}s unconditionally; readiness not confirmed"
+      sleep "$SVC_TIMEOUT"
+    fi
+  done <<< "$SERVICES_JSON"
+fi
+
+if [ -n "$SERVICE_FAILURE" ]; then
+  not_executed "$SERVICE_FAILURE"
+fi
+
+# ─── Test ─────────────────────────────────────────────────────────────────────
+
+OUT_LOG="$(mktemp)"
+START_TS=$(date +%s)
+RC=0
+if command -v timeout >/dev/null 2>&1; then
+  ( cd "$WORKING_DIR" && timeout "$TIMEOUT_SECONDS" bash -c "$TEST_CMD" ) >"$OUT_LOG" 2>&1 || RC=$?
+else
+  ( cd "$WORKING_DIR" && eval "$TEST_CMD" ) >"$OUT_LOG" 2>&1 || RC=$?
+fi
+END_TS=$(date +%s)
+ELAPSED=$((END_TS - START_TS))
+
+cleanup_services
+trap - EXIT
+
+# ─── Parse pass/fail/skip from the captured output ──────────────────────────
+#
+# Best-effort across common runners:
+#   Playwright / Jest / pytest / Cypress: "N passed" / "N failed" / "N skipped"
+#   Mocha:                                "N passing" / "N failing" / "N pending"
+#   dotnet test:                          "Passed: N" / "Failed: N" / "Skipped: N"
+# A count this cannot find is reported as NOT MEASURED, never fabricated as 0 —
+# the same rule the rest of this plugin applies to every other bash-computed
+# figure.
+extract_count() {
+  local log="$1"; shift
+  local pat m
+  for pat in "$@"; do
+    m="$(grep -oE "$pat" "$log" 2>/dev/null | tail -1 | grep -oE '[0-9]+' | tail -1 || true)"
+    if [ -n "$m" ]; then printf '%s' "$m"; return 0; fi
+  done
+  return 1
+}
+
+PASS="$(extract_count "$OUT_LOG" '[0-9]+[[:space:]]+(passed|passing)' 'Passed:[[:space:]]*[0-9]+' || true)"
+FAIL="$(extract_count "$OUT_LOG" '[0-9]+[[:space:]]+(failed|failing)' 'Failed:[[:space:]]*[0-9]+' || true)"
+SKIP="$(extract_count "$OUT_LOG" '[0-9]+[[:space:]]+(skipped|pending)' 'Skipped:[[:space:]]*[0-9]+' || true)"
+
+if [ -z "$PASS" ] && [ -z "$FAIL" ]; then
+  PASS="NOT MEASURED — could not parse the test runner's output"
+  FAIL="NOT MEASURED"
+  SKIP="NOT MEASURED"
+  PCT="NOT MEASURED"
+else
+  [ -n "$PASS" ] || PASS=0
+  [ -n "$FAIL" ] || FAIL=0
+  [ -n "$SKIP" ] || SKIP=0
+  TOTAL=$((PASS + FAIL + SKIP))
+  if [ "$TOTAL" -gt 0 ]; then
+    PCT="$(( (PASS * 100 + TOTAL / 2) / TOTAL ))%"
+  else
+    PCT="NOT MEASURED — 0 tests reported"
+  fi
+fi
+
+rm -f "$OUT_LOG"
+
+# ─── Collect on-failure screenshots/video, if any ────────────────────────────
+#
+# artifacts_dir is wherever bf-e2e-architect configured the selected framework
+# to write on-failure captures (Failure Capture, its Task 3) — relative to
+# WORKING_DIR. Whatever is actually found there is copied, whole-tree, into a
+# timestamped folder under .specclaw/e2e/artifacts/ so a later run can never
+# silently overwrite an earlier one's evidence. An empty/missing directory is
+# not an error — it is the expected shape of a fully-passing run, or of a
+# framework/platform with no failure-capture capability — so it is reported as
+# "None" with the reason, never left blank and never treated as a failure.
+if [ -z "$ARTIFACTS_DIR" ]; then
+  write_artifacts_none "no artifacts_dir declared in run-config.json"
+else
+  ARTIFACTS_SRC="$WORKING_DIR/$ARTIFACTS_DIR"
+  if [ ! -d "$ARTIFACTS_SRC" ] || [ -z "$(find "$ARTIFACTS_SRC" -type f 2>/dev/null)" ]; then
+    write_artifacts_none "nothing found in \`${ARTIFACTS_DIR}\` — every test passed, or the selected framework/platform has no failure-capture capability"
+  else
+    ARTIFACTS_STAMP="$(date +%Y%m%d-%H%M%S)"
+    ARTIFACTS_DEST="$SPECCLAW_DIR/e2e/artifacts/$ARTIFACTS_STAMP"
+    mkdir -p "$ARTIFACTS_DEST"
+    cp -r "$ARTIFACTS_SRC/." "$ARTIFACTS_DEST/"
+    ROWS_TMP="$(mktemp)"
+    {
+      echo "| Type | Path |"
+      echo "|---|---|"
+      while IFS= read -r f; do
+        REL="${f#"$ARTIFACTS_DEST"/}"
+        case "$REL" in
+          *.png|*.jpg|*.jpeg|*.gif|*.bmp) TYPE="Screenshot" ;;
+          *.webm|*.mp4|*.mov|*.avi)       TYPE="Video" ;;
+          *)                              TYPE="Other" ;;
+        esac
+        echo "| ${TYPE} | \`.specclaw/e2e/artifacts/${ARTIFACTS_STAMP}/${REL}\` |"
+      done < <(find "$ARTIFACTS_DEST" -type f | LC_ALL=C sort)
+    } > "$ROWS_TMP"
+    write_artifacts "$ROWS_TMP"
+    rm -f "$ROWS_TMP"
+    ARTIFACTS_COUNT="$(find "$ARTIFACTS_DEST" -type f | wc -l | tr -d '[:space:]')"
+    echo "Captured ${ARTIFACTS_COUNT} artifact file(s) under .specclaw/e2e/artifacts/${ARTIFACTS_STAMP}/" >&2
+  fi
+fi
+
+write_result "yes (exit ${RC})" "$PASS" "$FAIL" "$SKIP" "$PCT" "${ELAPSED}s"
+generate_html_report
+
+if [ "${#STARTED_NAMES[@]}" -gt 0 ]; then
+  echo "Services started and torn down for this run: ${STARTED_NAMES[*]}" >&2
+fi
+echo "E2E execution finished: exit ${RC}, ${ELAPSED}s. Pass=${PASS} Fail=${FAIL} Skip=${SKIP} Pass%=${PCT}"
+[ "$RC" -eq 0 ] || warn "the E2E test command exited non-zero (${RC})."
+exit 0

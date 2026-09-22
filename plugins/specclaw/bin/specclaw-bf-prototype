@@ -1,0 +1,1703 @@
+#!/usr/bin/env bash
+# specclaw-bf-prototype — deterministic collector / allocator / recorder for the
+# REINTERPRET prototype-approval stage.
+#
+# This command owns RECORDS and GATES, never a prototype. The prototype itself
+# is built by a separate UI skill named in config.yaml's `prototype.skill`, in
+# the frontend framework AND language the project actually decided. Nothing in
+# this file knows the name of a single framework or language: both strings are
+# read out of the decision record at run time (the stack-blind invariant), and
+# a value that is not in the record is a hard stop, never a default.
+#
+# Subcommands:
+#   collect       Preconditions (incl. the framework+language resolver), the
+#                 inputs census, the SCR/DR/BL joins and scope classification.
+#                 Emits one JSON object for the bf-prototype-architect agent.
+#   allocate      Allocate PS-### ids for the agent's allocation keys against
+#                 the append-only registry. The ONLY place a PS is minted.
+#   record        Hash the prototype tree and the human's screenshots, join the
+#                 human's approvals, compute every per-screen status and the
+#                 whole-prototype readiness, write prototype-manifest.json, and
+#                 print the raw PROTOTYPE: READY / PROTOTYPE: NOT-READY line.
+#   map-render    Render prototype-map.md from the manifest plus the agent's
+#                 narration draft.
+#   verify        Read-only gate used by the NEW repo (bf-bootstrap, propose).
+#                 Emits {applicable, ready, reason, remedy, ...}. Never writes.
+#
+# What this command never does: build a prototype, choose a framework, choose a
+# language, allocate a CQ, write prototype-approvals.md, mark a screen approved,
+# or touch application source. Every status below is computed here and narrated
+# by the agent — the agent never states a status this file did not print.
+
+set -uo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  specclaw-bf-prototype collect <specclaw_dir>
+                The preconditions, in order, each a hard stop naming the exact
+                id or file that is missing: SQ-013 decided REINTERPRET; the
+                frontend FRAMEWORK and the frontend LANGUAGE each resolved from
+                the decision record with a citation; ui-inventory.md;
+                rebuild-backlog.md; target-architecture.md. Then the inputs
+                census (with hashes), the screen joins (SCR to DR/BL/MOD), the
+                in-scope / out-of-scope / retired classification, and the
+                configured generator skill. Emits JSON. Writes nothing.
+
+  specclaw-bf-prototype allocate <specclaw_dir> <keys_file>
+                <keys_file> holds one allocation key per line, in brief order:
+                an SCR-### for a screen that replaces a legacy one, or
+                CQ-###:<slug> for a genuinely new screen the CQ sanctions.
+                Allocates a PS-### for every key not already in
+                .specclaw/prototype/id-registry.json and appends it. Existing
+                keys keep their id. Nothing is ever removed or renumbered.
+                Emits the full key-to-PS map as JSON.
+
+  specclaw-bf-prototype record <specclaw_dir>
+                Hashes prototype.output_dir into one tree_hash, sha256s every
+                screenshot under screens/, joins prototype-approvals.md, applies
+                the status precedence, computes prototype_ready against the
+                rebuild backlog, writes prototype-manifest.json, and prints the
+                raw PROTOTYPE: line on stdout.
+                Exit 0 = READY, 1 = NOT-READY, 2 = nothing to record.
+
+  specclaw-bf-prototype map-render <specclaw_dir> <draft_file>
+                Renders .specclaw/prototype/prototype-map.md from the manifest's
+                bash-computed rows plus the agent's narration draft.
+
+  specclaw-bf-prototype verify <specclaw_dir> [--item <BL-###>]
+                Read-only. The gate the NEW repo's bf-bootstrap and propose
+                call. Without --item: the whole-prototype check (manifest
+                present and parseable, screens/ paired and every hash matching,
+                prototype_ready true, SQ-013 / framework / language still
+                consistent with this repo's own decision record). With --item:
+                additionally, every SCR-### that backlog item references maps to
+                an APPROVED PS-###. Emits JSON; exit 0 always (the caller reads
+                the JSON), except on usage error.
+USAGE
+}
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+die() { echo "ERROR: $*" >&2; exit 1; }
+warn() { echo "WARN: $*" >&2; }
+
+require_jq() {
+  command -v jq >/dev/null 2>&1 || die "jq is required for /specclaw:bf-prototype (it owns id-registry.json and prototype-manifest.json) but was not found on PATH."
+}
+
+# ─── Generic JSON helpers (copied verbatim from specclaw-bf-ui — no shared lib,
+# per repo convention) ───────────────────────────────────────────────────────
+
+json_escape() {
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  s="${s//$'\n'/\\n}"
+  s="${s//$'\r'/\\r}"
+  s="${s//$'\t'/\\t}"
+  printf '%s' "$s"
+}
+
+emit_json() {
+  local payload="$1"
+  if command -v jq >/dev/null 2>&1; then
+    if printf '%s' "$payload" | jq . >/dev/null 2>&1; then
+      printf '%s\n' "$payload"
+    else
+      warn "JSON validation failed, outputting best-effort"
+      printf '%s\n' "$payload"
+    fi
+  else
+    printf '%s\n' "$payload"
+  fi
+}
+
+# Every jq read strips CR: a value of true-plus-CR is not true, and these files
+# are edited by humans on Windows as often as anywhere else.
+jqr() { jq -r "$@" | tr -d '\r'; }
+
+# ─── Config reading (copied verbatim from specclaw-bf-ui) ────────────────────
+
+yaml_val() {
+  local file="$1" path="$2" default="${3:-}"
+  [ -f "$file" ] || { printf '%s' "$default"; return 0; }
+  local section="" key=""
+  case "$path" in
+    *.*) section="${path%%.*}"; key="${path#*.}" ;;
+    *)   key="$path" ;;
+  esac
+  local val=""
+  if [ -n "$section" ]; then
+    val="$(awk -v sec="$section" -v k="$key" '
+      $0 ~ "^"sec":" { ins=1; next }
+      ins && /^[^[:space:]#]/ { ins=0 }
+      ins && $0 ~ "^[[:space:]]+"k":" {
+        sub("^[[:space:]]+"k":[[:space:]]*", "")
+        print; exit
+      }
+    ' "$file" 2>/dev/null || true)"
+  else
+    val="$(awk -v k="$key" '
+      $0 ~ "^"k":" { sub("^"k":[[:space:]]*", ""); print; exit }
+    ' "$file" 2>/dev/null || true)"
+  fi
+  val="${val%$'\r'}"
+  val="${val%%#*}"
+  # Trim trailing whitespace without a backreference — MSYS2 sed and GNU sed
+  # disagree about & often enough that this repo does not use one.
+  while [ -n "$val" ] && [ "${val: -1}" = " " ]; do val="${val%?}"; done
+  val="${val#\"}"; val="${val%\"}"
+  val="${val#\'}"; val="${val%\'}"
+  [ -z "$val" ] && val="$default"
+  printf '%s' "$val"
+}
+
+# ─── Template substitution (copied verbatim from specclaw-bf-ui) ─────────────
+
+substitute() {
+  local content="$1" token="$2" value="$3"
+  local out="" rest="$content"
+  while [[ "$rest" == *"$token"* ]]; do
+    out="${out}${rest%%"$token"*}${value}"
+    rest="${rest#*"$token"}"
+  done
+  printf '%s' "${out}${rest}"
+}
+
+# ─── sha256 (portable; copied verbatim from specclaw-bf-ui) ──────────────────
+
+sha256_of() {
+  local file="$1" out=""
+  if command -v sha256sum >/dev/null 2>&1; then
+    out="$(sha256sum "$file" 2>/dev/null | awk '{print $1}' || true)"
+  elif command -v shasum >/dev/null 2>&1; then
+    out="$(shasum -a 256 "$file" 2>/dev/null | awk '{print $1}' || true)"
+  fi
+  printf '%s' "$out"
+}
+
+sha256_available() {
+  command -v sha256sum >/dev/null 2>&1 && return 0
+  command -v shasum >/dev/null 2>&1 && return 0
+  return 1
+}
+
+sha256_of_string() {
+  local s="$1" out=""
+  if command -v sha256sum >/dev/null 2>&1; then
+    out="$(printf '%s' "$s" | sha256sum 2>/dev/null | awk '{print $1}' || true)"
+  elif command -v shasum >/dev/null 2>&1; then
+    out="$(printf '%s' "$s" | shasum -a 256 2>/dev/null | awk '{print $1}' || true)"
+  fi
+  printf '%s' "$out"
+}
+
+# The manifest and the map both record which plugin version produced them, so
+# a reader can tell whether a record predates a change in how it is computed.
+# CLAUDE_PLUGIN_ROOT is set when running as an installed plugin; PLUGIN_ROOT is
+# where this script actually lives, which is correct when it is run by path —
+# as every test and every development run does. Falling back to it is what
+# stops a manifest recording "unknown" for a version that is sitting two
+# directories up.
+plugin_version_of_this_run() {
+  local v="" root
+  for root in "${CLAUDE_PLUGIN_ROOT:-}" "$PLUGIN_ROOT"; do
+    [ -n "$root" ] || continue
+    [ -f "$root/.claude-plugin/plugin.json" ] || continue
+    command -v jq >/dev/null 2>&1 || break
+    v="$(jqr '.version // ""' "$root/.claude-plugin/plugin.json" 2>/dev/null || true)"
+    [ -n "$v" ] && break
+  done
+  printf '%s' "${v:-unknown}"
+}
+
+resolve_specclaw_dir() {
+  local d="$1"
+  [ -d "$d" ] || die "specclaw directory not found: $d"
+  (cd "$d" && pwd)
+}
+
+# One scratch directory per run, with its cleanup trap installed at script
+# scope. A `local` here would be out of scope by the time the EXIT trap fires.
+workdir=""
+cleanup_workdir() { [ -n "$workdir" ] && rm -rf "$workdir"; }
+trap cleanup_workdir EXIT
+
+prototype_dir()   { printf '%s/prototype' "$1"; }
+registry_path()   { printf '%s/prototype/id-registry.json' "$1"; }
+manifest_path()   { printf '%s/prototype/prototype-manifest.json' "$1"; }
+approvals_path()  { printf '%s/prototype/prototype-approvals.md' "$1"; }
+brief_path()      { printf '%s/prototype/prototype-brief.md' "$1"; }
+screens_dir()     { printf '%s/prototype/screens' "$1"; }
+
+# ─── Decision-record reading ─────────────────────────────────────────────────
+#
+# Same discipline as specclaw-bf-ui's read_fidelity_policy and
+# specclaw-bf-bootstrap's decision_text_of: a decided answer is proved by a
+# literal "### <id> —" heading in decisions.md (those headings only ever appear
+# under that document's "## Decisions" section) plus a non-empty
+# "- **Decision:**" line inside that block. Anything else is undecided. Never
+# inferred, never defaulted.
+
+FIDELITY_SQ_ID="SQ-013"
+FRAMEWORK_SQ_ID="SQ-006"
+LANGUAGE_SQ_ID="SQ-015"
+
+decision_block_of() {
+  local decisions_file="$1" id="$2"
+  [ -f "$decisions_file" ] || { printf ''; return 0; }
+  awk -v id="$id" '
+    $0 ~ ("^### " id "[[:space:]]") { cap=1; next }
+    cap && /^### / { cap=0 }
+    cap { print }
+  ' "$decisions_file" 2>/dev/null || true
+}
+
+# One field out of a decision block: Decision, Decided by, Date, Family.
+decision_field_of() {
+  local decisions_file="$1" id="$2" field="$3"
+  local block; block="$(decision_block_of "$decisions_file" "$id")"
+  [ -n "$block" ] || { printf ''; return 0; }
+  local v
+  v="$(printf '%s\n' "$block" | grep -m1 -- "^- \*\*${field}:\*\*" | sed -E "s/^- \*\*${field}:\*\* *//" || true)"
+  v="${v%$'\r'}"
+  case "$v" in
+    '⚠ not recorded') printf '' ;;
+    *) printf '%s' "$v" ;;
+  esac
+}
+
+decision_text_of() { decision_field_of "$1" "$2" "Decision"; }
+
+read_fidelity_policy() {
+  local decisions_file="$1"
+  local decision; decision="$(decision_text_of "$decisions_file" "$FIDELITY_SQ_ID")"
+  [ -n "$decision" ] || { printf 'UNDECIDED'; return 0; }
+  case "$decision" in
+    *THEME-ONLY*)  printf 'THEME-ONLY' ;;
+    *FAITHFUL*)    printf 'FAITHFUL' ;;
+    *REINTERPRET*) printf 'REINTERPRET' ;;
+    *)             printf 'UNDECIDED' ;;
+  esac
+}
+
+# Every decided question id in decisions.md, in document order.
+decided_ids_of() {
+  local decisions_file="$1"
+  [ -f "$decisions_file" ] || { printf ''; return 0; }
+  grep -oE '^### (SQ|CQ|UQ)-[0-9]+' "$decisions_file" 2>/dev/null \
+    | sed -E 's/^### //' | awk '!seen[$0]++' || true
+}
+
+# The title of a decided question, for the role match below.
+decision_title_of() {
+  local decisions_file="$1" id="$2"
+  [ -f "$decisions_file" ] || { printf ''; return 0; }
+  local t
+  t="$(grep -m1 -E "^### ${id}[[:space:]]" "$decisions_file" 2>/dev/null \
+    | sed -E "s/^### ${id}[[:space:]]*(—|-)[[:space:]]*//" || true)"
+  printf '%s' "${t%$'\r'}"
+}
+
+# ─── PD-03a: the frontend stack resolver ─────────────────────────────────────
+#
+# Resolves TWO values before anything else in this command runs: the frontend
+# FRAMEWORK and the frontend LANGUAGE. Each is recorded with the id that
+# sanctions it, who decided it and when.
+#
+# THE STACK-BLIND INVARIANT. This resolver holds no list of frameworks and no
+# list of languages, and it never infers one from the other. It extracts the
+# strings the decision record already contains, keyed on the ROLE of a question
+# (SQ-006 is the framework question, SQ-015 is the language question) and on the
+# literal structure of the documents — never on recognising a value. That is why
+# a framework name can never imply a language here: nothing in this file knows
+# that any particular framework conventionally ships with any particular
+# language, and a convention is not a decision anybody made.
+#
+# Resolution order, framework:
+#   1. decisions.md's decided SQ-006.
+#   2. target-architecture.md's mapping-table row whose Status is DECIDED and
+#      whose Sanctioning decision cell cites SQ-006. (That citation is what
+#      makes it the frontend row — the role of the question identifies it, so
+#      no framework name is needed to find it.)
+#   decisions.md wins outright when present; the target-architecture.md row is
+#   a derived summary used ONLY as a fallback when SQ-006 is absent there, never
+#   a co-equal authority whose wording can trigger a disagreement stop.
+#
+# Resolution order, language:
+#   1. decisions.md's decided SQ-015.
+#   2. A single-word parenthetical inside the framework decision's own text —
+#      "<framework> (<language>)" decides both under that one citation, exactly
+#      as PD-04 describes. Single-word only: a multi-word parenthetical is not
+#      taken, because telling a language from a build tool would need the list
+#      this resolver refuses to hold. A project that wants one answer to cover
+#      both writes the language as a bare word in parentheses.
+#   3. A decided CQ/UQ whose TITLE names the frontend-language role. Again a
+#      role match, not a value match.
+#   4. target-architecture.md's DECIDED row citing SQ-015.
+#   SQ-015 wins outright when present; the rest are fallbacks for a still-open
+#   slot, tried in order (role → arch → parenthetical), never rival authorities
+#   cross-checked against each other for equality.
+#
+# Nothing here ever resolves to a value that is absent from the record, and the
+# language is never defaulted — not from the framework, not from convention.
+
+STACK_FW_VALUE=""; STACK_FW_ID=""; STACK_FW_SOURCE=""; STACK_FW_BY=""; STACK_FW_DATE=""
+STACK_LANG_VALUE=""; STACK_LANG_ID=""; STACK_LANG_SOURCE=""; STACK_LANG_BY=""; STACK_LANG_DATE=""
+STACK_STOP_REASON=""
+
+# Case- and whitespace-insensitive comparison key, so one record writing a
+# value in a different case or with trailing space is not reported as two
+# records disagreeing.
+norm_key() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -s '[:space:]' ' ' | sed -E 's/^ //; s/ $//'
+}
+
+# The Target element cell of the mapping-table row whose Status is DECIDED and
+# whose Sanctioning decision cell cites <id>. Columns are
+# | Legacy element | Target element | Sanctioning decision | Status |.
+arch_row_value_of() {
+  local arch_file="$1" id="$2"
+  [ -f "$arch_file" ] || { printf ''; return 0; }
+  awk -F'|' -v id="$id" '
+    /^[[:space:]]*\|/ {
+      if (NF < 5) next
+      target = $3; sanction = $4; status = $5
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", target)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", sanction)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", status)
+      gsub(/\r/, "", status)
+      if (status != "DECIDED") next
+      if (index(sanction, id) == 0) next
+      if (target == "" || target ~ /^-+$/) next
+      print target
+      exit
+    }
+  ' "$arch_file" 2>/dev/null || true
+}
+
+# A single-word parenthetical, or empty. A decision reading
+# "<framework> (<word>)" yields that word; "<framework> (two words)" yields
+# nothing, on purpose — see the resolver note above.
+single_word_parenthetical() {
+  local s="$1" inner=""
+  case "$s" in
+    *'('*')'*) ;;
+    *) printf ''; return 0 ;;
+  esac
+  inner="$(printf '%s' "$s" | sed -E 's/^[^(]*\(([^()]*)\).*$/\1/')"
+  inner="${inner#"${inner%%[![:space:]]*}"}"
+  while [ -n "$inner" ] && [ "${inner: -1}" = " " ]; do inner="${inner%?}"; done
+  [ -n "$inner" ] || { printf ''; return 0; }
+  case "$inner" in
+    *[[:space:]]*) printf '' ;;
+    *) printf '%s' "$inner" ;;
+  esac
+}
+
+# Does this decided question's TITLE name the frontend-language role? A role
+# match on the question, never a value match on the answer.
+title_names_frontend_language() {
+  local title_lc; title_lc="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  case "$title_lc" in
+    *"frontend language"*|*"front-end language"*|*"front end language"*) return 0 ;;
+    *"client-side language"*|*"client side language"*) return 0 ;;
+    *"ui language"*) return 0 ;;
+  esac
+  return 1
+}
+
+resolve_frontend_stack() {
+  local decisions_file="$1" arch_file="$2"
+  local decisions_rel=".specclaw/analysis/decisions.md"
+  local arch_rel=".specclaw/analysis/target-architecture.md"
+
+  STACK_FW_VALUE=""; STACK_FW_ID=""; STACK_FW_SOURCE=""; STACK_FW_BY=""; STACK_FW_DATE=""
+  STACK_LANG_VALUE=""; STACK_LANG_ID=""; STACK_LANG_SOURCE=""; STACK_LANG_BY=""; STACK_LANG_DATE=""
+  STACK_STOP_REASON=""
+
+  # ── Framework ──────────────────────────────────────────────────────────
+  # decisions.md's decided SQ-006 is AUTHORITATIVE when present. target-
+  # architecture.md is a readability artifact that /specclaw:bf-blueprint
+  # regenerates FROM decisions.md; its mapping-cell holds a concise summary of
+  # the same decision, never an independent one, so its wording will differ
+  # from the decision's full prose. It MUST NOT be treated as a co-equal
+  # authority that can hard-stop on a wording difference — two records derived
+  # from one decision hold two WORDINGS of it, not two decisions. The arch row
+  # is therefore consulted only as a fallback when decisions.md does not
+  # resolve SQ-006 at all.
+  local fw_dec fw_arch
+  fw_dec="$(decision_text_of "$decisions_file" "$FRAMEWORK_SQ_ID")"
+  fw_arch="$(arch_row_value_of "$arch_file" "$FRAMEWORK_SQ_ID")"
+
+  if [ -n "$fw_dec" ]; then
+    STACK_FW_VALUE="$fw_dec"; STACK_FW_ID="$FRAMEWORK_SQ_ID"; STACK_FW_SOURCE="$decisions_rel"
+    STACK_FW_BY="$(decision_field_of "$decisions_file" "$FRAMEWORK_SQ_ID" "Decided by")"
+    STACK_FW_DATE="$(decision_field_of "$decisions_file" "$FRAMEWORK_SQ_ID" "Date")"
+  elif [ -n "$fw_arch" ]; then
+    STACK_FW_VALUE="$fw_arch"; STACK_FW_ID="$FRAMEWORK_SQ_ID"; STACK_FW_SOURCE="$arch_rel"
+    STACK_FW_BY="$(decision_field_of "$decisions_file" "$FRAMEWORK_SQ_ID" "Decided by")"
+    STACK_FW_DATE="$(decision_field_of "$decisions_file" "$FRAMEWORK_SQ_ID" "Date")"
+  else
+    STACK_STOP_REASON="framework: ${FRAMEWORK_SQ_ID} undecided.
+No decided \`### ${FRAMEWORK_SQ_ID} —\` block in ${decisions_rel}, and no DECIDED
+mapping-table row in ${arch_rel} citing it. The prototype is built in the
+framework this project chose; it is not this command's to choose.
+Route: raise it in /specclaw:bf-clarify (with an options pack if the choice is
+the client's) -> answer it by name -> /specclaw:bf-clarify --resolve ->
+/specclaw:bf-blueprint -> re-run /specclaw:bf-prototype."
+    return 1
+  fi
+
+  # ── Language ───────────────────────────────────────────────────────────
+  # SQ-015 is the DEDICATED frontend-language decision and is AUTHORITATIVE
+  # when present: taken outright, and never cross-checked against the derived
+  # target-architecture.md summary or the framework parenthetical. Those are
+  # weaker readings of the SAME decision — a wording difference between a
+  # decision and its own derived summary is not two rival languages, and the
+  # framework parenthetical in particular can read a component library such as
+  # "(MUI)" as if it were a language. Only when SQ-015 is undecided do the
+  # fallbacks below apply, each a weaker reading of one still-open slot rather
+  # than a rival authority.
+  local lang_dec lang_paren lang_role="" lang_role_id="" lang_arch
+  lang_dec="$(decision_text_of "$decisions_file" "$LANGUAGE_SQ_ID")"
+  if [ -n "$lang_dec" ]; then
+    STACK_LANG_VALUE="$lang_dec"; STACK_LANG_ID="$LANGUAGE_SQ_ID"; STACK_LANG_SOURCE="$decisions_rel"
+    STACK_LANG_BY="$(decision_field_of "$decisions_file" "$LANGUAGE_SQ_ID" "Decided by")"
+    STACK_LANG_DATE="$(decision_field_of "$decisions_file" "$LANGUAGE_SQ_ID" "Date")"
+    return 0
+  fi
+  lang_paren="$(single_word_parenthetical "$STACK_FW_VALUE")"
+  lang_arch="$(arch_row_value_of "$arch_file" "$LANGUAGE_SQ_ID")"
+
+  local did
+  while IFS= read -r did; do
+    [ -n "$did" ] || continue
+    [ "$did" = "$LANGUAGE_SQ_ID" ] && continue
+    case "$did" in SQ-*|CQ-*|UQ-*) ;; *) continue ;; esac
+    if title_names_frontend_language "$(decision_title_of "$decisions_file" "$did")"; then
+      local t; t="$(decision_text_of "$decisions_file" "$did")"
+      if [ -n "$t" ]; then lang_role="$t"; lang_role_id="$did"; break; fi
+    fi
+  done < <(decided_ids_of "$decisions_file")
+
+  # SQ-015 was undecided (handled above), so these are ordered fallbacks for a
+  # still-open slot, not rival authorities: the first that resolves wins and
+  # keeps its own citation. They are NOT cross-checked against each other — a
+  # decisions.md role decision, the framework parenthetical, and the derived
+  # target-architecture.md row are weaker readings of one unanswered question,
+  # and comparing their free-form wordings for equality is exactly the false
+  # "disagreement" this resolver must not raise. Order: role → arch → paren
+  # (the leading "dec" slot is always empty here — SQ-015 short-circuited above
+  # — and is kept only so the citation table stays aligned with the resolution-
+  # order comment at the top of this function).
+  local seen_val="" cand_val cand_id cand_src quad
+  for quad in \
+    "dec" "role" "arch" "paren"
+  do
+    case "$quad" in
+      dec)   cand_val="$lang_dec";   cand_id="$LANGUAGE_SQ_ID"; cand_src="$decisions_rel" ;;
+      role)  cand_val="$lang_role";  cand_id="$lang_role_id";   cand_src="$decisions_rel" ;;
+      arch)  cand_val="$lang_arch";  cand_id="$LANGUAGE_SQ_ID"; cand_src="$arch_rel" ;;
+      paren) cand_val="$lang_paren"; cand_id="$STACK_FW_ID";    cand_src="$decisions_rel" ;;
+    esac
+    [ -n "$cand_val" ] || continue
+    if [ -z "$seen_val" ]; then
+      seen_val="$cand_val"
+      STACK_LANG_ID="$cand_id"; STACK_LANG_SOURCE="$cand_src"
+    fi
+  done
+
+  if [ -z "$seen_val" ]; then
+    STACK_STOP_REASON="language: no decided SQ/CQ names the frontend language.
+${LANGUAGE_SQ_ID} is undecided, no decided question's title names the
+frontend-language role, ${arch_rel} has no DECIDED row citing ${LANGUAGE_SQ_ID},
+and ${FRAMEWORK_SQ_ID}'s answer (\"${STACK_FW_VALUE}\") carries no single-word
+parenthetical to read one from.
+The frontend language is NEVER defaulted here — not to JavaScript, not to
+TypeScript, and never from the framework's convention. A framework name alone
+decides a framework and nothing else.
+Route: raise it in /specclaw:bf-clarify (with an options pack if the choice is
+the client's) -> answer it by name -> /specclaw:bf-clarify --resolve ->
+/specclaw:bf-blueprint -> re-run /specclaw:bf-prototype.
+To decide both in one answer instead, write ${FRAMEWORK_SQ_ID}'s decision as
+\"<framework> (<language>)\" with the language as a single bare word."
+    return 1
+  fi
+
+  STACK_LANG_VALUE="$seen_val"
+  STACK_LANG_BY="$(decision_field_of "$decisions_file" "$STACK_LANG_ID" "Decided by")"
+  STACK_LANG_DATE="$(decision_field_of "$decisions_file" "$STACK_LANG_ID" "Date")"
+  return 0
+}
+
+# ─── Inventory / backlog readers ─────────────────────────────────────────────
+#
+# Same literal-structure discipline the rest of the brownfield pipeline uses:
+# "### SCR-NNN —" in ui-inventory.md, "### BL-NNN —" under a "## MOD-NNN"
+# heading in rebuild-backlog.md, a STRUCK title prefix for a tombstone. Nothing
+# is inferred from a filename or a directory.
+
+# "SCR-NNN<TAB><title>" for every screen in the inventory.
+inventory_screens() {
+  local inventory="$1"
+  [ -f "$inventory" ] || return 0
+  local line id title
+  while IFS= read -r line; do
+    line="${line%$'\r'}"
+    id="$(printf '%s' "$line" | grep -oE 'SCR-[0-9]+' | head -1 || true)"
+    [ -n "$id" ] || continue
+    title="$(printf '%s' "$line" | sed -E 's/^### SCR-[0-9]+[[:space:]]*(—|-)[[:space:]]*//')"
+    printf '%s\t%s\n' "$id" "$title"
+  done < <(grep -E '^### SCR-[0-9]+' "$inventory" 2>/dev/null || true)
+}
+
+# The body of one "### <id> —" block out of a document.
+block_of() {
+  local file="$1" id="$2"
+  [ -f "$file" ] || { printf ''; return 0; }
+  awk -v id="$id" '
+    $0 ~ ("^### " id "[[:space:]]") { cap=1; next }
+    cap && /^### / { cap=0 }
+    cap && /^## / { cap=0 }
+    cap { print }
+  ' "$file" 2>/dev/null || true
+}
+
+# "BL-NNN<TAB>status<TAB>MOD-NNN<TAB>title" for every backlog item.
+# status is active | struck | deferred. The module is the nearest preceding
+# "## MOD-NNN" heading, which is how rebuild-backlog.md groups items.
+backlog_items() {
+  local backlog="$1"
+  [ -f "$backlog" ] || return 0
+  awk '
+    /^## / {
+      mod = ""
+      if (match($0, /MOD-[0-9]+/)) mod = substr($0, RSTART, RLENGTH)
+      current_mod = mod
+      next
+    }
+    /^### BL-[0-9]+/ {
+      line = $0
+      sub(/\r$/, "", line)
+      match(line, /BL-[0-9]+/)
+      id = substr(line, RSTART, RLENGTH)
+      title = line
+      sub(/^### BL-[0-9]+[[:space:]]*(—|-)[[:space:]]*/, "", title)
+      status = "active"
+      if (title ~ /^STRUCK/) status = "struck"
+      else if (title ~ /^DEFERRED/) status = "deferred"
+      printf "%s\t%s\t%s\t%s\n", id, status, current_mod, title
+    }
+  ' "$backlog" 2>/dev/null || true
+}
+
+# Screens the backlog's bash-computed UI Screen Coverage section records as
+# deliberately out of scope, as "SCR-NNN<TAB>reason". Read from the rendered
+# section rather than recomputed, so this command and the backlog can never
+# disagree about what the rebuild decided to leave out.
+backlog_out_of_scope_scr() {
+  local backlog="$1"
+  [ -f "$backlog" ] || return 0
+  awk '
+    /^### UI Screen Coverage/ { ins=1; next }
+    ins && /^#{1,3} / && $0 !~ /^### UI Screen Coverage/ { ins=0 }
+    ins && /out of scope:/ {
+      line = $0
+      sub(/\r$/, "", line)
+      if (match(line, /SCR-[0-9]+/)) {
+        id = substr(line, RSTART, RLENGTH)
+        reason = line
+        sub(/^.*out of scope:[[:space:]]*/, "", reason)
+        printf "%s\t%s\n", id, reason
+      }
+    }
+  ' "$backlog" 2>/dev/null || true
+}
+
+# The IN-SCOPE half of the same bash-computed UI Screen Coverage section: each
+# screen the rebuild WILL build, mapped to the backlog item(s) that render it,
+# emitted as "SCR-NNN<TAB>BL-NNN,BL-NNN". Under a REINTERPRET policy the backlog
+# carries NO per-item SCR-### citation in the item body (no UI fidelity line is
+# rendered there), so this generated section is the canonical place the
+# item→screen join lives — read it rather than the item bodies, the same
+# source-of-truth discipline backlog_out_of_scope_scr uses for the other half.
+# A line counts as in-scope only if it carries at least one BL-### and is NOT an
+# out-of-scope line; the two halves are mutually exclusive by construction. BL
+# ids are de-duplicated within a line. Nothing here is inferred — a screen with
+# no mapping line simply does not appear.
+backlog_in_scope_scr() {
+  local backlog="$1"
+  [ -f "$backlog" ] || return 0
+  awk '
+    /^### UI Screen Coverage/ { ins=1; next }
+    ins && /^#{1,3} / && $0 !~ /^### UI Screen Coverage/ { ins=0 }
+    ins && $0 ~ /SCR-[0-9]/ && $0 ~ /BL-[0-9]/ && $0 !~ /out of scope:/ {
+      line = $0
+      sub(/\r$/, "", line)
+      if (!match(line, /SCR-[0-9]+/)) next
+      sid = substr(line, RSTART, RLENGTH)
+      rest = line
+      bids = ""
+      while (match(rest, /BL-[0-9]+/)) {
+        bid = substr(rest, RSTART, RLENGTH)
+        if (index("," bids ",", "," bid ",") == 0)
+          bids = bids (bids == "" ? "" : ",") bid
+        rest = substr(rest, RSTART + RLENGTH)
+      }
+      if (bids != "") printf "%s\t%s\n", sid, bids
+    }
+  ' "$backlog" 2>/dev/null || true
+}
+
+# ─── Pending-question / clarification state ──────────────────────────────────
+#
+# A PQ is unresolved while its Status line still reads OPEN. A CQ is unresolved
+# until decisions.md carries a decided block for it. Both are read literally;
+# neither is ever assumed answered.
+
+pq_is_open() {
+  local pq_file="$1" id="$2"
+  [ -f "$pq_file" ] || return 0
+  local block; block="$(block_of "$pq_file" "$id")"
+  [ -n "$block" ] || return 0
+  printf '%s\n' "$block" | grep -qE '^[[:space:]]*-[[:space:]]*\*\*Status:\*\*[[:space:]]*OPEN' && return 0
+  return 1
+}
+
+cq_is_decided() {
+  local decisions_file="$1" id="$2"
+  [ -n "$(decision_text_of "$decisions_file" "$id")" ]
+}
+
+# Is this provisional reference still unresolved?
+provisional_unresolved() {
+  local pq_file="$1" decisions_file="$2" ref="$3"
+  case "$ref" in
+    PQ-*) pq_is_open "$pq_file" "$ref" && return 0; return 1 ;;
+    *)    cq_is_decided "$decisions_file" "$ref" && return 1; return 0 ;;
+  esac
+}
+
+# ─── Subcommand: collect ─────────────────────────────────────────────────────
+
+cmd_collect() {
+  require_jq
+  local specclaw_dir_abs; specclaw_dir_abs="$(resolve_specclaw_dir "$1")"
+  local project_root; project_root="$(cd "$specclaw_dir_abs/.." && pwd)"
+  local analysis_dir="$specclaw_dir_abs/analysis"
+  local ui_dir="$specclaw_dir_abs/ui"
+  local decisions_file="$analysis_dir/decisions.md"
+  local arch_file="$analysis_dir/target-architecture.md"
+  local backlog_file="$analysis_dir/rebuild-backlog.md"
+  local inventory_file="$ui_dir/ui-inventory.md"
+  local pq_file="$analysis_dir/pending-questions.md"
+  local config_file="$specclaw_dir_abs/config.yaml"
+
+  # ── PD-02: activation. The one condition under which this whole stage
+  # exists. Every other policy stops here having written nothing, so a
+  # non-REINTERPRET repo is byte-identical to one where this command was
+  # never installed. ─────────────────────────────────────────────────────
+  local policy; policy="$(read_fidelity_policy "$decisions_file")"
+  if [ "$policy" != "REINTERPRET" ]; then
+    die "UI fidelity policy is ${policy} (${FIDELITY_SQ_ID}), not REINTERPRET — /specclaw:bf-prototype is the redesign-approval stage and does not apply to this project. Nothing was written."
+  fi
+
+  # ── PD-03: the remaining preconditions, each naming its exact artifact. ──
+  [ -f "$inventory_file" ] || die "No .specclaw/ui/ui-inventory.md in this repo.
+The prototype maps every redesigned screen to the legacy screen it replaces, so
+it needs the legacy screen inventory to map against. Screens are NEVER derived
+from directory names.
+Run /specclaw:bf-ui (Mode A — the inventory alone; screenshots are optional and
+are not used by this command), or supply a human-written ui-inventory.md in the
+same SCR-### form. Nothing was written."
+  [ -f "$backlog_file" ] || die "No .specclaw/analysis/rebuild-backlog.md in this repo.
+Prototype readiness is measured against the rebuild backlog — which screens are
+in scope, which the client scoped out — so the backlog is a hard input.
+Run /specclaw:bf-rebuild-plan first. Nothing was written."
+  [ -f "$arch_file" ] || die "No .specclaw/analysis/target-architecture.md in this repo.
+The frontend stack is resolved from the decision record and this document
+together, and the prototype is built in exactly that stack.
+Run /specclaw:bf-blueprint first. Nothing was written."
+
+  # ── PD-03a: framework AND language, each with its citation. ─────────────
+  if ! resolve_frontend_stack "$decisions_file" "$arch_file"; then
+    die "the frontend stack is not fully decided.
+${STACK_STOP_REASON}
+Nothing was written."
+  fi
+
+  # ── PD-04: the generator. The stack comes from the decisions; the skill
+  # that builds in it comes from config. Neither is ever guessed. ─────────
+  local skill output_dir
+  skill="$(yaml_val "$config_file" "prototype.skill" "")"
+  output_dir="$(yaml_val "$config_file" "prototype.output_dir" ".specclaw/prototype/app/")"
+
+  # ── Inputs census, with hashes so the brief can prove what it was built
+  # from and a later reader can tell whether an input has moved since. ────
+  local inputs_json="" f rel first=true
+  for f in "$inventory_file" "$analysis_dir/domain-model.md" "$analysis_dir/functional-spec.md" \
+           "$analysis_dir/module-map.md" "$backlog_file" "$decisions_file" "$arch_file" \
+           "$ui_dir/design-tokens.json"; do
+    rel="${f#"$project_root"/}"
+    local present=false h=""
+    if [ -f "$f" ]; then present=true; h="$(sha256_of "$f")"; fi
+    if $first; then first=false; else inputs_json="${inputs_json}, "; fi
+    inputs_json="${inputs_json}{\"path\": \"$(json_escape "$rel")\", \"present\": ${present}, \"sha256\": \"$(json_escape "$h")\"}"
+  done
+
+  # ── Screens, and the joins each one carries into the brief. ─────────────
+  workdir="$(mktemp -d)"
+  inventory_screens "$inventory_file" > "$workdir/screens.tsv"
+  backlog_items "$backlog_file" > "$workdir/items.tsv"
+  backlog_out_of_scope_scr "$backlog_file" > "$workdir/oos.tsv"
+
+  # Which SCR ids each active item cites, and the reverse index.
+  declare -A ITEM_SCR=() ITEM_MOD=() ITEM_STATUS=()
+  local bid bstatus bmod
+  while IFS=$'\t' read -r bid bstatus bmod _; do
+    [ -n "$bid" ] || continue
+    ITEM_STATUS["$bid"]="$bstatus"
+    ITEM_MOD["$bid"]="$bmod"
+    ITEM_SCR["$bid"]="$(block_of "$backlog_file" "$bid" | grep -oE 'SCR-[0-9]{3}' | awk '!seen[$0]++' | paste -sd',' - || true)"
+  done < "$workdir/items.tsv"
+
+  # Fold the generated UI Screen Coverage section's in-scope mappings into
+  # ITEM_SCR, so the reverse index below resolves the item→screen join under
+  # EVERY policy — including REINTERPRET, where the item bodies carry no SCR-###
+  # token at all. Under FAITHFUL/THEME-ONLY (or any project whose items cite
+  # SCR-### in their body) this agrees with what was parsed above, and the
+  # de-dup keeps a doubly-recorded screen from being counted twice. FAIL-CLOSED:
+  # a mapping to a BL id this backlog does not carry as an item is ignored here
+  # (never entered into ITEM_SCR for an unknown key), and a mapping to a
+  # non-active item still fails the active check in the reverse index below, so
+  # a stale or wrong coverage line can never conjure an in-scope screen.
+  local cov_sid cov_bids cov_bid
+  while IFS=$'\t' read -r cov_sid cov_bids; do
+    [ -n "$cov_sid" ] || continue
+    for cov_bid in ${cov_bids//,/ }; do
+      [ -n "$cov_bid" ] || continue
+      [ -n "${ITEM_STATUS[$cov_bid]:-}" ] || continue   # unknown BL id → ignore (fail-closed)
+      case ",${ITEM_SCR[$cov_bid]:-}," in
+        *",${cov_sid},"*) ;;                             # already recorded → de-dup
+        *) ITEM_SCR["$cov_bid"]="${ITEM_SCR[$cov_bid]:+${ITEM_SCR[$cov_bid]},}${cov_sid}" ;;
+      esac
+    done
+  done < <(backlog_in_scope_scr "$backlog_file")
+
+  declare -A OOS_REASON=()
+  local oid oreason
+  while IFS=$'\t' read -r oid oreason; do
+    [ -n "$oid" ] || continue
+    OOS_REASON["$oid"]="$oreason"
+  done < "$workdir/oos.tsv"
+
+  local screens_json="" sid stitle conflicts=""
+  first=true
+  while IFS=$'\t' read -r sid stitle; do
+    [ -n "$sid" ] || continue
+    local citing="" citing_active="" mods="" rules=""
+    for bid in "${!ITEM_STATUS[@]}"; do
+      case ",${ITEM_SCR[$bid]}," in
+        *",${sid},"*)
+          citing="${citing}${citing:+,}${bid}"
+          if [ "${ITEM_STATUS[$bid]}" = "active" ]; then
+            citing_active="${citing_active}${citing_active:+,}${bid}"
+            [ -n "${ITEM_MOD[$bid]}" ] && case ",${mods}," in
+              *",${ITEM_MOD[$bid]},"*) ;;
+              *) mods="${mods}${mods:+,}${ITEM_MOD[$bid]}" ;;
+            esac
+          fi
+          ;;
+      esac
+    done
+    # DR rules visible on this screen: the inventory entry's own citations,
+    # unioned with those of the active items that render it.
+    rules="$(block_of "$inventory_file" "$sid" | grep -oE 'DR-[0-9]{3}' | awk '!seen[$0]++' | paste -sd',' - || true)"
+    local cb
+    for cb in ${citing_active//,/ }; do
+      local more; more="$(block_of "$backlog_file" "$cb" | grep -oE 'DR-[0-9]{3}' || true)"
+      local m
+      for m in $more; do
+        case ",${rules}," in *",${m},"*) ;; *) rules="${rules}${rules:+,}${m}" ;; esac
+      done
+    done
+
+    local scope="uncovered"
+    if [ -n "$citing_active" ] && [ -n "${OOS_REASON[$sid]:-}" ]; then
+      # Recorded BOTH in scope and out of scope. Never silently pick one — a
+      # screen cannot be both built and deliberately dropped, and choosing
+      # either way hides a real contradiction in the backlog.
+      scope="conflict"
+      conflicts="${conflicts}${conflicts:+; }${sid} (in scope via ${citing_active}; also recorded out of scope)"
+    elif [ -n "$citing_active" ]; then scope="in-scope"
+    elif [ -n "${OOS_REASON[$sid]:-}" ]; then scope="out-of-scope"
+    fi
+
+    if $first; then first=false; else screens_json="${screens_json}, "; fi
+    screens_json="${screens_json}{\"scr\": \"$(json_escape "$sid")\", \"title\": \"$(json_escape "$stitle")\", \"scope\": \"${scope}\", \"backlog_items\": \"$(json_escape "$citing_active")\", \"backlog_items_all\": \"$(json_escape "$citing")\", \"modules\": \"$(json_escape "$mods")\", \"rules\": \"$(json_escape "$rules")\", \"out_of_scope_reason\": \"$(json_escape "${OOS_REASON[$sid]:-}")\"}"
+  done < "$workdir/screens.tsv"
+
+  # A screen recorded both in scope and out of scope is a contradiction in the
+  # backlog's own coverage record; surface it and stop rather than emit a
+  # screen_counts that quietly resolved it. Fail-closed, and it names every
+  # offending screen so the fix (re-run /specclaw:bf-rebuild-plan) is obvious.
+  if [ -n "$conflicts" ]; then
+    die "UI Screen Coverage conflict — screen(s) recorded BOTH in scope and out of scope in rebuild-backlog.md. A screen cannot be both built and deliberately dropped; fix the UI Screen Coverage section (re-run /specclaw:bf-rebuild-plan) so each screen is one or the other: ${conflicts}"
+  fi
+
+  # ── T3: how much of the inventory has no join at all. The agent raises a
+  # PQ per screen; bash reports the proportion so the agent can stop when
+  # upstream analysis is simply not ready yet. ────────────────────────────
+  local n_total=0 n_in=0 n_oos=0 n_uncovered=0
+  n_total="$(wc -l < "$workdir/screens.tsv" | tr -d ' ')"
+  n_in="$(printf '%s' "$screens_json" | grep -o '"scope": "in-scope"' | wc -l | tr -d ' ')"
+  n_oos="$(printf '%s' "$screens_json" | grep -o '"scope": "out-of-scope"' | wc -l | tr -d ' ')"
+  n_uncovered="$(printf '%s' "$screens_json" | grep -o '"scope": "uncovered"' | wc -l | tr -d ' ')"
+
+  local registry; registry="$(registry_path "$specclaw_dir_abs")"
+  local registry_json="{}"
+  if [ -f "$registry" ] && jq -e . "$registry" >/dev/null 2>&1; then
+    registry_json="$(jq -c . "$registry")"
+  fi
+
+  emit_json "$(jq -n \
+    --arg project_root "$project_root" \
+    --arg plugin_version "$(plugin_version_of_this_run)" \
+    --arg policy "$policy" \
+    --arg fw_value "$STACK_FW_VALUE" --arg fw_id "$STACK_FW_ID" --arg fw_source "$STACK_FW_SOURCE" \
+    --arg fw_by "$STACK_FW_BY" --arg fw_date "$STACK_FW_DATE" \
+    --arg lang_value "$STACK_LANG_VALUE" --arg lang_id "$STACK_LANG_ID" --arg lang_source "$STACK_LANG_SOURCE" \
+    --arg lang_by "$STACK_LANG_BY" --arg lang_date "$STACK_LANG_DATE" \
+    --arg skill "$skill" --arg output_dir "$output_dir" \
+    --argjson skill_configured "$([ -n "$skill" ] && echo true || echo false)" \
+    --argjson inputs "[${inputs_json}]" \
+    --argjson screens "[${screens_json}]" \
+    --argjson registry "$registry_json" \
+    --argjson counts "{\"total\": ${n_total:-0}, \"in_scope\": ${n_in:-0}, \"out_of_scope\": ${n_oos:-0}, \"uncovered\": ${n_uncovered:-0}}" \
+    --arg pq_path ".specclaw/analysis/pending-questions.md" \
+    --argjson pq_present "$([ -f "$pq_file" ] && echo true || echo false)" \
+    '{
+      command: "bf-prototype", mode: "collect",
+      project_root: $project_root, plugin_version: $plugin_version,
+      ui_fidelity: { id: "SQ-013", policy: $policy },
+      stack: {
+        framework: { value: $fw_value, sanctioned_by: $fw_id, source: $fw_source, decided_by: $fw_by, date: $fw_date },
+        language:  { value: $lang_value, sanctioned_by: $lang_id, source: $lang_source, decided_by: $lang_by, date: $lang_date }
+      },
+      generator: { skill: $skill, configured: $skill_configured, output_dir: $output_dir },
+      inputs: $inputs,
+      screens: $screens,
+      screen_counts: $counts,
+      id_registry: $registry,
+      pending_questions: { path: $pq_path, present: $pq_present }
+    }')"
+
+  if [ "${n_total:-0}" -gt 0 ] && [ "${n_uncovered:-0}" -gt 0 ]; then
+    local half=$(( n_total / 2 ))
+    if [ "$n_uncovered" -gt "$half" ]; then
+      warn "${n_uncovered} of ${n_total} screen(s) are cited by no active backlog item and carry no out-of-scope reason. More than half the inventory has no join, which is an upstream analysis gap, not a prototype question — re-run /specclaw:bf-rebuild-plan before briefing a prototype."
+    fi
+  fi
+  if [ -z "$skill" ]; then
+    warn "config.yaml has no prototype.skill. The brief can still be written (--brief-only), but no skill can be invoked to build from it."
+  fi
+}
+
+# ─── Subcommand: allocate ────────────────────────────────────────────────────
+#
+# PD-06. The ONLY place a PS-### is minted. The registry maps an allocation key
+# to a PS id and is append-only: an entry is never removed, never renumbered,
+# and never reused, so a screen that later leaves the inventory keeps its id and
+# renders RETIRED rather than freeing a number for something else.
+#
+# Allocation keys: an SCR-### (the legacy screen this prototype screen replaces)
+# or CQ-###:<slug> (a genuinely new screen, with the CQ that sanctions its
+# existence). First-time allocation order is SCR-mapped ascending, then new-screen
+# keys in the order the brief lists them.
+
+cmd_allocate() {
+  require_jq
+  local specclaw_dir_abs; specclaw_dir_abs="$(resolve_specclaw_dir "$1")"
+  local keys_file="$2"
+  [ -f "$keys_file" ] || die "allocate: keys file not found: ${keys_file}"
+
+  local proto_dir; proto_dir="$(prototype_dir "$specclaw_dir_abs")"
+  local registry; registry="$(registry_path "$specclaw_dir_abs")"
+  mkdir -p "$proto_dir"
+  if [ ! -f "$registry" ]; then printf '{}\n' > "$registry"; fi
+  jq -e . "$registry" >/dev/null 2>&1 || die "allocate: ${registry#"$specclaw_dir_abs"/} is not valid JSON. It is the permanent PS-### registry and is never rewritten from scratch by this command — inspect and repair it by hand rather than letting a run mint duplicate ids."
+
+  workdir="$(mktemp -d)"
+
+  # Split the incoming keys into SCR-mapped (sorted ascending) and new-screen
+  # (brief order), so a first run numbers them in the documented order.
+  local line
+  : > "$workdir/scr.txt"; : > "$workdir/new.txt"
+  while IFS= read -r line; do
+    line="${line%$'\r'}"
+    line="${line#"${line%%[![:space:]]*}"}"
+    while [ -n "$line" ] && [ "${line: -1}" = " " ]; do line="${line%?}"; done
+    [ -n "$line" ] || continue
+    case "$line" in
+      SCR-[0-9][0-9][0-9]) printf '%s\n' "$line" >> "$workdir/scr.txt" ;;
+      CQ-[0-9][0-9][0-9]:*) printf '%s\n' "$line" >> "$workdir/new.txt" ;;
+      *) die "allocate: '${line}' is not a valid allocation key. A key is either an SCR-### (the legacy screen this prototype screen replaces) or CQ-###:<slug> (a new screen, citing the CQ that sanctions it). A new screen with no decided CQ gets no PS-### at all — it renders PROVISIONAL(PQ-###) until one exists." ;;
+    esac
+  done < "$keys_file"
+  sort -u "$workdir/scr.txt" > "$workdir/scr-sorted.txt"
+  awk '!seen[$0]++' "$workdir/new.txt" > "$workdir/new-ordered.txt"
+  cat "$workdir/scr-sorted.txt" "$workdir/new-ordered.txt" > "$workdir/ordered.txt"
+
+  # Highest PS already minted. Never reuse, never compact.
+  local max_ps; max_ps="$(jqr 'to_entries | map(.value) | map(select(test("^PS-[0-9]+$"))) | map(sub("^PS-";"") | tonumber) | max // 0' "$registry")"
+  case "$max_ps" in ''|*[!0-9]*) max_ps=0 ;; esac
+
+  local allocated=0 key existing
+  while IFS= read -r key; do
+    [ -n "$key" ] || continue
+    # shellcheck disable=SC2016  # $k is a jq variable, not a shell one
+    existing="$(jqr --arg k "$key" '.[$k] // ""' "$registry")"
+    [ -n "$existing" ] && continue
+    max_ps=$((max_ps + 1))
+    local new_id; new_id="$(printf 'PS-%03d' "$max_ps")"
+    local tmp; tmp="$(mktemp)"
+    jq --arg k "$key" --arg v "$new_id" '. + {($k): $v}' "$registry" > "$tmp" && mv "$tmp" "$registry"
+    allocated=$((allocated + 1))
+  done < "$workdir/ordered.txt"
+
+  emit_json "$(jq -c '.' "$registry")"
+  echo "PS registry: ${allocated} new id(s) allocated, $(jqr 'length' "$registry") total (append-only — nothing was removed or renumbered)." >&2
+}
+
+# ─── Brief directives (the agent's machine-readable hand-off to bash) ────────
+#
+# Same split every other brownfield command uses: the agent writes prose AND a
+# small block of literal directives; bash reads only the directives and never
+# parses the prose. The directives live under the brief's "## Machine
+# Directives" heading:
+#
+#   PS: PS-001 | SCR-003 | MOD-002 | BL-014,BL-015 | DR-021,DR-022
+#   PS: PS-004 | NEW | MOD-002 | BL-019 | DR-030
+#   REVIEW-POINT: PS-001 | DR-021 | Order number is visible on load
+#   PROVISIONAL: PS-001 | CQ-017
+#   RETIRED-SCR: SCR-011 | CQ-020
+#   LANG-FILE-CONVENTIONS: allow=<ext>,<ext> forbid=<ext>,<ext>
+#
+# The language conventions are DECLARED BY THE BRIEF, which took them from the
+# resolved language. This file holds no table of languages and no table of
+# extensions: it enforces what the brief declared, and enforces nothing when the
+# brief declared nothing.
+
+brief_directives() {
+  local brief="$1" kind="$2"
+  [ -f "$brief" ] || return 0
+  grep -E "^${kind}:" "$brief" 2>/dev/null | sed -E "s/^${kind}:[[:space:]]*//" | tr -d '\r' || true
+}
+
+# Field <n> of a pipe-delimited directive, trimmed.
+dfield() {
+  local line="$1" n="$2" v
+  v="$(printf '%s' "$line" | awk -F'|' -v n="$n" '{ if (NF >= n) { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $n); print $n } }')"
+  printf '%s' "$v"
+}
+
+# ─── Tree hashing ────────────────────────────────────────────────────────────
+#
+# One sha256 over the whole prototype tree for a run: the sorted list of
+# "<relative path><TAB><file sha256>" lines, itself hashed. Path-sensitive, so
+# a renamed file changes the tree hash; content-sensitive, so an edited file
+# does. Excludes dependency trees, generic build output directories and every
+# dotfile/dotdir — the same exclusion set specclaw-bf-ui's file enumeration
+# already uses, and none of it is a framework name.
+
+tree_file_list() {
+  local root="$1"
+  [ -d "$root" ] || return 0
+  ( cd "$root" && find . -type f -print 2>/dev/null | sed 's|^\./||' ) | while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    case "/$f/" in
+      */node_modules/*|*/vendor/*|*/dist/*|*/build/*|*/out/*|*/coverage/*) continue ;;
+    esac
+    case "$f" in
+      .*|*/.*) continue ;;
+    esac
+    printf '%s\n' "$f"
+  done | LC_ALL=C sort
+}
+
+tree_hash_of() {
+  local root="$1" listing="" f h
+  [ -d "$root" ] || { printf ''; return 0; }
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    h="$(sha256_of "$root/$f")"
+    listing="${listing}${f}	${h}
+"
+  done < <(tree_file_list "$root")
+  [ -n "$listing" ] || { printf ''; return 0; }
+  sha256_of_string "$listing"
+}
+
+# ─── Approvals (human-owned; never written by this command) ──────────────────
+#
+# PD-08. One row per PS-### in prototype-approvals.md:
+#   | PS-### | APPROVED | <approver name> | <date> | <approved_source_hash> |
+# This file is read and never written — not by this script, not by the agent.
+# An approval is a named person's statement, and a record a tool can write is
+# not one.
+
+approval_rows() {
+  local approvals="$1"
+  [ -f "$approvals" ] || return 0
+  awk -F'|' '
+    /^[[:space:]]*\|[[:space:]]*PS-[0-9]+[[:space:]]*\|/ {
+      if (NF < 6) next
+      ps = $2; verdict = $3; by = $4; date = $5; hash = $6
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", ps)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", verdict)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", by)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", date)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", hash)
+      gsub(/\r/, "", hash)
+      printf "%s\t%s\t%s\t%s\t%s\n", ps, toupper(verdict), by, date, hash
+    }
+  ' "$approvals" 2>/dev/null || true
+}
+
+# ─── Subcommand: record ──────────────────────────────────────────────────────
+
+cmd_record() {
+  require_jq
+  local specclaw_dir_abs; specclaw_dir_abs="$(resolve_specclaw_dir "$1")"
+  local project_root; project_root="$(cd "$specclaw_dir_abs/.." && pwd)"
+  local analysis_dir="$specclaw_dir_abs/analysis"
+  local decisions_file="$analysis_dir/decisions.md"
+  local arch_file="$analysis_dir/target-architecture.md"
+  local backlog_file="$analysis_dir/rebuild-backlog.md"
+  local pq_file="$analysis_dir/pending-questions.md"
+  local config_file="$specclaw_dir_abs/config.yaml"
+  local proto_dir; proto_dir="$(prototype_dir "$specclaw_dir_abs")"
+  local brief; brief="$(brief_path "$specclaw_dir_abs")"
+  local approvals; approvals="$(approvals_path "$specclaw_dir_abs")"
+  local screens; screens="$(screens_dir "$specclaw_dir_abs")"
+  local manifest; manifest="$(manifest_path "$specclaw_dir_abs")"
+  local registry; registry="$(registry_path "$specclaw_dir_abs")"
+
+  local policy; policy="$(read_fidelity_policy "$decisions_file")"
+  [ "$policy" = "REINTERPRET" ] || die "UI fidelity policy is ${policy} (${FIDELITY_SQ_ID}), not REINTERPRET — there is no prototype stage to record. Nothing was written."
+
+  if ! resolve_frontend_stack "$decisions_file" "$arch_file"; then
+    die "the frontend stack is not fully decided.
+${STACK_STOP_REASON}
+Nothing was written."
+  fi
+
+  local output_rel; output_rel="$(yaml_val "$config_file" "prototype.output_dir" ".specclaw/prototype/app/")"
+  local output_abs="${project_root}/${output_rel#./}"
+  output_abs="${output_abs%/}"
+
+  # ── PD-04: nothing to record. Under --brief-only the human imports an
+  # externally built prototype here first; an empty directory means that
+  # step has not happened, and a manifest over nothing would be a record of
+  # nothing. Exit 2, distinct from NOT-READY. ────────────────────────────
+  local n_files=0
+  if [ -d "$output_abs" ]; then n_files="$(tree_file_list "$output_abs" | wc -l | tr -d ' ')"; fi
+  if [ "${n_files:-0}" -eq 0 ]; then
+    echo "ERROR: prototype.output_dir is empty: ${output_rel}
+Nothing to record. Either the configured prototype skill has not run yet, or —
+under --brief-only — the externally built prototype has not been imported into
+that directory. It must be built in the decided framework and language
+(${STACK_FW_VALUE} / ${STACK_LANG_VALUE}); a prototype in any other framework or
+language is not the design anybody is approving." >&2
+    exit 2
+  fi
+
+  sha256_available || warn "neither sha256sum nor shasum is on PATH — the prototype tree and the screenshots cannot be hashed on this machine, so nothing here is tamper-evident and the prototype cannot be recorded READY until one is installed."
+
+  local tree_hash; tree_hash="$(tree_hash_of "$output_abs")"
+
+  # ── The prior manifest is how a stack change after approval is detectable:
+  # it records the framework and language the approvals were given under. ──
+  local prior_fw="" prior_lang=""
+  if [ -f "$manifest" ] && jq -e . "$manifest" >/dev/null 2>&1; then
+    prior_fw="$(jqr '.stack.framework.value // ""' "$manifest")"
+    prior_lang="$(jqr '.stack.language.value // ""' "$manifest")"
+  fi
+
+  workdir="$(mktemp -d)"
+
+  # ── Directives ──────────────────────────────────────────────────────────
+  brief_directives "$brief" "PS" > "$workdir/ps.txt"
+  brief_directives "$brief" "REVIEW-POINT" > "$workdir/rp.txt"
+  brief_directives "$brief" "PROVISIONAL" > "$workdir/prov.txt"
+  brief_directives "$brief" "RETIRED-SCR" > "$workdir/retired.txt"
+  local lang_conv; lang_conv="$(brief_directives "$brief" "LANG-FILE-CONVENTIONS" | head -1)"
+
+  # ── PD-04: the language check, enforced only as the brief declared it. ──
+  local forbid_list="" violations="" vio_json="" vfirst=true
+  case "$lang_conv" in
+    *forbid=*)
+      forbid_list="$(printf '%s' "$lang_conv" | sed -E 's/.*forbid=([^[:space:]]*).*/\1/')"
+      ;;
+  esac
+  if [ -n "$forbid_list" ]; then
+    local ext f
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      for ext in ${forbid_list//,/ }; do
+        [ -n "$ext" ] || continue
+        case "$f" in
+          *"$ext") violations="${violations}${violations:+ }${f}"
+                   if $vfirst; then vfirst=false; else vio_json="${vio_json}, "; fi
+                   vio_json="${vio_json}\"$(json_escape "$f")\"" ;;
+        esac
+      done
+    done < <(tree_file_list "$output_abs")
+  fi
+
+  # ── Approvals ───────────────────────────────────────────────────────────
+  declare -A AP_VERDICT=() AP_BY=() AP_DATE=() AP_HASH=()
+  local aps averdict aby adate ahash n_approval_rows=0
+  while IFS=$'\t' read -r aps averdict aby adate ahash; do
+    [ -n "$aps" ] || continue
+    AP_VERDICT["$aps"]="$averdict"; AP_BY["$aps"]="$aby"
+    AP_DATE["$aps"]="$adate"; AP_HASH["$aps"]="$ahash"
+    n_approval_rows=$((n_approval_rows + 1))
+  done < <(approval_rows "$approvals")
+
+  # A human wrote this file by hand, so a malformed table is the likeliest way
+  # for an approval to go missing — and a missing approval reads as DRAFT, a
+  # perfectly ordinary state that nobody would investigate. Say so loudly
+  # instead: the file existing but yielding no rows is always a mistake.
+  if [ -f "$approvals" ] && [ "$n_approval_rows" -eq 0 ]; then
+    warn "prototype-approvals.md exists but no approval rows could be read from it. Each row must be a Markdown table row of five cells: | PS-### | APPROVED|CHANGES-REQUESTED|REJECTED | <approver name> | <date> | <tree_hash> |. Until a row parses, every screen reads DRAFT or IN-REVIEW as though nobody had reviewed it."
+  fi
+
+  # ── Provisional references per PS, and whether each is still unresolved ──
+  declare -A PROV_REFS=() PROV_OPEN=()
+  local pline pps pref
+  while IFS= read -r pline; do
+    [ -n "$pline" ] || continue
+    pps="$(dfield "$pline" 1)"; pref="$(dfield "$pline" 2)"
+    if [ -z "$pps" ] || [ -z "$pref" ]; then continue; fi
+    PROV_REFS["$pps"]="${PROV_REFS[$pps]:-}${PROV_REFS[$pps]:+,}${pref}"
+    if provisional_unresolved "$pq_file" "$decisions_file" "$pref"; then
+      PROV_OPEN["$pps"]="${PROV_OPEN[$pps]:-}${PROV_OPEN[$pps]:+,}${pref}"
+    fi
+  done < "$workdir/prov.txt"
+
+  # ── Review points per PS ────────────────────────────────────────────────
+  declare -A RP_JSON=()
+  local rline rps rprot rtext
+  while IFS= read -r rline; do
+    [ -n "$rline" ] || continue
+    rps="$(dfield "$rline" 1)"; rprot="$(dfield "$rline" 2)"; rtext="$(dfield "$rline" 3)"
+    if [ -z "$rps" ] || [ -z "$rtext" ]; then continue; fi
+    RP_JSON["$rps"]="${RP_JSON[$rps]:-}${RP_JSON[$rps]:+, }{\"text\": \"$(json_escape "$rtext")\", \"protects\": \"$(json_escape "$rprot")\"}"
+  done < "$workdir/rp.txt"
+
+  # ── Retired screens: only a DECIDED CQ retires a screen. An undecided one
+  # does not, and saying so is the whole point of the check. ──────────────
+  declare -A RETIRED=()
+  local tline tscr tcq retired_json="" rfirst=true
+  while IFS= read -r tline; do
+    [ -n "$tline" ] || continue
+    tscr="$(dfield "$tline" 1)"; tcq="$(dfield "$tline" 2)"
+    if [ -z "$tscr" ] || [ -z "$tcq" ]; then continue; fi
+    if cq_is_decided "$decisions_file" "$tcq"; then
+      RETIRED["$tscr"]="$tcq"
+      if $rfirst; then rfirst=false; else retired_json="${retired_json}, "; fi
+      retired_json="${retired_json}{\"id\": \"$(json_escape "$tscr")\", \"decision\": \"$(json_escape "$tcq")\"}"
+    fi
+  done < "$workdir/retired.txt"
+
+  # ── Per-PS status, PD-10 precedence, first match wins ───────────────────
+  declare -A PS_STATUS=() PS_REPLACES=()
+  local screens_json="" sfirst=true
+  local psline psid psreplaces psmod psbl psrules shot shot_sha status
+  while IFS= read -r psline; do
+    [ -n "$psline" ] || continue
+    psid="$(dfield "$psline" 1)"
+    [ -n "$psid" ] || continue
+    psreplaces="$(dfield "$psline" 2)"
+    psmod="$(dfield "$psline" 3)"
+    psbl="$(dfield "$psline" 4)"
+    psrules="$(dfield "$psline" 5)"
+    case "$psreplaces" in NEW|new) psreplaces="" ;; esac
+    PS_REPLACES["$psid"]="$psreplaces"
+
+    shot="screens/${psid}.png"
+    shot_sha=""
+    if [ -f "${screens}/${psid}.png" ]; then shot_sha="$(sha256_of "${screens}/${psid}.png")"; fi
+
+    local verdict="${AP_VERDICT[$psid]:-}"
+    if   [ -n "${PROV_OPEN[$psid]:-}" ];                              then status="PROVISIONAL"
+    elif [ "$verdict" = "APPROVED" ] && [ "${AP_HASH[$psid]:-}" != "$tree_hash" ]; then status="STALE"
+    elif [ "$verdict" = "CHANGES-REQUESTED" ];                        then status="CHANGES-REQUESTED"
+    elif [ "$verdict" = "REJECTED" ];                                 then status="REJECTED"
+    elif [ "$verdict" = "APPROVED" ];                                 then status="APPROVED"
+    elif [ -n "$shot_sha" ];                                          then status="IN-REVIEW"
+    else                                                                   status="DRAFT"
+    fi
+    PS_STATUS["$psid"]="$status"
+
+    local approval_json="null"
+    if [ -n "$verdict" ]; then
+      approval_json="{\"verdict\": \"$(json_escape "$verdict")\", \"by\": \"$(json_escape "${AP_BY[$psid]:-}")\", \"date\": \"$(json_escape "${AP_DATE[$psid]:-}")\", \"source_hash\": \"$(json_escape "${AP_HASH[$psid]:-}")\"}"
+    fi
+    local shot_json="null"
+    [ -n "$shot_sha" ] && shot_json="\"$(json_escape "$shot_sha")\""
+
+    local refs_json="" ref
+    local rf=true prefs="${PROV_REFS[$psid]:-}"
+    for ref in ${prefs//,/ }; do
+      [ -n "$ref" ] || continue
+      if $rf; then rf=false; else refs_json="${refs_json}, "; fi
+      refs_json="${refs_json}\"$(json_escape "$ref")\""
+    done
+    local repl_json="" rr=true
+    for ref in ${psreplaces//,/ }; do
+      [ -n "$ref" ] || continue
+      if $rr; then rr=false; else repl_json="${repl_json}, "; fi
+      repl_json="${repl_json}\"$(json_escape "$ref")\""
+    done
+    local bl_json="" bb=true
+    for ref in ${psbl//,/ }; do
+      [ -n "$ref" ] || continue
+      if $bb; then bb=false; else bl_json="${bl_json}, "; fi
+      bl_json="${bl_json}\"$(json_escape "$ref")\""
+    done
+    local rules_json="" rl=true
+    for ref in ${psrules//,/ }; do
+      [ -n "$ref" ] || continue
+      if $rl; then rl=false; else rules_json="${rules_json}, "; fi
+      rules_json="${rules_json}\"$(json_escape "$ref")\""
+    done
+
+    if $sfirst; then sfirst=false; else screens_json="${screens_json}, "; fi
+    screens_json="${screens_json}{\"id\": \"$(json_escape "$psid")\", \"replaces\": [${repl_json}], \"module\": \"$(json_escape "$psmod")\", \"backlog_items\": [${bl_json}], \"rules\": [${rules_json}], \"review_points\": [${RP_JSON[$psid]:-}], \"screenshot\": \"$(json_escape "$shot")\", \"screenshot_sha256\": ${shot_json}, \"provisional_ref\": [${refs_json}], \"approval\": ${approval_json}, \"status\": \"${status}\"}"
+  done < "$workdir/ps.txt"
+
+  # ── RETIRED: a registry key whose screen has left the inventory or the
+  # brief. Informational, never a readiness blocker; the id is kept forever
+  # so nothing that still cites it silently points at another screen. ─────
+  local retired_ps_json="" rpfirst=true rkey rps_id
+  if [ -f "$registry" ] && jq -e . "$registry" >/dev/null 2>&1; then
+    while IFS=$'\t' read -r rkey rps_id; do
+      [ -n "$rps_id" ] || continue
+      [ -n "${PS_STATUS[$rps_id]:-}" ] && continue
+      if $rpfirst; then rpfirst=false; else retired_ps_json="${retired_ps_json}, "; fi
+      retired_ps_json="${retired_ps_json}{\"id\": \"$(json_escape "$rps_id")\", \"key\": \"$(json_escape "$rkey")\", \"status\": \"RETIRED\"}"
+    done < <(jqr 'to_entries[] | [.key, .value] | @tsv' "$registry")
+  fi
+
+  # ── Readiness, measured against the rebuild backlog (PD-10) ─────────────
+  backlog_items "$backlog_file" > "$workdir/items.tsv"
+  backlog_out_of_scope_scr "$backlog_file" > "$workdir/oos.tsv"
+
+  declare -A OOS=()
+  local oid oreason
+  while IFS=$'\t' read -r oid oreason; do
+    [ -n "$oid" ] || continue
+    OOS["$oid"]="$oreason"
+  done < "$workdir/oos.tsv"
+
+  local required_scr="" bid bstatus s
+  while IFS=$'\t' read -r bid bstatus _; do
+    [ -n "$bid" ] || continue
+    [ "$bstatus" = "active" ] || continue
+    for s in $(block_of "$backlog_file" "$bid" | grep -oE 'SCR-[0-9]{3}' | awk '!seen[$0]++'); do
+      case ",${required_scr}," in *",${s},"*) ;; *) required_scr="${required_scr}${required_scr:+,}${s}" ;; esac
+    done
+  done < "$workdir/items.tsv"
+
+  local reasons="" uncovered_json="" ufirst=true oos_json="" ofirst=true
+  for s in ${required_scr//,/ }; do
+    [ -n "$s" ] || continue
+    if [ -n "${RETIRED[$s]:-}" ]; then continue; fi
+    if [ -n "${OOS[$s]:-}" ]; then
+      if $ofirst; then ofirst=false; else oos_json="${oos_json}, "; fi
+      oos_json="${oos_json}{\"id\": \"$(json_escape "$s")\", \"backlog_scope\": \"$(json_escape "${OOS[$s]}")\"}"
+      continue
+    fi
+    local covered=false blocking=""
+    local pid
+    for pid in "${!PS_REPLACES[@]}"; do
+      case ",${PS_REPLACES[$pid]}," in
+        *",${s},"*)
+          case "${PS_STATUS[$pid]}" in
+            APPROVED) covered=true ;;
+            STALE|PROVISIONAL) blocking="${blocking}${blocking:+, }${pid} (${PS_STATUS[$pid]})" ;;
+          esac
+          ;;
+      esac
+    done
+    if $covered; then
+      [ -n "$blocking" ] && reasons="${reasons}${reasons:+; }${blocking}"
+      continue
+    fi
+    if [ -n "$blocking" ]; then
+      reasons="${reasons}${reasons:+; }${blocking}"
+    else
+      reasons="${reasons}${reasons:+; }${s} uncovered"
+    fi
+    if $ufirst; then ufirst=false; else uncovered_json="${uncovered_json}, "; fi
+    uncovered_json="${uncovered_json}\"$(json_escape "$s")\""
+  done
+
+  # Stack decision changed after approval: the prior manifest recorded the
+  # stack the approvals were given under.
+  local any_approved=false
+  for pid in "${!PS_STATUS[@]}"; do
+    [ "${PS_STATUS[$pid]}" = "APPROVED" ] && any_approved=true
+  done
+  if $any_approved; then
+    [ -n "$prior_fw" ] && [ "$(norm_key "$prior_fw")" != "$(norm_key "$STACK_FW_VALUE")" ] && \
+      reasons="${reasons}${reasons:+; }stack-decision-changed: framework"
+    [ -n "$prior_lang" ] && [ "$(norm_key "$prior_lang")" != "$(norm_key "$STACK_LANG_VALUE")" ] && \
+      reasons="${reasons}${reasons:+; }stack-decision-changed: language"
+  fi
+
+  [ -n "$violations" ] && reasons="${reasons}${reasons:+; }prototype tree contains file(s) the brief's declared language conventions forbid"
+  [ -z "$tree_hash" ] && reasons="${reasons}${reasons:+; }prototype tree could not be hashed (no sha256sum/shasum on PATH)"
+  [ -n "$screens_json" ] || reasons="${reasons}${reasons:+; }no PS: directives in prototype-brief.md — nothing has been briefed to approve"
+
+  local ready=false
+  [ -z "$reasons" ] && ready=true
+
+  local reasons_json="" refirst=true r
+  local IFS_OLD="$IFS"
+  IFS=';'
+  for r in $reasons; do
+    r="${r#"${r%%[![:space:]]*}"}"
+    [ -n "$r" ] || continue
+    if $refirst; then refirst=false; else reasons_json="${reasons_json}, "; fi
+    reasons_json="${reasons_json}\"$(json_escape "$r")\""
+  done
+  IFS="$IFS_OLD"
+
+  local legacy_commit
+  legacy_commit="$(git -C "$project_root" rev-parse HEAD 2>/dev/null || true)"
+
+  mkdir -p "$proto_dir"
+  local tmp; tmp="$(mktemp)"
+  jq -n \
+    --arg plugin_version "$(plugin_version_of_this_run)" \
+    --arg legacy_commit "$legacy_commit" \
+    --arg sq013_by "$(decision_field_of "$decisions_file" "$FIDELITY_SQ_ID" "Decided by")" \
+    --arg sq013_date "$(decision_field_of "$decisions_file" "$FIDELITY_SQ_ID" "Date")" \
+    --arg fw_value "$STACK_FW_VALUE" --arg fw_id "$STACK_FW_ID" --arg fw_source "$STACK_FW_SOURCE" \
+    --arg fw_by "$STACK_FW_BY" --arg fw_date "$STACK_FW_DATE" \
+    --arg lang_value "$STACK_LANG_VALUE" --arg lang_id "$STACK_LANG_ID" --arg lang_source "$STACK_LANG_SOURCE" \
+    --arg lang_by "$STACK_LANG_BY" --arg lang_date "$STACK_LANG_DATE" \
+    --arg skill "$(yaml_val "$config_file" "prototype.skill" "")" \
+    --arg output_dir "$output_rel" --arg tree_hash "$tree_hash" \
+    --argjson ready "$ready" \
+    --argjson not_ready_reasons "[${reasons_json}]" \
+    --argjson screens "[${screens_json}]" \
+    --argjson retired_ps "[${retired_ps_json}]" \
+    --argjson uncovered "[${uncovered_json}]" \
+    --argjson retired_scr "[${retired_json}]" \
+    --argjson out_of_scope "[${oos_json}]" \
+    --argjson lang_violations "[${vio_json}]" \
+    '{
+      schema_version: 1,
+      plugin_version: $plugin_version,
+      legacy_commit: $legacy_commit,
+      sq013: { value: "REINTERPRET", decided_by: $sq013_by, date: $sq013_date },
+      stack: {
+        framework: { value: $fw_value, sanctioned_by: $fw_id, source: $fw_source, decided_by: $fw_by, date: $fw_date },
+        language:  { value: $lang_value, sanctioned_by: $lang_id, source: $lang_source, decided_by: $lang_by, date: $lang_date }
+      },
+      generator: { skill: $skill, output_dir: $output_dir, tree_hash: $tree_hash },
+      prototype_ready: $ready,
+      not_ready_reasons: $not_ready_reasons,
+      screens: $screens,
+      retired_ps: $retired_ps,
+      uncovered_scr: $uncovered,
+      retired_scr: $retired_scr,
+      out_of_scope_scr: $out_of_scope,
+      language_convention_violations: $lang_violations
+    }' > "$tmp" && mv "$tmp" "$manifest"
+
+  # ── The raw line. The agent narrates this; it never infers a status bash
+  # did not print, and never states READY that bash did not compute. ──────
+  if $ready; then
+    printf 'PROTOTYPE: READY\n'
+    echo "Wrote ${manifest#"$project_root"/} — tree_hash ${tree_hash:0:12}, $(printf '%s' "$screens_json" | grep -o '"status": "APPROVED"' | wc -l | tr -d ' ') screen(s) APPROVED." >&2
+    exit 0
+  fi
+  printf 'PROTOTYPE: NOT-READY (%s)\n' "$(printf '%s' "$reasons" | sed 's/; /, /g')"
+  echo "Wrote ${manifest#"$project_root"/} — not ready. Nothing in the new repo may start until this line reads READY." >&2
+  exit 1
+}
+
+# ─── Subcommand: verify (the NEW repo's gate) ────────────────────────────────
+#
+# PD-11. Read-only, writes nothing, and fails CLOSED: anything it cannot read
+# it reports as not-ready with the reason, never as ready. Called by
+# /specclaw:bf-bootstrap before it scaffolds anything and by /specclaw:propose
+# before it drafts anything.
+#
+# `applicable` is false — and every other field null — for a repo with no
+# rebuild backlog (greenfield) or a fidelity policy that is not REINTERPRET.
+# Those projects see this gate exactly the way they saw it before it existed.
+
+cmd_verify() {
+  local specclaw_dir_abs; specclaw_dir_abs="$(resolve_specclaw_dir "$1")"
+  shift
+  local item=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --item) item="${2:-}"; shift 2 ;;
+      *) die "verify: unknown argument '$1'" ;;
+    esac
+  done
+
+  local project_root; project_root="$(cd "$specclaw_dir_abs/.." && pwd)"
+  local analysis_dir="$specclaw_dir_abs/analysis"
+  local decisions_file="$analysis_dir/decisions.md"
+  local arch_file="$analysis_dir/target-architecture.md"
+  local backlog_file="$analysis_dir/rebuild-backlog.md"
+  local manifest; manifest="$(manifest_path "$specclaw_dir_abs")"
+  local screens; screens="$(screens_dir "$specclaw_dir_abs")"
+  local manifest_rel=".specclaw/prototype/prototype-manifest.json"
+
+  local remedy="REINTERPRET project: prototype not approved. Run bf-prototype --record in the legacy repo until it prints PROTOTYPE: READY, then copy prototype-map.md + prototype-manifest.json + screens/ together and re-run."
+
+  na() {
+    emit_json "{\"applicable\": false, \"ready\": null, \"reason\": \"$(json_escape "$1")\", \"remedy\": null, \"item\": null, \"item_ready\": null, \"item_reason\": null}"
+    exit 0
+  }
+  notready() {
+    emit_json "{\"applicable\": true, \"ready\": false, \"reason\": \"$(json_escape "$1")\", \"remedy\": \"$(json_escape "$remedy")\", \"item\": \"$(json_escape "$item")\", \"item_ready\": false, \"item_reason\": null}"
+    exit 0
+  }
+
+  # ── Not a brownfield rebuild target at all. Greenfield never sees this. ──
+  [ -f "$backlog_file" ] || na "no rebuild-backlog.md — this project is not a brownfield rebuild target, so no prototype gate applies"
+  [ -f "$decisions_file" ] || na "no decisions.md — the UI fidelity policy cannot be read, so no prototype gate applies (bootstrap's own decision precondition covers this case)"
+
+  # ── PD-02: only REINTERPRET activates the gate. ─────────────────────────
+  local policy; policy="$(read_fidelity_policy "$decisions_file")"
+  [ "$policy" = "REINTERPRET" ] || na "UI fidelity policy is ${policy} (${FIDELITY_SQ_ID}), not REINTERPRET — no prototype stage exists for this project"
+
+  command -v jq >/dev/null 2>&1 || notready "jq is not on PATH, so ${manifest_rel} cannot be read. A manifest nobody can read is not evidence of an approval."
+
+  # ── Manifest present and parseable. Fail closed on both. ────────────────
+  [ -f "$manifest" ] || notready "no ${manifest_rel} in this repo"
+  jq -e . "$manifest" >/dev/null 2>&1 || notready "${manifest_rel} is present but is not valid JSON — it cannot be read, so it proves nothing"
+
+  # ── Pairing: screens/ travels with the manifest or the hashes prove
+  # nothing, exactly as ui-manifest.json and screens/ do. Every recorded
+  # screenshot hash is re-verified against the file on disk. ──────────────
+  local n_shots; n_shots="$(jqr '[.screens[]? | select(.screenshot_sha256 != null)] | length' "$manifest")"
+  case "$n_shots" in ''|*[!0-9]*) n_shots=0 ;; esac
+  if [ "$n_shots" -gt 0 ] && [ ! -d "$screens" ]; then
+    notready "${manifest_rel} records ${n_shots} screenshot(s) but .specclaw/prototype/screens/ is not in this repo — the two are always copied together, or the recorded hashes prove nothing"
+  fi
+  local bad_pairs="" psid rel want got
+  while IFS=$'\t' read -r psid rel want; do
+    [ -n "$psid" ] || continue
+    if [ ! -f "${specclaw_dir_abs}/prototype/${rel}" ]; then
+      bad_pairs="${bad_pairs}${bad_pairs:+, }${psid} (missing ${rel})"
+      continue
+    fi
+    got="$(sha256_of "${specclaw_dir_abs}/prototype/${rel}")"
+    if [ -z "$got" ]; then
+      bad_pairs="${bad_pairs}${bad_pairs:+, }${psid} (cannot hash ${rel} on this machine)"
+    elif [ "$got" != "$want" ]; then
+      bad_pairs="${bad_pairs}${bad_pairs:+, }${psid} (${rel} does not match its recorded hash)"
+    fi
+  done < <(jqr '.screens[]? | select(.screenshot_sha256 != null) | [.id, .screenshot, .screenshot_sha256] | @tsv' "$manifest")
+  [ -n "$bad_pairs" ] && notready "screenshot evidence does not verify: ${bad_pairs}"
+
+  # ── The readiness bash computed in the legacy repo. ─────────────────────
+  local ready; ready="$(jqr '.prototype_ready // false' "$manifest")"
+  if [ "$ready" != "true" ]; then
+    local why; why="$(jqr '(.not_ready_reasons // []) | join(", ")' "$manifest")"
+    notready "${manifest_rel} records prototype_ready: false${why:+ (${why})}"
+  fi
+
+  # ── The manifest's own stack citations must still be what THIS repo's
+  # decision record resolves, by the same PD-03a resolver. An approval given
+  # under one stack is not an approval of another. ───────────────────────
+  local m_sq013; m_sq013="$(jqr '.sq013.value // ""' "$manifest")"
+  [ "$m_sq013" = "REINTERPRET" ] || notready "${manifest_rel} records sq013.value '${m_sq013}', but this repo's decisions.md records REINTERPRET — the manifest was recorded under a different policy"
+
+  if ! resolve_frontend_stack "$decisions_file" "$arch_file"; then
+    notready "the frontend stack cannot be re-resolved in this repo: $(printf '%s' "$STACK_STOP_REASON" | head -1)"
+  fi
+  local m_fw m_lang
+  m_fw="$(jqr '.stack.framework.value // ""' "$manifest")"
+  m_lang="$(jqr '.stack.language.value // ""' "$manifest")"
+  [ "$(norm_key "$m_fw")" = "$(norm_key "$STACK_FW_VALUE")" ] || \
+    notready "stack-decision-changed: framework — the prototype was approved against '${m_fw}' but this repo's decision record now resolves '${STACK_FW_VALUE}'"
+  [ "$(norm_key "$m_lang")" = "$(norm_key "$STACK_LANG_VALUE")" ] || \
+    notready "stack-decision-changed: language — the prototype was approved against '${m_lang}' but this repo's decision record now resolves '${STACK_LANG_VALUE}'"
+
+  # ── Per-item (PD-11b). Every SCR the item references maps to an APPROVED
+  # PS-###. An item that references no screen passes on the whole-prototype
+  # check alone. ─────────────────────────────────────────────────────────
+  local item_ready=true item_reason=""
+  if [ -n "$item" ]; then
+    local scrs s detail=""
+    scrs="$(block_of "$backlog_file" "$item" | grep -oE 'SCR-[0-9]{3}' | awk '!seen[$0]++' || true)"
+    # shellcheck disable=SC2016  # $s inside the jq filter below is a jq
+    # variable bound by --arg, not a shell expansion
+    for s in $scrs; do
+      local best="" best_status=""
+      while IFS=$'\t' read -r psid status; do
+        [ -n "$psid" ] || continue
+        if [ "$status" = "APPROVED" ]; then best="$psid"; best_status="APPROVED"; break; fi
+        [ -z "$best" ] && { best="$psid"; best_status="$status"; }
+      done < <(jqr --arg s "$s" '.screens[]? | select((.replaces // []) | index($s)) | [.id, .status] | @tsv' "$manifest")
+      if [ "$best_status" = "APPROVED" ]; then continue; fi
+      item_ready=false
+      if [ -n "$best" ]; then
+        detail="${detail}${detail:+, }${s} → ${best} (${best_status})"
+      else
+        detail="${detail}${detail:+, }${s} → (no prototype screen)"
+      fi
+    done
+    if ! $item_ready; then
+      item_reason="Prototype screen(s) not approved for ${item}: ${detail}. Re-approve, re-record, re-copy."
+    fi
+  fi
+
+  emit_json "$(jq -n \
+    --arg item "$item" \
+    --argjson item_ready "$item_ready" \
+    --arg item_reason "$item_reason" \
+    --arg manifest "$manifest_rel" \
+    --argjson n_screens "$(jqr '[.screens[]?] | length' "$manifest")" \
+    --argjson n_approved "$(jqr '[.screens[]? | select(.status == "APPROVED")] | length' "$manifest")" \
+    '{applicable: true, ready: true, reason: null, remedy: null,
+      manifest: $manifest, screens: $n_screens, approved: $n_approved,
+      item: (if $item == "" then null else $item end),
+      item_ready: $item_ready,
+      item_reason: (if $item_reason == "" then null else $item_reason end)}')"
+  exit 0
+}
+
+# ─── Subcommand: map-render ──────────────────────────────────────────────────
+#
+# PD-08/PD-14. prototype-map.md is fully regenerated every run and never
+# hand-edited. Every row is bash-computed from the manifest; the agent supplies
+# only the narration paragraph. Client-visible, so no internal command name
+# appears anywhere except the provenance footer.
+
+cmd_map_render() {
+  require_jq
+  local specclaw_dir_abs; specclaw_dir_abs="$(resolve_specclaw_dir "$1")"
+  local draft="${2:-}"
+  local project_root; project_root="$(cd "$specclaw_dir_abs/.." && pwd)"
+  local manifest; manifest="$(manifest_path "$specclaw_dir_abs")"
+  local out="${specclaw_dir_abs}/prototype/prototype-map.md"
+
+  [ -f "$manifest" ] || die "map-render: no .specclaw/prototype/prototype-manifest.json — run /specclaw:bf-prototype --record first. The map is rendered from the manifest's computed rows, never from the brief."
+  jq -e . "$manifest" >/dev/null 2>&1 || die "map-render: prototype-manifest.json is not valid JSON."
+
+  local narration=""
+  [ -n "$draft" ] && [ -f "$draft" ] && narration="$(cat "$draft")"
+
+  local ready line
+  ready="$(jqr '.prototype_ready // false' "$manifest")"
+  if [ "$ready" = "true" ]; then
+    line="PROTOTYPE: READY"
+  else
+    line="PROTOTYPE: NOT-READY ($(jqr '(.not_ready_reasons // []) | join(", ")' "$manifest"))"
+  fi
+
+  local fw lang n_total n_appr n_prov n_stale
+  fw="$(jqr '.stack.framework.value // ""' "$manifest")"
+  lang="$(jqr '.stack.language.value // ""' "$manifest")"
+  n_total="$(jqr '[.screens[]?] | length' "$manifest")"
+  n_appr="$(jqr '[.screens[]? | select(.status == "APPROVED")] | length' "$manifest")"
+  n_prov="$(jqr '[.screens[]? | select(.status == "PROVISIONAL")] | length' "$manifest")"
+  n_stale="$(jqr '[.screens[]? | select(.status == "STALE")] | length' "$manifest")"
+
+  local rows; rows="$(jqr '
+    .screens[]? |
+    "| " + .id
+    + " | " + (if ((.replaces // []) | length) == 0 then "new screen" else ((.replaces // []) | join(", ")) end)
+    + " | " + (.module // "—")
+    + " | " + (((.backlog_items // []) | join(", ")) // "—")
+    + " | " + (((.rules // []) | join(", ")) // "—")
+    + " | " + (if ((.provisional_ref // []) | length) == 0 then "none" else ((.provisional_ref // []) | join(", ")) end)
+    + " | " + .status
+    + " | " + (.approval.by // "—")
+    + " | " + (.approval.date // "—")
+    + " |"' "$manifest")"
+  [ -n "$rows" ] || rows="| _no screens recorded_ |  |  |  |  |  |  |  |  |"
+
+  local retired_rows; retired_rows="$(jqr '.retired_ps[]? | "| " + .id + " | " + .key + " | RETIRED |"' "$manifest")"
+
+  # Statuses are rendered in client-facing words. The manifest keeps the
+  # machine values; a client reading this document should not have to learn
+  # them, and PD-14 keeps internal vocabulary out of client-visible files.
+  rows="$(printf '%s
+' "$rows"     | sed -e 's/| PROVISIONAL |/| Awaiting a decision |/'           -e 's/| CHANGES-REQUESTED |/| Changes requested |/'           -e 's/| IN-REVIEW |/| In review |/'           -e 's/| APPROVED |/| Approved |/'           -e 's/| REJECTED |/| Not approved |/'           -e 's/| STALE |/| Changed since approval |/'           -e 's/| DRAFT |/| Draft |/')"
+
+  local retired_section=""
+  if [ -n "$retired_rows" ]; then
+    retired_section="## Screens no longer in the redesign
+
+_These keep their identifier permanently, so anything still referring to one fails loudly rather than quietly pointing at a different screen._
+
+| Screen | Originally mapped to | Status |
+|---|---|---|
+${retired_rows}
+
+"
+  fi
+
+  local template_file doc
+  template_file="$PLUGIN_ROOT/templates/prototype-map.md"
+  [ -f "$template_file" ] || die "template not found: $template_file"
+  doc="$(cat "$template_file")"
+  doc="$(substitute "$doc" '{{ready_line}}' "$line")"
+  doc="$(substitute "$doc" '{{stack}}' "${fw} · ${lang}")"
+  doc="$(substitute "$doc" '{{counts}}' "${n_total} total · ${n_appr} approved · ${n_prov} awaiting a decision · ${n_stale} changed since approval")"
+  doc="$(substitute "$doc" '{{narration}}' "$narration")"
+  doc="$(substitute "$doc" '{{rows}}' "$rows")"
+  doc="$(substitute "$doc" '{{retired_section}}' "$retired_section")"
+  doc="$(substitute "$doc" '{{date}}' "$(date +%Y-%m-%d)")"
+  doc="$(substitute "$doc" '{{plugin_version}}' "$(plugin_version_of_this_run)")"
+
+  mkdir -p "${specclaw_dir_abs}/prototype"
+  printf '%s
+' "$doc" > "$out"
+
+  echo "Wrote ${out#"$project_root"/} (${n_total} screen(s), ${n_appr} approved)." >&2
+}
+
+# ─── Dispatch ────────────────────────────────────────────────────────────────
+
+case "${1:-}" in
+  collect)
+    [ $# -ge 2 ] || die "Usage: specclaw-bf-prototype collect <specclaw_dir>"
+    cmd_collect "$2" ;;
+  allocate)
+    [ $# -ge 3 ] || die "Usage: specclaw-bf-prototype allocate <specclaw_dir> <keys_file>"
+    cmd_allocate "$2" "$3" ;;
+  record)
+    [ $# -ge 2 ] || die "Usage: specclaw-bf-prototype record <specclaw_dir>"
+    cmd_record "$2" ;;
+  map-render)
+    [ $# -ge 2 ] || die "Usage: specclaw-bf-prototype map-render <specclaw_dir> [draft_file]"
+    cmd_map_render "$2" "${3:-}" ;;
+  verify)
+    [ $# -ge 2 ] || die "Usage: specclaw-bf-prototype verify <specclaw_dir> [--item <BL-###>]"
+    shift
+    cmd_verify "$@" ;;
+  -h|--help|help|'')
+    usage ;;
+  *)
+    die "unknown subcommand: $1
+
+$(usage)" ;;
+esac

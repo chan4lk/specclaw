@@ -273,6 +273,141 @@ decision_json() {
 # not specclaw artifacts" is a true statement about any stack; deciding whether
 # they constitute an application foundation is the AGENT's judgement, made by
 # reading them, and a hard stop when the answer is yes and no manifest exists.
+# ─── The prototype gate (REINTERPRET only) ──────────────────────────────────
+#
+# Two facts bootstrap needs about the redesign prototype, and nothing else:
+# whether this project has one at all, and whether it is approved.
+#
+# The policy is read HERE, locally, before anything is shelled out. That is
+# deliberate: a project that is not REINTERPRET must behave exactly as it did
+# before this gate existed, including on an installation where
+# specclaw-bf-prototype is absent entirely. Reading SQ-013 first means the
+# common case never depends on the new binary being present.
+#
+# When the project IS REINTERPRET, the gate fails CLOSED. A verifier that
+# cannot be run, cannot be parsed, or reports anything other than ready leaves
+# PROTOTYPE_GATE_READY false with a stated reason. "I could not check" is not
+# "it is fine" — the whole point of the gate is that production work does not
+# start on an unapproved design, and an unreadable check proves nothing about
+# approval.
+
+PROTOTYPE_GATE_APPLICABLE="false"
+PROTOTYPE_GATE_READY="false"
+PROTOTYPE_GATE_REASON=""
+
+prototype_gate_state() {
+  local specclaw_dir_abs="$1" item="${2:-}"
+  PROTOTYPE_GATE_APPLICABLE="false"
+  PROTOTYPE_GATE_READY="false"
+  PROTOTYPE_GATE_REASON=""
+
+  local decisions_file="$specclaw_dir_abs/analysis/decisions.md"
+  local policy=""
+  case "$(decision_text_of "$decisions_file" "SQ-013")" in
+    *THEME-ONLY*)  policy="THEME-ONLY" ;;
+    *FAITHFUL*)    policy="FAITHFUL" ;;
+    *REINTERPRET*) policy="REINTERPRET" ;;
+    *)             policy="UNDECIDED" ;;
+  esac
+  [ "$policy" = "REINTERPRET" ] || return 0
+
+  PROTOTYPE_GATE_APPLICABLE="true"
+
+  local proto_bin="$SCRIPT_DIR/specclaw-bf-prototype"
+  if [ ! -x "$proto_bin" ]; then
+    proto_bin="$(command -v specclaw-bf-prototype 2>/dev/null || true)"
+  fi
+  if [ -z "$proto_bin" ] || [ ! -x "$proto_bin" ]; then
+    PROTOTYPE_GATE_REASON="this project is REINTERPRET, but specclaw-bf-prototype could not be found, so the prototype approval cannot be verified. Update the plugin installation."
+    return 0
+  fi
+
+  local out
+  out="$("$proto_bin" verify "$specclaw_dir_abs" ${item:+--item "$item"} 2>/dev/null || true)"
+  if [ -z "$out" ] || ! printf '%s' "$out" | jq -e . >/dev/null 2>&1; then
+    PROTOTYPE_GATE_REASON="the prototype verifier produced no readable result, so the approval cannot be confirmed."
+    return 0
+  fi
+
+  local applicable ready reason
+  applicable="$(printf '%s' "$out" | jqr '.applicable // false')"
+  ready="$(printf '%s' "$out" | jqr '.ready // false')"
+  reason="$(printf '%s' "$out" | jqr '.reason // ""')"
+
+  # The verifier reading its own copy of decisions.md and concluding "not
+  # applicable" while we read REINTERPRET means the two disagree about the
+  # policy. Fail closed and say so rather than silently deferring to it.
+  if [ "$applicable" != "true" ]; then
+    PROTOTYPE_GATE_REASON="${reason:-the prototype verifier reports this project has no prototype stage, but decisions.md records SQ-013 as REINTERPRET}"
+    return 0
+  fi
+
+  if [ "$ready" = "true" ]; then
+    PROTOTYPE_GATE_READY="true"
+    if [ -n "$item" ]; then
+      local item_ready item_reason
+      item_ready="$(printf '%s' "$out" | jqr '.item_ready // false')"
+      item_reason="$(printf '%s' "$out" | jqr '.item_reason // ""')"
+      if [ "$item_ready" != "true" ]; then
+        PROTOTYPE_GATE_READY="false"
+        PROTOTYPE_GATE_REASON="$item_reason"
+      fi
+    fi
+    return 0
+  fi
+
+  PROTOTYPE_GATE_REASON="${reason:-the prototype is not recorded ready}"
+  return 0
+}
+
+# ─── Tree hashing, for the --adopt refusal (PD-05) ──────────────────────────
+#
+# Same algorithm specclaw-bf-prototype uses, copied verbatim rather than
+# shared: this repo has no shared lib, and the two must agree exactly or the
+# comparison below silently never matches.
+
+bootstrap_tree_file_list() {
+  local root="$1"
+  [ -d "$root" ] || return 0
+  ( cd "$root" && find . -type f -print 2>/dev/null | sed 's|^\./||' ) | while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    case "/$f/" in
+      */node_modules/*|*/vendor/*|*/dist/*|*/build/*|*/out/*|*/coverage/*) continue ;;
+    esac
+    case "$f" in
+      .*|*/.*) continue ;;
+    esac
+    printf '%s\n' "$f"
+  done | LC_ALL=C sort
+}
+
+bootstrap_sha256_of() {
+  local file="$1" out=""
+  if command -v sha256sum >/dev/null 2>&1; then
+    out="$(sha256sum "$file" 2>/dev/null | awk '{print $1}' || true)"
+  elif command -v shasum >/dev/null 2>&1; then
+    out="$(shasum -a 256 "$file" 2>/dev/null | awk '{print $1}' || true)"
+  fi
+  printf '%s' "$out"
+}
+
+bootstrap_tree_hash_of() {
+  local root="$1" listing="" f h
+  [ -d "$root" ] || { printf ''; return 0; }
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    h="$(bootstrap_sha256_of "$root/$f")"
+    listing="${listing}${f}	${h}
+"
+  done < <(bootstrap_tree_file_list "$root")
+  [ -n "$listing" ] || { printf ''; return 0; }
+  if command -v sha256sum >/dev/null 2>&1; then
+    printf '%s' "$listing" | sha256sum 2>/dev/null | awk '{print $1}' || true
+  elif command -v shasum >/dev/null 2>&1; then
+    printf '%s' "$listing" | shasum -a 256 2>/dev/null | awk '{print $1}' || true
+  fi
+}
+
 tracked_non_specclaw_count() {
   local project_root="$1"
   if git -C "$project_root" rev-parse --git-dir >/dev/null 2>&1; then
@@ -351,6 +486,21 @@ behalf.
 Answer them with /specclaw:bf-clarify (then --resolve) and re-copy
 decisions.md, or record the decision directly in ${decisions_rel} if it was
 made in this repo.
+Nothing has been created."
+  fi
+
+  # ── Phase 1b: the eighth precondition, REINTERPRET only. ────────────────
+  # A project that redesigns its interface does not start the new repo until a
+  # named client stakeholder has approved the redesign, screen by screen, in a
+  # throwaway prototype. Scaffolding first would mean the application exists
+  # before anybody agreed what it looks like or what it does — and by the time
+  # the approval arrives, the thing it is approving has already been built.
+  # Inert under every other policy: prototype_gate_state returns applicable
+  # false and this block is a no-op.
+  prototype_gate_state "$specclaw_dir_abs"
+  if [ "$PROTOTYPE_GATE_APPLICABLE" = "true" ] && [ "$PROTOTYPE_GATE_READY" != "true" ]; then
+    die "REINTERPRET project: prototype not approved. Run bf-prototype --record in the legacy repo until it prints PROTOTYPE: READY, then copy prototype-map.md + prototype-manifest.json + screens/ together and re-run.
+Reason: ${PROTOTYPE_GATE_REASON}
 Nothing has been created."
   fi
 
@@ -780,6 +930,26 @@ cmd_record() {
   # and, if there are any, write no manifest and archive nothing. A run that
   # produced an invalid state must not also destroy the last valid one.
   local -a problems=()
+
+  # ── PD-05: the approved prototype is not a production foundation. ───────
+  # --adopt is a skill-level mode, so every adopt path arrives here; this is
+  # where the refusal belongs. The prototype is deliberately built in the real
+  # target stack, which is exactly what makes it look adoptable — it is a
+  # runnable application in the framework and language the rebuild chose. It
+  # is still design-acceptance code: no persistence, no auth, sample data, and
+  # structured to be read and thrown away rather than extended. Adopting it
+  # would make every one of those shortcuts a foundation the real application
+  # inherits silently.
+  local proto_manifest="$specclaw_dir_abs/prototype/prototype-manifest.json"
+  if [ -f "$proto_manifest" ] && jq -e . "$proto_manifest" >/dev/null 2>&1; then
+    local proto_hash; proto_hash="$(jqr '.generator.tree_hash // ""' "$proto_manifest")"
+    if [ -n "$proto_hash" ]; then
+      local candidate_hash; candidate_hash="$(bootstrap_tree_hash_of "$project_root")"
+      if [ -n "$candidate_hash" ] && [ "$candidate_hash" = "$proto_hash" ]; then
+        problems+=("This is the approved prototype, not a production foundation. Scaffold fresh. The tree in this repo hashes identically to the prototype recorded in .specclaw/prototype/prototype-manifest.json, which means the throwaway prototype was copied here rather than a foundation being created. The prototype exists so a client could approve the design; it is not built to be extended, and adopting it would inherit every shortcut it was allowed to take.")
+      fi
+    fi
+  fi
   [ -f "$gate_file" ]  || problems+=("No gate result at .specclaw/bootstrap/gate-results.json — run \`gate\` first. A manifest recorded without the foundation-only gate would claim a boundary nobody checked.")
   [ -f "$smoke_file" ] || problems+=("No smoke results at .specclaw/bootstrap/smoke-results.json — run \`smoke\` first. A foundation nobody proved starts is not a foundation.")
   [ -f "$plan" ]       || problems+=("No bootstrap plan at .specclaw/bootstrap/bootstrap-plan.md — the agent writes it in Phase 2, and it is the human-readable record of what this scaffold was meant to be.")

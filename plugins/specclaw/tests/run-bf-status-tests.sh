@@ -208,6 +208,43 @@ OUT="$(run_status "$R")"
 assert_contains "$OUT" "missing: domain-model.md functional-spec.md module-map.md" \
   "a backlog citing MOD-001 never implies bf-domain has run"
 
+# ── 2b. E2E coverage reads from its own persisted report ─────────────────────
+echo
+echo "-- E2E coverage: read from e2e-report.md, not assumed untracked --"
+
+R="$WORK/e2e-not-run"; new_empty "$R"
+OUT="$(run_status "$R")"
+assert_not_contains "$OUT" "not tracked" "the old 'not tracked — writes no artifact' wording is gone"
+assert_contains "$OUT" "| E2E coverage | \`/specclaw:bf-e2e\` | — | not yet run |" \
+  "no report yet reads as 'not yet run'"
+
+R="$WORK/e2e-run"; new_empty "$R"
+mkdir -p "$R/.specclaw/e2e"
+printf '**Date generated:** 2026-08-15\n' > "$R/.specclaw/e2e/e2e-report.md"
+OUT="$(run_status "$R")"
+assert_contains "$OUT" "| E2E coverage | \`/specclaw:bf-e2e\` | DONE | generated 2026-08-15 — see \`.specclaw/e2e/e2e-report.md\` |" \
+  "a written report flips the row to DONE with its own generation date"
+
+# A report carrying a recorded execution (specclaw-bf-e2e-run's Execution
+# Results section) surfaces the pass/fail counts in the row, and a failure
+# raises attention — but never as a lifecycle verdict (PD-01 stays intact:
+# this is still just "the report exists", nothing here blocks or gates).
+R="$WORK/e2e-run-clean"; new_empty "$R"
+mkdir -p "$R/.specclaw/e2e"
+printf '**Date generated:** 2026-08-16\n**Pass Count:** 10\n**Fail Count:** 0\n' > "$R/.specclaw/e2e/e2e-report.md"
+OUT="$(run_status "$R")"
+assert_contains "$OUT" "generated 2026-08-16; last recorded run: 10 passed, 0 failed" \
+  "a clean recorded run surfaces its counts in the row"
+assert_not_contains "$OUT" "last recorded run had" "and raises no attention when nothing failed"
+
+R="$WORK/e2e-run-failing"; new_empty "$R"
+mkdir -p "$R/.specclaw/e2e"
+printf '**Date generated:** 2026-08-16\n**Pass Count:** 8\n**Fail Count:** 2\n' > "$R/.specclaw/e2e/e2e-report.md"
+OUT="$(run_status "$R")"
+assert_contains "$OUT" "last recorded run: 8 passed, 2 failed" "a failing recorded run surfaces its counts too"
+assert_contains "$OUT" "The E2E suite's last recorded run had 2 failure(s)" \
+  "and is raised as attention, not silently folded into DONE"
+
 # ── 3. The module-map confirmation gate ──────────────────────────────────────
 echo
 echo "-- module map confirmation --"
@@ -698,6 +735,48 @@ if command -v jq >/dev/null 2>&1; then
     "a --not-applicable declaration is not a foundation, and is never told to propose backlog work"
 fi
 
+# ── 18b. A rebuild-repo checkout does not recommend Phase A commands ─────────
+#
+# Phase A (bf-analyze/bf-architecture/bf-domain/bf-clarify) runs in the LEGACY
+# repo. A rebuild-repo checkout can carry a bootstrap-manifest.json (only
+# /specclaw:bf-bootstrap writes it, and only in the new repo) while never
+# having had the legacy analysis documents copied over. The old code inferred
+# each missing document as "this phase hasn't happened yet" and recommended
+# running it here — a command that cannot help, in the wrong repo.
+echo
+echo "-- rebuild-repo checkout: Phase A recommendations go silent --"
+
+if command -v jq >/dev/null 2>&1; then
+  R="$WORK/rebuild-only"; new_empty "$R"; seed_boot "$R"
+  OUT="$(run_next "$R")"
+  assert_not_contains "$OUT" '/specclaw:bf-analyze' \
+    "a ready foundation with no analysis docs never recommends bf-analyze — that phase runs in the legacy repo"
+  assert_not_contains "$OUT" '/specclaw:bf-architecture' \
+    "nor bf-architecture"
+  assert_not_contains "$OUT" '/specclaw:bf-domain' \
+    "nor bf-domain"
+  assert_not_contains "$OUT" '/specclaw:bf-clarify' \
+    "nor bf-clarify"
+
+  DASH_NEXT="$(next_section_of "$(run_status "$R")")"
+  assert_not_contains "$DASH_NEXT" '/specclaw:bf-analyze' \
+    "the full dashboard's Next section agrees — no Phase A command is recommended there either"
+
+  # The rows still report the documents as not written — this suppresses the
+  # RECOMMENDATION, not the row's own honest state.
+  assert_contains "$(run_status "$R")" "codebase-report.md not written" \
+    "the row itself still reports the document as absent"
+
+  # A repo with the analysis docs present is unaffected — the ordinary
+  # progression from section 12 still recommends bf-analyze when it is
+  # actually the phase this repo is missing.
+  R2="$WORK/legacy-only"; new_empty "$R2"
+  assert_contains "$(run_next "$R2")" '`/specclaw:bf-analyze`' \
+    "with no bootstrap manifest at all, bf-analyze is still recommended as normal"
+else
+  echo "  (skipped — jq not installed)"
+fi
+
 # ── 19. Replay: an outstanding FAIL is stated, and never as progress ─────────
 echo
 echo "-- replay in the compact block --"
@@ -813,7 +892,8 @@ assert_eq "2" "$RC" "--next with no directory at all exits 2"
 # PD-01 as a structural assertion rather than a promise. Every lifecycle skill
 # reaches the recommendation through this script, and the three that are not
 # lifecycle commands do not carry one at all: bf-status IS this output,
-# bf-quality has no phase row, and bf-e2e declares no .specclaw/ artifact.
+# bf-quality has no phase row, and bf-e2e has a phase row (reading its own
+# persisted e2e-report.md) but is not sequenced into the ordering below.
 echo
 echo "-- single source of truth, across the skills --"
 
@@ -834,6 +914,64 @@ for S in bf-status bf-quality bf-e2e; do
   N="$({ grep -cF 'specclaw-bf-status .specclaw --next' "$F" || true; })"
   assert_eq "0" "$N" "$S carries no guidance step (not a lifecycle phase)"
 done
+
+# ── 18c. Suppressing Phase A must not be rendered as completion (B1) ─────────
+#
+# Section 18b pins that a rebuild-repo checkout stops RECOMMENDING the Phase A
+# commands. It does not pin what is said instead — and what was said instead
+# was a completion message: an empty NEXT_CMD fell through to "nothing
+# outstanding" / "every phase ... has already run" in a repo whose own table
+# reported eight sequenced phases as not run. `--next` is the standalone form
+# every bf-* skill relays verbatim, so that line was the lifecycle answer.
+echo
+echo "-- rebuild-repo checkout: no command, but never 'nothing outstanding' --"
+
+if command -v jq >/dev/null 2>&1; then
+  R="$WORK/b1-no-false-completion"; new_empty "$R"; seed_boot "$R"
+
+  OUT="$(run_next "$R")"
+  assert_not_contains "$OUT" "nothing outstanding" \
+    "--next never claims nothing is outstanding while sequenced phases read not run"
+  assert_not_contains "$OUT" "has run, and no phase that has run" \
+    "nor the long form of the same completion claim"
+  assert_contains "$OUT" "legacy" \
+    "--next instead names where the absent Phase A documents are produced"
+  assert_contains "$OUT" "Phase B copy set" \
+    "and cites the established copy set rather than inventing an instruction"
+
+  DASH="$(run_status "$R")"
+  DASH_NEXT="$(next_section_of "$DASH")"
+  assert_not_contains "$DASH_NEXT" "already run" \
+    "the dashboard's Next section makes no completion claim either"
+  assert_contains "$DASH_NEXT" "have not run" \
+    "it states how many sequenced phases have not run"
+
+  # PD-14: the suppressed verbs must not creep back as the recommended command.
+  assert_not_contains "$DASH_NEXT" '`/specclaw:bf-analyze`' \
+    "and still does not recommend running bf-analyze in this repo"
+
+  # The row itself is unchanged — this is about the guidance, not the table.
+  assert_contains "$DASH" "codebase-report.md not written" \
+    "the phase row still reports the document as absent, exactly as before"
+
+  # CONTROL: bf-e2e's row reads "—" in EVERY repo and bf-ui reports N/A when
+  # unstarted, so a naive "any dash means unfinished" gate would suppress the
+  # genuine completion message for ever. A fully-progressed project must still
+  # get it.
+  R2="$WORK/b1-control-complete"; new_empty "$R2"
+  seed_analysis "$R2"; seed_clarify_done "$R2"; seed_baseline_recorded "$R2"
+  seed_backlog "$R2"; seed_blueprint "$R2"; seed_boot "$R2"
+  seed_run "$R2" "pool" "r1" "BL-001" "PASS" "2026-08-07" "false"
+  CTRL="$(next_section_of "$(run_status "$R2")")"
+  case "$CTRL" in
+    *"have not run"*)
+      bad "a fully-progressed project still reports real completion, not a false shortfall" \
+          "got: $CTRL" ;;
+    *) ok "a fully-progressed project still reports real completion, not a false shortfall" ;;
+  esac
+else
+  echo "  (skipped — jq not installed)"
+fi
 
 echo
 echo "=================================================="

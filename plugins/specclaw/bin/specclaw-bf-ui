@@ -783,7 +783,19 @@ ui_scope_to_workdir() {
   policy="$(read_fidelity_policy "$decisions_file")"
   case "$policy" in
     FAITHFUL|THEME-ONLY) ;;
-    REINTERPRET) die "UI fidelity policy is REINTERPRET (${FIDELITY_SQ_ID}) — the legacy UI is reference material only, so no UI fidelity review applies to this or any change. Nothing to generate." ;;
+    REINTERPRET)
+      # PD-12. With an approved prototype copied here, the reference is that
+      # approved design rather than the legacy screenshot. Without one, the
+      # original refusal stands unchanged.
+      proto_manifest="$(prototype_manifest_path "$specclaw_dir_abs")"
+      if [ -f "$proto_manifest" ] && jq -e . "$proto_manifest" >/dev/null 2>&1; then
+        bl_id_proto="$(resolve_bl_id "$change_dir" "$backlog_file")"
+        [ -n "$bl_id_proto" ] || die "change '${change}' cites no rebuild-backlog item — /specclaw:bf-ui --checklist only makes sense for backlog-driven changes (same rule /specclaw:bf-replay applies)."
+        cmd_checklist_prototype "$specclaw_dir_abs" "$change" "$bl_id_proto" "$proto_manifest"
+        CHECKLIST_HANDLED_BY_PROTOTYPE=true
+        return 0
+      fi
+      die "UI fidelity policy is REINTERPRET (${FIDELITY_SQ_ID}) — the legacy UI is reference material only, so no UI fidelity review applies to this or any change. Nothing to generate." ;;
     *) die "UI fidelity policy (${FIDELITY_SQ_ID}) has no recorded decision in decisions.md — a review cannot state how closely the legacy UI must be reproduced. Answer it in clarifications.md and run /specclaw:bf-clarify --resolve first." ;;
   esac
 
@@ -849,6 +861,169 @@ ui_scope_to_workdir() {
 
 # ─── Subcommand: checklist-collect (Mode C, pre-agent) ──────────────────────
 
+
+# ─── REINTERPRET: review against the approved prototype (PD-12) ─────────────
+#
+# Under FAITHFUL and THEME-ONLY the reference is a legacy screenshot and this
+# command refuses under REINTERPRET, because reproducing the legacy interface
+# is exactly what that policy waived. But a REINTERPRET project is not a
+# project with no design to check against — it has a BETTER one: a redesign a
+# named client stakeholder approved, screen by screen, before the build began.
+#
+# So when the prototype manifest has been copied here, the reference column
+# becomes the approved prototype screenshot and each row is a review point
+# recorded when that screen was briefed. The rows travel in the manifest
+# precisely so this repo never needs prototype-brief.md, which is not copied.
+#
+# With NO manifest, this path does not run at all and the original refusal
+# stands byte-identical — a REINTERPRET repo that never ran the prototype
+# stage sees exactly what it saw before.
+
+# Set by ui_scope_to_workdir when it has already produced the whole review via
+# the REINTERPRET path. Both callers check it: that function resolves the
+# policy, so the branch has to live there, but a `return` inside it only exits
+# that function and the caller would go on to read facts that were never
+# written.
+CHECKLIST_HANDLED_BY_PROTOTYPE=false
+
+prototype_manifest_path() { printf '%s/prototype/prototype-manifest.json' "$1"; }
+
+# Screens in this manifest that the given backlog item's SCR citations map to,
+# as "PS-###<TAB>status<TAB>screenshot<TAB>sha256".
+prototype_screens_for_item() {
+  local manifest="$1" scrs="$2" s
+  for s in $scrs; do
+    jq -r --arg s "$s" '
+      .screens[]? | select((.replaces // []) | index($s))
+      | [.id, .status, (.screenshot // ""), (.screenshot_sha256 // "")] | @tsv
+    ' "$manifest" 2>/dev/null | tr -d '\r' || true
+  done | awk '!seen[$1]++'
+}
+
+cmd_checklist_prototype() {
+  local specclaw_dir_abs="$1" change="$2" bl_id="$3" manifest="$4"
+  local project_root; project_root="$(cd "$specclaw_dir_abs/.." && pwd)"
+  local change_dir="$specclaw_dir_abs/changes/$change"
+  local backlog_file="$specclaw_dir_abs/analysis/rebuild-backlog.md"
+  local proto_dir="$specclaw_dir_abs/prototype"
+
+  local block scrs
+  block="$(heading_block "$backlog_file" "$bl_id")"
+  scrs="$(printf '%s\n' "$block" | { grep -oE 'SCR-[0-9]{3}' | awk '!seen[$0]++'; } || true)"
+  [ -n "$scrs" ] || die "${bl_id} cites no SCR-### entry in rebuild-backlog.md — this item renders no screen, so there is no approved design to review it against."
+
+  local rows_file; rows_file="$(mktemp)"
+  prototype_screens_for_item "$manifest" "$scrs" > "$rows_file"
+
+  # Every screen this item renders must map to an APPROVED prototype screen.
+  # This is the same claim /specclaw:propose checked before the work started;
+  # re-checking it here is not redundant, because an approval can be withdrawn
+  # and a manifest re-copied between proposing and reviewing.
+  local unapproved="" ps status shot sha
+  local -a have=()
+  while IFS=$'\t' read -r ps status shot sha; do
+    [ -n "$ps" ] || continue
+    have+=("$ps")
+    [ "$status" = "APPROVED" ] || unapproved="${unapproved}${unapproved:+, }${ps} (${status})"
+  done < "$rows_file"
+  local s
+  for s in $scrs; do
+    jq -e --arg s "$s" '[.screens[]? | select((.replaces // []) | index($s))] | length > 0' "$manifest" >/dev/null 2>&1 \
+      || unapproved="${unapproved}${unapproved:+, }${s} (no prototype screen)"
+  done
+  if [ -n "$unapproved" ]; then
+    rm -f "$rows_file"
+    die "Prototype screen(s) not approved for ${bl_id}: ${unapproved}. A review against an unapproved design would be a signature on something nobody agreed to. Re-approve, re-record, re-copy."
+  fi
+
+  # ── Render ────────────────────────────────────────────────────────────
+  local sections="" missing="" screen_count=0 row_count=0
+  while IFS=$'\t' read -r ps status shot sha; do
+    [ -n "$ps" ] || continue
+    screen_count=$((screen_count + 1))
+
+    local evidence_ok=true note=""
+    if [ -z "$shot" ] || [ -z "$sha" ]; then
+      evidence_ok=false; note="no approved screenshot recorded for ${ps}"
+    elif [ ! -f "${proto_dir}/${shot}" ]; then
+      evidence_ok=false; note="${shot} is not in this repo — screens/ and the manifest are always copied together"
+    else
+      local got; got="$(sha256_of "${proto_dir}/${shot}")"
+      if [ -n "$got" ] && [ "$got" != "$sha" ]; then
+        evidence_ok=false; note="${shot} does not match its recorded hash — the evidence changed and this review would be void"
+      fi
+    fi
+    if ! $evidence_ok; then
+      missing="${missing}- **${ps}** — ${note}
+"
+    fi
+
+    local approver approved_on replaces
+    approver="$(jq -r --arg id "$ps" '.screens[] | select(.id==$id) | .approval.by // "—"' "$manifest" | tr -d '\r')"
+    approved_on="$(jq -r --arg id "$ps" '.screens[] | select(.id==$id) | .approval.date // "—"' "$manifest" | tr -d '\r')"
+    replaces="$(jq -r --arg id "$ps" '.screens[] | select(.id==$id) | (.replaces // []) | join(", ")' "$manifest" | tr -d '\r')"
+    [ -n "$replaces" ] || replaces="new screen"
+
+    local rows=""
+    while IFS=$'\t' read -r rp_text rp_protects; do
+      [ -n "$rp_text" ] || continue
+      row_count=$((row_count + 1))
+      rows="${rows}| ${rp_text} | ${rp_protects:-—} | | | |
+"
+    done < <(jq -r --arg id "$ps" '.screens[] | select(.id==$id) | .review_points[]? | [.text, (.protects // "")] | @tsv' "$manifest" 2>/dev/null | tr -d '\r')
+    if [ -z "$rows" ]; then
+      rows="| _No review points were recorded for this screen when it was briefed. Nothing here can be signed; re-brief the screen so its review points are recorded._ | — | | | |
+"
+    fi
+
+    # Built up before the heredoc-ish block below rather than inline: an
+    # embedded command substitution here reads as an unexpanded expression.
+    local sha_note="" warn_note=""
+    [ -n "$sha" ] && sha_note=" (sha256 ${sha:0:16}…)"
+    $evidence_ok || warn_note=" — ⚠ ${note}"
+
+    sections="${sections}### ${ps} — replaces ${replaces}
+
+**Approved by:** ${approver} on ${approved_on}
+**Reference screenshot:** \`.specclaw/prototype/${shot}\`${sha_note}${warn_note}
+
+| Review point | Protects | Verified by | Date | Notes |
+|---|---|---|---|---|
+${rows}
+"
+  done < "$rows_file"
+  rm -f "$rows_file"
+
+  [ -n "$missing" ] || missing="_None — every screen in scope has a recorded approved screenshot whose hash matches._"
+
+  local fw lang
+  fw="$(jq -r '.stack.framework.value // ""' "$manifest" | tr -d '\r')"
+  lang="$(jq -r '.stack.language.value // ""' "$manifest" | tr -d '\r')"
+
+  mkdir -p "$change_dir"
+  local review_file="$change_dir/ui-review.md"
+  if [ -f "$review_file" ]; then
+    mkdir -p "$specclaw_dir_abs/analysis/archive"
+    mv "$review_file" "$specclaw_dir_abs/analysis/archive/$(date +%Y-%m-%d-%H%M%S)-ui-review-${change}.md"
+  fi
+
+  local template_file doc
+  template_file="$PLUGIN_ROOT/templates/ui-review-prototype.md"
+  [ -f "$template_file" ] || die "template not found: $template_file"
+  doc="$(cat "$template_file")"
+  doc="$(substitute "$doc" '{{change}}' "$change")"
+  doc="$(substitute "$doc" '{{date}}' "$(date +%Y-%m-%d)")"
+  doc="$(substitute "$doc" '{{bl_item}}' "$bl_id")"
+  doc="$(substitute "$doc" '{{stack}}' "${fw} · ${lang}")"
+  doc="$(substitute "$doc" '{{screen_count}}' "$screen_count")"
+  doc="$(substitute "$doc" '{{row_count}}' "$row_count")"
+  doc="$(substitute "$doc" '{{review_sections}}' "$sections")"
+  doc="$(substitute "$doc" '{{missing_evidence}}' "$missing")"
+  printf '%s\n' "$doc" > "$review_file"
+
+  echo "Wrote ${review_file#"$project_root"/} (${screen_count} approved prototype screen(s), ${row_count} row(s) needing a signature). Every row is signed by a human; specclaw completes none of them." >&2
+}
+
 cmd_checklist_collect() {
   local specclaw_dir="$1" change="$2"
   [ -d "$specclaw_dir" ] || die "specclaw directory not found: $specclaw_dir"
@@ -860,6 +1035,7 @@ cmd_checklist_collect() {
 
   local workdir; workdir="$(mktemp -d)"
   ui_scope_to_workdir "$specclaw_dir_abs" "$change" "$workdir"
+  $CHECKLIST_HANDLED_BY_PROTOTYPE && { rm -rf "$workdir"; return 0; }
 
   local policy bl_item legacy_sha
   policy="$(cat "$workdir/policy")"
@@ -941,6 +1117,7 @@ cmd_checklist_render() {
 
   local workdir; workdir="$(mktemp -d)"
   ui_scope_to_workdir "$specclaw_dir_abs" "$change" "$workdir"
+  $CHECKLIST_HANDLED_BY_PROTOTYPE && { rm -rf "$workdir"; return 0; }
 
   local policy bl_item legacy_sha
   policy="$(cat "$workdir/policy")"

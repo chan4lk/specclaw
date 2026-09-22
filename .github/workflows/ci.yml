@@ -37,6 +37,10 @@ jobs:
         run: bash plugins/specclaw/tests/run-cs-body-parser-tests.sh
       - name: Run bf-status dashboard tests
         run: bash plugins/specclaw/tests/run-bf-status-tests.sh
+      - name: Run baseline-collect co-ownership tests
+        run: bash plugins/specclaw/tests/run-baseline-collect-tests.sh
+      - name: Run bf-e2e-run execution tests
+        run: bash plugins/specclaw/tests/run-bf-e2e-run-tests.sh
       - name: Run code-quality collector tests
         run: bash plugins/specclaw/tests/run-quality-tests.sh
       - name: Run status-row tests
@@ -51,6 +55,24 @@ jobs:
         run: bash plugins/specclaw/tests/run-change-numbering-tests.sh
       - name: Run party-mode tests
         run: bash plugins/specclaw/tests/run-party-tests.sh
+      - name: Run prototype stack-resolver tests
+        run: bash plugins/specclaw/tests/run-prototype-stack-resolver-tests.sh
+      - name: Run prototype screen-coverage tests
+        run: bash plugins/specclaw/tests/run-prototype-screen-coverage-tests.sh
+      - name: Run prototype status-machine tests
+        run: bash plugins/specclaw/tests/run-prototype-status-machine-tests.sh
+      - name: Run prototype readiness-scope tests
+        run: bash plugins/specclaw/tests/run-prototype-readiness-scope-tests.sh
+      - name: Run prototype brief-contract tests
+        run: bash plugins/specclaw/tests/run-prototype-brief-contract-tests.sh
+      - name: Run prototype id-permanence tests
+        run: bash plugins/specclaw/tests/run-prototype-id-permanence-tests.sh
+      - name: Run prototype gate tests
+        run: bash plugins/specclaw/tests/run-prototype-gates-tests.sh
+      - name: Run prototype checklist tests
+        run: bash plugins/specclaw/tests/run-prototype-checklist-tests.sh
+      - name: Run prototype byte-identity tests
+        run: bash plugins/specclaw/tests/run-prototype-byte-identity-tests.sh
       - name: Run debug-protocol tests
         run: bash plugins/specclaw/tests/run-debug-protocol-tests.sh
       - name: Run change-size tests

@@ -1,6 +1,6 @@
 # Clarify Standard Question Bank
 
-**Bank version:** 2
+**Bank version:** 3
 
 <!--
   This is reference data for /specclaw:bf-clarify's bank layer, read directly
@@ -221,3 +221,14 @@
 - **Proposed default:** unknown — no legacy-code signal determines this; ask explicitly. The legacy app's own stack is *not* evidence here: replacing it is usually the point of the rebuild.
 - **Applicability:** Applicable to every rebuild with any server-side component, which is nearly all of them. Answer option 2 (or mark this question Not applicable) for a genuinely client-only rebuild — that is a real answer and `/specclaw:bf-bootstrap` accepts it. This is deliberately separate from SQ-001 (which picks the *platform*: web, desktop, mobile) and SQ-006 (which picks the *UI framework*): between them those two never determine what runs on the server, and that gap is what left the target backend undecided-but-assumed on a real rebuild. `/specclaw:bf-bootstrap` requires this one resolved before it will scaffold anything, and stops naming this id rather than inferring a stack from the legacy app or from convention.
 
+## SQ-015 — Target frontend language
+
+- **Type:** DECISION
+- **Blocking:** no
+- **Question:** Which language is the rebuilt frontend written in?
+- **Options:**
+  1. Adopt a specific named language (state which).
+  2. The same language already named in the SQ-006 answer — restate it here explicitly.
+  3. Undecided — defer to an implementation-time ADR.
+- **Proposed default:** unknown — no legacy-code signal determines this; ask explicitly. Neither the legacy app's language nor the chosen framework's usual language is evidence: the first is what the rebuild is replacing, and the second is a convention nobody in this project decided.
+- **Applicability:** Applicable only when SQ-013 is decided REINTERPRET. Under FAITHFUL, THEME-ONLY, an undecided SQ-013, or a rebuild with no UI layer, mark this Not applicable — the rest of the pipeline never reads it and asking would be noise. Under REINTERPRET it is required, because `/specclaw:bf-prototype` builds a throwaway prototype in the decided stack for a named client stakeholder to approve screen by screen, and it refuses to run until the framework *and* the language are each decided with a citation. This is deliberately separate from SQ-006, which picks the *framework* only: a framework name decides a framework and nothing else, and a rebuild that answered SQ-006 alone has silently inherited whichever language its framework's convention implies — which is exactly the assumption this entry exists to stop. If SQ-006's own answer already names both (written as `<framework> (<language>)`, the language a single bare word), that one answer decides both and this question is answered as option 2 or marked Not applicable. `/specclaw:bf-prototype` stops naming this id rather than defaulting the language to anything.

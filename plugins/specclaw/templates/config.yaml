@@ -156,12 +156,25 @@ github:
   token: ""                      # GitHub PAT for curl fallback (not needed if gh CLI is authed)
   label: "specclaw"              # Label applied to SpecClaw issues
 
+# Throwaway design prototype — brownfield rebuilds that decided SQ-013
+# REINTERPRET, and nothing else. Every other project ignores this block
+# entirely; /specclaw:bf-prototype stops on the policy before it reads a key.
+#
+# specclaw does NOT contain a UI generator. It writes the brief — including the
+# frontend framework and language the project decided, each with its citation —
+# and hands it to the skill named here. The stack is never taken from this
+# block: it comes from the decision record, so nothing below can quietly
+# override what somebody chose.
+prototype:
+  skill: ""                        # UI/prototype skill to invoke. Required under REINTERPRET.
+  output_dir: .specclaw/prototype/app/
+
 # Workflow enforcement
 workflow:
-  strict: true                     # Enforce phase prerequisites (disable for rapid prototyping)
-  code_review: false               # Spawn code-reviewer agent during /specclaw:verify
-  code_review_block: false         # Block /specclaw:pr if code review verdict is CHANGES_REQUESTED
-
+  strict: true                     # Enforce phase prerequisites
+  code_review: false               # Spawn code-reviewer agent during verify
+  code_review_block: false         # Block PR if review requests changes
+  
   # Staged-files audit — does the branch carry exactly what this change should?
   # PRs shipped the wrong file set in BOTH directions, silently: planning
   # artifacts missing, and junk swept in by a `git add -A`. Layer 1

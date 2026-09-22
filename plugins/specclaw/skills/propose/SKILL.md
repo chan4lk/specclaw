@@ -40,6 +40,22 @@ Both flags are required and the declaration is refused without them — same rul
 
 When `foundation_ready` is `true`, continue silently. Mention the foundation only if the user asks.
 
+1a. **Prototype-approval gate** (REINTERPRET rebuilds only — inert everywhere else). **Only run this if step 1 reported `applicable: true`.** If step 1 said `applicable: false`, this project is not a brownfield rebuild target, so skip straight to step 1b and say nothing — a greenfield project never runs this command at all.
+
+```bash
+specclaw-bf-prototype verify .specclaw
+```
+
+**If `applicable` is `false`, continue to step 1b silently** — this rebuild did not answer `SQ-013` as `REINTERPRET`, so there is no prototype stage and nothing here applies.
+
+**If the command does not run at all** — `command not found`, any non-zero exit, or no JSON on stdout — apply the same rule as step 1: if `.specclaw/prototype/prototype-manifest.json` does not exist, continue to step 1b silently (an older install with no prototype stage, and no manifest for it to protect). If that file **does** exist, say the prototype gate could not be evaluated, name the command that failed, and stop.
+
+**If `applicable` is `true` and `ready` is `false`, stop.** Do not name the change, do not create the change directory, do not draft a proposal. Relay the `reason`, then the `remedy` verbatim.
+
+This check is deliberately whole-repo rather than per-item, and it runs for **every** change, not only screen-bearing ones. A repo that was bootstrapped while the prototype was approved, and whose approval was later withdrawn — or which had a `NOT-READY` manifest re-copied over a ready one — has an unapproved design underneath everything now being proposed. Gating only the screen-bearing items would let the rest of the work proceed on that foundation, which is the same mistake the foundation gate above exists to prevent, one level up.
+
+The per-item half of this gate runs in step 2d, once the backlog item is known.
+
 1b. Name the change `<NNN>-<slug>` — e.g. `001-init-repo`:
    - **Backfill offer — do this first, because a backfill changes the next number.** Run `specclaw-renumber-changes .specclaw` with no `--apply`: it is dry-run by default and renames nothing. If it prints a plan, unnumbered folders exist — show the user the full `old → new` list and ask **once** whether to apply it. On a yes, re-run with `--apply`; on a no, proceed with creating the new numbered change alone. No "already asked" flag is needed: the offer is conditioned on unnumbered folders existing, so it self-clears the moment a backfill runs.
    - Run `specclaw-next-change-number .specclaw` for `<NNN>`, and slugify the user's idea (lowercase, hyphens, no spaces) for `<slug>`. Join them with a hyphen. Never format the number by hand — `specclaw-next-change-number` owns that rule and is the only place it lives.
@@ -152,6 +168,20 @@ specclaw-bf-rebuild-collect split-append .specclaw \
 It prints the new `IS-###`. `Evidence` and `Replay evidence` stay `not yet merged`/`not yet replayed` — the build and replay steps fill those in, and writing them now would be inventing a citation.
 
 **What to tell the user after recording it**, in one breath: the item will render `⚠ PARTIALLY BUILT` in `rebuild-backlog.md`, an `/specclaw:bf-replay --item BL-###` run will report **PARTIAL** and cannot be the item's final acceptance, and the split returns automatically — `--refresh` flips it to `READY-TO-RESUME` as soon as every blocked-until item carries a declared `BUILT:` note. Nothing is tainted: a split fakes nothing.
+
+2d. **Per-item prototype gate** (REINTERPRET rebuilds only — inert everywhere else). **Skip this entirely unless step 1a reported `applicable: true`.** Skip it too when step 2a said `applicable: false` — with no backlog item there is nothing to key on.
+
+```bash
+specclaw-bf-prototype verify .specclaw --item <the BL-### from step 2a>
+```
+
+**If `item_ready` is `false`, stop.** Relay `item_reason` verbatim — it names each screen and exactly what is wrong with it:
+
+> Prototype screen(s) not approved for BL-0NN: SCR-004 → PS-003 (STALE), SCR-007 → (no prototype screen). Re-approve, re-record, re-copy.
+
+An item that references no screen passes this check on step 1a's whole-repo result alone; nothing extra is required of it.
+
+**Why per-item as well as whole-repo.** Step 1a proves the redesign as a whole was approved. This proves *this* item's screens were — which is a different claim, and the one that matters when the work about to be proposed is the work that builds those screens. A screen reading `STALE` means the prototype changed after the client signed it off, so the approval on file describes something that no longer exists; building from it would produce an interface nobody approved, with a signed approval sitting next to it saying otherwise.
 
 3. Generate `proposal.md` from `$CLAUDE_PLUGIN_ROOT/templates/proposal.md`. Fill in: problem statement, proposed solution, scope (in / out), impact (files, complexity, risk), open questions.
    - **`## Dependency Bypass`:** one bullet per **stubbed** dependency, citing the `ST-###` from step 2c, the strategy, the chooser and date, and the concrete sketch. **Omit the whole section** when there was no stub bypass — which is the normal case.

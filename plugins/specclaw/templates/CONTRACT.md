@@ -1195,3 +1195,164 @@ PARTIAL until the remainder lands. Whether shipping the slice is worth the
 incompleteness is a human judgement about a named, dated, recorded decision —
 considerably more than an unrecorded split offers, because an unrecorded split
 is indistinguishable from a finished item.
+
+## (p) The redesign prototype and `prototype-manifest.json`
+
+Applies only to a rebuild whose `SQ-013` is decided `REINTERPRET`. Under every
+other policy — `FAITHFUL`, `THEME-ONLY`, undecided, or not applicable — nothing
+in this section exists, no file below is created, and every command behaves
+exactly as it does in a project that never had this stage.
+
+### (p.1) What the stage owns, and what it does not
+
+specclaw contains **no UI generator**. `/specclaw:bf-prototype` produces a
+brief and hands it to the prototype/UI skill named in `config.yaml`'s
+`prototype.skill`. What specclaw owns is the record and the gate: the
+legacy-screen to prototype-screen map, the permanent `PS-###` ids, the
+questions a redesign raises, the approval join, the bash-computed readiness,
+and the tamper-evident manifest.
+
+The prototype is **design-acceptance code and is thrown away.** It is built in
+the real decided stack so the client approves realistic component behaviour and
+the production team can read it as a reference; that does not make it
+production code. It is never copied to the new repo, never a
+`/specclaw:bf-bootstrap` input, and `--adopt` refuses a tree whose hash equals
+the recorded `tree_hash`. The production foundation comes only from bootstrap's
+own scaffold.
+
+### (p.2) The stack is resolved, never chosen
+
+Two values are resolved from the decision record before anything runs: the
+frontend **framework** and the frontend **language**. Each is recorded with the
+id that sanctions it, who decided it, and when. If either cannot be resolved
+with a citation, the command stops naming exactly which one and the route that
+answers it.
+
+**The language is never defaulted** — not from the framework's convention, not
+from the legacy app, not from anything. A framework name decides a framework
+and nothing else. `SQ-006` asks the framework; `SQ-015` asks the language; one
+answer written as the framework followed by the language in parentheses, the
+language a single bare word, decides both under that single citation.
+
+The resolver is **stack-blind**: it holds no list of frameworks and no list of
+languages, and infers neither from the other. It extracts the strings the
+decision record contains, keyed on the role of a question and the literal
+structure of the documents. Two sources disagreeing is a hard stop naming both,
+never a pick — two records of one decision cannot both be right, and choosing
+between them would be the tool deciding the stack.
+
+### (p.3) Who writes what
+
+| File | Written by | Regenerated | Copied to the new repo |
+|---|---|---|---|
+| `prototype-brief.md` | agent | fully, each run | no |
+| `app/` (`prototype.output_dir`) | the configured skill, or a human under `--brief-only` | — | **never** |
+| `id-registry.json` | bash | append-only | no |
+| `prototype-map.md` | bash rows + agent narration | fully, each run | yes, after READY |
+| `screens/PS-###.png` | **human** | — | yes, with the manifest |
+| `prototype-approvals.md` | **human** | never | no |
+| `prototype-manifest.json` | bash (`--record`) | fully, each run | yes, with `screens/` |
+
+`prototype-approvals.md` is **never written by any agent or script.** An
+approval is a named person's statement about a design; a record a tool can
+write is not one. The same rule that keeps `screens/` human-captured keeps this
+file human-authored.
+
+`PS-###` ids are permanent, exactly like `DR-NNN`/`BL-NNN`/`GM-NNN`/`CQ-NNN`.
+The registry maps an allocation key — the `SCR-###` a screen replaces, or
+`CQ-###:<slug>` for a new screen the CQ sanctions — to its id, and is
+append-only. A screen that leaves the inventory keeps its id and renders
+`RETIRED`; its number is never reused.
+
+### (p.4) Behaviour changes are questions, not design choices
+
+Anything the redesign would change about what the system **does** — a required
+field removed or added, a validation altered, a workflow merged or split, a
+status transition changed, a screen retired — is raised as a `PQ-###` in
+`pending-questions.md`, tagged `Source: bf-prototype`, citing the `PS-###`, the
+`SCR-###` and every affected `DR-###`. `/specclaw:bf-prototype` never allocates
+a `CQ` number; `/specclaw:bf-clarify` promotes the question and a human decides
+it.
+
+Until it is decided, bash refuses to compute the affected screen `APPROVED`, so
+the prototype cannot reach READY with an undecided behaviour change. **That
+refusal is the point of the stage.** Without it, a redesign changes what the
+system does, a client approves the screen it appears on, and the change arrives
+in the rebuild sanctioned by an approval nobody realised they were giving.
+
+Once decided, the change surfaces in `/specclaw:bf-replay` as
+`DIVERGES — SANCTIONED (CQ-###)` through the existing sanction path. No replay
+logic changes.
+
+### (p.5) Status is computed, never asserted
+
+Per screen, first match wins:
+
+| | Condition | Status |
+|---|---|---|
+| 1 | an unresolved `PQ`/`CQ` is referenced | `PROVISIONAL` |
+| 2 | `APPROVED` and `approved_source_hash` differs from the current `tree_hash` | `STALE` |
+| 3 | `CHANGES-REQUESTED` | `CHANGES-REQUESTED` |
+| 4 | `REJECTED` | `REJECTED` |
+| 5 | `APPROVED` and the hash matches | `APPROVED` |
+| 6 | a screenshot exists, no approval row | `IN-REVIEW` |
+| 7 | otherwise | `DRAFT` |
+| — | in the registry, no longer briefed | `RETIRED` (informational) |
+
+Rule 1 outranking rule 5 is deliberate: an undecided behaviour question means
+nobody has agreed to the change, whoever signed the screen off. Rule 2 binds an
+approval to the exact tree the approver reviewed — `approved_source_hash` is the
+`tree_hash` printed by the `--record` run they looked at — so editing the
+prototype afterwards invalidates the approval rather than leaving a stale
+signature standing. Rule 4 is reached only when rule 2 cannot fire, so a
+rejected screen whose tree then changed stays `REJECTED`.
+
+The agent narrates these; it never infers one, never upgrades one, and never
+states a readiness the raw `PROTOTYPE:` line did not print.
+
+### (p.6) Readiness is measured against the backlog
+
+`prototype_ready` is true when every `SCR-###` rendered by an in-scope, active,
+screen-bearing backlog item is covered by at least one `APPROVED` screen — or is
+retired by a **decided** `CQ`, or recorded out of scope by the backlog — with
+none of those screens `STALE` or `PROVISIONAL`, and the recorded framework and
+language each still equal what the resolver returns from the current decision
+record.
+
+Measuring against the backlog rather than the legacy inventory is what makes
+the gate satisfiable. A rebuild deliberately leaves screens behind; a gate that
+demanded an approved prototype for every legacy screen would be unmeetable on
+every real project and would simply be switched off, which is worse than not
+having it. Out-of-scope screens are **listed**, with their reason, rather than
+dropped silently.
+
+An **undecided** `CQ` retires nothing. A screen dropped on an unanswered
+question is exactly the silent scope cut this stage exists to surface.
+
+### (p.7) The new-repo gates, and what they cannot prove
+
+Under `REINTERPRET`, read from the copied `decisions.md`:
+
+- **`/specclaw:bf-bootstrap`** gains an eighth precondition beside its seven
+  decisions: the manifest present and parseable, `screens/` present with every
+  screenshot hash re-verified, `prototype_ready: true`, and the manifest's
+  `sq013`, framework and language all still consistent with this repo's own
+  decision record. Otherwise it scaffolds nothing. This applies to every
+  bootstrap mode including `--adopt`.
+- **`/specclaw:propose`** applies the same whole-prototype check — so a repo
+  bootstrapped before an approval was withdrawn stops for *every* item, not
+  only screen-bearing ones — plus a per-item check that every `SCR-###` the
+  item references maps to an `APPROVED` screen.
+
+Both fail **closed**: a manifest that cannot be read, cannot be parsed, or
+whose screenshots do not verify is reported not-ready with the reason, never
+treated as absent and never waved through. Greenfield projects and
+non-`REINTERPRET` rebuilds never see either check.
+
+What these gates cannot prove, stated rather than implied: that the prototype
+the client approved is a good design, that the approver understood what they
+were approving, or that the built application resembles the approved screens.
+The first two are human judgements. The third is what
+`/specclaw:bf-ui --checklist` asks a human to confirm, row by row, against the
+approved screenshot — and it remains a human signature, never a computed
+verdict, exactly as UI fidelity does under every other policy.

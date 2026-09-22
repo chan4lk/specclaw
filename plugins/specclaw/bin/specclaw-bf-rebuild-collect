@@ -1548,6 +1548,23 @@ cmd_render() {
   local ui_grounding_required=false
   case "$fidelity_policy" in FAITHFUL|THEME-ONLY) ui_grounding_required=true ;; esac
 
+  # Two different questions, deliberately kept apart.
+  #
+  # ui_grounding_required — does an item inherit a VISUAL FIDELITY obligation
+  # from the legacy screen it renders? Only under FAITHFUL/THEME-ONLY. Under
+  # REINTERPRET the legacy look is reference material and no item is held to
+  # it; that is the whole content of that decision.
+  #
+  # screen_mapping_required — does the backlog record WHICH SCREENS an item
+  # renders at all? That is a different fact, and REINTERPRET needs it more
+  # than the other policies do, not less: the redesign has to map every new
+  # screen to the legacy screen it replaces, and prototype readiness is
+  # measured against exactly this set. Conflating the two left a REINTERPRET
+  # backlog with no SCR citations anywhere, which made the prototype gate
+  # vacuous — it would have found nothing to require approval for.
+  local screen_mapping_required=false
+  case "$fidelity_policy" in FAITHFUL|THEME-ONLY|REINTERPRET) screen_mapping_required=true ;; esac
+
   declare -A SCR_TITLE TK_FOR_SCR
   SCR_TITLE[__init__]=1; unset 'SCR_TITLE[__init__]'
   TK_FOR_SCR[__init__]=1; unset 'TK_FOR_SCR[__init__]'
@@ -2701,7 +2718,7 @@ ${body}"
   local ui_status_block="**UI fidelity policy:** ${fidelity_policy} (${FIDELITY_SQ_ID})"
   case "$fidelity_policy" in
     REINTERPRET)
-      ui_status_block="${ui_status_block} — the legacy UI is reference material only; no UI requirement is attached to any item, and /specclaw:bf-ui is not needed."
+      ui_status_block="${ui_status_block} — the legacy UI is reference material only, so no appearance requirement is attached to any item. Screens are still mapped: each item cites the SCR-### it replaces, and /specclaw:bf-prototype requires a named client stakeholder to approve the redesign of every one of them before the new repo is built."
       ;;
     UNDECIDED)
       if [ "$n_screen_bearing" -gt 0 ]; then
@@ -3077,7 +3094,7 @@ _Not computable — the Coverage Check above carries no per-module coverage line
   # reported as one rather than left for a reader to notice. Only rendered
   # when a decided FAITHFUL/THEME-ONLY policy makes screens part of the
   # acceptance basis and ui-inventory.md actually exists. ─────────────────
-  if $ui_grounding_required && [ -f "$ui_inventory" ]; then
+  if $screen_mapping_required && [ -f "$ui_inventory" ]; then
     local scr_cov="" unmapped="" scr_count=0
     for sid in $scr_all; do
       scr_count=$((scr_count+1))
