@@ -53,6 +53,8 @@ Skip all of this when the proposal has no bypass section, which is the normal ca
 
 Skip all of this when the proposal has neither section, which is the normal case.
 
+3d. **Teaching gate** (if `teach.enabled: true`, via `specclaw-teach .specclaw status`): surface each significant design decision as scored options and **let the user choose before step 4a writes `design.md` (architectural) or the `## Approach` section (bounded); skip for a spike**. Deciding silently and documenting afterwards defeats the mode. See the Teaching mode section at the end of this skill.
+
 4. **Read the change's size first** — `specclaw-validate-change .specclaw <change> status` prints
    `Size: <spike|bounded|architectural>`. It decides what this step writes:
 
@@ -92,3 +94,13 @@ Skip all of this when the proposal has neither section, which is the normal case
 ## Planner guardrails
 
 When generating `tasks.md`, apply the same rules `/specclaw:build` injects into coding agents — see `references/agent-guardrails.md`. In particular: **Rule 1 (Think Before Coding)** — state assumptions explicitly in the spec/design and ask if anything is unclear, rather than picking silently between interpretations. **Rule 2 (Simplicity First)** — no speculative tasks, no over-decomposition; if three tasks could be one, make it one.
+
+## Teaching mode (if `teach.enabled: true`)
+
+Check with `specclaw-teach .specclaw status`. When enabled, design decisions become the user's, not yours:
+
+1. For each significant decision in `design.md`, present **2–4 options** in a table with pros, cons, learning cost and run cost — including at least one option *simpler* than your recommendation. Naming and rejecting the simpler option with a reason is itself the lesson.
+2. Give **one recommendation with the single deciding factor** — not a list — plus **what would change your mind**. Then stop and let the user choose.
+3. Record their choice and their reason **verbatim** in `design.md` under Key Decisions, and log it: `specclaw-teach .specclaw <change> log decision "<what and why>"`. If they choose against your recommendation, their reason is the rationale, not yours.
+
+Full option-table format and worked example: `references/teaching-mode.md`.
