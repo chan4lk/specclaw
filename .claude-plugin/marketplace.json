@@ -10,7 +10,7 @@
     {
       "name": "specclaw",
       "source": "./plugins/specclaw",
-      "version": "0.8.2",
+      "version": "0.8.4",
       "description": "Lean, output-first spec-driven builds: mock first, then propose, plan, build, verify, pr.",
       "author": {
         "name": "Chandima Ranaweera"
@@ -21,7 +21,7 @@
     {
       "name": "specclaw-bf",
       "source": "./plugins/specclaw-bf",
-      "version": "0.8.2",
+      "version": "0.8.4",
       "description": "Brownfield rebuild add-on for specclaw: analyze, clarify, baseline, replay and rebuild a legacy app.",
       "author": {
         "name": "Chandima Ranaweera"
@@ -32,7 +32,7 @@
     {
       "name": "specclaw-sync",
       "source": "./plugins/specclaw-sync",
-      "version": "0.8.2",
+      "version": "0.8.4",
       "description": "Tracker sync add-on for specclaw: GitHub issues, Azure DevOps boards and PRs, Jira.",
       "author": {
         "name": "Chandima Ranaweera"
@@ -43,7 +43,7 @@
     {
       "name": "specclaw-extras",
       "source": "./plugins/specclaw-extras",
-      "version": "0.8.2",
+      "version": "0.8.4",
       "description": "Optional specclaw skills: auto, loop, learn, patterns, context, author-spec, debug, renumber and the review panel.",
       "author": {
         "name": "Chandima Ranaweera"
@@ -54,7 +54,7 @@
     {
       "name": "specclaw-review",
       "source": "./plugins/specclaw-review",
-      "version": "0.8.2",
+      "version": "0.8.4",
       "description": "Local review loop for specclaw: layered review rules, converging rounds, a bounded review memory behind an MCP server.",
       "author": {
         "name": "Chandima Ranaweera"

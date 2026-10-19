@@ -23,7 +23,7 @@ Fix two bin portability bugs, then the test-only GNU-isms, then bump.
   - Files: plugins/specclaw/tests/run-parser-tests.sh, plugins/specclaw/tests/run-change-numbering-tests.sh, plugins/specclaw/tests/run-phase-state-tests.sh, plugins/specclaw/tests/run-synth-agent-tests.sh
   - Estimate: small
   - Kind: test
-- [ ] `T3` — Bump plugin versions
+- [x] `T3` — Bump plugin versions
   - Files: plugins/specclaw/.claude-plugin/plugin.json, .claude-plugin/marketplace.json
   - Estimate: small
   - Kind: config

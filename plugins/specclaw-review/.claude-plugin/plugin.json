@@ -1,6 +1,6 @@
 {
   "name": "specclaw-review",
-  "version": "0.8.2",
+  "version": "0.8.4",
   "description": "Local review loop for specclaw: layered review rules, converging rounds, a bounded review memory behind an MCP server.",
   "author": {
     "name": "Chandima Ranaweera",
