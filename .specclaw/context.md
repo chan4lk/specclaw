@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-10-16 — 044-fast-review-loop_
+_Last updated: 2026-10-20 — 046-macos-test-portability_
 
 ## Architecture Overview
 
@@ -158,6 +158,11 @@ when `git.merge_on_finalize: true` (default `false`).
 - **Never add an index/cache for filesystem-derived state.** Append-only event ledgers are distinct.
 - **Never silence ShellCheck by appending to `shellcheck-baseline.txt`.**
 - **Never add an unregistered test suite.**
+- **No GNU-only flags in `bin/` or `tests/`.** Avoid `find -printf`, `stat -c`, suffixless `sed -i`, bare
+  `timeout`, and unstripped `wc -l` output (BSD pads it). Use `find … | sed`, `stat -c … || stat -f …`,
+  `sed -i.bak` + `rm`, the `timeout` → `gtimeout` → plain/perl-alarm fallback, and `tr -d ' '` on counts.
+  CI is Linux-only, so macOS breakage is invisible there; the 046 fixes were two real product bugs
+  (`specclaw-run-long`, `specclaw-browser-lock`) plus test bugs.
 - **Never copy canonical assets for Codex.** The installed package points at
   `plugins/specclaw/skills/`; the single checkout-local adapter delegates to that same root.
 - **Never let package validation mutate global Codex configuration.** Installation tests, if
@@ -179,15 +184,14 @@ when `git.merge_on_finalize: true` (default `false`).
 
 <!-- Last 5 significant decisions from merged changes. Updated automatically on each PR merge. -->
 
-1. **2026-10-16 — 044-fast-review-loop:** PR review runs locally in the `specclaw-review` add-on (review →
+1. **2026-10-20 — 046-macos-test-portability:** five suites and two `bin/` scripts made BSD/macOS-portable
+   by reusing existing idioms (timeout fallback, `tr -d ' '` on counts); a macOS CI job is a separate change.
+2. **2026-10-16 — 044-fast-review-loop:** PR review runs locally in the `specclaw-review` add-on (review →
    class fix → delta + impact-set round → Opus final pass → one push); CI only checks the reviewed SHA is HEAD.
-2. **2026-10-16 — 044-fast-review-loop:** the rulebook is plugin packs + `.specclaw/review/rules/` + the repo's
+3. **2026-10-16 — 044-fast-review-loop:** the rulebook is plugin packs + `.specclaw/review/rules/` + the repo's
    own governance read live (`review.governance`), and with governance set the repo's severity policy wins
    (`severity: project`).
-3. **2026-10-16 — 044-fast-review-loop:** review memory is a repo-committed, bounded jsonl reached only through
+4. **2026-10-16 — 044-fast-review-loop:** review memory is a repo-committed, bounded jsonl reached only through
    the plugin's MCP server/CLI; a PreToolUse hook denies direct reads.
-4. **2026-10-13 — 043-headless-pr-and-build-fixes:** `specclaw-build finalize` no longer merges by
+5. **2026-10-13 — 043-headless-pr-and-build-fixes:** `specclaw-build finalize` no longer merges by
    default (opt-in `git.merge_on_finalize: true`); the PR is how a change reaches the base.
-5. **2026-10-13 — 043-headless-pr-and-build-fixes:** PR git steps live once in
-   `plugins/specclaw/lib/pr-git.sh`, sourced by `specclaw-pr` and `specclaw-azdo-pr`: branch check,
-   TTY guard, lock-excluding staging, branch publish, post-PR bookkeeping commit.
