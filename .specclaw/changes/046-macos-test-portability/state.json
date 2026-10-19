@@ -1,0 +1,11 @@
+{
+  "change": "046-macos-test-portability",
+  "phase": "tasks",
+  "branch": "",
+  "size": "bounded",
+  "phases": {
+    "proposal": {"status":"approved","at":"2026-10-19T18:48:49Z"},
+    "spec": {"status":"done","at":"2026-10-19T18:48:49Z"},
+    "tasks": {"status":"done","at":"2026-10-19T18:48:49Z"}
+  }
+}
