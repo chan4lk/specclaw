@@ -12,7 +12,7 @@ Fix two bin portability bugs, then the test-only GNU-isms, then bump.
 
 ### Wave 1 — Product bugs
 
-- [ ] `T1` — Unpadded wc count in run-long; timeout fallback in browser-lock probe (AC-1)
+- [x] `T1` — Unpadded wc count in run-long; timeout fallback in browser-lock probe (AC-1)
   - Files: plugins/specclaw/bin/specclaw-run-long, plugins/specclaw/bin/specclaw-browser-lock, plugins/specclaw/tests/run-long-orchestration-tests.sh
   - Estimate: small
   - Kind: impl

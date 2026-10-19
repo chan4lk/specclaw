@@ -471,12 +471,16 @@ echo
 
 echo "--- Case 16 (edge 1b): mktemp failure too -> inline execution, no log/sidecar ---"
 err16="$WORK/edge1b.err"
-out="$(TMPDIR="$blocker" "$RUNLONG" --log-dir "$blocker/logs" --phase inline -- "echo ran-inline" 2>"$err16")"; rc=$?
+# A failing `mktemp` shim on PATH: BSD `mktemp -d` ignores TMPDIR, so TMPDIR alone
+# cannot force the failure on macOS.
+nomk="$WORK/no-mktemp"; mkdir -p "$nomk"
+printf '#!/usr/bin/env bash\nexit 1\n' > "$nomk/mktemp"; chmod +x "$nomk/mktemp"
+out="$(PATH="$nomk:$PATH" TMPDIR="$blocker" "$RUNLONG" --log-dir "$blocker/logs" --phase inline -- "echo ran-inline" 2>"$err16")"; rc=$?
 assert_eq "edge1b inline execution exits with the command's code" "0" "$rc"
 assert_contains "edge1b warns that it is running inline" "running inline" "$(cat "$err16")"
 assert_contains "edge1b command still ran" "ran-inline" "$out"
 assert_not_contains "edge1b no log path claimed" "log: " "$out"
-rc=0; TMPDIR="$blocker" "$RUNLONG" --log-dir "$blocker/logs" -- "sh -c 'exit 5'" >/dev/null 2>&1 || rc=$?
+rc=0; PATH="$nomk:$PATH" TMPDIR="$blocker" "$RUNLONG" --log-dir "$blocker/logs" -- "sh -c 'exit 5'" >/dev/null 2>&1 || rc=$?
 assert_eq "edge1b inline execution still propagates a failure" "5" "$rc"
 echo
 
