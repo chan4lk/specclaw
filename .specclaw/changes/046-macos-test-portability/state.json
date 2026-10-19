@@ -1,6 +1,6 @@
 {
   "change": "046-macos-test-portability",
-  "phase": "verify",
+  "phase": "pr",
   "branch": "specclaw/046-macos-test-portability",
   "size": "bounded",
   "phases": {
@@ -8,6 +8,7 @@
     "spec": {"status":"done","at":"2026-10-19T18:48:49Z"},
     "tasks": {"status":"done","at":"2026-10-19T18:48:49Z"},
     "build": {"status":"done","at":"2026-10-19T18:56:06Z","tasks":{"done":3,"total":3,"failed":0}},
-    "verify": {"status":"partial","at":"2026-10-19T19:55:36Z","verdict":"PARTIAL"}
+    "verify": {"status":"partial","at":"2026-10-19T19:55:36Z","verdict":"PARTIAL"},
+    "pr": {"status":"raised","at":"2026-10-19T20:11:36Z","url":"https://github.com/chan4lk/specclaw/pull/100"}
   }
 }
