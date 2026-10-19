@@ -12,8 +12,8 @@
 | Spec | ✅ Done |  |
 | Design | ⏳ Pending |  |
 | Tasks | ✅ Done |  |
-| Build | ⏳ Pending |  |
-| Verify | ⏳ Pending |  |
+| Build | ✅ Done | 3/3 tasks |
+| Verify | ⚠️ Partial | PARTIAL |
 
 ## Task Progress
 
