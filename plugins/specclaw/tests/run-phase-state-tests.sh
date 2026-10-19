@@ -993,7 +993,7 @@ assert_lacks "E11d with no unsubstituted placeholder left behind" \
 
 # ─── Hermeticity: nothing was written outside the temp workdir ───────────────
 assert_eq "Ha every change directory lives under the temp workdir" "0" \
-  "$(find "$SPECCLAW" "$RSPEC" ${USPEC:+"$USPEC"} -name state.json -not -path "$WORK/*" | wc -l)"
+  "$(find "$SPECCLAW" "$RSPEC" ${USPEC:+"$USPEC"} -name state.json -not -path "$WORK/*" | wc -l | tr -d ' ')"
 
 echo
 echo "─────────────────────────────"

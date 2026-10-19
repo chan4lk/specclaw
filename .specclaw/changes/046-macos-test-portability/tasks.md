@@ -19,7 +19,7 @@ Fix two bin portability bugs, then the test-only GNU-isms, then bump.
 
 ### Wave 2 — Test portability
 
-- [ ] `T2` — Portable find/stat/sed/timeout/wc in parser, change-numbering, phase-state, synth-agent suites (AC-2..AC-5)
+- [x] `T2` — Portable find/stat/sed/timeout/wc in parser, change-numbering, phase-state, synth-agent suites (AC-2..AC-5)
   - Files: plugins/specclaw/tests/run-parser-tests.sh, plugins/specclaw/tests/run-change-numbering-tests.sh, plugins/specclaw/tests/run-phase-state-tests.sh, plugins/specclaw/tests/run-synth-agent-tests.sh
   - Estimate: small
   - Kind: test

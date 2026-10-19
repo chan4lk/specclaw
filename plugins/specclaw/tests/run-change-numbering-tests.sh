@@ -258,7 +258,7 @@ snapshot() {
 names_in() {
   (
     cd "$1" 2>/dev/null || return 0
-    find . -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | LC_ALL=C sort | tr '\n' ' '
+    find . -mindepth 1 -maxdepth 1 -type d | sed 's|^\./||' | LC_ALL=C sort | tr '\n' ' '
   )
 }
 
@@ -913,7 +913,7 @@ assert_eq "AC18i the ordering still holds without a hint" "001-a 002-b" "$(activ
 # Nothing in this suite may write outside the temp workdir — in particular not
 # into the repository's own .specclaw, which several cases read.
 assert_eq "Ha every fixture artefact lives under the temp workdir" "0" \
-  "$(find "$WORK" -name state.json -not -path "$WORK/*" | wc -l)"
+  "$(find "$WORK" -name state.json -not -path "$WORK/*" | wc -l | tr -d ' ')"
 # The AC6a case runs the real script against the repo's own .specclaw. It is a
 # read, and this proves it: the working-tree status of that directory is
 # identical to the snapshot taken before any case ran. Skipped outside a git
