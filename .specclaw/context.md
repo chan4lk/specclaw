@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-10-20 — 045-project-custom-presets_
+_Last updated: 2026-10-20 — 046-macos-test-portability_
 
 ## Architecture Overview
 
@@ -166,6 +166,11 @@ when `git.merge_on_finalize: true` (default `false`).
 - **Never add an index/cache for filesystem-derived state.** Append-only event ledgers are distinct.
 - **Never silence ShellCheck by appending to `shellcheck-baseline.txt`.**
 - **Never add an unregistered test suite.**
+- **No GNU-only flags in `bin/` or `tests/`.** Avoid `find -printf`, `stat -c`, suffixless `sed -i`, bare
+  `timeout`, and unstripped `wc -l` output (BSD pads it). Use `find … | sed`, `stat -c … || stat -f …`,
+  `sed -i.bak` + `rm`, the `timeout` → `gtimeout` → plain/perl-alarm fallback, and `tr -d ' '` on counts.
+  CI is Linux-only, so macOS breakage is invisible there; the 046 fixes were two real product bugs
+  (`specclaw-run-long`, `specclaw-browser-lock`) plus test bugs.
 - **Never copy canonical assets for Codex.** The installed package points at
   `plugins/specclaw/skills/`; the single checkout-local adapter delegates to that same root.
 - **Never let package validation mutate global Codex configuration.** Installation tests, if
@@ -191,16 +196,16 @@ when `git.merge_on_finalize: true` (default `false`).
 
 <!-- Last 5 significant decisions from merged changes. Updated automatically on each PR merge. -->
 
-1. **2026-10-20 — 045-project-custom-presets:** projects keep presets in `.specclaw/presets/<name>.md`; a
+1. **2026-10-20 — 046-macos-test-portability:** five suites and two `bin/` scripts made BSD/macOS-portable
+   by reusing existing idioms (timeout fallback, `tr -d ' '` on counts); a macOS CI job is a separate change.
+2. **2026-10-20 — 045-project-custom-presets:** projects keep presets in `.specclaw/presets/<name>.md`; a
    same-name file replaces the built-in, and `extends: <name>` (leading frontmatter only, one level)
    keeps the parent first. `specclaw-presets` is the sole resolver.
-2. **2026-10-20 — 045-project-custom-presets:** unusable preset files (symlink escape, dangling link,
+3. **2026-10-20 — 045-project-custom-presets:** unusable preset files (symlink escape, dangling link,
    directory) are refused, not silently replaced by the built-in. Review majors (shared scalar parser,
    tab-led comments) were deferred to `follow-ups.md`.
-3. **2026-10-16 — 044-fast-review-loop:** PR review runs locally in the `specclaw-review` add-on (review →
+4. **2026-10-16 — 044-fast-review-loop:** PR review runs locally in the `specclaw-review` add-on (review →
    class fix → delta + impact-set round → Opus final pass → one push); CI only checks the reviewed SHA is HEAD.
-4. **2026-10-16 — 044-fast-review-loop:** the rulebook is plugin packs + `.specclaw/review/rules/` + the repo's
+5. **2026-10-16 — 044-fast-review-loop:** the rulebook is plugin packs + `.specclaw/review/rules/` + the repo's
    own governance read live (`review.governance`), and with governance set the repo's severity policy wins
    (`severity: project`).
-5. **2026-10-16 — 044-fast-review-loop:** review memory is a repo-committed, bounded jsonl reached only through
-   the plugin's MCP server/CLI; a PreToolUse hook denies direct reads.

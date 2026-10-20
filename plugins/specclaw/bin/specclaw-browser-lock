@@ -212,12 +212,18 @@ shell_quote() {
 # Is `systemd-run --user --scope` actually usable here? Probed once and cached
 # for the process: `command -v` succeeds in containers where the call fails, and
 # a false-positive cap silently does nothing (edge case 11). Bounded by
-# `timeout` so a wedged systemd/dbus can never stall a build (NFR2).
+# `timeout` so a wedged systemd/dbus can never stall a build (NFR2). macOS has
+# no `timeout`: fall back to gtimeout, then a perl alarm (as specclaw-update-status).
+bounded5() {
+  if command -v timeout >/dev/null 2>&1; then timeout 5 "$@"
+  elif command -v gtimeout >/dev/null 2>&1; then gtimeout 5 "$@"
+  else perl -e 'alarm shift; exec @ARGV' 5 "$@"; fi
+}
 SYSTEMD_RUN_USABLE=""
 systemd_run_usable() {
   if [[ -z "$SYSTEMD_RUN_USABLE" ]]; then
     if command -v systemd-run >/dev/null 2>&1 &&
-       timeout 5 systemd-run --user --scope -q true >/dev/null 2>&1; then
+       bounded5 systemd-run --user --scope -q true >/dev/null 2>&1; then
       SYSTEMD_RUN_USABLE=yes
     else
       SYSTEMD_RUN_USABLE=no

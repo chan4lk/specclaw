@@ -194,7 +194,7 @@ if [[ -n "$prior_sidecar" ]]; then
     echo "[run-long] reuse: sidecar HEAD matches current HEAD (${current_head:0:8}), clean tree — skipping execution" >&2
     # Print the stored tail from the log file if it still exists.
     if [[ -f "$cached_log" ]]; then
-      local_total="$(wc -l < "$cached_log" 2>/dev/null || echo 0)"
+      local_total="$(wc -l < "$cached_log" 2>/dev/null | tr -d ' ' || echo 0)"
       if [[ "$local_total" -gt "$TAIL_LINES" ]]; then
         tail -"${TAIL_LINES}" "$cached_log"
         echo "... (truncated, ${local_total} total lines)"
@@ -328,7 +328,8 @@ fi
 
 # ─── Print capped tail to stdout (FR3) ────────────────────────────────────────
 
-total="$(wc -l < "$log_file" 2>/dev/null || echo 0)"
+# BSD wc pads the count; strip it so the marker reads the same on macOS.
+total="$(wc -l < "$log_file" 2>/dev/null | tr -d ' ' || echo 0)"
 
 if [[ "$total" -gt "$TAIL_LINES" ]]; then
   tail -"${TAIL_LINES}" "$log_file"
