@@ -1,0 +1,14 @@
+{
+  "change": "045-project-custom-presets",
+  "phase": "pr",
+  "branch": "specclaw/045-project-custom-presets",
+  "size": "bounded",
+  "phases": {
+    "proposal": {"status":"approved","at":"2026-10-19T17:45:46Z"},
+    "spec": {"status":"done","at":"2026-10-19T17:46:58Z"},
+    "tasks": {"status":"done","at":"2026-10-19T17:46:58Z"},
+    "build": {"status":"done","at":"2026-10-19T18:13:03Z","tasks":{"done":3,"total":3,"failed":0}},
+    "verify": {"status":"passed","at":"2026-10-20T01:34:43Z","verdict":"PASS"},
+    "pr": {"status":"raised","at":"2026-10-20T01:34:58Z","url":"https://github.com/chan4lk/specclaw/pull/101"}
+  }
+}

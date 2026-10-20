@@ -54,6 +54,8 @@ fi
 mkdir -p "$SPECCLAW_DIR/mock"
 mock_name="$(printf '%s' "$PROJECT_NAME" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e 's/[&|\\]/\\&/g')"
 sed "s|{{project_name}}|$mock_name|g" "$PLUGIN_ROOT/templates/lean/mock.html" > "$SPECCLAW_DIR/mock/index.html"
+mkdir -p "$SPECCLAW_DIR/presets"
+cp "$PLUGIN_ROOT/templates/presets-README.md" "$SPECCLAW_DIR/presets/README.md"
 
 # Create initial STATUS.md
 cat > "$SPECCLAW_DIR/STATUS.md" << EOF

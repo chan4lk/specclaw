@@ -23,6 +23,10 @@ drives the spec-first lifecycle `propose` → `plan` → `build` → `verify` �
   call it behind `command -v`.
 - `plugins/specclaw/bin/` — executable Bash lifecycle rules; skills call these helpers rather
   than reimplementing mechanics.
+- `plugins/specclaw/bin/specclaw-presets` — the only preset resolver (change 045). It prints resolved
+  preset paths, `base` first. A project's `.specclaw/presets/<name>.md` replaces the built-in of the
+  same name; a local-only name adds one. `extends: <name>` in leading frontmatter only keeps the parent
+  first, one level. The lean build skill reads its output and stops on non-zero exit.
 - `plugins/specclaw/lib/pr-git.sh` — the PR git steps (branch check, TTY guard, lock-excluding
   staging, branch publish, post-PR bookkeeping commit), sourced by `specclaw-pr` and
   `specclaw-azdo-pr` (specclaw-sync) so neither carries an inline copy.
@@ -118,6 +122,10 @@ when `git.merge_on_finalize: true` (default `false`).
 - **Headless-safe by default.** A script that would prompt checks for a terminal first and, without
   one, exits 2 naming the config key to set (e.g. `pr.test_policy`). A failed `read` also exits 2,
   so a prompt loop can never spin.
+- **One resolver, callers read its output.** Build skills never hard-code `presets/` paths; they run
+  `specclaw-presets` and treat non-zero exit (unknown or unusable name) as a stop, not a skip.
+- **Structured fields come from structure only.** `extends` is read from leading frontmatter; an
+  `extends:` line elsewhere only warns.
 - **Document fallback precedence** for incomplete data and use deterministic name tiebreakers.
 - **`git mv` inside a working tree, plain `mv` outside it.**
 - **Mixed old/new states are supported steady states.** No lifecycle command fails merely because
@@ -179,6 +187,10 @@ when `git.merge_on_finalize: true` (default `false`).
   a plain push only when the upstream has the branch's own name; branches cut from `origin/<base>`
   track the base, so otherwise run `push -u <remote> HEAD`.
 - **Never commit dispatch locks.** Stage a change dir with `':(exclude)<change>/.lock'`.
+- **Never resolve a preset outside its presets dir.** A resolved file must be a regular file inside its
+  presets dir; a symlink escape, dangling link or directory is refused with no fallback to the built-in.
+  Path-like names are unknown names. Nested extends is reported (a local parent extending its own
+  built-in is not nesting).
 
 ## Recent Decisions
 
@@ -186,12 +198,14 @@ when `git.merge_on_finalize: true` (default `false`).
 
 1. **2026-10-20 — 046-macos-test-portability:** five suites and two `bin/` scripts made BSD/macOS-portable
    by reusing existing idioms (timeout fallback, `tr -d ' '` on counts); a macOS CI job is a separate change.
-2. **2026-10-16 — 044-fast-review-loop:** PR review runs locally in the `specclaw-review` add-on (review →
+2. **2026-10-20 — 045-project-custom-presets:** projects keep presets in `.specclaw/presets/<name>.md`; a
+   same-name file replaces the built-in, and `extends: <name>` (leading frontmatter only, one level)
+   keeps the parent first. `specclaw-presets` is the sole resolver.
+3. **2026-10-20 — 045-project-custom-presets:** unusable preset files (symlink escape, dangling link,
+   directory) are refused, not silently replaced by the built-in. Review majors (shared scalar parser,
+   tab-led comments) were deferred to `follow-ups.md`.
+4. **2026-10-16 — 044-fast-review-loop:** PR review runs locally in the `specclaw-review` add-on (review →
    class fix → delta + impact-set round → Opus final pass → one push); CI only checks the reviewed SHA is HEAD.
-3. **2026-10-16 — 044-fast-review-loop:** the rulebook is plugin packs + `.specclaw/review/rules/` + the repo's
+5. **2026-10-16 — 044-fast-review-loop:** the rulebook is plugin packs + `.specclaw/review/rules/` + the repo's
    own governance read live (`review.governance`), and with governance set the repo's severity policy wins
    (`severity: project`).
-4. **2026-10-16 — 044-fast-review-loop:** review memory is a repo-committed, bounded jsonl reached only through
-   the plugin's MCP server/CLI; a PreToolUse hook denies direct reads.
-5. **2026-10-13 — 043-headless-pr-and-build-fixes:** `specclaw-build finalize` no longer merges by
-   default (opt-in `git.merge_on_finalize: true`); the PR is how a change reaches the base.

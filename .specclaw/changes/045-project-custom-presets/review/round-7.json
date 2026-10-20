@@ -1,0 +1,77 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 2
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw/bin/specclaw-presets",
+  "plugins/specclaw/tests/run-preset-check-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/tests/run-preset-check-tests.sh",
+   "fp": "c58f098096c9",
+   "in_delta": true,
+   "line": 92,
+   "message": "The previous round asked for a negative row (no warning) for an indented `    extends: node`. The new row `stray: indented line warns` asserts the opposite. The `stray()` code visible in the diff matches `^extends\\s*:` against `line`, so the row only passes if `lines` are stripped earlier in the function. That is not shown in the diff. Confirm the intended behaviour: if indented lines are meant to be ignored, flip the row to `quiet`; if they are meant to warn, say so in the label and the README. Either way, pin it with a row.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "An indented sample line `    extends: node` in a preset body. If `stray()` does not strip lines, the row fails. If it does strip them, an indented markdown code block warns, which contradicts the negative row the previous round requested.",
+   "severity": "minor"
+  },
+  {
+   "file": "plugins/specclaw/tests/run-preset-check-tests.sh",
+   "fp": "ba0c310194dd",
+   "in_delta": true,
+   "line": 80,
+   "message": "Only one valid-frontmatter row (`fm: extends own built-in`) asserts `quiet`. The BOM, CRLF, quoted-value and `extends` in a local-parent rows exercise different parsing paths for the leading block. None of them assert that the stray warning stays silent. A frontmatter-boundary bug could make `stray()` treat a valid declaration as stray and warn spuriously. Add `quiet` to those rows.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "A file with `\\xef\\xbb\\xbf---\\nextends: node\\n---\\n` or CRLF frontmatter. If the frontmatter parser and `stray()` disagree about where the block ends, a spurious 'outside frontmatter' warning is printed. The row still passes because it checks only the exit code and the label list.",
+   "severity": "minor"
+  }
+ ],
+ "head": "9c4d699fc113f7cb1d8919616e9a378eda16292e",
+ "impact": [
+  ".github/workflows/trigger-evals.yml",
+  "plugins/specclaw-bf/bin/specclaw-bf-analyze-codebase",
+  "plugins/specclaw-bf/bin/specclaw-bf-baseline",
+  "plugins/specclaw-bf/bin/specclaw-bf-blueprint",
+  "plugins/specclaw-bf/bin/specclaw-bf-bootstrap",
+  "plugins/specclaw-bf/bin/specclaw-bf-clarify",
+  "plugins/specclaw-bf/bin/specclaw-bf-domain-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-e2e-run",
+  "plugins/specclaw-bf/bin/specclaw-bf-prototype",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-rebuild-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-replay",
+  "plugins/specclaw-bf/bin/specclaw-bf-ui",
+  "plugins/specclaw-extras/bin/specclaw-party",
+  "plugins/specclaw-extras/tests/run-party-tests.sh",
+  "plugins/specclaw-sync/bin/specclaw-azdo-issue",
+  "plugins/specclaw-sync/bin/specclaw-azdo-pr",
+  "plugins/specclaw-sync/bin/specclaw-gh-sync",
+  "plugins/specclaw-sync/tests/run-azdo-pr-description-tests.sh",
+  "plugins/specclaw/bin/specclaw-browser-lock"
+ ],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 23462,
+ "round": 7,
+ "since": "d268594a086c63ea46688a57404f6bb6ec735705",
+ "status": "clean",
+ "system_chars": 7112,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1792442025,
+ "ts_start": 1792442001
+}

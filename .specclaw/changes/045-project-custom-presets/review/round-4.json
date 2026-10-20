@@ -1,0 +1,82 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 2
+ },
+ "escalated": [
+  "a2574fb101a3"
+ ],
+ "files": [
+  "plugins/specclaw/bin/specclaw-presets",
+  "plugins/specclaw/templates/presets-README.md",
+  "plugins/specclaw/tests/run-preset-check-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/bin/specclaw-presets",
+   "fp": "a2574fb101a3",
+   "in_delta": true,
+   "line": 83,
+   "message": "A file that does not open with `---` now returns None silently. This includes the old `Extends: <name>` first-line form, any case or spelling variant, and the common mistake of using `extends:` without frontmatter. The local file then silently replaces the built-in, which is the wrong-intent fallback the earlier rounds treated as an error. The prose-collision fix should have kept a narrow check: warn and exit 1 only when a non-heading line outside any fence matches `^extends\\s*:`, as the previous round proposed. Prose such as 'Extends the base rules.' would still pass.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B6",
+   "scenario": "dotnet.md = 'Extends: dotnet\\n# our rules' with presets: [dotnet] -> prints only v:dotnet, no warning, exit 0. The built-in dotnet rules are dropped without a signal. The new 'prose Extends: is ignored' row asserts this behaviour instead of catching it.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw/tests/run-preset-check-tests.sh",
+   "fp": "5ba92443745b",
+   "in_delta": true,
+   "line": 98,
+   "message": "The symlinked-extends-parent check still pipes through `grep -q outside.md`, which is vacuous because output lines are labels such as `v:a`. The new exit-code assertion carries the whole check, but it cannot tell a symlink refusal from any other exit 1. Assert the exact stdout (`specclaw:base v:a `) as the previous round asked, or use cfgcase-style expected-names comparison.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "If the guard were replaced by some other failure that exits 1 while still printing `v:b`, the grep passes and the check stays green. Only the exit code distinguishes the cases.",
+   "severity": "minor"
+  },
+  {
+   "file": "plugins/specclaw/tests/run-preset-check-tests.sh",
+   "fp": "8671daeefc68",
+   "in_delta": true,
+   "line": 87,
+   "message": "The variant table has no rows for several shapes the new parser handles. These are a UTF-8 BOM before `---` (the new `utf-8-sig` change), CRLF line endings, empty frontmatter (`---\\n---`), a comment line inside frontmatter, two `extends:` lines, `Extends:` capitalised inside frontmatter, and a mismatched quote such as `\"node'`, which the regex accepts. Add rows for these.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Remove `utf-8-sig` and every test stays green. A BOM-prefixed preset would then be treated as having no frontmatter and silently replace the built-in.",
+   "severity": "minor"
+  }
+ ],
+ "head": "b47c6b7e6822832b4912775246898eebb254f5b3",
+ "impact": [
+  "plugins/specclaw-bf/bin/specclaw-bf-clarify",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-rebuild-collect",
+  "plugins/specclaw-bf/tests/run-narration-gate-tests.sh",
+  "plugins/specclaw-extras/bin/specclaw-party",
+  "plugins/specclaw-sync/bin/specclaw-jira-issue",
+  "plugins/specclaw/bin/specclaw-build",
+  "plugins/specclaw/bin/specclaw-reconcile",
+  "plugins/specclaw/tests/run-long-orchestration-tests.sh"
+ ],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 22064,
+ "round": 4,
+ "since": "3fca3a27778eda6497ab5656d674ee65780788e8",
+ "status": "escalate",
+ "system_chars": 7123,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1792440839,
+ "ts_start": 1792440814
+}

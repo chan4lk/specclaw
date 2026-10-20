@@ -7,7 +7,7 @@ description: Use when a planned change is ready to build, or the user says go or
 # specclaw build (lean)
 
 1. `specclaw-validate-change .specclaw <change> build`, then `specclaw-build setup .specclaw <change>` (creates the branch). Commit `.specclaw/mock/index.html` and the change folder: `specclaw(<change>): mock + change`.
-Before coding, read `$CLAUDE_PLUGIN_ROOT/presets/base.md` and each preset listed under `presets:` in `config.yaml`. Follow them in every file.
+Before coding, read every file `specclaw-presets .specclaw` prints (project presets win over built-ins). Follow them in every file. If it exits non-zero, stop and show its errors.
 
 2. For each pending task in `change.md`, in order:
    - Mark it in progress with `specclaw-update-task-status .specclaw/changes/<change>/change.md <T> in_progress`.

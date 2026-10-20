@@ -1,0 +1,149 @@
+#!/usr/bin/env python3
+# specclaw-presets — resolve the preset files build must read.
+#
+# Usage: specclaw-presets [<specclaw-dir>]   (default .specclaw)
+#   Prints one absolute path per line: base first, then each name in
+#   config.yaml `presets:` in order, no duplicates. Per name, the project's
+#   <specclaw-dir>/presets/<name>.md wins over the plugin's presets/<name>.md.
+#   A project preset that opens with frontmatter (`---` / `extends: <name>` /
+#   `---` as its first lines) is preceded by <name> (the built-in when it
+#   extends its own name). One level. Frontmatter is the only place `extends`
+#   is read, so prose never collides; any other key in it, or no closing `---`,
+#   is an error and the file is then used alone. An `extends:` line outside
+#   frontmatter only warns.
+# Exit: 0 all resolved; 1 an unknown preset, an unreadable config, a malformed
+# `presets:` value, or a preset file resolving outside its presets dir (each
+# warned on stderr; everything else resolvable is still printed).
+import os, re, sys
+
+BUILTIN = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "presets")
+NAME = re.compile(r"^[a-z0-9-]+$")
+ERRORS = []
+
+
+def warn(msg, fatal=True):
+    if fatal:
+        ERRORS.append(msg)
+    print(f"specclaw-presets: {msg}", file=sys.stderr)
+
+
+def strip(value):
+    return value.split(" #")[0].strip().strip("\"'") if not value.startswith("#") else ""
+
+
+def configured(cfg):
+    try:
+        lines = open(cfg, encoding="utf-8-sig", errors="replace").read().splitlines()
+    except OSError as e:
+        warn(f"cannot read {cfg}: {e.strerror}")
+        return []
+    for i, raw in enumerate(lines):
+        m = re.match(r"^presets:(.*)$", raw.rstrip("\r"))
+        if not m:
+            continue
+        rest = strip(m.group(1).strip())
+        if rest.startswith("[") and rest.endswith("]"):
+            return [strip(n.strip()) for n in rest[1:-1].split(",") if strip(n.strip())]
+        if rest:
+            warn(f"malformed presets value '{rest}' (want [a, b] or a - list)")
+            return []
+        out = []
+        for item in lines[i + 1:]:
+            item = item.rstrip("\r")
+            if not item.strip() or item.lstrip().startswith("#"):
+                continue
+            m = re.match(r"^\s*- +(\S.*)$", item)
+            if m:
+                out.append(strip(m.group(1)))
+            elif re.match(r"^[^\s-]", item):
+                break
+            else:
+                warn(f"malformed presets item {item.strip()!r}")
+        return out
+    return []
+
+
+def lookup(root, name):
+    if not NAME.match(name):
+        return None
+    p = os.path.join(root, name + ".md")
+    if not os.path.lexists(p):
+        return None
+    real, home = os.path.realpath(p), os.path.realpath(root)
+    if not os.path.isfile(p) or os.path.dirname(real) != home:
+        warn(f"preset '{name}' in {home} is not a regular file inside it; refused")
+        return False
+    return real
+
+
+def stray(path, lines):
+    # Advisory only: frontmatter is the sole declaration site, so a hint here can
+    # never fail a build over a code sample that happens to say `extends:`.
+    if any(re.match(r"^extends\s*:", line, re.I) for line in lines):
+        warn(f"warning: {path}: an 'extends:' line outside frontmatter has no effect"
+             " (declare it in a leading --- block; ignore this if it is a sample)", fatal=False)
+
+
+def extends(path):
+    try:
+        lines = [l.strip() for l in open(path, encoding="utf-8-sig", errors="replace")]
+    except OSError as e:
+        warn(f"cannot read {path}: {e.strerror}")
+        return None
+    if not lines or lines[0] != "---":
+        stray(path, lines)
+        return None
+    parent = None
+    for n, line in enumerate(lines[1:], 1):
+        if line == "---":
+            stray(path, lines[n + 1:])
+            return parent
+        if not line or line.startswith("#"):
+            continue
+        m = re.match(r"^extends:\s*([\"']?)([a-z0-9-]+)\1\s*$", line.split(" #")[0])
+        if not m or parent:
+            warn(f"{path}: frontmatter allows one 'extends: <name>' line, got {line!r}")
+            return None
+        parent = m.group(2)
+    warn(f"{path}: frontmatter has no closing '---'")
+    return None
+
+
+def resolve(local_root, name):
+    own = lookup(local_root, name)
+    if own is False:
+        return []
+    if own is None:
+        return [(name, lookup(BUILTIN, name) or None)]
+    parent = extends(own)
+    if parent is None:
+        return [(name, own)]
+    if parent == name:
+        return [(parent, lookup(BUILTIN, parent) or None), (name, own)]
+    local_parent = lookup(local_root, parent)
+    if local_parent is False:
+        return [(name, own)]
+    grand = extends(local_parent) if local_parent else None
+    if grand == parent:
+        return [(parent, lookup(BUILTIN, parent) or None), (parent, local_parent), (name, own)]
+    if grand:
+        warn(f"{local_parent}: nested extends is not followed (one level only)")
+    return [(parent, local_parent or lookup(BUILTIN, parent) or None), (name, own)]
+
+
+def main():
+    sdir = sys.argv[1] if len(sys.argv) > 1 else ".specclaw"
+    out = []
+    for name in ["base"] + configured(os.path.join(sdir, "config.yaml")):
+        for found, path in resolve(os.path.join(sdir, "presets"), name):
+            if path is None:
+                warn(f"unknown preset {found!r}")
+            elif path not in out:
+                out.append(path)
+    if out:
+        print("\n".join(out))
+    return 1 if ERRORS else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

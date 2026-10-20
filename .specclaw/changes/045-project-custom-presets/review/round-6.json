@@ -1,0 +1,93 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 2
+ },
+ "escalated": [
+  "eaf1bcafff9c"
+ ],
+ "files": [
+  "plugins/specclaw/bin/specclaw-presets",
+  "plugins/specclaw/templates/presets-README.md",
+  "plugins/specclaw/tests/run-preset-check-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/tests/run-preset-check-tests.sh",
+   "fp": "eaf1bcafff9c",
+   "in_delta": true,
+   "line": 87,
+   "message": "The variants the previous round named are still missing from the table. Only one row asserts that the warning is emitted (`# Ours\\nExtends: node`). The other stray rows (not-on-line-1, after-fm, the fenced row) assert only `exit 0` plus the label list, and those are identical whether `stray()` warns or not. Add warning-assertion rows for: a `~~~` fence, an unclosed fence followed by `extends:`, `Extends : node` with a space before the colon, and a heading containing the word. Add negative rows asserting no warning for an indented `    extends: node` and for valid frontmatter. Also make the new check create its own `$TMP/v` fixture instead of reusing the directory left by the previous `cfgcase`. The explicit `printf` writes are fine, but the dir and `presets/` must exist from earlier cases.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Reintroduce fence tracking in `stray()` with no close or end-of-file handling. Input: `a.md` = '```\\nunclosed\\nextends: node\\n'. The warning is silently dropped, yet every `exit 0` row and the single `Extends: node` warning row still pass, so the regression goes undetected.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw/bin/specclaw-presets",
+   "fp": "bf8859261a57",
+   "in_delta": true,
+   "line": 82,
+   "message": "`stray()` now hand-builds the `specclaw-presets: warning:` prefix and writes to stderr itself instead of going through the shared `warn()` helper, so the message format exists in two places. Give `warn()` a non-failing variant, or a parameter that skips the exit-code effect, and call that.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B4",
+   "scenario": "Someone changes the prefix or format in `warn()`, for example to add the file context. The stray-extends line keeps the old format, and any consumer that greps for the standard prefix sees inconsistent output.",
+   "severity": "minor"
+  },
+  {
+   "file": "plugins/specclaw/bin/specclaw-presets",
+   "fp": "d5d90066d397",
+   "in_delta": true,
+   "line": 78,
+   "message": "Demoting the stray `extends:` case to a stderr-only warning with exit 0 means a file using the old first-line `Extends: node` form still replaces the built-in silently as far as the build result goes. Only the stderr hint reveals it. The warning also fires for a documented `extends:` inside a fenced sample, where its text ('is ignored; put it in a leading --- block') is misleading. Consider wording that covers both cases.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B6",
+   "scenario": "A user keeps `Extends: node` as line 1 of `node.md`. The build exits 0 with only the local text and no built-in node rules, and the only signal is a stderr line that a build wrapper may swallow.",
+   "severity": "minor"
+  }
+ ],
+ "head": "d268594a086c63ea46688a57404f6bb6ec735705",
+ "impact": [
+  "plugins/specclaw-bf/bin/specclaw-bf-blueprint",
+  "plugins/specclaw-bf/bin/specclaw-bf-clarify",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-rebuild-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-status",
+  "plugins/specclaw-bf/tests/run-bf-status-tests.sh",
+  "plugins/specclaw-bf/tests/run-blueprint-tests.sh",
+  "plugins/specclaw-bf/tests/run-narration-gate-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-brief-contract-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-byte-identity-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-status-machine-tests.sh",
+  "plugins/specclaw-bf/tests/run-quality-tests.sh",
+  "plugins/specclaw-extras/bin/specclaw-party",
+  "plugins/specclaw-sync/bin/specclaw-jira-issue",
+  "plugins/specclaw/bin/specclaw-bootstrap-snapshot",
+  "plugins/specclaw/bin/specclaw-build",
+  "plugins/specclaw/bin/specclaw-pr",
+  "plugins/specclaw/bin/specclaw-reconcile",
+  "plugins/specclaw/bin/specclaw-update-status",
+  "plugins/specclaw/tests/run-long-orchestration-tests.sh"
+ ],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 18587,
+ "round": 6,
+ "since": "cfe77f1e9f1442317427bb024be565ad5413bed9",
+ "status": "escalate",
+ "system_chars": 7112,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1792441954,
+ "ts_start": 1792441931
+}

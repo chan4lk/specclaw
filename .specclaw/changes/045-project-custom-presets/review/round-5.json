@@ -1,0 +1,94 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 2,
+  "minor": 1
+ },
+ "escalated": [
+  "9013c66b29f1",
+  "0e84aaf07090"
+ ],
+ "files": [
+  "plugins/specclaw/bin/specclaw-presets",
+  "plugins/specclaw/templates/presets-README.md",
+  "plugins/specclaw/tests/run-preset-check-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/bin/specclaw-presets",
+   "fp": "9013c66b29f1",
+   "in_delta": true,
+   "line": 80,
+   "message": "The fix only handles part of the fenced-code case. `stray()` treats only a line starting with three backticks as a fence. Three variants are wrong: (1) a `~~~` fence is not recognised, so a documented `extends: node` inside it is reported as an error, which is a false positive that blocks the whole build. (2) Every line is `.strip()`ped before the check, so an indented code block or an indented list continuation line `    extends: node` is also flagged. (3) An unclosed ``` fence hides every later line, so a real stray `extends:` after it is silently ignored. That is the fail-open case this fix was meant to close. Track the fence character and length, and close only on a matching fence. Check the indentation-sensitive form on the raw line instead of the stripped one. Warn when a fence is still open at end of file.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "A preset body containing '~~~\\nextends: node\\n~~~' -> warn and exit 1 (false positive). A body with '```\\ntext\\n' never closed, then 'extends: node' -> exit 0 with no warning, and the local file silently replaces the built-in.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw/tests/run-preset-check-tests.sh",
+   "fp": "0e84aaf07090",
+   "in_delta": true,
+   "line": 85,
+   "message": "The variant table for the stray-`extends:` check covers only the backtick fence. It has no rows for a `~~~` fence, an indented `extends:` line, an unclosed fence followed by `extends:`, `Extends : node` with a space before the colon, or a heading containing the word. Without these rows the instance fix above passes while the variants misbehave. Add them to the table.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Deleting the `~~~` or unclosed-fence handling would leave every current row green. Rows such as 'a=~~~\\nextends: node\\n~~~\\n' (expect 0) and 'a=```\\nx\\nextends: node\\n' (expect 1) do not exist.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw/templates/presets-README.md",
+   "fp": "869d2b611b82",
+   "in_delta": true,
+   "line": 18,
+   "message": "The README says an `extends:` line outside frontmatter is an error. It does not say that lines inside a fenced code block are exempt, so the doc and the code disagree. State the fence exemption, or narrow the code to match the doc.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B4",
+   "scenario": "A reader following the README puts an example `extends: node` in a code fence and cannot tell whether it is allowed.",
+   "severity": "minor"
+  }
+ ],
+ "head": "cfe77f1e9f1442317427bb024be565ad5413bed9",
+ "impact": [
+  "plugins/specclaw-bf/bin/specclaw-bf-blueprint",
+  "plugins/specclaw-bf/bin/specclaw-bf-clarify",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-rebuild-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-status",
+  "plugins/specclaw-bf/tests/run-bf-status-tests.sh",
+  "plugins/specclaw-bf/tests/run-blueprint-tests.sh",
+  "plugins/specclaw-bf/tests/run-narration-gate-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-brief-contract-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-byte-identity-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-status-machine-tests.sh",
+  "plugins/specclaw-bf/tests/run-quality-tests.sh",
+  "plugins/specclaw-extras/bin/specclaw-party",
+  "plugins/specclaw-sync/bin/specclaw-jira-issue",
+  "plugins/specclaw/bin/specclaw-bootstrap-snapshot",
+  "plugins/specclaw/bin/specclaw-build",
+  "plugins/specclaw/bin/specclaw-pr",
+  "plugins/specclaw/bin/specclaw-reconcile",
+  "plugins/specclaw/bin/specclaw-update-status",
+  "plugins/specclaw/tests/run-long-orchestration-tests.sh"
+ ],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 19700,
+ "round": 5,
+ "since": "b47c6b7e6822832b4912775246898eebb254f5b3",
+ "status": "escalate",
+ "system_chars": 7112,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1792440921,
+ "ts_start": 1792440898
+}

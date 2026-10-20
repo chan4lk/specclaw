@@ -1,0 +1,94 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 2,
+  "minor": 1
+ },
+ "escalated": [
+  "f7646ed79ad8",
+  "7acacfbb2915"
+ ],
+ "files": [
+  "plugins/specclaw/bin/specclaw-presets",
+  "plugins/specclaw/templates/presets-README.md",
+  "plugins/specclaw/tests/run-preset-check-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/bin/specclaw-presets",
+   "fp": "f7646ed79ad8",
+   "in_delta": true,
+   "line": 83,
+   "message": "The Extends check is now too broad. It scans every non-heading line in the file, with no fence or position awareness. Any line that starts with the word `extends` is treated as a malformed or misplaced Extends declaration, including ordinary prose. That prose line triggers the warning and an exit-1 failure for a valid preset that never declared Extends. Only a line that looks like a declaration (`extends` followed by optional spaces and a colon) should be an error. A prose line that merely begins with the word should be ignored, and the match should skip fenced code blocks. Add a regression row for this.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "Project preset a.md has `# Rules` then `Use strict mode.` then `Extends the default timeout to 30s in tests.`, with `presets: [a]` in the config. The `^extends\\b` regex matches the third line, n=2 and the strict regex fails, so it warns and exits 1. A valid preset with no Extends declaration now breaks the build. The same happens for a line `extends: x` inside a fenced code example.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw/tests/run-preset-check-tests.sh",
+   "fp": "7acacfbb2915",
+   "in_delta": true,
+   "line": 92,
+   "message": "The new symlinked-Extends-parent check only asserts `! specclaw-presets | grep -q outside.md`, with no exit-code assertion. The sibling direct-symlink check has both. Output lines are label-style (`v:a`, `specclaw:base`), so the symlink named b.md would print as `v:b` or a b.md path and never contain `outside.md`. The grep is then vacuously true even if the symlink guard were removed for Extends parents. Assert exit 1 and the exact stdout (`specclaw:base v:a `). Better still, assert that the parent's content ('secret') is absent from the build output.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Delete the symlink-escape refusal in the Extends-parent lookup. specclaw-presets prints the b.md entry or content, 'outside.md' never appears in stdout, and the test stays green even though the escape is open.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw/tests/run-preset-check-tests.sh",
+   "fp": "1d051577f642",
+   "in_delta": true,
+   "line": 83,
+   "message": "The block-list change has a new terminator rule (a column-0 non-dash line ends the list; anything else unparsable warns), but no row pins the terminator or the other shapes the previous round named. Missing rows: a following top-level key (`presets:\\n  - node\\nbuild:\\n  x: 1\\n` \u2192 exit 0, base+node), a tab after the dash (`-\\tnode`), a column-0 `- node` list, and CRLF endings. The 'indented scalar' row would also pass if the break rule regressed to warn-on-everything, so the key-terminator behaviour is unproven.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "If the `elif re.match(r\"^[^\\s-]\", item): break` branch were deleted, a config with a normal `build:` section after the presets list would warn and exit 1. No existing row would catch this.",
+   "severity": "minor"
+  }
+ ],
+ "head": "fa466c88f379045934bbd45de17b98a96464fb19",
+ "impact": [
+  ".github/workflows/trigger-evals.yml",
+  "plugins/specclaw-bf/bin/specclaw-bf-e2e-run",
+  "plugins/specclaw-bf/bin/specclaw-bf-prototype",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-rebuild-collect",
+  "plugins/specclaw-bf/tests/run-quality-tests.sh",
+  "plugins/specclaw-extras/bin/specclaw-party",
+  "plugins/specclaw-extras/tests/run-party-tests.sh",
+  "plugins/specclaw-review/hooks/guard-memory",
+  "plugins/specclaw-review/tests/run-review-tests.sh",
+  "plugins/specclaw-sync/bin/specclaw-azdo-pr",
+  "plugins/specclaw-sync/bin/specclaw-jira-issue",
+  "plugins/specclaw-sync/tests/run-azdo-pr-description-tests.sh",
+  "plugins/specclaw/bin/specclaw-browser-lock",
+  "plugins/specclaw/bin/specclaw-build",
+  "plugins/specclaw/bin/specclaw-change-lock",
+  "plugins/specclaw/bin/specclaw-loop",
+  "plugins/specclaw/bin/specclaw-pr",
+  "plugins/specclaw/bin/specclaw-validate-change",
+  "plugins/specclaw/bin/specclaw-verify"
+ ],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 21458,
+ "round": 3,
+ "since": "b7eeae7805410a29dffc178e3c1246d479483bb6",
+ "status": "escalate",
+ "system_chars": 6742,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1792440274,
+ "ts_start": 1792440228
+}
