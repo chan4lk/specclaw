@@ -58,25 +58,6 @@ chmod +x "$TMP/fake0/jscpd" "$TMP/fake0/lizard"
 out="$(cd "$TMP/p0" && PATH="$TMP/fake0:/usr/bin:/bin" "$SCAN" . --gate)"; rc=$?
 check "046 zero clones → jscpd ran, 0 duplicated lines, gate pass" '[ "$rc" = 0 ] && [ "$(jq -r .tools.jscpd <<<"$out")" = ran ] && [ "$(jq -r .totals.duplicated_lines <<<"$out")" = 0 ] && [ "$(jq -r .gate <<<"$out")" = pass ]'
 
-# Zero clones: jscpd reports no duplicates, so the join's first file is empty. Every
-# scanned file must still be measured at 0 duplicated lines and the gate must pass.
-ZERO="$TMP/zero"; mkdir -p "$ZERO"
-for t in jq git mktemp; do ln -s "$(command -v "$t")" "$ZERO/$t"; done; ln -s "$BASH" "$ZERO/bash"
-cp "$FAKE/lizard" "$ZERO/lizard"
-cat > "$ZERO/jscpd" <<'JS'
-#!/usr/bin/env bash
-out=""; while [ $# -gt 0 ]; do [ "$1" = --output ] && out="$2"; shift; done
-mkdir -p "$out"
-cat > "$out/jscpd-report.json" <<'J'
-{"duplicates":[],
- "summary":{"by":"lines","files":[{"path":"src/a.ts","lines":22},{"path":"src/b.ts","lines":22}]}}
-J
-JS
-chmod +x "$ZERO/jscpd"
-out="$(run "$ZERO" --gate)"; rc=$?
-check "zero clones: jscpd ran, 0 duplicated lines" '[ "$(jq -r .tools.jscpd <<<"$out")" != not_run ] && [ "$(jq -r ".duplicates | length" <<<"$out")" = 0 ]'
-check "zero clones: --gate passes (exit 0)" '[ "$rc" = 0 ]'
-
 # Edge case: tools absent → not_run (never zero duplicates), --gate exits 2.
 # The bare PATH mirrors /usr/bin and /bin minus every way to reach the tools, so
 # the case holds on a runner whose /usr/bin carries npx or uvx.
