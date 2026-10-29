@@ -24,6 +24,8 @@
 - [ ] AC-1: with a jscpd report of `"duplicates":[]` over two scanned files, `specclaw-quality-scan . --gate` reports `tools.jscpd == "ran"`, `totals.lines` equal to the scanned line sum, `totals.duplicated_lines == 0`, `gate == "pass"`, exit 0.
 - [ ] AC-2: the existing planted-duplicate case still lists the duplicate and `--gate` still exits 1.
 - [ ] AC-3: `run-quality-scan-tests.sh` includes the zero-clone case, fails on the unfixed awk, passes on the fixed one.
+- [ ] AC-4: `specclaw-quality-scan . --gate` exits 0 on the repo (no `high` functions); `run-review-tests.sh` still passes.
+- [ ] AC-5: every `plugins/*/.claude-plugin/plugin.json`, `plugins/*/.codex-plugin/plugin.json` and every marketplace entry carries one identical version; review rule R1 names the codex manifests.
 
 ## Edge Cases
 

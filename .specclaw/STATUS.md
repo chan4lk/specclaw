@@ -1,9 +1,9 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** specclaw
-**Last Updated:** 2026-10-20 01:34 UTC
+**Last Updated:** 2026-10-29 12:09 UTC
 
-_4 unnumbered changes · run `/specclaw-extras:renumber` to order them_
+_5 unnumbered changes · run `/specclaw-extras:renumber` to order them_
 
 ## Active Changes
 
@@ -12,11 +12,13 @@ _4 unnumbered changes · run `/specclaw-extras:renumber` to order them_
 - 🔀 **042-lean-output-first** ▣ — pr raised | 16/16 tasks (100%) | 0 failed | PR #93 merged | 19h12m
 - 🔀 **043-headless-pr-and-build-fixes** ▫ — pr raised | 6/6 tasks (100%) | 0 failed | PR #95 merged | 2h32m
 - 🔀 **044-fast-review-loop** ▣ — pr raised | 11/11 tasks (100%) | 0 failed | PR #97 merged | 3h24m
-- 🔍 **045-project-custom-presets** ▫ — verify PASS | 3/3 tasks (100%) | 0 failed
+- 🔀 **045-project-custom-presets** ▫ — pr raised | 3/3 tasks (100%) | 0 failed | PR #101 merged
+- 🔍 **046-quality-scan-zero-clone** ▫ — verify PASS | 4/4 tasks (100%) | 0 failed
 
 ## Pending Proposals
 
-_None._
+
+- 📋 **047-review-core-complexity** — proposal ready, awaiting planning
 
 ## Recently Completed
 
@@ -68,6 +70,6 @@ _None._
 
 ## Stats
 
-- **Total changes:** 49
-- **Active:** 5
+- **Total changes:** 50
+- **Active:** 6
 - **Completed:** 44

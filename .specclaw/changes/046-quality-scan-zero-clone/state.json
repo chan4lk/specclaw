@@ -1,12 +1,13 @@
 {
   "change": "046-quality-scan-zero-clone",
-  "phase": "build",
+  "phase": "verify",
   "branch": "specclaw/046-quality-scan-zero-clone",
   "size": "bounded",
   "phases": {
     "proposal": {"status":"approved","at":"2026-10-29T11:56:02Z"},
     "spec": {"status":"done","at":"2026-10-29T11:56:34Z"},
     "tasks": {"status":"done","at":"2026-10-29T11:56:34Z"},
-    "build": {"status":"in-progress","at":"2026-10-29T11:57:02Z"}
+    "build": {"status":"in-progress","at":"2026-10-29T11:57:02Z"},
+    "verify": {"status":"done","at":"2026-10-29T12:09:15Z","verdict":"PASS"}
   }
 }
