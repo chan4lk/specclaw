@@ -18,7 +18,7 @@ _5 unnumbered changes · run `/specclaw-extras:renumber` to order them_
 ## Pending Proposals
 
 
-- 📋 **047-review-core-complexity** — proposal ready, awaiting planning
+- 📋 **047-review-core-complexity** ▫ — proposal ready, awaiting planning
 
 ## Recently Completed
 

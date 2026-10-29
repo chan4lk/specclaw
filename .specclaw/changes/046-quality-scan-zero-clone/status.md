@@ -13,4 +13,4 @@
 | Design | ⬜ Pending | |
 | Tasks | ✅ Done |  |
 | Build | 🔨 In-progress |  |
-| Verify | ✅ Done | PASS |
+| Verify | ✅ Done | PARTIAL |
