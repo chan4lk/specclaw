@@ -19,10 +19,10 @@ You can use Bash freely (auto permission mode). Useful binaries on PATH: git, gh
 **Always bump the plugin version before opening a PR.** This applies to every PR — features, fixes, and chores alike.
 
 Version files to bump (patch increment `X.Y.Z → X.Y.Z+1`):
-- `plugins/specclaw/.claude-plugin/plugin.json` — `"version"` field
-- `.claude-plugin/marketplace.json` — `"version"` field inside the `"plugins"` array entry for `"specclaw"`
+- every `plugins/*/.claude-plugin/plugin.json` — `"version"` field
+- `.claude-plugin/marketplace.json` — `"version"` field of every entry in the `"plugins"` array
 
-Both files must stay in sync. Commit the bump as a separate commit (`chore: bump version to X.Y.Z`) before or as part of the PR branch. `specclaw-pr` will auto-bump via `ensure_version_bumped()` if `plugin.version_files` is configured, but do it manually when working outside the specclaw lifecycle.
+All plugins must stay at the same version (review rule R1, `.specclaw/review/rules/versions.md`). Commit the bump as a separate commit (`chore: bump version to X.Y.Z`) before or as part of the PR branch. `specclaw-pr` will auto-bump via `ensure_version_bumped()` if `plugin.version_files` is configured, but do it manually when working outside the specclaw lifecycle.
 
 # Cloning additional repos
 
