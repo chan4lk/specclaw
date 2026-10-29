@@ -71,48 +71,63 @@ def _strip_comment(line):
     return "".join(out).rstrip()
 
 
+def _block_body(text, block):
+    """The lines of a column-0 `block:`, the whole text when block is None, None if it is absent."""
+    lines = text.splitlines()
+    if block is None:
+        return lines
+    start = next((i for i, ln in enumerate(lines) if re.match(r"^" + re.escape(block) + r":\s*(#.*)?$", ln)), None)
+    if start is None:
+        return None
+    body = []
+    for ln in lines[start + 1:]:
+        if ln.strip() and not ln[0].isspace() and not ln.lstrip().startswith("#"):
+            break
+        body.append(ln)
+    return body
+
+
+def _indented_rows(lines):
+    rows = []
+    for ln in lines:
+        s = _strip_comment(ln)
+        if s.strip():
+            rows.append((len(s) - len(s.lstrip()), s.strip()))
+    return rows
+
+
+def _fold_row(out, key, base, ind, s):
+    """Fold one parsed row into `out`; returns the key the rows after it attach to."""
+    if ind == base and not s.startswith("- "):
+        k, _, v = s.partition(":")
+        key = k.strip()
+        out[key] = _scalar(v) if v.strip() else None
+    elif key is not None and s.startswith("- "):
+        if not isinstance(out.get(key), list):
+            out[key] = []
+        out[key].append(_scalar(s[2:]))
+    elif key is not None and ind > base:
+        if not isinstance(out.get(key), dict):
+            out[key] = {}
+        k, _, v = s.partition(":")
+        out[key][k.strip()] = _scalar(v)
+    return key
+
+
 def parse_block(text, block=None):
     """Parse a column-0 `block:` (or the top level when None) of a simple YAML file.
 
     Handles scalars, inline lists, `- item` lists and one nested map level. Block-scoped on
     purpose: a whole-file key search finds same-named keys in other blocks.
     """
-    lines = text.splitlines()
-    if block is not None:
-        start = next((i for i, ln in enumerate(lines) if re.match(r"^" + re.escape(block) + r":\s*(#.*)?$", ln)), None)
-        if start is None:
-            return {}
-        body = []
-        for ln in lines[start + 1:]:
-            if ln.strip() and not ln[0].isspace() and not ln.lstrip().startswith("#"):
-                break
-            body.append(ln)
-        lines = body
-    rows = []
-    for ln in lines:
-        s = _strip_comment(ln)
-        if s.strip():
-            rows.append((len(s) - len(s.lstrip()), s.strip()))
+    lines = _block_body(text, block)
+    rows = _indented_rows(lines) if lines is not None else []
     if not rows:
         return {}
     base = min(r[0] for r in rows)
-    out, key, i = {}, None, 0
-    while i < len(rows):
-        ind, s = rows[i]
-        if ind == base and not s.startswith("- "):
-            k, _, v = s.partition(":")
-            key = k.strip()
-            out[key] = _scalar(v) if v.strip() else None
-        elif key is not None and s.startswith("- "):
-            if not isinstance(out.get(key), list):
-                out[key] = []
-            out[key].append(_scalar(s[2:]))
-        elif key is not None and ind > base:
-            if not isinstance(out.get(key), dict):
-                out[key] = {}
-            k, _, v = s.partition(":")
-            out[key][k.strip()] = _scalar(v)
-        i += 1
+    out, key = {}, None
+    for ind, s in rows:
+        key = _fold_row(out, key, base, ind, s)
     return out
 
 
@@ -581,6 +596,44 @@ def append_follow_ups(cdir, findings, round_no):
     return len(new)
 
 
+def _run_passes(cfg, cls, rec, diff, model, prev, final):
+    """Run every configured review pass over the diff; records the prompt sizes on `rec`."""
+    impact = impact_set(cfg, diff, set(cls["files"]))
+    prior = blocking(prev[-1]["findings"]) if prev and not final else []
+    passes = cfg.lst("passes") or ["review"]
+    unknown = [p for p in passes if p not in PASS_PROMPTS]
+    if unknown:
+        raise ReviewError(f"unknown review pass(es): {', '.join(unknown)} (known: {', '.join(PASS_PROMPTS)})")
+    system = build_system(cfg, cls)
+    rec.update(passes=passes, tools=str(cfg.get("tools", "") or ""), system_chars=len(system),
+               impact=sorted(impact))
+    raw = []
+    for name in passes:
+        prompt = build_prompt(cfg, diff, impact, prior, final, PASS_PROMPTS[name])
+        for f in parse_findings(call_backend(cfg, model, system, prompt)):
+            f["pass"] = name
+            raw.append(f)
+    rec["prompt_chars"] = len(system) + len(prompt)
+    return raw
+
+
+def _settle_round(cfg, cdir, change, rec, found, prev, n):
+    """Judge the calibrated findings: status, escalation, lesson memory and follow-ups."""
+    rec["findings"] = found
+    block = blocking(found)
+    seen = {}
+    for r in prev:
+        for f in blocking(r.get("findings", [])):
+            seen.setdefault((f.get("rule"), f["file"]), set()).add(r["round"])
+    repeat = [f for f in block if len(seen.get((f.get("rule"), f["file"]), ())) >= 2]
+    rec["status"] = "escalate" if repeat else "open" if block else "clean"
+    rec["escalated"] = [f["fp"] for f in repeat]
+    # a lesson counts once per change: a finding still open next round is not a recurrence
+    known = {g.get("fp") for r in prev for g in r.get("findings", [])}
+    mem.put(cfg.mem_dir, [dict(f, lesson=f.get("message")) for f in block if f["fp"] not in known], change)
+    append_follow_ups(cdir, found, n)
+
+
 def run_round(cfg, change, since=None, final=False):
     cdir = change_dir(cfg, change)
     ensure(cfg)
@@ -599,36 +652,8 @@ def run_round(cfg, change, since=None, final=False):
             diff = diff_text(cfg, cls["files"], since)
             if not diff.strip():
                 raise ReviewError("empty diff for a non-skip change", 3)
-            impact = impact_set(cfg, diff, set(cls["files"]))
-            prior = blocking(prev[-1]["findings"]) if prev and not final else []
-            passes = cfg.lst("passes") or ["review"]
-            unknown = [p for p in passes if p not in PASS_PROMPTS]
-            if unknown:
-                raise ReviewError(f"unknown review pass(es): {', '.join(unknown)} (known: {', '.join(PASS_PROMPTS)})")
-            system = build_system(cfg, cls)
-            rec.update(passes=passes, tools=str(cfg.get("tools", "") or ""), system_chars=len(system),
-                       impact=sorted(impact))
-            raw = []
-            for name in passes:
-                prompt = build_prompt(cfg, diff, impact, prior, final, PASS_PROMPTS[name])
-                for f in parse_findings(call_backend(cfg, model, system, prompt)):
-                    f["pass"] = name
-                    raw.append(f)
-            rec["prompt_chars"] = len(system) + len(prompt)
-            found = calibrate(cfg, raw)
-            rec["findings"] = found
-            block = blocking(found)
-            seen = {}
-            for r in prev:
-                for f in blocking(r.get("findings", [])):
-                    seen.setdefault((f.get("rule"), f["file"]), set()).add(r["round"])
-            repeat = [f for f in block if len(seen.get((f.get("rule"), f["file"]), ())) >= 2]
-            rec["status"] = "escalate" if repeat else "open" if block else "clean"
-            rec["escalated"] = [f["fp"] for f in repeat]
-            # a lesson counts once per change: a finding still open next round is not a recurrence
-            known = {g.get("fp") for r in prev for g in r.get("findings", [])}
-            mem.put(cfg.mem_dir, [dict(f, lesson=f.get("message")) for f in block if f["fp"] not in known], change)
-            append_follow_ups(cdir, found, n)
+            raw = _run_passes(cfg, cls, rec, diff, model, prev, final)
+            _settle_round(cfg, cdir, change, rec, calibrate(cfg, raw), prev, n)
     except ReviewError as e:
         if e.code != 3:
             raise
@@ -647,6 +672,18 @@ EXIT_BY_STATUS = {"clean": 0, "skipped": 0, "open": 1, "not_run": 3, "escalate":
 
 # ─── verdict ─────────────────────────────────────────────────────────────────
 
+def _final_pass_drift(cfg, fsha):
+    """(still_ok, note) for a final pass that is not HEAD: only records-only commits may follow it."""
+    reachable = subprocess.run(["git", "-C", cfg.root, "merge-base", "--is-ancestor", fsha, "HEAD"],
+                               capture_output=True).returncode == 0
+    if not reachable:
+        return False, " (the final pass is not in HEAD's history: rebased or shallow; run --final again)"
+    later = [f for f in git(cfg.root, "diff", "--name-only", f"{fsha}..HEAD").splitlines() if f.strip()]
+    if any(not is_skip(cfg, f) for f in later):
+        return False, " (code changed after the final pass)"
+    return True, " (+ records-only commits)"
+
+
 def verdict(cfg, change):
     cdir = change_dir(cfg, change)
     rs = rounds(cdir)
@@ -661,16 +698,7 @@ def verdict(cfg, change):
     ok = state == "CLEAN" and fsha is not None and last.get("final")
     note = ""
     if ok and fsha != now:
-        reachable = subprocess.run(["git", "-C", cfg.root, "merge-base", "--is-ancestor", fsha, "HEAD"],
-                                   capture_output=True).returncode == 0
-        later = [f for f in git(cfg.root, "diff", "--name-only", f"{fsha}..HEAD").splitlines() if f.strip()] \
-            if reachable else []
-        if not reachable:
-            ok, note = False, " (the final pass is not in HEAD's history: rebased or shallow; run --final again)"
-        elif any(not is_skip(cfg, f) for f in later):
-            ok, note = False, " (code changed after the final pass)"
-        else:
-            note = " (+ records-only commits)"
+        ok, note = _final_pass_drift(cfg, fsha)
     if state == "CLEAN" and not ok and not note:
         note = " (final pass missing)"
     final_txt = fsha[:10] if fsha else "missing"
@@ -810,8 +838,8 @@ def _pr_host(cfg):
     return "none detected"
 
 
-def discover(cfg):
-    """Read-only scan for the repo's own review governance; suggests config, writes nothing."""
+def _scan_governance(cfg):
+    """Tracked docs that look like review governance, one record per file, first category wins."""
     tracked = git(cfg.root, "ls-files").splitlines()
     tracked = [t for t in tracked if t.lower().endswith(DOC_EXT) and not any(glob_match(t.lower(), p) for p in DISCOVER_SKIP)]
     seen, found = set(), []
@@ -826,6 +854,12 @@ def discover(cfg):
                 continue
             found.append({"category": cat, "path": t, "lines": text.count("\n") + 1, "chars": len(text),
                           "defines_severity": bool(SEVERITY_RE.search(text))})
+    return found
+
+
+def discover(cfg):
+    """Read-only scan for the repo's own review governance; suggests config, writes nothing."""
+    found = _scan_governance(cfg)
     inline = [f for f in found if not f["category"].startswith("decisions")]
     budget = cfg.num("governance_budget", 200000)
     total = sum(f["chars"] for f in inline)
