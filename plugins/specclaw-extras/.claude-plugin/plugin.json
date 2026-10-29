@@ -1,6 +1,6 @@
 {
   "name": "specclaw-extras",
-  "version": "0.8.3",
+  "version": "0.8.4",
   "description": "Optional specclaw skills: auto, loop, learn, patterns, context, author-spec, debug, renumber and the review panel.",
   "author": {
     "name": "Chandima Ranaweera",
