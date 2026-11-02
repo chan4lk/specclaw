@@ -19,9 +19,9 @@ async function refresh($: EngineInterface) {
 }
 
 async function refreshQuietly($: EngineInterface) {
-  await refresh($).catch(() => {
-    $.ui.status(statusText(UNREADABLE))
-    return update($, snapshot, () => UNREADABLE).catch(() => undefined)
+  await refresh($).catch(async () => {
+    await Promise.resolve().then(() => $.ui.status(statusText(UNREADABLE))).catch(() => undefined)
+    await update($, snapshot, () => UNREADABLE).catch(() => undefined)
   })
 }
 

@@ -21,6 +21,7 @@ const AC6: [string | undefined, Snapshot, string][] = [
   ['/repo/.specclaw/state.json', UNAPPROVED, 'allow'],
   ['/repo/.specclaw/changes/x/sub/state.json', UNAPPROVED, 'allow'],
   ['/repo/.specclaw/changes/x/state.json', UNAPPROVED, 'deny'],
+  ['/repo/.specclaw/changes/x/STATE.JSON', UNAPPROVED, 'deny'],
   ['\\repo\\.specclaw\\changes\\x\\state.json', UNAPPROVED, 'deny'],
   ['/repo/cafe\u0301.ts', UNAPPROVED, 'deny'],
 ]

@@ -16,8 +16,8 @@ export type GateInput = {
 }
 
 const ALLOW: GateVerdict = { action: 'allow' }
-const EXEMPT = /^\.(specclaw|git)(\/|$)/
-const STATE_FILE = /^\.specclaw\/changes\/[^/]+\/state\.json$/
+const EXEMPT = /^\.(specclaw|git)(\/|$)/i
+const STATE_FILE = /^\.specclaw\/changes\/[^/]+\/state\.json$/i
 
 const slash = (path: string) => path.replaceAll('\\', '/').normalize('NFC')
 
