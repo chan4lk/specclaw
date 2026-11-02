@@ -1,0 +1,13 @@
+{
+  "change": "047-specclaw-mod",
+  "phase": "build",
+  "branch": "specclaw/047-specclaw-mod",
+  "size": "architectural",
+  "phases": {
+    "proposal": {"status":"approved","at":"2026-11-02T12:33:49Z"},
+    "spec": {"status":"done","at":"2026-11-02T12:35:27Z"},
+    "design": {"status":"done","at":"2026-11-02T12:35:27Z"},
+    "tasks": {"status":"done","at":"2026-11-02T12:35:27Z"},
+    "build": {"status":"in-progress","at":"2026-11-02T12:38:23Z"}
+  }
+}
