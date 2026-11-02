@@ -11,9 +11,11 @@ test('AC1 reads full and lean task lists, verdict and PR', () => {
   expect(LEAN).toMatchObject({ phase: 'build', done: 1, total: 2, failed: 0 })
 })
 
-test('AC2 malformed state.json yields phase ? without throwing', () => {
-  const change = parseChange({ name: '001-bad', state: '{nope', mtimeMs: 0 })
-  expect(change).toMatchObject({ phase: '?', approved: false, total: 0 })
+test('AC2 malformed or non-object state.json yields phase ? without throwing', () => {
+  for (const state of ['{nope', 'null', '42', '[]', '"s"']) {
+    const change = parseChange({ name: '001-bad', state, mtimeMs: 0 })
+    expect(change).toMatchObject({ phase: '?', approved: false, total: 0 })
+  }
 })
 
 test('AC3 current change is the active one with the newest state.json', () => {

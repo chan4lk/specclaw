@@ -13,8 +13,9 @@ fi
 
 if command -v claude >/dev/null 2>&1; then
   claude plugin validate "$PLUGIN_DIR" || FAILS=$((FAILS + 1))
+  NOTE=""
 else
-  echo "SKIP: claude not on PATH, plugin validate not run (AC-8)"
+  NOTE=" (claude plugin validate not run: claude not on PATH, AC-8 unverified)"
 fi
 
-[ "$FAILS" -eq 0 ] && echo "ALL PASS" || { echo "$FAILS step(s) failed"; exit 1; }
+[ "$FAILS" -eq 0 ] && echo "ALL PASS${NOTE:-}" || { echo "$FAILS step(s) failed"; exit 1; }

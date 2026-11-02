@@ -18,7 +18,7 @@ const ALLOW: GateVerdict = { action: 'allow' }
 
 const normalise = (path: string) => {
   const parts: string[] = []
-  for (const part of path.split('/')) {
+  for (const part of path.replaceAll('\\', '/').split('/')) {
     if (part === '..') parts.pop()
     else if (part !== '' && part !== '.') parts.push(part)
   }
@@ -27,14 +27,17 @@ const normalise = (path: string) => {
 
 const relativeInside = (cwd: string, path: string) => {
   const root = normalise(cwd)
-  const target = normalise(path.startsWith('/') ? path : `${cwd}/${path}`)
-  return target.startsWith(root + '/') ? target.slice(root.length + 1) : undefined
+  const isAbsolute = /^([A-Za-z]:)?[\\/]/.test(path)
+  const target = normalise(isAbsolute ? path : `${cwd}/${path}`)
+  const prefix = root === '/' ? '/' : root + '/'
+  return target.startsWith(prefix) ? target.slice(prefix.length) : undefined
 }
 
 export const gateDecision = ({ cwd, path, mode, snapshot }: GateInput): GateVerdict => {
   if (mode === 'off' || !snapshot.hasSpecclaw) return ALLOW
   const relative = relativeInside(cwd, path)
-  if (relative === undefined || /^\.(specclaw|git)(\/|$)/.test(relative)) return ALLOW
+  if (relative === undefined) return ALLOW
+  if (/^\.(specclaw|git)(\/|$)/.test(relative) && !relative.endsWith('/state.json')) return ALLOW
   if (active(snapshot.changes).some(change => change.approved)) return ALLOW
   return {
     action: mode === 'warn' ? 'warn' : 'deny',

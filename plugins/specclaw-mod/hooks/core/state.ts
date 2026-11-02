@@ -32,7 +32,8 @@ export const countTasks = (text: string) => {
 
 const readJson = (text: string) => {
   try {
-    return JSON.parse(text)
+    const value = JSON.parse(text)
+    return typeof value === 'object' && value !== null && !Array.isArray(value) ? value : undefined
   } catch {
     return undefined
   }
@@ -48,7 +49,7 @@ export const parseChange = (files: ChangeFiles): Change => {
     approved: phases.proposal?.status === 'approved',
     ...countTasks(tasks),
     verdict: phases.verify?.verdict,
-    pr: phases.pr?.url,
+    pr: phases.pr?.url ?? (typeof json?.pr === 'string' ? json.pr : undefined),
     mtimeMs: files.mtimeMs,
   }
 }

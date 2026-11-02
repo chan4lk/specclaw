@@ -43,9 +43,9 @@ export const register: Register = (on, options) => {
 
   on('tool.call', async ($, e, next) => {
     const ran = await next(e)
-    if (JSON.stringify(e).includes('.specclaw')) await refresh($)
+    if (JSON.stringify(e).includes('.specclaw')) await refresh($).catch(() => undefined)
     return ran
-  }).catch(($, e, next) => next(e))
+  })
 
   on('tool.call', { tool: ['Edit', 'Write', 'NotebookEdit'] }, async ($, e, next) => {
     const path = 'notebook_path' in e ? e.notebook_path : e.file_path
