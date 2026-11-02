@@ -54,13 +54,14 @@ export const register: Register = (on, options) => {
   on('tool.call', { tool: ['Edit', 'Write', 'NotebookEdit'] }, async ($, e, next) => {
     if (mode === 'off') return next(e)
     const path = 'notebook_path' in e ? e.notebook_path : e.file_path
-    const { root, changes, target } = await placeInCwd($, path)
-    const verdict = gateDecision({ root, changes, target, path, mode, snapshot: await refresh($) })
+    const placed = await placeInCwd($, path)
+    const verdict = gateDecision({ ...placed, path, mode, snapshot: await refresh($) })
     if (verdict.action === 'deny') return { deny: verdict.message }
     if (verdict.action === 'warn') await Promise.resolve().then(() => $.ui.toast(verdict.message)).catch(() => $.ui.status(verdict.message))
     return next(e)
-  }).catch(($, e, next) => {
-    if (!next.called) $.ui.toast('specclaw: the propose gate failed; the edit was allowed.')
+  }).catch(async ($, e, next) => {
+    const failed = 'specclaw: the propose gate failed; the edit was allowed.'
+    if (!next.called) await Promise.resolve().then(() => $.ui.toast(failed)).catch(() => $.ui.status(failed))
     return next(e)
   })
 

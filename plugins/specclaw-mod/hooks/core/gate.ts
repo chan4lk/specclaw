@@ -10,6 +10,7 @@ export type GateVerdict =
 export type GateInput = {
   root: string
   changes?: string
+  spelled?: string
   target: string | undefined
   path: string
   mode: GateMode
@@ -38,13 +39,13 @@ const held = (mode: GateMode, file: string): GateVerdict => ({
 const isStateFile = (changes: string | undefined, target: string) =>
   changes !== undefined && CHANGE_STATE.test(relativeInside(changes, target) ?? '')
 
-export const gateDecision = ({ root, changes, target, path, mode, snapshot }: GateInput): GateVerdict => {
+export const gateDecision = ({ root, changes, spelled, target, path, mode, snapshot }: GateInput): GateVerdict => {
   if (mode === 'off' || !snapshot.hasSpecclaw) return ALLOW
   if (active(snapshot.changes).some(change => change.approved)) return ALLOW
   if (snapshot.isUnreadable || snapshot.changes.some(change => change.isUnreadable)) {
     throw new Error('specclaw: could not read every change')
   }
-  if (target === undefined) return held(mode, path)
+  if (target === undefined || STATE_FILE.test(spelled ?? '')) return held(mode, path)
   if (isStateFile(changes, target)) return held(mode, path)
   const relative = relativeInside(root, target)
   if (relative === undefined) return ALLOW

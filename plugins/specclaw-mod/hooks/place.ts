@@ -38,10 +38,22 @@ async function placePath($: EngineInterface, cwd: string, path: string) {
   return undefined
 }
 
+const spelledInCwd = (cwd: string, path: string) => {
+  const parts: string[] = []
+  const full = ABSOLUTE.test(path) ? path : `${cwd}/${path}`
+  for (const part of full.replaceAll('\\', '/').split('/')) {
+    if (part === '..') parts.pop()
+    else if (part !== '' && part !== '.') parts.push(part)
+  }
+  const base = cwd.replaceAll('\\', '/').split('/').filter(part => part !== '' && part !== '.')
+  const isInside = base.every((part, index) => parts[index]?.toLowerCase() === part.toLowerCase())
+  return isInside ? parts.slice(base.length).join('/') : undefined
+}
+
 export async function placeInCwd($: EngineInterface, path: string) {
   const cwd = await $.session.cwd()
   const root = await realPathOf($, cwd)
   if (root === undefined) throw new Error(`specclaw: cannot resolve ${cwd}`)
-  const changes = await realPathOf($, `${cwd}/.specclaw/changes`)
-  return { root, changes, target: await placePath($, cwd, path) }
+  const changes = await placePath($, cwd, '.specclaw/changes')
+  return { root, changes, spelled: spelledInCwd(cwd, path), target: await placePath($, cwd, path) }
 }
