@@ -9,6 +9,7 @@ test('AC1 reads full and lean task lists, verdict and PR', () => {
     verdict: 'PASS', pr: 'https://x/pr/1',
   })
   expect(LEAN).toMatchObject({ phase: 'build', done: 1, total: 2, failed: 0 })
+  expect(parseChange({ name: '002-top', state: '{"phase":"pr","pr":"u"}', mtimeMs: 0 }).pr).toBe('u')
 })
 
 test('AC2 malformed or non-object state.json yields phase ? without throwing', () => {

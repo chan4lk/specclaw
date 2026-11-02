@@ -9,13 +9,14 @@ if ! command -v bun >/dev/null 2>&1; then
   exit 1
 fi
 
-(cd "$PLUGIN_DIR" && bun test tests/) || FAILS=$((FAILS + 1))
+(cd "$PLUGIN_DIR" && bun test ./tests/*.spec.ts) || FAILS=$((FAILS + 1))
 
 if command -v claude >/dev/null 2>&1; then
   claude plugin validate "$PLUGIN_DIR" || FAILS=$((FAILS + 1))
-  NOTE=""
+  claude plugin test "$PLUGIN_DIR" || FAILS=$((FAILS + 1))
+  RESULT="ALL PASS"
 else
-  NOTE=" (claude plugin validate not run: claude not on PATH, AC-8 unverified)"
+  RESULT="PARTIAL: bun tests passed; claude plugin validate and claude plugin test not run (claude not on PATH)"
 fi
 
-[ "$FAILS" -eq 0 ] && echo "ALL PASS${NOTE:-}" || { echo "$FAILS step(s) failed"; exit 1; }
+[ "$FAILS" -eq 0 ] && echo "$RESULT" || { echo "$FAILS step(s) failed"; exit 1; }

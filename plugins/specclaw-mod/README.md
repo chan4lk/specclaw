@@ -34,7 +34,7 @@ If the gate itself fails, it allows the edit and shows a toast.
 - Any approved change that has not been archived unlocks edits. Archive merged changes to keep the gate meaningful.
 - File writes through `Bash` (`sed -i`, redirects) are not checked.
 - `.specclaw/` is looked up only in the session's working directory, not in parent folders.
-- Paths are compared as text: symbolic links are not resolved, and Windows drive letters must match in case.
+- Paths are compared as text and without regard to case, so a path that differs only in case is treated as inside the project. Symbolic links are not resolved.
 
 ## Development
 

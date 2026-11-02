@@ -30,14 +30,18 @@ const relativeInside = (cwd: string, path: string) => {
   const isAbsolute = /^([A-Za-z]:)?[\\/]/.test(path)
   const target = normalise(isAbsolute ? path : `${cwd}/${path}`)
   const prefix = root === '/' ? '/' : root + '/'
-  return target.startsWith(prefix) ? target.slice(prefix.length) : undefined
+  const isInside = target.toLowerCase().startsWith(prefix.toLowerCase())
+  return isInside ? target.slice(prefix.length) : undefined
 }
+
+const EXEMPT = /^\.(specclaw|git)(\/|$)/i
+const STATE_FILE = /^\.specclaw\/changes\/[^/]+\/state\.json$/i
 
 export const gateDecision = ({ cwd, path, mode, snapshot }: GateInput): GateVerdict => {
   if (mode === 'off' || !snapshot.hasSpecclaw) return ALLOW
   const relative = relativeInside(cwd, path)
   if (relative === undefined) return ALLOW
-  if (/^\.(specclaw|git)(\/|$)/.test(relative) && !relative.endsWith('/state.json')) return ALLOW
+  if (EXEMPT.test(relative) && !STATE_FILE.test(relative)) return ALLOW
   if (active(snapshot.changes).some(change => change.approved)) return ALLOW
   return {
     action: mode === 'warn' ? 'warn' : 'deny',
