@@ -36,6 +36,9 @@ const held = (mode: GateMode, file: string): GateVerdict => ({
 export const gateDecision = ({ root, target, path, mode, snapshot }: GateInput): GateVerdict => {
   if (mode === 'off' || !snapshot.hasSpecclaw) return ALLOW
   if (active(snapshot.changes).some(change => change.approved)) return ALLOW
+  if (snapshot.isUnreadable || snapshot.changes.some(change => change.isUnreadable)) {
+    throw new Error('specclaw: could not read every change')
+  }
   if (target === undefined) return held(mode, path)
   const relative = relativeInside(root, target)
   if (relative === undefined) return ALLOW

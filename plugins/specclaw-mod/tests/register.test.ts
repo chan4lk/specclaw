@@ -12,6 +12,8 @@ const FAILURES: [string, () => unknown][] = [
 for (const [shape, fail] of FAILURES) {
   test(`FR6 a refresh that ${shape} after a tool call runs the tool once and keeps its result`, async ($, on) => {
     let runs = 0
+    const statuses: (string | undefined)[] = []
+    on('ui.status', (_, e) => (statuses.push(e.text), { value: undefined }))
     on('tool.call', () => {
       runs += 1
       return { result: { stdout: 'ok' } }
@@ -20,5 +22,6 @@ for (const [shape, fail] of FAILURES) {
     const ran = await $.tool.call({ tool: 'Bash', command: 'cat .specclaw/x' })
     expect(runs).toBe(1)
     expect(ran.result).toEqual({ stdout: 'ok' })
+    expect(statuses.at(-1)).toBe('specclaw: could not read changes')
   })
 }

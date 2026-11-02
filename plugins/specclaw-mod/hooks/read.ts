@@ -24,7 +24,7 @@ async function readChange($: EngineInterface, root: string, name: string): Promi
 }
 
 async function readOrUnknown($: EngineInterface, root: string, name: string) {
-  return readChange($, root, name).catch(() => parseChange({ name, state: '', mtimeMs: 0 }))
+  return readChange($, root, name).catch(() => ({ ...parseChange({ name, state: '', mtimeMs: 0 }), isUnreadable: true }))
 }
 
 export async function readSnapshot($: EngineInterface, cwd: string): Promise<Snapshot> {

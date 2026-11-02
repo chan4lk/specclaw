@@ -33,6 +33,10 @@ test('AC6 gates resolved project files, state.json and unplaceable paths only wh
   const windows = gateDecision({ root: 'C:\\proj', target: 'C:\\proj\\src\\a.ts', path: 'a', mode: 'block', snapshot: UNAPPROVED })
   const atRoot = gateDecision({ root: '/', target: '/etc/x', path: 'a', mode: 'block', snapshot: UNAPPROVED })
   expect([windows.action, atRoot.action]).toEqual(['deny', 'deny'])
+  const unreadable = snapshot({ ...FULL, approved: false, isUnreadable: true })
+  expect(() => decide('/repo/src/a.ts', unreadable)).toThrow('could not read every change')
+  expect(() => decide('/repo/src/a.ts', { ...UNAPPROVED, isUnreadable: true })).toThrow()
+  expect(decide('/repo/src/a.ts', snapshot(FULL, { ...FULL, isUnreadable: true }))).toBe('allow')
 })
 
 test('AC7 warn allows with a message and off allows silently', () => {

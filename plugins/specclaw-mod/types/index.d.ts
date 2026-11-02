@@ -8,6 +8,7 @@ export type SpecclawChange = {
   verdict?: string
   pr?: string
   mtimeMs: number
+  isUnreadable?: boolean
 }
 
 export type SpecclawSnapshot = { hasSpecclaw: boolean; isUnreadable?: boolean; changes: SpecclawChange[] }

@@ -38,7 +38,7 @@ for (const [file_path, runs] of ROWS) {
     on('fs.list', () => ({ value: [] }))
     on('fs.stat', (_, e) => {
       const realPath = REAL[e.path === '/link/..' ? '/' : e.path] ?? (e.path === '/' ? '/' : undefined)
-      if (realPath === undefined) throw new Error('ENOENT')
+      if (realPath === undefined) return { deny: 'ENOENT' }
       return { value: { kind: 'dir', size: 0, mtimeMs: 0, isLink: false, realPath } }
     })
     on('tool.call', () => ((ran = true), { result: {} }))

@@ -29,7 +29,7 @@ export const register: Register = (on, options) => {
   const mode = (options.gate ?? 'block') as GateMode
 
   on('session.start', async ($, e, next) => {
-    await $.command.register({ name: 'specclaw-pane', description: 'Show the active specclaw changes in a pane' }).catch(() => undefined)
+    await $.command.register({ name: 'specclaw-pane', description: 'Show the active specclaw changes in a pane' }).catch(() => $.ui.toast('specclaw: /specclaw-pane could not be registered.'))
     await refreshQuietly($)
     return next(e)
   })

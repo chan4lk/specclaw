@@ -4,9 +4,15 @@ const UNPLACEABLE = /^(?:[A-Za-z]:(?![\\/])|\\\\|\/\/)/
 const ABSOLUTE = /^(?:[A-Za-z]:)?[\\/]/
 const BAD_NAME = /^$|^\.\.?$|:|[. ]$/
 
+const MISSING = /\b(ENOENT|ENOTDIR)\b/
+
 async function realPathOf($: EngineInterface, path: string) {
-  const stat = await $.fs.stat(path, { resolve: true }).catch(() => undefined)
-  return stat?.realPath
+  try {
+    return (await $.fs.stat(path, { resolve: true })).realPath
+  } catch (error) {
+    if (MISSING.test(error instanceof Error ? error.message : String(error))) return undefined
+    throw error
+  }
 }
 
 const parentOf = (dir: string) => {
