@@ -29,7 +29,7 @@ Pure core with tests first, then the mod wiring, then packaging and CI.
 
 ### Wave 3 — Ship
 
-- [ ] `T3` — Marketplace entry + version bump to 0.8.5 across all plugins (AC-9)
+- [x] `T3` — Marketplace entry + version bump to 0.8.5 across all plugins (AC-9)
   - Files: .claude-plugin/marketplace.json, plugins/*/.claude-plugin/plugin.json
   - Estimate: small
   - Kind: config

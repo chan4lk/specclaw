@@ -1,6 +1,6 @@
 {
   "name": "specclaw-mod",
-  "version": "0.8.4",
+  "version": "0.8.5",
   "description": "Claude Code mod for specclaw: a changes pane, a band above the prompt, a status line entry and a propose-gate guard on edits.",
   "author": {
     "name": "Chandima Ranaweera",
