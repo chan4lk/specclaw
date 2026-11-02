@@ -22,7 +22,7 @@ for (const [shape, fail] of SHAPES) {
       let reached = 0
       const statuses: (string | undefined)[] = []
       on('ui.status', (_, e) => (statuses.push(e.text), { value: undefined }))
-      on('command.register', () => ({ value: { command: 'specclaw-pane' } }))
+      on('command.register', event === 'session.start' ? fail : () => ({ value: { command: 'specclaw-pane' } }))
       on('ui.open', () => ({ value: { isPlaced: true } }))
       on('session.cwd', fail)
       on('session.start', (_, e) => (reached += 1, { cwd: e.cwd }))
