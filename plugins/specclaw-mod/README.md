@@ -27,7 +27,7 @@ Set `gate` in the plugin's config (`/plugin`, then the plugin's options) to:
 - `warn`: allow the edit and show that message as a toast.
 - `off`: no check.
 
-If the gate itself fails, it allows the edit and shows a toast.
+If the gate itself fails (for example, it cannot read `.specclaw/`), it allows the edit and shows a toast, in every mode. This is deliberate: a broken gate must never stop work.
 
 **Known gaps:**
 

@@ -12,7 +12,7 @@
 - **FR-5 Status line.** `specclaw: <n> active` plus ` · building <NNN>` when a change's phase is `build`; cleared when `.specclaw/` is absent.
 - **FR-6 Refresh.** State is re-read at `session.start`, after every tool call whose input path or command mentions `.specclaw`, after each `turn.complete`, and when `/specclaw-pane` runs. Readings are stored in `$.state` so pane and band redraw.
 - **FR-7 Propose gate.** On `Edit`, `Write`, `NotebookEdit`: when the target path resolves inside the session cwd, outside `<cwd>/.specclaw/` and outside `<cwd>/.git/`, the project has `.specclaw/`, and no active change has `proposal` status `approved` — the call is denied with: `specclaw: no approved change is open. Run /specclaw:propose and get approval before editing <relpath>.` Otherwise the call proceeds.
-- **FR-8 Gate modes.** `userConfig.gate` ∈ `block` (default) | `warn` | `off`. `warn` lets the call run and shows a toast with the same text; `off` skips the check. A guard failure (thrown error) fails open with a toast, never blocks.
+- **FR-8 Gate modes.** `userConfig.gate` ∈ `block` (default) | `warn` | `off`. `warn` lets the call run and shows a toast with the same text; `off` skips the check. A guard failure (thrown error) fails open with a toast, never blocks. This was confirmed by the operator on 2026-11-02 after review round 5 proposed failing closed: a broken gate must never stop work, and `block` mode only governs the case where the gate ran.
 - **FR-9 Packaging.** `plugins/specclaw-mod` is listed in `.claude-plugin/marketplace.json`; every plugin is at one version (R1).
 
 ## Non-Functional Requirements
