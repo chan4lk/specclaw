@@ -42,5 +42,6 @@ export async function placeInCwd($: EngineInterface, path: string) {
   const cwd = await $.session.cwd()
   const root = await realPathOf($, cwd)
   if (root === undefined) throw new Error(`specclaw: cannot resolve ${cwd}`)
-  return { root, target: await placePath($, cwd, path) }
+  const changes = await realPathOf($, `${cwd}/.specclaw/changes`)
+  return { root, changes, target: await placePath($, cwd, path) }
 }

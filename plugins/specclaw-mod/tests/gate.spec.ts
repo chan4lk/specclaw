@@ -17,6 +17,7 @@ const AC6: [string | undefined, Snapshot, string][] = [
   ['/elsewhere/a.ts', UNAPPROVED, 'allow'],
   ['/repository/a.ts', UNAPPROVED, 'allow'],
   ['/repo/.git/config', UNAPPROVED, 'allow'],
+  ['/repo/.GIT/config', UNAPPROVED, 'deny'],
   ['/repo/.specclaw/changes/x/spec.md', UNAPPROVED, 'allow'],
   ['/repo/.specclaw/state.json', UNAPPROVED, 'allow'],
   ['/repo/.specclaw/changes/x/sub/state.json', UNAPPROVED, 'allow'],
@@ -33,6 +34,9 @@ test('AC6 gates resolved project files, state.json and unplaceable paths only wh
   const windows = gateDecision({ root: 'C:\\proj', target: 'C:\\proj\\src\\a.ts', path: 'a', mode: 'block', snapshot: UNAPPROVED })
   const atRoot = gateDecision({ root: '/', target: '/etc/x', path: 'a', mode: 'block', snapshot: UNAPPROVED })
   expect([windows.action, atRoot.action]).toEqual(['deny', 'deny'])
+  const linked = (target: string) =>
+    gateDecision({ root: '/repo', changes: '/outside/changes', target, path: 'p', mode: 'block', snapshot: UNAPPROVED }).action
+  expect([linked('/outside/changes/x/state.json'), linked('/outside/changes/x/STATE.json'), linked('/outside/changes/x/spec.md')]).toEqual(['deny', 'deny', 'allow'])
   const unreadable = snapshot({ ...FULL, approved: false, isUnreadable: true })
   expect(() => decide('/repo/src/a.ts', unreadable)).toThrow('could not read every change')
   expect(() => decide('/repo/src/a.ts', { ...UNAPPROVED, isUnreadable: true })).toThrow()

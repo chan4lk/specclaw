@@ -9,6 +9,10 @@ const REAL: Record<string, string> = {
   '/repo/.specclaw': '/repo/.specclaw',
   '/repo/.specclaw/changes': '/repo/.specclaw/changes',
   '/repo/.specclaw/changes/x': '/repo/.specclaw/changes/x',
+  '/repo/linked': '/outside',
+  '/outside': '/outside',
+  '/outside/changes': '/outside/changes',
+  '/outside/changes/y': '/outside/changes/y',
 }
 
 const ROWS: [string, boolean][] = [
@@ -28,6 +32,7 @@ const ROWS: [string, boolean][] = [
   ['/repo/.specclaw/changes/new/state.json', false],
   ['/repo/.specclaw/changes/x/State.json', false],
   ['/repo/.specclaw/changes/x/STATE.JSON', false],
+  ['/repo/linked/changes/y/spec.md', true],
 ]
 
 for (const [file_path, runs] of ROWS) {
