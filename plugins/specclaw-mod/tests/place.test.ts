@@ -9,6 +9,9 @@ const REAL: Record<string, string> = {
   '/repo/.specclaw': '/repo/.specclaw',
   '/repo/.specclaw/changes': '/repo/.specclaw/changes',
   '/repo/.specclaw/changes/x': '/repo/.specclaw/changes/x',
+  '/REPO': '/repo',
+  '/repo/SRC': '/repo/src',
+  '/REPO/.specclaw/changes/x': '/repo/.specclaw/changes/x',
   '/repo/linked': '/outside',
   '/outside': '/outside',
   '/outside/changes': '/outside/changes',
@@ -39,6 +42,9 @@ const ROWS: [string, boolean][] = [
   ['/repo/.specclaw/changes/x/change.md', true],
   ['/repo/.specclaw/changes/x/tasks.md', true],
   ['/repo/.specclaw/changes', false],
+  ['/REPO/src/a.ts', false],
+  ['/repo/SRC/new.ts', false],
+  ['/REPO/.specclaw/changes/x/state.json', false],
   ['/repo/.SpecClaw', false],
 ]
 
