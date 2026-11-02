@@ -55,6 +55,9 @@ jobs:
         run: bash plugins/specclaw/tests/run-headless-pr-tests.sh
       - name: Run specclaw-review tests
         run: bash plugins/specclaw-review/tests/run-review-tests.sh
+      - uses: oven-sh/setup-bun@v2
+      - name: Run specclaw-mod tests
+        run: bash plugins/specclaw-mod/tests/run-mod-tests.sh
       - name: Run azdo PR description tests
         run: bash plugins/specclaw-sync/tests/run-azdo-pr-description-tests.sh
       - name: Run loop-gate tests
@@ -142,11 +145,12 @@ jobs:
           python3 -c "import json; json.load(open('plugins/specclaw/hooks/hooks.json'))"
           python3 -c "import json; json.load(open('plugins/specclaw-review/hooks/hooks.json'))"
           python3 -c "import json; json.load(open('plugins/specclaw-review/.mcp.json'))"
+          python3 -c "import json; json.load(open('plugins/specclaw-mod/hooks/hooks.json'))"
           python3 - <<'PY'
           import glob, json
           files = glob.glob("plugins/*/.c*-plugin/plugin.json")
           vs = {f: json.load(open(f))["version"] for f in files}
           vs.update({"marketplace:" + p["name"]: p["version"] for p in json.load(open(".claude-plugin/marketplace.json"))["plugins"]})
           print(vs)
-          assert len(files) == 10 and len(set(vs.values())) == 1, "::error::plugin versions are not in sync"
+          assert len(files) == 11 and len(set(vs.values())) == 1, "::error::plugin versions are not in sync"
           PY

@@ -35,7 +35,7 @@ Pure core with tests first, then the mod wiring, then packaging and CI.
   - Kind: config
   - Depends: T2
 
-- [ ] `T4` — CI registration of run-mod-tests.sh with setup-bun (AC-10)
+- [x] `T4` — CI registration of run-mod-tests.sh with setup-bun (AC-10)
   - Files: .github/workflows/ci.yml
   - Estimate: small
   - Kind: config
