@@ -5,3 +5,4 @@
 {"ev":"start","span":"W1","kind":"wave","label":"wave 1","at":"2026-11-02T12:38:56Z","ts":1793623136}
 {"ev":"stop","span":"W1","at":"2026-11-02T12:43:09Z","ts":1793623389,"status":"ok"}
 {"ev":"start","span":"verify-1793623596","kind":"phase","label":"verify","at":"2026-11-02T12:46:36Z","ts":1793623596}
+{"ev":"stop","span":"verify","at":"2026-11-02T16:30:12Z","ts":1793637012,"status":"ok"}
