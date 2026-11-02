@@ -1,6 +1,6 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
-import { gateDecision, type GateMode } from './core/gate.ts'
+import { gateDecision, isGateOpen, type GateMode } from './core/gate.ts'
 import type { Snapshot } from './core/state.ts'
 import { bandText, paneLines, statusText } from './core/view.ts'
 import { placeInCwd } from './place.ts'
@@ -39,7 +39,6 @@ export const register: Register = (on, options) => {
     await $.ui.open({ id: PANE, title: 'specclaw' })
     return { text: 'specclaw pane opened.' }
   })
-
   on('turn.complete', async ($, e, next) => {
     await refreshQuietly($)
     return next(e)
@@ -54,8 +53,9 @@ export const register: Register = (on, options) => {
   on('tool.call', { tool: ['Edit', 'Write', 'NotebookEdit'] }, async ($, e, next) => {
     if (mode === 'off') return next(e)
     const path = 'notebook_path' in e ? e.notebook_path : e.file_path
-    const placed = await placeInCwd($, path)
-    const verdict = gateDecision({ ...placed, path, mode, snapshot: await refresh($) })
+    const snapshot = await refresh($)
+    const placed = isGateOpen(snapshot) ? { root: '/', target: path } : await placeInCwd($, path)
+    const verdict = gateDecision({ ...placed, path, mode, snapshot })
     if (verdict.action === 'deny') return { deny: verdict.message }
     if (verdict.action === 'warn') await Promise.resolve().then(() => $.ui.toast(verdict.message)).catch(() => $.ui.status(verdict.message))
     return next(e)

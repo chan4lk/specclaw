@@ -19,8 +19,8 @@ export type GateInput = {
 
 const ALLOW: GateVerdict = { action: 'allow' }
 const EXEMPT = /^\.(specclaw|git)(\/|$)/
-const CHANGE_STATE = /^[^/]+\/state\.json$/i
-const STATE_FILE = /^\.specclaw\/changes\/[^/]+\/state\.json$/i
+const CHANGE_STATE = /^[^/]+\/(state\.json(\/|$)|(tasks|change)\.md\/)/i
+const STATE_FILE = /^\.specclaw\/changes\/[^/]+\/(state\.json(\/|$)|(tasks|change)\.md\/)/i
 
 const slash = (path: string) => path.replaceAll('\\', '/').normalize('NFC')
 
@@ -39,9 +39,11 @@ const held = (mode: GateMode, file: string): GateVerdict => ({
 const isStateFile = (changes: string | undefined, target: string) =>
   changes !== undefined && CHANGE_STATE.test(relativeInside(changes, target) ?? '')
 
+export const isGateOpen = (snapshot: Snapshot) =>
+  !snapshot.hasSpecclaw || active(snapshot.changes).some(change => change.approved)
+
 export const gateDecision = ({ root, changes, spelled, target, path, mode, snapshot }: GateInput): GateVerdict => {
-  if (mode === 'off' || !snapshot.hasSpecclaw) return ALLOW
-  if (active(snapshot.changes).some(change => change.approved)) return ALLOW
+  if (mode === 'off' || isGateOpen(snapshot)) return ALLOW
   if (snapshot.isUnreadable || snapshot.changes.some(change => change.isUnreadable)) {
     throw new Error('specclaw: could not read every change')
   }

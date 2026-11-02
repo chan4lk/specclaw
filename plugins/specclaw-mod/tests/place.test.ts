@@ -33,6 +33,11 @@ const ROWS: [string, boolean][] = [
   ['/repo/.specclaw/changes/x/State.json', false],
   ['/repo/.specclaw/changes/x/STATE.JSON', false],
   ['/repo/linked/changes/y/spec.md', true],
+  ['/repo/.specclaw/changes/x/state.json/foo', false],
+  ['/repo/.specclaw/changes/x/Tasks.md/foo', false],
+  ['/repo/.specclaw/changes/x/change.md/foo', false],
+  ['/repo/.specclaw/changes/x/change.md', true],
+  ['/repo/.specclaw/changes/x/tasks.md', true],
 ]
 
 for (const [file_path, runs] of ROWS) {
