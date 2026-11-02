@@ -29,6 +29,7 @@ export const paneLines = (snapshot: Snapshot) => {
 }
 
 export const bandText = (snapshot: Snapshot) => {
+  if (snapshot.isUnreadable) return 'specclaw · could not read changes'
   const change = snapshot.hasSpecclaw ? current(snapshot.changes) : undefined
   return change
     ? `specclaw · ${change.name} · ${change.phase} · ${change.done}/${change.total} tasks`

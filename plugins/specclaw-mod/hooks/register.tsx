@@ -3,6 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import { gateDecision, type GateMode } from './core/gate.ts'
 import type { Snapshot } from './core/state.ts'
 import { bandText, paneLines, statusText } from './core/view.ts'
+import { placeInCwd } from './place.ts'
 import { readSnapshot } from './read.ts'
 
 const PANE = 'specclaw'
@@ -28,10 +29,7 @@ export const register: Register = (on, options) => {
   const mode = (options.gate ?? 'block') as GateMode
 
   on('session.start', async ($, e, next) => {
-    await $.command.register({
-      name: 'specclaw-pane',
-      description: 'Show the active specclaw changes in a pane',
-    })
+    await $.command.register({ name: 'specclaw-pane', description: 'Show the active specclaw changes in a pane' })
     await refreshQuietly($)
     return next(e)
   })
@@ -49,14 +47,14 @@ export const register: Register = (on, options) => {
 
   on('tool.call', async ($, e, next) => {
     const ran = await next(e)
-    if (JSON.stringify(e).includes('.specclaw')) await refreshQuietly($)
+    if (/\.specclaw/i.test(JSON.stringify(e))) await refreshQuietly($)
     return ran
   })
 
   on('tool.call', { tool: ['Edit', 'Write', 'NotebookEdit'] }, async ($, e, next) => {
     const path = 'notebook_path' in e ? e.notebook_path : e.file_path
-    const cwd = await $.session.cwd()
-    const verdict = gateDecision({ cwd, path, mode, snapshot: await refresh($) })
+    const { root, target } = await placeInCwd($, path)
+    const verdict = gateDecision({ root, target, path, mode, snapshot: await refresh($) })
     if (verdict.action === 'deny') return { deny: verdict.message }
     if (verdict.action === 'warn') $.ui.toast(verdict.message)
     return next(e)

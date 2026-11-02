@@ -20,6 +20,8 @@ for (const [shape, fail] of SHAPES) {
   for (const [event, raise] of EVENTS) {
     test(`FR6 ${event} goes on when the refresh ${shape}`, async ($, on) => {
       let reached = 0
+      const statuses: (string | undefined)[] = []
+      on('ui.status', (_, e) => (statuses.push(e.text), { value: undefined }))
       on('command.register', () => ({ value: { command: 'specclaw-pane' } }))
       on('ui.open', () => ({ value: { isPlaced: true } }))
       on('session.cwd', fail)
@@ -28,6 +30,7 @@ for (const [shape, fail] of SHAPES) {
       const ran = await raise($)
       const isCommand = event === 'command.run'
       expect(isCommand ? (ran as { text: string }).text : reached).toEqual(isCommand ? 'specclaw pane opened.' : 1)
+      expect(statuses.at(-1)).toBe('specclaw: could not read changes')
     })
   }
 }

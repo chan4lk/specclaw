@@ -37,6 +37,7 @@ The gate reads the latest snapshot and, if the snapshot is older than the last `
 | `plugins/specclaw-mod/hooks/hooks.json` | new — `{ "modules": ["./register.tsx"] }` |
 | `plugins/specclaw-mod/hooks/core.ts` | new — pure logic |
 | `plugins/specclaw-mod/hooks/register.tsx` | new — mod wiring |
+| `plugins/specclaw-mod/hooks/place.ts` | new — resolves the gate's target and cwd through `$.fs.stat` realPath (review round 7 redesign) |
 | `plugins/specclaw-mod/types/index.d.ts` | new — `PluginState['specclaw-mod']` contract |
 | `plugins/specclaw-mod/tsconfig.json` | new — type-check config |
 | `plugins/specclaw-mod/tests/core.test.ts` | new — bun tests for AC-1…AC-7 |
@@ -51,7 +52,8 @@ The gate reads the latest snapshot and, if the snapshot is older than the last `
 
 - **Pure core + thin wiring** — the mods test kit needs the `claude` binary; CI has bash and can add bun. Pure functions cover every AC except validate.
 - **Snapshot in `$.state`, not module vars** — survives hot reload and drives redraws without `invalidate`.
-- **Fail open** — a broken guard must not stop all edits; it toasts instead.
+- **Fail open** — a broken guard must not stop all edits; it toasts instead (operator-confirmed).
+- **Resolved paths, not text** — the gate compares realPaths; an unplaceable spelling is held, not allowed (operator decision after review round 7).
 - **No Codex manifest** — mods are Claude Code–only; `.agents/plugins/marketplace.json` is untouched.
 
 ## Risks

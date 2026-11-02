@@ -4,46 +4,42 @@ import type { Snapshot } from '../hooks/core/state.ts'
 import { FULL, NONE, snapshot } from './fixtures.ts'
 
 const UNAPPROVED = snapshot({ ...FULL, approved: false })
-const decide = (path: string, state: Snapshot, mode: GateMode) =>
-  gateDecision({ cwd: '/repo', path, mode, snapshot: state }).action
+const decide = (target: string | undefined, state: Snapshot, mode: GateMode = 'block') =>
+  gateDecision({ root: '/repo', target, path: target ?? 'odd', mode, snapshot: state }).action
 
-const AC6: [string, string, Snapshot, string][] = [
-  ['/repo', '/repo/src/a.ts', UNAPPROVED, 'deny'],
-  ['/repo', 'README.md', UNAPPROVED, 'deny'],
-  ['/repo', '/REPO/src/a.ts', UNAPPROVED, 'deny'],
-  ['/repo', '/repo/src/a.ts', snapshot(FULL), 'allow'],
-  ['/repo', '/repo/src/a.ts', NONE, 'allow'],
-  ['/repo', '/repo/../elsewhere/a.ts', UNAPPROVED, 'allow'],
-  ['/repo', '/repo/.git/config', UNAPPROVED, 'allow'],
-  ['/repo', '/repo/.specclaw/changes/x/spec.md', UNAPPROVED, 'allow'],
-  ['/repo', '/repo/.specclaw/state.json', UNAPPROVED, 'allow'],
-  ['/repo', '/repo/.specclaw/changes/x/state.json', UNAPPROVED, 'deny'],
-  ['/repo', '/repo/.specclaw/x/../changes/y/state.json', UNAPPROVED, 'deny'],
-  ['/repo', '.specclaw\\changes\\x\\state.json', UNAPPROVED, 'deny'],
-  ['/repo', '/repo/.SpecClaw/changes/x/state.json', UNAPPROVED, 'deny'],
-  ['/repo', '/repo/.specclaw/changes/x/STATE.JSON', UNAPPROVED, 'deny'],
-  ['/repo', '/repo/.specclaw/changes/x/sub/state.json', UNAPPROVED, 'allow'],
-  ['/repo', '/repo/.GIT/config', UNAPPROVED, 'allow'],
-  ['C:\\proj', 'C:\\proj\\src\\a.ts', UNAPPROVED, 'deny'],
-  ['C:\\proj', 'c:\\Proj\\src\\a.ts', UNAPPROVED, 'deny'],
-  ['C:\\proj', 'src\\a.ts', UNAPPROVED, 'deny'],
-  ['C:\\proj', 'D:\\other\\a.ts', UNAPPROVED, 'allow'],
-  ['C:\\proj', '.specclaw\\x.md', UNAPPROVED, 'allow'],
-  ['/', '/etc/x', UNAPPROVED, 'deny'],
+const AC6: [string | undefined, Snapshot, string][] = [
+  ['/repo/src/a.ts', UNAPPROVED, 'deny'],
+  ['/repo/README.md', UNAPPROVED, 'deny'],
+  [undefined, UNAPPROVED, 'deny'],
+  ['/repo/src/a.ts', snapshot(FULL), 'allow'],
+  [undefined, snapshot(FULL), 'allow'],
+  ['/repo/src/a.ts', NONE, 'allow'],
+  ['/elsewhere/a.ts', UNAPPROVED, 'allow'],
+  ['/repository/a.ts', UNAPPROVED, 'allow'],
+  ['/repo/.git/config', UNAPPROVED, 'allow'],
+  ['/repo/.specclaw/changes/x/spec.md', UNAPPROVED, 'allow'],
+  ['/repo/.specclaw/state.json', UNAPPROVED, 'allow'],
+  ['/repo/.specclaw/changes/x/sub/state.json', UNAPPROVED, 'allow'],
+  ['/repo/.specclaw/changes/x/state.json', UNAPPROVED, 'deny'],
+  ['\\repo\\.specclaw\\changes\\x\\state.json', UNAPPROVED, 'deny'],
+  ['/repo/cafe\u0301.ts', UNAPPROVED, 'deny'],
 ]
 
-test('AC6 gates project files and state.json only when no approved change is open', () => {
-  for (const [cwd, path, state, action] of AC6) {
-    expect([path, gateDecision({ cwd, path, mode: 'block', snapshot: state }).action]).toEqual([path, action])
+test('AC6 gates resolved project files, state.json and unplaceable paths only when no change is approved', () => {
+  for (const [target, state, action] of AC6) {
+    expect([target, decide(target, state)]).toEqual([target, action])
   }
+  const windows = gateDecision({ root: 'C:\\proj', target: 'C:\\proj\\src\\a.ts', path: 'a', mode: 'block', snapshot: UNAPPROVED })
+  const atRoot = gateDecision({ root: '/', target: '/etc/x', path: 'a', mode: 'block', snapshot: UNAPPROVED })
+  expect([windows.action, atRoot.action]).toEqual(['deny', 'deny'])
 })
 
 test('AC7 warn allows with a message and off allows silently', () => {
-  const warned = gateDecision({ cwd: '/repo', path: 'src/a.ts', mode: 'warn', snapshot: UNAPPROVED })
+  const warned = gateDecision({ root: '/repo', target: '/repo/src/a.ts', path: 'src/a.ts', mode: 'warn', snapshot: UNAPPROVED })
   expect(warned).toEqual({
     action: 'warn',
     message: 'specclaw: no approved change is open. Run /specclaw:propose and get approval before editing src/a.ts.',
   })
-  expect(decide('src/a.ts', UNAPPROVED, 'off')).toBe('allow')
-  expect(decide('.specclaw/changes/x/state.json', UNAPPROVED, 'warn')).toBe('warn')
+  expect(decide('/repo/src/a.ts', UNAPPROVED, 'off')).toBe('allow')
+  expect(decide(undefined, UNAPPROVED, 'warn')).toBe('warn')
 })

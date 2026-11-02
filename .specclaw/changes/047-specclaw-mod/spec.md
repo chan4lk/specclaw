@@ -11,7 +11,7 @@
 - **FR-4 Band.** Above the prompt, while a current change exists: `specclaw · <change> · <phase> · <done>/<total> tasks`. Otherwise the engine's own band (`next(e)`).
 - **FR-5 Status line.** `specclaw: <n> active` plus ` · building <NNN>` when a change's phase is `build`; cleared when `.specclaw/` is absent.
 - **FR-6 Refresh.** State is re-read at `session.start`, after every tool call whose input path or command mentions `.specclaw`, after each `turn.complete`, and when `/specclaw-pane` runs. Readings are stored in `$.state` so pane and band redraw.
-- **FR-7 Propose gate.** On `Edit`, `Write`, `NotebookEdit`: when the target path resolves inside the session cwd, outside `<cwd>/.specclaw/` and outside `<cwd>/.git/`, the project has `.specclaw/`, and no active change has `proposal` status `approved` — the call is denied with: `specclaw: no approved change is open. Run /specclaw:propose and get approval before editing <relpath>.` Otherwise the call proceeds.
+- **FR-7 Propose gate.** On `Edit`, `Write`, `NotebookEdit`: the target is placed with the engine's realPath (`$.fs.stat` with `resolve`) of its deepest existing ancestor plus the new names; the cwd is resolved the same way. A spelling that cannot be placed (drive-relative, `\\` or `//` prefixes, a name with `:`, a trailing dot or space, `.`/`..` past a missing folder) counts as inside the project. Operator decision 2026-11-02, after review round 7. When the target is inside the resolved cwd, outside `<cwd>/.specclaw/` and outside `<cwd>/.git/`, the project has `.specclaw/`, and no active change has `proposal` status `approved` — the call is denied with: `specclaw: no approved change is open. Run /specclaw:propose and get approval before editing <relpath>.` Otherwise the call proceeds.
 - **FR-8 Gate modes.** `userConfig.gate` ∈ `block` (default) | `warn` | `off`. `warn` lets the call run and shows a toast with the same text; `off` skips the check. A guard failure (thrown error) fails open with a toast, never blocks. This was confirmed by the operator on 2026-11-02 after review round 5 proposed failing closed: a broken gate must never stop work, and `block` mode only governs the case where the gate ran.
 - **FR-9 Packaging.** `plugins/specclaw-mod` is listed in `.claude-plugin/marketplace.json`; every plugin is at one version (R1).
 
@@ -39,6 +39,6 @@
 
 - Change dir with no `state.json` (pre-plan) → phase `proposal`, status unknown → not counted as approved.
 - `tasks.md` and `change.md` both present → `tasks.md` wins.
-- `Write` to a not-yet-existing path → resolved by string against cwd; `..` segments normalised.
+- `Write` to a not-yet-existing path → placed under its deepest existing ancestor's realPath; symlinks resolve.
 - Session cwd is a subdirectory of the repo → `.specclaw/` looked up at cwd only (v1); documented.
 - Bash file writes are not gated (v1, by decision at approval).

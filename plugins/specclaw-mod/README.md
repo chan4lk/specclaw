@@ -34,7 +34,7 @@ If the gate itself fails (for example, it cannot read `.specclaw/`), it allows t
 - Any approved change that has not been archived unlocks edits. Archive merged changes to keep the gate meaningful.
 - File writes through `Bash` (`sed -i`, redirects) are not checked.
 - `.specclaw/` is looked up only in the session's working directory, not in parent folders.
-- Paths are compared as text and without regard to case on every platform. This fails closed: on a case-sensitive file system, a sibling folder whose name differs from the project's only in case is gated as if it were inside the project. Symbolic links are not resolved.
+- Paths are resolved through the file system (symbolic links and letter case included) before they are compared. A spelling that cannot be resolved, such as a `\\?\` or UNC prefix, a drive-relative path or a `:` stream name, is held as if it were inside the project.
 
 ## Development
 
