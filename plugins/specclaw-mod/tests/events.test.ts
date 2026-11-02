@@ -35,14 +35,26 @@ for (const [shape, fail] of SHAPES) {
   }
 }
 
-test('FR8 a tool that fails after the gate allowed it runs once', async ($, on) => {
-  let runs = 0
-  on('session.cwd', () => ({ value: '/x' }))
-  on('fs.exists', () => ({ value: false }))
-  on('tool.call', () => {
-    runs += 1
-    throw new Error('the tool fails')
+const APPROVED = '{"phase":"build","phases":{"proposal":{"status":"approved"}}}'
+const GATE_ROWS: [string, Record<string, string>, string][] = [
+  ['no .specclaw', {}, 'block'],
+  ['an approved change', { '/x/.specclaw': '', '/x/.specclaw/changes': '', '/x/.specclaw/changes/001-a/state.json': APPROVED }, 'block'],
+  ['warn mode', { '/x/.specclaw': '', '/x/.specclaw/changes': '' }, 'warn'],
+]
+
+for (const [why, files, gate] of GATE_ROWS) {
+  test(`FR8 a tool that fails after the gate allowed it (${why}) runs once`, { options: { gate } }, async ($, on) => {
+    let runs = 0
+    on('session.cwd', () => ({ value: '/x' }))
+    on('fs.stat', (_, e) => ({ value: { kind: 'file', size: 0, mtimeMs: 1, isLink: false, realPath: e.path } }))
+    on('fs.exists', (_, e) => ({ value: e.path === '/x' || files[e.path] !== undefined }))
+    on('fs.list', () => ({ value: files['/x/.specclaw/changes/001-a/state.json'] ? [{ name: '001-a', kind: 'dir', size: 0, mtimeMs: 0, isLink: false }] : [] }))
+    on('fs.read', (_, e) => ({ value: files[e.path] ?? '' }))
+    on('tool.call', () => {
+      runs += 1
+      throw new Error('the tool fails')
+    })
+    await $.tool.call({ tool: 'Write', file_path: '/x/a.ts', content: 'a' }).catch(() => undefined)
+    expect(runs).toBe(1)
   })
-  await $.tool.call({ tool: 'Write', file_path: '/x/a.ts', content: 'a' }).catch(() => undefined)
-  expect(runs).toBe(1)
-})
+}
