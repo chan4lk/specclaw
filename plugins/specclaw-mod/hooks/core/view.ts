@@ -23,6 +23,7 @@ const row = (change: Change) =>
 
 export const paneLines = (snapshot: Snapshot) => {
   if (!snapshot.hasSpecclaw) return ['No .specclaw/ in this project.']
+  if (snapshot.isUnreadable) return ['Could not read .specclaw/changes.']
   const changes = active(snapshot.changes)
   return changes.length === 0 ? ['No active specclaw changes.'] : changes.map(row)
 }
@@ -36,6 +37,7 @@ export const bandText = (snapshot: Snapshot) => {
 
 export const statusText = (snapshot: Snapshot) => {
   if (!snapshot.hasSpecclaw) return undefined
+  if (snapshot.isUnreadable) return 'specclaw: could not read changes'
   const changes = active(snapshot.changes)
   const building = changes.find(change => change.phase === 'build')
   const suffix = building ? ` · building ${building.name.slice(0, 3)}` : ''

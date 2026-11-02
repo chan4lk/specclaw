@@ -39,17 +39,24 @@ const readJson = (text: string) => {
   }
 }
 
+const text = (value: unknown) => (typeof value === 'string' ? value : undefined)
+
+const phaseOf = (json: Record<string, unknown> | undefined) => {
+  if (json === undefined) return '?'
+  return json.phase === undefined ? 'proposal' : (text(json.phase) ?? '?')
+}
+
 export const parseChange = (files: ChangeFiles): Change => {
   const json = files.state === undefined ? {} : readJson(files.state)
   const phases = json?.phases ?? {}
   const tasks = files.tasks ?? leanTasks(files.lean ?? '')
   return {
     name: files.name,
-    phase: json === undefined ? '?' : (json.phase ?? 'proposal'),
+    phase: phaseOf(json),
     approved: phases.proposal?.status === 'approved',
     ...countTasks(tasks),
-    verdict: phases.verify?.verdict,
-    pr: phases.pr?.url ?? (typeof json?.pr === 'string' ? json.pr : undefined),
+    verdict: text(phases.verify?.verdict),
+    pr: text(phases.pr?.url) ?? text(json?.pr),
     mtimeMs: files.mtimeMs,
   }
 }

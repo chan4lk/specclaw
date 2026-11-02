@@ -8,7 +8,7 @@ import { readSnapshot } from './read.ts'
 const PANE = 'specclaw'
 const EMPTY: Snapshot = { hasSpecclaw: false, changes: [] }
 const snapshot = atom({ plugin: 'specclaw-mod', key: 'snapshot' } as const, EMPTY, {
-  shape: 'snapshot-1',
+  shape: 'snapshot-2',
 })
 
 async function refresh($: EngineInterface) {
@@ -16,6 +16,10 @@ async function refresh($: EngineInterface) {
   await update($, snapshot, () => latest)
   $.ui.status(statusText(latest))
   return latest
+}
+
+async function refreshQuietly($: EngineInterface) {
+  await refresh($).catch(() => undefined)
 }
 
 export const register: Register = (on, options) => {
@@ -26,24 +30,24 @@ export const register: Register = (on, options) => {
       name: 'specclaw-pane',
       description: 'Show the active specclaw changes in a pane',
     })
-    await refresh($)
+    await refreshQuietly($)
     return next(e)
   })
 
   on('command.run', { command: 'specclaw-pane' }, async $ => {
-    await refresh($)
+    await refreshQuietly($)
     await $.ui.open({ id: PANE, title: 'specclaw' })
     return { text: 'specclaw pane opened.' }
   })
 
   on('turn.complete', async ($, e, next) => {
-    await refresh($)
+    await refreshQuietly($)
     return next(e)
   })
 
   on('tool.call', async ($, e, next) => {
     const ran = await next(e)
-    if (JSON.stringify(e).includes('.specclaw')) await refresh($).catch(() => undefined)
+    if (JSON.stringify(e).includes('.specclaw')) await refreshQuietly($)
     return ran
   })
 
@@ -62,7 +66,7 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text } = $.ui.resolve(e)
     const lines = paneLines(await read($, snapshot))
-    return <Box flexDirection="column">{lines.map(line => <Text>{line}</Text>)}</Box>
+    return <Box flexDirection="column">{lines.map(line => <Text key={line}>{line}</Text>)}</Box>
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {

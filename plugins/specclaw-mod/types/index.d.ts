@@ -10,7 +10,7 @@ export type SpecclawChange = {
   mtimeMs: number
 }
 
-export type SpecclawSnapshot = { hasSpecclaw: boolean; changes: SpecclawChange[] }
+export type SpecclawSnapshot = { hasSpecclaw: boolean; isUnreadable?: boolean; changes: SpecclawChange[] }
 
 declare module 'claude-code' {
   interface PluginState {

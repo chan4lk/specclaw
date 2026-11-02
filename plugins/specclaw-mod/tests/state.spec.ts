@@ -13,10 +13,12 @@ test('AC1 reads full and lean task lists, verdict and PR', () => {
 })
 
 test('AC2 malformed or non-object state.json yields phase ? without throwing', () => {
-  for (const state of ['{nope', 'null', '42', '[]', '"s"']) {
+  for (const state of ['{nope', 'null', '42', '[]', '"s"', '', '{"phase":5}']) {
     const change = parseChange({ name: '001-bad', state, mtimeMs: 0 })
     expect(change).toMatchObject({ phase: '?', approved: false, total: 0 })
   }
+  const odd = parseChange({ name: '002-odd', state: '{"phases":{"pr":{"url":{}},"verify":{"verdict":1}}}', mtimeMs: 0 })
+  expect([odd.pr, odd.verdict]).toEqual([undefined, undefined])
 })
 
 test('AC3 current change is the active one with the newest state.json', () => {

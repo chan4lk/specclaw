@@ -156,5 +156,8 @@ jobs:
           vs = {f: json.load(open(f))["version"] for f in files}
           vs.update({"marketplace:" + p["name"]: p["version"] for p in json.load(open(".claude-plugin/marketplace.json"))["plugins"]})
           print(vs)
-          assert len(files) == 11 and len(set(vs.values())) == 1, "::error::plugin versions are not in sync"
+          listed = {p["source"].split("/")[-1] for p in json.load(open(".claude-plugin/marketplace.json"))["plugins"]}
+          claude = {f.split("/")[1] for f in glob.glob("plugins/*/.claude-plugin/plugin.json")}
+          assert listed == claude, "::error::marketplace.json and plugins/*/.claude-plugin disagree"
+          assert len(set(vs.values())) == 1, "::error::plugin versions are not in sync"
           PY
