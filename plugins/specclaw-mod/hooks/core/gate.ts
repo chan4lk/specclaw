@@ -19,8 +19,9 @@ export type GateInput = {
 
 const ALLOW: GateVerdict = { action: 'allow' }
 const EXEMPT = /^\.(specclaw|git)(\/|$)/
-const CHANGE_STATE = /^[^/]+\/(state\.json(\/|$)|(tasks|change)\.md\/)/i
-const STATE_FILE = /^\.specclaw\/changes\/[^/]+\/(state\.json(\/|$)|(tasks|change)\.md\/)/i
+const TRACKED = String.raw`[^/]+\/(state\.json(\/|$)|(tasks|change)\.md\/)`
+const CHANGE_STATE = new RegExp(`^${TRACKED}`, 'i')
+const STATE_FILE = new RegExp(String.raw`^\.specclaw(\/changes)?$|^\.specclaw\/changes\/` + TRACKED, 'i')
 
 const slash = (path: string) => path.replaceAll('\\', '/').normalize('NFC')
 

@@ -24,6 +24,7 @@ for (const [shape, fail] of SHAPES) {
       on('ui.status', (_, e) => (statuses.push(e.text), { value: undefined }))
       on('command.register', event === 'session.start' ? fail : () => ({ value: { command: 'specclaw-pane' } }))
       on('ui.open', () => ({ value: { isPlaced: true } }))
+      on('ui.toast', fail)
       on('session.cwd', fail)
       on('session.start', (_, e) => (reached += 1, { cwd: e.cwd }))
       on('turn.complete', (_, e) => (reached += 1, { text: e.answer }))

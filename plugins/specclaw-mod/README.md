@@ -7,7 +7,7 @@ A [Claude Code mod](https://code.claude.com/docs/en/plugins/mods/overview) for s
 | `/specclaw-pane` | A pane beside the chat with one row per active change: name, phase, tasks done/total, failed count, verify verdict and PR link. |
 | Band above the prompt | `specclaw · <change> · <phase> · <done>/<total> tasks` for the change whose `state.json` changed most recently. |
 | Status line | `specclaw: <n> active`, plus `· building <NNN>` while a change is in `build`. |
-| Propose gate | Denies `Edit`, `Write` and `NotebookEdit` on files inside the project but outside `.specclaw/` and `.git/` when no active change has an approved proposal. Edits to a change's `state.json` are checked too, so the model cannot approve its own proposal with an edit. |
+| Propose gate | Denies `Edit`, `Write` and `NotebookEdit` on files inside the project but outside `.specclaw/` and `.git/` when no active change has an approved proposal. Edits to a change's `state.json` are checked too, so the model cannot approve its own proposal with an edit. So are writes that would replace `.specclaw/`, `.specclaw/changes/` or a change's `state.json`, `tasks.md` or `change.md` with something the mod can no longer read, such as `tasks.md/x`. |
 
 The mod refreshes its view at session start, after every turn, and after any tool call that mentions `.specclaw`. It never writes to `.specclaw/`.
 

@@ -1,35 +1,16 @@
-import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { Register } from 'claude-code'
 import { gateDecision, isGateOpen, type GateMode } from './core/gate.ts'
-import type { Snapshot } from './core/state.ts'
-import { bandText, paneLines, statusText } from './core/view.ts'
+import { bandText, paneLines } from './core/view.ts'
 import { placeInCwd } from './place.ts'
-import { readSnapshot } from './read.ts'
+import { notify, readView, refresh, refreshQuietly } from './refresh.ts'
 
 const PANE = 'specclaw'
-const EMPTY: Snapshot = { hasSpecclaw: false, changes: [] }
-const UNREADABLE: Snapshot = { hasSpecclaw: true, isUnreadable: true, changes: [] }
-const snapshot = atom({ plugin: 'specclaw-mod', key: 'snapshot' } as const, EMPTY, { shape: 'snapshot-2' })
-
-async function refresh($: EngineInterface) {
-  const latest = await readSnapshot($, await $.session.cwd())
-  await update($, snapshot, () => latest)
-  $.ui.status(statusText(latest))
-  return latest
-}
-
-async function refreshQuietly($: EngineInterface) {
-  await refresh($).catch(async () => {
-    await Promise.resolve().then(() => $.ui.status(statusText(UNREADABLE))).catch(() => undefined)
-    await update($, snapshot, () => UNREADABLE).catch(() => undefined)
-  })
-}
 
 export const register: Register = (on, options) => {
   const mode = (options.gate ?? 'block') as GateMode
 
   on('session.start', async ($, e, next) => {
-    await $.command.register({ name: 'specclaw-pane', description: 'Show the active specclaw changes in a pane' }).catch(() => $.ui.toast('specclaw: /specclaw-pane could not be registered.'))
+    await $.command.register({ name: 'specclaw-pane', description: 'Show the active specclaw changes in a pane' }).catch(() => notify($, 'specclaw: /specclaw-pane could not be registered.'))
     await refreshQuietly($)
     return next(e)
   })
@@ -57,22 +38,22 @@ export const register: Register = (on, options) => {
     const placed = isGateOpen(snapshot) ? { root: '/', target: path } : await placeInCwd($, path)
     const verdict = gateDecision({ ...placed, path, mode, snapshot })
     if (verdict.action === 'deny') return { deny: verdict.message }
-    if (verdict.action === 'warn') await Promise.resolve().then(() => $.ui.toast(verdict.message)).catch(() => $.ui.status(verdict.message))
+    if (verdict.action === 'warn') await notify($, verdict.message)
     return next(e)
   }).catch(async ($, e, next) => {
     const failed = 'specclaw: the propose gate failed; the edit was allowed.'
-    if (!next.called) await Promise.resolve().then(() => $.ui.toast(failed)).catch(() => $.ui.status(failed))
+    if (!next.called) await notify($, failed)
     return next(e)
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text } = $.ui.resolve(e)
-    const lines = paneLines(await read($, snapshot))
+    const lines = paneLines(await readView($))
     return <Box flexDirection="column">{lines.map(line => <Text key={line}>{line}</Text>)}</Box>
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    const text = bandText(await read($, snapshot))
+    const text = bandText(await readView($))
     if (text === undefined || e.props.hasSurvey) return next(e)
     const { Text } = $.ui.resolve(e)
     return <Text dimColor>{text}</Text>
