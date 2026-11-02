@@ -24,7 +24,7 @@ const leanTasks = (text: string) => {
 export const countTasks = (text: string) => {
   const marks = [...text.matchAll(TASK_LINE)].map(match => match[1])
   return {
-    done: marks.filter(mark => mark === 'x').length,
+    done: marks.filter(mark => mark?.toLowerCase() === 'x').length,
     total: marks.length,
     failed: marks.filter(mark => mark === '!').length,
   }
@@ -50,10 +50,11 @@ export const parseChange = (files: ChangeFiles): Change => {
   const json = files.state === undefined ? {} : readJson(files.state)
   const phases = json?.phases ?? {}
   const tasks = files.tasks ?? leanTasks(files.lean ?? '')
+  const phase = phaseOf(json)
   return {
     name: files.name,
-    phase: phaseOf(json),
-    approved: phases.proposal?.status === 'approved',
+    phase,
+    approved: phase !== '?' && phases.proposal?.status === 'approved',
     ...countTasks(tasks),
     verdict: text(phases.verify?.verdict),
     pr: text(phases.pr?.url) ?? text(json?.pr),

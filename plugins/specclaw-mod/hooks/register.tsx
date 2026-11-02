@@ -7,9 +7,8 @@ import { readSnapshot } from './read.ts'
 
 const PANE = 'specclaw'
 const EMPTY: Snapshot = { hasSpecclaw: false, changes: [] }
-const snapshot = atom({ plugin: 'specclaw-mod', key: 'snapshot' } as const, EMPTY, {
-  shape: 'snapshot-2',
-})
+const UNREADABLE: Snapshot = { hasSpecclaw: true, isUnreadable: true, changes: [] }
+const snapshot = atom({ plugin: 'specclaw-mod', key: 'snapshot' } as const, EMPTY, { shape: 'snapshot-2' })
 
 async function refresh($: EngineInterface) {
   const latest = await readSnapshot($, await $.session.cwd())
@@ -19,7 +18,10 @@ async function refresh($: EngineInterface) {
 }
 
 async function refreshQuietly($: EngineInterface) {
-  await refresh($).catch(() => undefined)
+  await refresh($).catch(() => {
+    $.ui.status(statusText(UNREADABLE))
+    return update($, snapshot, () => UNREADABLE).catch(() => undefined)
+  })
 }
 
 export const register: Register = (on, options) => {

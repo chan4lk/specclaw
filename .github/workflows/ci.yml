@@ -158,6 +158,8 @@ jobs:
           print(vs)
           listed = {p["source"].split("/")[-1] for p in json.load(open(".claude-plugin/marketplace.json"))["plugins"]}
           claude = {f.split("/")[1] for f in glob.glob("plugins/*/.claude-plugin/plugin.json")}
+          codex = {f.split("/")[1] for f in glob.glob("plugins/*/.codex-plugin/plugin.json")}
           assert listed == claude, "::error::marketplace.json and plugins/*/.claude-plugin disagree"
+          assert claude - codex == {"specclaw-mod"}, "::error::every plugin but the specclaw-mod mod needs a .codex-plugin manifest"
           assert len(set(vs.values())) == 1, "::error::plugin versions are not in sync"
           PY
