@@ -34,7 +34,7 @@ If the gate itself fails, it allows the edit and shows a toast.
 - Any approved change that has not been archived unlocks edits. Archive merged changes to keep the gate meaningful.
 - File writes through `Bash` (`sed -i`, redirects) are not checked.
 - `.specclaw/` is looked up only in the session's working directory, not in parent folders.
-- Paths are compared as text and without regard to case, so a path that differs only in case is treated as inside the project. Symbolic links are not resolved.
+- Paths are compared as text and without regard to case on every platform. This fails closed: on a case-sensitive file system, a sibling folder whose name differs from the project's only in case is gated as if it were inside the project. Symbolic links are not resolved.
 
 ## Development
 
@@ -42,4 +42,4 @@ If the gate itself fails, it allows the edit and shows a toast.
 bash plugins/specclaw-mod/tests/run-mod-tests.sh
 ```
 
-This runs the bun tests for the pure logic in `hooks/core/`, and runs `claude plugin validate` when `claude` is on PATH. To try the mod in a session, start one with `claude --plugin-dir plugins/specclaw-mod`.
+This runs the bun tests for the pure logic in `hooks/core/`, then `claude plugin validate` and `claude plugin test` (which drives the real hooks). It needs `bun` and `claude` on PATH. To try the mod in a session, start one with `claude --plugin-dir plugins/specclaw-mod`.

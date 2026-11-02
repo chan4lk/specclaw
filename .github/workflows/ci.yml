@@ -56,6 +56,10 @@ jobs:
       - name: Run specclaw-review tests
         run: bash plugins/specclaw-review/tests/run-review-tests.sh
       - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - name: Install Claude Code for plugin validate and plugin test
+        run: npm install -g @anthropic-ai/claude-code@2.1.316
       - name: Run specclaw-mod tests
         run: bash plugins/specclaw-mod/tests/run-mod-tests.sh
       - name: Run azdo PR description tests

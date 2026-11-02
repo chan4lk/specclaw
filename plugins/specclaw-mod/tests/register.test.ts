@@ -1,18 +1,24 @@
 import { expect, test } from 'claude-code/testing'
 
-test('FR6 a failing refresh after a tool call runs the tool once and keeps its result', async ($, on) => {
-  let runs = 0
-  on('tool.call', () => {
-    runs += 1
-    return { result: { stdout: 'ok' } }
-  })
-  on('session.cwd', () => {
-    throw new Error('refresh fails')
-  })
+const FAILURES: [string, () => unknown][] = [
+  ['throws', () => {
+    throw new Error('refresh throws')
+  }],
+  ['rejects', async () => {
+    throw new Error('refresh rejects')
+  }],
+]
 
-  for (const command of ['cat .specclaw/x', 'ls .specclaw']) {
-    const ran = await $.tool.call({ tool: 'Bash', command })
-    expect(ran.deny).toBeUndefined()
-  }
-  expect(runs).toBe(2)
-})
+for (const [shape, fail] of FAILURES) {
+  test(`FR6 a refresh that ${shape} after a tool call runs the tool once and keeps its result`, async ($, on) => {
+    let runs = 0
+    on('tool.call', () => {
+      runs += 1
+      return { result: { stdout: 'ok' } }
+    })
+    on('session.cwd', fail)
+    const ran = await $.tool.call({ tool: 'Bash', command: 'cat .specclaw/x' })
+    expect(runs).toBe(1)
+    expect(ran.result).toEqual({ stdout: 'ok' })
+  })
+}
