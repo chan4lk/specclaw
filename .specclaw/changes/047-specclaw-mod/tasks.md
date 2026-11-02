@@ -20,7 +20,7 @@ Pure core with tests first, then the mod wiring, then packaging and CI.
 
 ### Wave 2 — Mod
 
-- [ ] `T2` — Mod wiring: manifest, hooks.json, types contract, register.tsx (pane, band, status, command, gate) (FR-3…FR-8, AC-8)
+- [x] `T2` — Mod wiring: manifest, hooks.json, types contract, register.tsx (pane, band, status, command, gate) (FR-3…FR-8, AC-8)
   - Files: plugins/specclaw-mod/.claude-plugin/plugin.json, plugins/specclaw-mod/hooks/hooks.json, plugins/specclaw-mod/hooks/register.tsx, plugins/specclaw-mod/types/index.d.ts, plugins/specclaw-mod/tsconfig.json
   - Estimate: medium
   - Kind: impl

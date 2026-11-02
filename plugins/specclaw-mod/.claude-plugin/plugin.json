@@ -1,0 +1,23 @@
+{
+  "name": "specclaw-mod",
+  "version": "0.8.4",
+  "description": "Claude Code mod for specclaw: a changes pane, a band above the prompt, a status line entry and a propose-gate guard on edits.",
+  "author": {
+    "name": "Chandima Ranaweera",
+    "email": "chan4lk@gmail.com"
+  },
+  "homepage": "https://github.com/chan4lk/specclaw",
+  "repository": "https://github.com/chan4lk/specclaw",
+  "license": "MIT",
+  "keywords": ["spec-driven", "mod", "claude-code"],
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "gate": {
+      "type": "string",
+      "title": "Propose gate",
+      "description": "block: deny Edit/Write outside .specclaw/ until a change is approved. warn: allow and show a toast. off: no check.",
+      "options": ["block", "warn", "off"],
+      "default": "block"
+    }
+  }
+}

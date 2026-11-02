@@ -1,16 +1,7 @@
-export type Change = {
-  name: string
-  phase: string
-  approved: boolean
-  done: number
-  total: number
-  failed: number
-  verdict?: string
-  pr?: string
-  mtimeMs: number
-}
+import type { SpecclawChange, SpecclawSnapshot } from '../../types/index.d.ts'
 
-export type Snapshot = { hasSpecclaw: boolean; changes: Change[] }
+export type Change = SpecclawChange
+export type Snapshot = SpecclawSnapshot
 
 export type ChangeFiles = {
   name: string
