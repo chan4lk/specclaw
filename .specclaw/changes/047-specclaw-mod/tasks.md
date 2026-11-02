@@ -41,7 +41,7 @@ Pure core with tests first, then the mod wiring, then packaging and CI.
   - Kind: config
   - Depends: T1
 
-- [ ] `T5` — Docs: plugin README + root README line
+- [x] `T5` — Docs: plugin README + root README line
   - Files: plugins/specclaw-mod/README.md, README.md
   - Estimate: small
   - Kind: docs

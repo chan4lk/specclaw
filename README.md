@@ -38,8 +38,9 @@ Add-ons from the same marketplace are installed only when you need them:
 | `specclaw-bf` | Brownfield rebuilds: analyze, clarify, baseline, replay and rebuild a legacy app (`/specclaw-bf:bf-*`, see [docs/rebuild-workflow.md](docs/rebuild-workflow.md)) | `/plugin install specclaw-bf@chan4lk` |
 | `specclaw-sync` | GitHub issues, Azure DevOps boards and PRs, Jira (`/specclaw-sync:*`) | `/plugin install specclaw-sync@chan4lk` |
 | `specclaw-extras` | auto, loop, learn, patterns, context, author-spec, debug, renumber and the review panel (`/specclaw-extras:*`) | `/plugin install specclaw-extras@chan4lk` |
+| `specclaw-mod` | Claude Code mod: a changes pane (`/specclaw-pane`), a band above the prompt, a status line entry and a gate that holds edits until a change is approved (see [plugins/specclaw-mod/README.md](plugins/specclaw-mod/README.md)) | `/plugin install specclaw-mod@chan4lk` |
 
-All four share one version. When your config uses an add-on that is not installed, the session-start hook prints the install command.
+All plugins share one version. When your config uses an add-on that is not installed, the session-start hook prints the install command.
 
 **Codex:** `codex plugin marketplace add chan4lk/specclaw --sparse .agents/plugins`, then `codex plugin add specclaw@chan4lk`. In this checkout, Codex also finds the repo-local adapter at `.agents/skills/specclaw/`; invoke it with `$specclaw`.
 
