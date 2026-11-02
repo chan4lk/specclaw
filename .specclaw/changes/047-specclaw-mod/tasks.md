@@ -12,7 +12,7 @@ Pure core with tests first, then the mod wiring, then packaging and CI.
 
 ### Wave 1 — Core
 
-- [ ] `T1` — Pure core + bun tests for reader, active/current, pane/band/status text, gate decision (AC-1…AC-7)
+- [x] `T1` — Pure core + bun tests for reader, active/current, pane/band/status text, gate decision (AC-1…AC-7)
   - Files: plugins/specclaw-mod/hooks/core.ts, plugins/specclaw-mod/tests/core.test.ts, plugins/specclaw-mod/tests/run-mod-tests.sh
   - Estimate: medium
   - Kind: impl
