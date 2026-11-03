@@ -61,6 +61,8 @@ const MODE_ROWS: [unknown, ReturnType<typeof gateMode>][] = [
   ['OFF', { mode: 'off' }],
   ['deny', { mode: 'warn', unknown: 'deny' }],
   [true, { mode: 'warn', unknown: 'true' }],
+  [null, { mode: 'warn', unknown: 'null' }],
+  [3, { mode: 'warn', unknown: '3' }],
 ]
 for (const [raw, want] of MODE_ROWS) {
   test(`AC7 gate setting ${JSON.stringify(raw)} reads as ${want.mode}${want.unknown ? ' and is reported' : ''}`, () => {
