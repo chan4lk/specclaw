@@ -6,7 +6,7 @@ import { readSnapshot } from './read.ts'
 
 const EMPTY: Snapshot = { hasSpecclaw: false, changes: [] }
 const UNREADABLE: Snapshot = { hasSpecclaw: true, isUnreadable: true, changes: [] }
-const snapshot = atom({ plugin: 'specclaw-mod', key: 'snapshot' } as const, EMPTY, { shape: 'snapshot-2' })
+const snapshot = atom({ plugin: 'specclaw', key: 'snapshot' } as const, EMPTY, { shape: 'snapshot-2' })
 
 export async function refresh($: EngineInterface) {
   const latest = await readSnapshot($, await $.session.cwd())

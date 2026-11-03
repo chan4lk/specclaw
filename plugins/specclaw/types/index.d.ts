@@ -15,6 +15,6 @@ export type SpecclawSnapshot = { hasSpecclaw: boolean; isUnreadable?: boolean; c
 
 declare module 'claude-code' {
   interface PluginState {
-    'specclaw-mod': { snapshot: Shaped<SpecclawSnapshot> }
+    specclaw: { snapshot: Shaped<SpecclawSnapshot> }
   }
 }

@@ -61,17 +61,6 @@
       },
       "homepage": "https://github.com/chan4lk/specclaw",
       "license": "MIT"
-    },
-    {
-      "name": "specclaw-mod",
-      "source": "./plugins/specclaw-mod",
-      "version": "0.8.5",
-      "description": "Claude Code mod for specclaw: a changes pane, a band above the prompt, a status line entry and a propose-gate guard on edits.",
-      "author": {
-        "name": "Chandima Ranaweera"
-      },
-      "homepage": "https://github.com/chan4lk/specclaw",
-      "license": "MIT"
     }
   ]
 }

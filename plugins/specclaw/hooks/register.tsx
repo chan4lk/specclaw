@@ -7,7 +7,7 @@ import { notify, readView, refresh, refreshQuietly } from './refresh.ts'
 const PANE = 'specclaw'
 
 export const register: Register = (on, options) => {
-  const mode = (options.gate ?? 'block') as GateMode
+  const mode = (options.gate ?? 'warn') as GateMode
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'specclaw-pane', description: 'Show the active specclaw changes in a pane' }).catch(() => notify($, 'specclaw: /specclaw-pane could not be registered.'))

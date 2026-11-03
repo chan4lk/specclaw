@@ -49,7 +49,7 @@ Pure core with tests first, then the mod wiring, then packaging and CI.
 
 ### Wave 4 — Bundle (amendment 2026-11-03)
 
-- [ ] `T6` — Move the mod into plugins/specclaw: hooks module + core + types + tests + tsconfig; `modules` in specclaw's hooks.json; `types` and `userConfig.gate` (default `warn`) in specclaw's plugin.json; remove plugins/specclaw-mod and its marketplace entry
+- [x] `T6` — Move the mod into plugins/specclaw: hooks module + core + types + tests + tsconfig; `modules` in specclaw's hooks.json; `types` and `userConfig.gate` (default `warn`) in specclaw's plugin.json; remove plugins/specclaw-mod and its marketplace entry
   - Files: plugins/specclaw/hooks/*, plugins/specclaw/types/index.d.ts, plugins/specclaw/tests/*.ts, plugins/specclaw/tests/run-mod-tests.sh, plugins/specclaw/tsconfig.json, plugins/specclaw/.gitignore, plugins/specclaw/.claude-plugin/plugin.json, .claude-plugin/marketplace.json
   - Estimate: medium
   - Kind: refactor

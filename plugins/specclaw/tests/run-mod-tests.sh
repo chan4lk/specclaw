@@ -5,7 +5,7 @@ PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FAILS=0
 
 if ! command -v bun >/dev/null 2>&1; then
-  echo "FAIL: bun is required to run the specclaw-mod tests"
+  echo "FAIL: bun is required to run the specclaw mod tests"
   exit 1
 fi
 

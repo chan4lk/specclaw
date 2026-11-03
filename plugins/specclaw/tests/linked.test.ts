@@ -15,7 +15,7 @@ const ROWS: [string, boolean][] = [
 
 for (const [layout, real] of LAYOUTS) {
   for (const [file_path, runs] of ROWS) {
-    test(`AC6 with ${layout}, a Write to ${file_path} ${runs ? 'runs' : 'is held'}`, async ($, on) => {
+    test(`AC6 with ${layout}, a Write to ${file_path} ${runs ? 'runs' : 'is held'}`, { options: { gate: 'block' } }, async ($, on) => {
       let ran = false
       on('session.cwd', () => ({ value: '/repo' }))
       on('fs.exists', (_, e) => ({ value: real[e.path] !== undefined }))

@@ -49,7 +49,7 @@ const ROWS: [string, boolean][] = [
 ]
 
 for (const [file_path, runs] of ROWS) {
-  test(`AC6 the gate ${runs ? 'lets through' : 'holds'} a Write to ${file_path}`, async ($, on) => {
+  test(`AC6 the gate ${runs ? 'lets through' : 'holds'} a Write to ${file_path}`, { options: { gate: 'block' } }, async ($, on) => {
     let ran = false
     on('session.cwd', () => ({ value: '/repo' }))
     on('fs.exists', (_, e) => ({ value: REAL[e.path] !== undefined }))
@@ -64,3 +64,20 @@ for (const [file_path, runs] of ROWS) {
     expect([file_path, ran]).toEqual([file_path, runs])
   })
 }
+
+test('AC6 with no gate option set, the default is warn: the Write runs and a toast names the gate', async ($, on) => {
+  let ran = false
+  const toasts: string[] = []
+  on('ui.toast', (_, e) => (toasts.push(JSON.stringify(e)), { value: undefined }))
+  on('ui.status', () => ({ value: undefined }))
+  on('session.cwd', () => ({ value: '/repo' }))
+  on('fs.exists', (_, e) => ({ value: REAL[e.path] !== undefined }))
+  on('fs.list', () => ({ value: [] }))
+  on('fs.stat', (_, e) => {
+    const realPath = REAL[e.path]
+    return realPath === undefined ? { deny: 'ENOENT' } : { value: { kind: 'dir', size: 0, mtimeMs: 0, isLink: false, realPath } }
+  })
+  on('tool.call', () => ((ran = true), { result: {} }))
+  await $.tool.call({ tool: 'Write', file_path: '/repo/src/a.ts', content: 'a' })
+  expect([ran, toasts.some(t => t.includes('/specclaw:propose'))]).toEqual([true, true])
+})
