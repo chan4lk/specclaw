@@ -7,6 +7,6 @@
     "proposal": {"status":"approved","at":"2026-11-03T08:51:06Z"},
     "spec": {"status":"done","at":"2026-11-03T08:51:26Z"},
     "tasks": {"status":"done","at":"2026-11-03T08:51:26Z"},
-    "build": {"status":"in_progress","at":"2026-11-03T08:51:35Z"}
+    "build": {"status":"done","at":"2026-11-03T08:53:30Z","tasks":{"done":3,"total":3,"failed":0}}
   }
 }
