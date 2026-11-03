@@ -1,0 +1,11 @@
+{
+  "change": "048-codex-safe-mod-hooks",
+  "phase": "tasks",
+  "branch": "specclaw/048-codex-safe-mod-hooks",
+  "size": "bounded",
+  "phases": {
+    "proposal": {"status":"approved","at":"2026-11-03T08:51:06Z"},
+    "spec": {"status":"done","at":"2026-11-03T08:51:26Z"},
+    "tasks": {"status":"done","at":"2026-11-03T08:51:26Z"}
+  }
+}
