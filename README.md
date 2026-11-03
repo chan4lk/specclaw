@@ -34,11 +34,10 @@ Add-ons from the same marketplace are installed only when you need them:
 
 | Plugin | Adds | Install |
 |---|---|---|
-| `specclaw` | The lifecycle: init, propose, plan, build, verify, pr, status, archive | `/plugin install specclaw@chan4lk` |
+| `specclaw` | The lifecycle: init, propose, plan, build, verify, pr, status, archive. In Claude Code it also runs a mod: a changes pane (`/specclaw-pane`), a band above the prompt, a status line entry and a propose gate that warns on edits until a change is approved (see [plugins/specclaw/MOD.md](plugins/specclaw/MOD.md)) | `/plugin install specclaw@chan4lk` |
 | `specclaw-bf` | Brownfield rebuilds: analyze, clarify, baseline, replay and rebuild a legacy app (`/specclaw-bf:bf-*`, see [docs/rebuild-workflow.md](docs/rebuild-workflow.md)) | `/plugin install specclaw-bf@chan4lk` |
 | `specclaw-sync` | GitHub issues, Azure DevOps boards and PRs, Jira (`/specclaw-sync:*`) | `/plugin install specclaw-sync@chan4lk` |
 | `specclaw-extras` | auto, loop, learn, patterns, context, author-spec, debug, renumber and the review panel (`/specclaw-extras:*`) | `/plugin install specclaw-extras@chan4lk` |
-| `specclaw-mod` | Claude Code mod: a changes pane (`/specclaw-pane`), a band above the prompt, a status line entry and a gate that holds edits until a change is approved (see [plugins/specclaw-mod/README.md](plugins/specclaw-mod/README.md)) | `/plugin install specclaw-mod@chan4lk` |
 
 All plugins share one version. When your config uses an add-on that is not installed, the session-start hook prints the install command.
 

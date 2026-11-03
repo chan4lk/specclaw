@@ -55,7 +55,7 @@ Pure core with tests first, then the mod wiring, then packaging and CI.
   - Kind: refactor
   - Notes: run-mod-tests.sh, `claude plugin validate`/`test` and run-plugin-split-tests.sh green.
 
-- [ ] `T7` — CI and docs follow the move: ci.yml paths and the codex-manifest assertion, root README row, mod README moved to plugins/specclaw/MOD.md with the new install and `warn` default
+- [x] `T7` — CI and docs follow the move: ci.yml paths and the codex-manifest assertion, root README row, mod README moved to plugins/specclaw/MOD.md with the new install and `warn` default
   - Files: .github/workflows/ci.yml, README.md, plugins/specclaw/MOD.md
   - Estimate: small
   - Kind: docs
