@@ -1,6 +1,6 @@
 {
   "change": "043-headless-pr-and-build-fixes",
-  "phase": "pr",
+  "phase": "archived",
   "branch": "specclaw/043-headless-pr-and-build-fixes",
   "size": "bounded",
   "phases": {
@@ -9,6 +9,7 @@
     "tasks": {"status":"done","at":"2026-10-12T17:14:42Z"},
     "build": {"status":"done","at":"2026-10-12T19:15:21Z","tasks":{"done":5,"total":5,"failed":0}},
     "verify": {"status":"passed","at":"2026-10-12T20:17:40Z"},
-    "pr": {"status":"raised","at":"2026-10-12T20:17:40Z"}
+    "pr": {"status":"raised","at":"2026-10-12T20:17:40Z"},
+    "archived": {"status":"done","at":"2026-11-03T05:05:05Z"}
   }
 }

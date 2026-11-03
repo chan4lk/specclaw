@@ -15,6 +15,7 @@
 | Build | ✅ Done | 5/5 tasks |
 | Verify | ✅ Passed |  |
 | PR | ✅ Raised |  |
+| Archived | ✅ Done |  |
 
 ## Task Progress
 

@@ -1,6 +1,6 @@
 {
   "change": "044-fast-review-loop",
-  "phase": "pr",
+  "phase": "archived",
   "branch": "",
   "size": "architectural",
   "phases": {
@@ -10,6 +10,7 @@
     "tasks": {"status":"done","at":"2026-10-16T14:22:00Z"},
     "build": {"status":"done","at":"2026-10-16T14:34:07Z","tasks":{"done":6,"total":7,"failed":0}},
     "verify": {"status":"passed","at":"2026-10-16T17:15:07Z","verdict":"PASS"},
-    "pr": {"status":"raised","at":"2026-10-16T17:15:51Z","url":"https://github.com/chan4lk/specclaw/pull/97"}
+    "pr": {"status":"raised","at":"2026-10-16T17:15:51Z","url":"https://github.com/chan4lk/specclaw/pull/97"},
+    "archived": {"status":"done","at":"2026-11-03T05:05:05Z"}
   }
 }
