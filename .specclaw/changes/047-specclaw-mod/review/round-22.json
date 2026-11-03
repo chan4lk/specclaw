@@ -1,0 +1,68 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 1
+ },
+ "escalated": [],
+ "files": [
+  "README.md",
+  "plugins/specclaw/.claude-plugin/plugin.json",
+  "plugins/specclaw/MOD.md",
+  "plugins/specclaw/hooks/core/gate.ts",
+  "plugins/specclaw/hooks/register.tsx",
+  "plugins/specclaw/tests/gate.spec.ts"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/hooks/register.tsx",
+   "fp": "8b9e4d30f604",
+   "in_delta": true,
+   "line": 13,
+   "message": "The tests cover only the pure `gateMode()` function. Nothing checks that `register` shows the 'unknown gate mode' toast at session.start, nor that the mode it computes reaches the gate decision. If the `notify` line or the `mode` wiring were dropped, every test would still pass. The MOD.md claim that a toast at session start names the value is therefore unproven. Add a test that drives `register` with `{gate: 'deny'}` and asserts the toast text and the effective mode. Also add `null` and numeric rows to MODE_ROWS.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "options.gate = 'deny' -> if the `await notify(...)` line in session.start is removed, gate.spec.ts still passes and the user gets no warning.",
+   "severity": "minor"
+  }
+ ],
+ "head": "4e1be6bd5ecafdc2da32c41a320e08f9a428e527",
+ "impact": [
+  ".github/ISSUE_TEMPLATE/bug_report.yml",
+  "plugins/specclaw-bf/bin/specclaw-bf-analyze-codebase",
+  "plugins/specclaw-bf/bin/specclaw-bf-baseline",
+  "plugins/specclaw-bf/bin/specclaw-bf-blueprint",
+  "plugins/specclaw-bf/bin/specclaw-bf-bootstrap",
+  "plugins/specclaw-bf/bin/specclaw-bf-clarify",
+  "plugins/specclaw-bf/bin/specclaw-bf-domain-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-e2e-run",
+  "plugins/specclaw-bf/bin/specclaw-bf-prototype",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-render",
+  "plugins/specclaw-bf/bin/specclaw-bf-rebuild-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-replay",
+  "plugins/specclaw-bf/bin/specclaw-bf-status",
+  "plugins/specclaw-bf/bin/specclaw-bf-ui",
+  "plugins/specclaw-bf/lib/gm-paths.jq",
+  "plugins/specclaw-bf/tests/run-bf-collect-tests.sh",
+  "plugins/specclaw-bf/tests/run-bf-e2e-run-tests.sh",
+  "plugins/specclaw-bf/tests/run-item-split-tests.sh",
+  "plugins/specclaw-bf/tests/run-narration-gate-tests.sh"
+ ],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 23372,
+ "round": 22,
+ "since": "711c615",
+ "status": "clean",
+ "system_chars": 8973,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1793683975,
+ "ts_start": 1793683958
+}

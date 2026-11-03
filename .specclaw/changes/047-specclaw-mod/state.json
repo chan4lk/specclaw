@@ -1,6 +1,6 @@
 {
   "change": "047-specclaw-mod",
-  "phase": "build",
+  "phase": "verify",
   "branch": "specclaw/047-specclaw-mod",
   "size": "architectural",
   "phases": {
