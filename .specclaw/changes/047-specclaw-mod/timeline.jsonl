@@ -1,0 +1,9 @@
+{"ev":"start","span":"propose","kind":"phase","label":"propose","at":"2026-11-02T12:25:46Z","ts":1793622346}
+{"ev":"stop","span":"propose","at":"2026-11-02T12:25:46Z","ts":1793622346,"status":"ok"}
+{"ev":"start","span":"plan","kind":"phase","label":"plan","at":"2026-11-02T12:34:23Z","ts":1793622863}
+{"ev":"stop","span":"plan","at":"2026-11-02T12:35:59Z","ts":1793622960,"status":"ok"}
+{"ev":"start","span":"W1","kind":"wave","label":"wave 1","at":"2026-11-02T12:38:56Z","ts":1793623136}
+{"ev":"stop","span":"W1","at":"2026-11-02T12:43:09Z","ts":1793623389,"status":"ok"}
+{"ev":"start","span":"verify-1793623596","kind":"phase","label":"verify","at":"2026-11-02T12:46:36Z","ts":1793623596}
+{"ev":"stop","span":"verify","at":"2026-11-02T16:30:12Z","ts":1793637012,"status":"ok"}
+{"ev":"start","span":"verify-1793683472","kind":"phase","label":"verify","at":"2026-11-03T05:24:32Z","ts":1793683472}

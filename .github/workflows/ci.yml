@@ -55,6 +55,13 @@ jobs:
         run: bash plugins/specclaw/tests/run-headless-pr-tests.sh
       - name: Run specclaw-review tests
         run: bash plugins/specclaw-review/tests/run-review-tests.sh
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - name: Install Claude Code for plugin validate and plugin test
+        run: npm install -g @anthropic-ai/claude-code@2.1.316
+      - name: Run specclaw mod tests
+        run: bash plugins/specclaw/tests/run-mod-tests.sh
       - name: Run azdo PR description tests
         run: bash plugins/specclaw-sync/tests/run-azdo-pr-description-tests.sh
       - name: Run loop-gate tests
@@ -148,5 +155,10 @@ jobs:
           vs = {f: json.load(open(f))["version"] for f in files}
           vs.update({"marketplace:" + p["name"]: p["version"] for p in json.load(open(".claude-plugin/marketplace.json"))["plugins"]})
           print(vs)
-          assert len(files) == 10 and len(set(vs.values())) == 1, "::error::plugin versions are not in sync"
+          listed = {p["source"].split("/")[-1] for p in json.load(open(".claude-plugin/marketplace.json"))["plugins"]}
+          claude = {f.split("/")[1] for f in glob.glob("plugins/*/.claude-plugin/plugin.json")}
+          codex = {f.split("/")[1] for f in glob.glob("plugins/*/.codex-plugin/plugin.json")}
+          assert listed == claude, "::error::marketplace.json and plugins/*/.claude-plugin disagree"
+          assert claude == codex, "::error::every plugin needs a .codex-plugin manifest"
+          assert len(set(vs.values())) == 1, "::error::plugin versions are not in sync"
           PY

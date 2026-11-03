@@ -6,10 +6,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-start"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/session-start\""
           }
         ]
       }
     ]
-  }
+  },
+  "modules": [
+    "./register.tsx"
+  ]
 }

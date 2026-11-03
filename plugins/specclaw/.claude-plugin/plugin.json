@@ -1,6 +1,6 @@
 {
   "name": "specclaw",
-  "version": "0.8.4",
+  "version": "0.8.6",
   "description": "Lean, output-first spec-driven builds: mock first, then propose, plan, build, verify, pr.",
   "author": {
     "name": "Chandima Ranaweera",
@@ -14,5 +14,14 @@
     "workflow",
     "lifecycle",
     "mock-first"
-  ]
+  ],
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "gate": {
+      "type": "string",
+      "title": "Propose gate",
+      "description": "warn (default), block or off. warn: allow Edit, Write and NotebookEdit on project files outside .specclaw/ and .git/ when no change is approved, and show a toast. block: deny those edits (a change's state.json and anything that would break the mod's reads included) until a change is approved. off: no check.",
+      "default": "warn"
+    }
+  }
 }

@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-10-20 — 045-project-custom-presets_
+_Last updated: 2026-11-03 — 047-specclaw-mod_
 
 ## Architecture Overview
 
@@ -10,6 +10,11 @@ drives the spec-first lifecycle `propose` → `plan` → `build` → `verify` �
 - `plugins/specclaw/` — core lifecycle. `specclaw-flow` returns `lean` (one `change.md` per change
   plus `.specclaw/mock/index.html`) or `full` (no `flow` key; skills dispatch to
   `references/full/<phase>.md`).
+- `plugins/specclaw/hooks/register.tsx` — the Claude Code mod (change 047), loaded by `"modules"` in
+  `hooks/hooks.json` next to the SessionStart hook. It adds `/specclaw-pane`, a band above the prompt, a
+  status line entry and a propose gate on `Edit`/`Write`/`NotebookEdit` (`userConfig.gate`: `warn` default,
+  `block`, `off`). Pure logic is in `hooks/core/` (bun specs); `tests/*.test.ts` drive the real hooks under
+  `claude plugin test`. It only reads `.specclaw/`, through `$.fs`; see `plugins/specclaw/MOD.md`.
 - `plugins/specclaw-bf/`, `plugins/specclaw-sync/`, `plugins/specclaw-extras/` — add-ons
   (brownfield, tracker sync, automation/knowledge/review panel). Core never runs an add-on script
   without a `command -v` guard; add-on scripts call core scripts by bare name, with a PATH fallback
@@ -177,6 +182,12 @@ when `git.merge_on_finalize: true` (default `false`).
 - **A `--force` safety override only overrides its documented failure mode.** For example,
   `specclaw-change-lock acquire --force` clears stale locks but still refuses live ones.
 
+- **Never put `options` in a plugin's `userConfig`.** Claude Code 2.1.250 rejects the key and drops the
+  whole plugin, skills and SessionStart router included. Validate enum-like values in code instead
+  (`gateMode()` in the mod).
+- **A mod's gate fails open and is a guard rail, not a sandbox.** A gate error allows the edit with a
+  toast (review rule R2). Bash writes are not checked (R3).
+
 - **Never prompt without a terminal.** Exit 2 and name the config key to set.
 - **Never `git push … || true`.** Publish failures are hard errors raised before `gh pr create`. Use
   a plain push only when the upstream has the branch's own name; branches cut from `origin/<base>`
@@ -191,16 +202,17 @@ when `git.merge_on_finalize: true` (default `false`).
 
 <!-- Last 5 significant decisions from merged changes. Updated automatically on each PR merge. -->
 
-1. **2026-10-20 — 045-project-custom-presets:** projects keep presets in `.specclaw/presets/<name>.md`; a
+1. **2026-11-03 — 047-specclaw-mod:** the specclaw plugin ships a Claude Code mod (pane, band, status line,
+   propose gate) in the same plugin, not a sixth one, so the five-plugins-one-version rule holds and
+   installing specclaw turns it on. Mod command names allow only `[A-Za-z0-9_-]`, so `/specclaw:pane` is
+   impossible; the command is `/specclaw-pane`.
+2. **2026-11-03 — 047-specclaw-mod:** the gate defaults to `warn` because every specclaw user now gets it;
+   it resolves paths through realPath and also holds edits to a change's `state.json`.
+3. **2026-10-20 — 045-project-custom-presets:** projects keep presets in `.specclaw/presets/<name>.md`; a
    same-name file replaces the built-in, and `extends: <name>` (leading frontmatter only, one level)
    keeps the parent first. `specclaw-presets` is the sole resolver.
-2. **2026-10-20 — 045-project-custom-presets:** unusable preset files (symlink escape, dangling link,
+4. **2026-10-20 — 045-project-custom-presets:** unusable preset files (symlink escape, dangling link,
    directory) are refused, not silently replaced by the built-in. Review majors (shared scalar parser,
    tab-led comments) were deferred to `follow-ups.md`.
-3. **2026-10-16 — 044-fast-review-loop:** PR review runs locally in the `specclaw-review` add-on (review →
+5. **2026-10-16 — 044-fast-review-loop:** PR review runs locally in the `specclaw-review` add-on (review →
    class fix → delta + impact-set round → Opus final pass → one push); CI only checks the reviewed SHA is HEAD.
-4. **2026-10-16 — 044-fast-review-loop:** the rulebook is plugin packs + `.specclaw/review/rules/` + the repo's
-   own governance read live (`review.governance`), and with governance set the repo's severity policy wins
-   (`severity: project`).
-5. **2026-10-16 — 044-fast-review-loop:** review memory is a repo-committed, bounded jsonl reached only through
-   the plugin's MCP server/CLI; a PreToolUse hook denies direct reads.
