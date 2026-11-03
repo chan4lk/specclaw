@@ -15,6 +15,7 @@
 | Build | ✅ Done | 6/7 tasks |
 | Verify | ✅ Passed | PASS |
 | PR | ✅ Raised | https://github.com/chan4lk/specclaw/pull/97 |
+| Archived | ✅ Done |  |
 
 ## Task Progress
 

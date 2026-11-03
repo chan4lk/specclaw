@@ -14,3 +14,4 @@
 | Tasks | ✅ Done |  |
 | Build | 🔨 In-progress |  |
 | Verify | ✅ Done | PARTIAL |
+| Archived | ✅ Done |  |
