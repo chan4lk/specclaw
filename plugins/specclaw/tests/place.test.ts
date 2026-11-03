@@ -73,10 +73,7 @@ test('AC6 with no gate option set, the default is warn: the Write runs and a toa
   on('session.cwd', () => ({ value: '/repo' }))
   on('fs.exists', (_, e) => ({ value: REAL[e.path] !== undefined }))
   on('fs.list', () => ({ value: [] }))
-  on('fs.stat', (_, e) => {
-    const realPath = REAL[e.path]
-    return realPath === undefined ? { deny: 'ENOENT' } : { value: { kind: 'dir', size: 0, mtimeMs: 0, isLink: false, realPath } }
-  })
+  on('fs.stat', (_, e) => (REAL[e.path] ? { value: { kind: 'dir', size: 0, mtimeMs: 0, isLink: false, realPath: REAL[e.path] } } : { deny: 'ENOENT' }))
   on('tool.call', () => ((ran = true), { result: {} }))
   await $.tool.call({ tool: 'Write', file_path: '/repo/src/a.ts', content: 'a' })
   expect([ran, toasts.some(t => t.includes('/specclaw:propose'))]).toEqual([true, true])
