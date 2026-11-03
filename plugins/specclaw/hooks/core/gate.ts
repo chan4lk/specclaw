@@ -3,6 +3,15 @@ import { active } from './view.ts'
 
 export type GateMode = 'block' | 'warn' | 'off'
 
+const MODES: readonly GateMode[] = ['block', 'warn', 'off']
+
+// The manifest cannot list the allowed values (older clients reject `options` and drop the plugin), so the raw text is checked here.
+export function gateMode(raw: unknown): { mode: GateMode; unknown?: string } {
+  const value = typeof raw === 'string' ? raw.trim().toLowerCase() : raw
+  if (value === undefined || value === '') return { mode: 'warn' }
+  return MODES.includes(value as GateMode) ? { mode: value as GateMode } : { mode: 'warn', unknown: String(raw) }
+}
+
 export type GateVerdict =
   | { action: 'allow' }
   | { action: 'deny' | 'warn'; message: string }

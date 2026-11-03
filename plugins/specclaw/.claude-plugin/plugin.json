@@ -20,12 +20,7 @@
     "gate": {
       "type": "string",
       "title": "Propose gate",
-      "description": "warn: allow Edit, Write and NotebookEdit on project files outside .specclaw/ and .git/ when no change is approved, and show a toast. block: deny those edits (a change's state.json and anything that would break the mod's reads included) until a change is approved. off: no check.",
-      "options": [
-        "warn",
-        "block",
-        "off"
-      ],
+      "description": "warn (default), block or off. warn: allow Edit, Write and NotebookEdit on project files outside .specclaw/ and .git/ when no change is approved, and show a toast. block: deny those edits (a change's state.json and anything that would break the mod's reads included) until a change is approved. off: no check.",
       "default": "warn"
     }
   }

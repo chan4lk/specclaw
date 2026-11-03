@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { gateDecision, type GateMode } from '../hooks/core/gate.ts'
+import { gateDecision, gateMode, type GateMode } from '../hooks/core/gate.ts'
 import type { Snapshot } from '../hooks/core/state.ts'
 import { FULL, NONE, snapshot } from './fixtures.ts'
 
@@ -52,3 +52,18 @@ test('AC7 warn allows with a message and off allows silently', () => {
   expect(decide('/repo/src/a.ts', UNAPPROVED, 'off')).toBe('allow')
   expect(decide(undefined, UNAPPROVED, 'warn')).toBe('warn')
 })
+
+const MODE_ROWS: [unknown, ReturnType<typeof gateMode>][] = [
+  [undefined, { mode: 'warn' }],
+  ['', { mode: 'warn' }],
+  ['block', { mode: 'block' }],
+  [' Block ', { mode: 'block' }],
+  ['OFF', { mode: 'off' }],
+  ['deny', { mode: 'warn', unknown: 'deny' }],
+  [true, { mode: 'warn', unknown: 'true' }],
+]
+for (const [raw, want] of MODE_ROWS) {
+  test(`AC7 gate setting ${JSON.stringify(raw)} reads as ${want.mode}${want.unknown ? ' and is reported' : ''}`, () => {
+    expect(gateMode(raw)).toEqual(want)
+  })
+}

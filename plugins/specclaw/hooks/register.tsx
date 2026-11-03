@@ -1,5 +1,5 @@
 import type { Register } from 'claude-code'
-import { gateDecision, isGateOpen, type GateMode } from './core/gate.ts'
+import { gateDecision, gateMode, isGateOpen } from './core/gate.ts'
 import { bandText, paneLines } from './core/view.ts'
 import { placeInCwd } from './place.ts'
 import { notify, readView, refresh, refreshQuietly } from './refresh.ts'
@@ -7,9 +7,10 @@ import { notify, readView, refresh, refreshQuietly } from './refresh.ts'
 const PANE = 'specclaw'
 
 export const register: Register = (on, options) => {
-  const mode = (options.gate ?? 'warn') as GateMode
+  const { mode, unknown } = gateMode(options.gate)
 
   on('session.start', async ($, e, next) => {
+    if (unknown !== undefined) await notify($, `specclaw: unknown gate mode "${unknown}", using warn. Use warn, block or off.`)
     await $.command.register({ name: 'specclaw-pane', description: 'Show the active specclaw changes in a pane' }).catch(() => notify($, 'specclaw: /specclaw-pane could not be registered.'))
     await refreshQuietly($)
     return next(e)
