@@ -51,3 +51,11 @@ A new plugin `plugins/specclaw-mod` containing one mod (`hooks/hooks.json` → `
 ---
 
 **To proceed:** Review this proposal and approve to begin planning.
+
+## Amendment — 2026-11-03: bundle the mod into specclaw
+
+**Requested by the operator after verify PASS, folded into this change rather than a new one.**
+
+- Ship the mod inside `plugins/specclaw` (its hooks module, core, types and tests move there) so installing specclaw turns it on. The separate `specclaw-mod` plugin and its marketplace entry are removed. This also restores the "five plugins share one version" invariant that the sixth plugin broke (`run-plugin-split-tests.sh` AC-7).
+- The `gate` default becomes `warn`. Every specclaw user now gets the gate, so it must not refuse edits for people who did not opt in. `block` stays one setting away.
+- The command stays `/specclaw-pane`. `/specclaw:pane` is not possible: a mod's command name allows only letters, digits, `_` and `-` (`CommandSpec.name`), and the `specclaw:` prefix belongs to the plugin's skill files.

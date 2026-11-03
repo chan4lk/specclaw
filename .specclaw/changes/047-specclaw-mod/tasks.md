@@ -2,7 +2,7 @@
 
 **Change:** 047-specclaw-mod
 **Created:** 2026-11-02
-**Total Tasks:** 5
+**Total Tasks:** 7
 
 ## Summary
 
@@ -46,3 +46,17 @@ Pure core with tests first, then the mod wiring, then packaging and CI.
   - Estimate: small
   - Kind: docs
   - Depends: T2
+
+### Wave 4 — Bundle (amendment 2026-11-03)
+
+- [ ] `T6` — Move the mod into plugins/specclaw: hooks module + core + types + tests + tsconfig; `modules` in specclaw's hooks.json; `types` and `userConfig.gate` (default `warn`) in specclaw's plugin.json; remove plugins/specclaw-mod and its marketplace entry
+  - Files: plugins/specclaw/hooks/*, plugins/specclaw/types/index.d.ts, plugins/specclaw/tests/*.ts, plugins/specclaw/tests/run-mod-tests.sh, plugins/specclaw/tsconfig.json, plugins/specclaw/.gitignore, plugins/specclaw/.claude-plugin/plugin.json, .claude-plugin/marketplace.json
+  - Estimate: medium
+  - Kind: refactor
+  - Notes: run-mod-tests.sh, `claude plugin validate`/`test` and run-plugin-split-tests.sh green.
+
+- [ ] `T7` — CI and docs follow the move: ci.yml paths and the codex-manifest assertion, root README row, mod README moved to plugins/specclaw/MOD.md with the new install and `warn` default
+  - Files: .github/workflows/ci.yml, README.md, plugins/specclaw/MOD.md
+  - Estimate: small
+  - Kind: docs
+  - Depends: T6
