@@ -72,6 +72,15 @@ if [ -f "$CODEX_MANIFEST" ]; then
   done
 fi
 
+# Codex parses every plugin's hooks/hooks.json and refuses unknown keys (0.8.6 shipped `modules` there and lost the SessionStart router in Codex).
+for hooks_file in "$REPO_ROOT"/plugins/*/hooks/hooks.json; do
+  rel="${hooks_file#"$REPO_ROOT"/}"
+  extra="$(python3 -c 'import json,sys; print(" ".join(sorted(set(json.load(open(sys.argv[1]))) - {"description", "hooks"})))' "$hooks_file" 2>&1)" \
+    && [ -z "$extra" ] \
+    && pass "$rel holds only keys Codex accepts" \
+    || fail "$rel holds only keys Codex accepts (found: ${extra:-unparsable})"
+done
+
 [ -f "$WORKFLOW_FILE" ] || fail "CI workflow exists"
 if [ -f "$WORKFLOW_FILE" ]; then
   grep -Fq 'run: bash plugins/specclaw/tests/run-codex-plugin-tests.sh' "$WORKFLOW_FILE" \

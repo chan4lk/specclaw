@@ -12,7 +12,7 @@ Split the hooks file, guard it with a test, then docs and version.
 
 ### Wave 1 — Fix
 
-- [ ] `T1` — Move `modules` to hooks/mod.json, name it in the Claude manifest, add the hooks.json key check (AC-1…AC-5)
+- [x] `T1` — Move `modules` to hooks/mod.json, name it in the Claude manifest, add the hooks.json key check (AC-1…AC-5)
   - Files: plugins/specclaw/hooks/hooks.json, plugins/specclaw/hooks/mod.json, plugins/specclaw/.claude-plugin/plugin.json, plugins/specclaw/tests/run-codex-plugin-tests.sh
   - Estimate: small
   - Kind: config

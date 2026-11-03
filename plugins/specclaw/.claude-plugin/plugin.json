@@ -16,6 +16,7 @@
     "mock-first"
   ],
   "types": "./types/index.d.ts",
+  "hooks": "./hooks/mod.json",
   "userConfig": {
     "gate": {
       "type": "string",
