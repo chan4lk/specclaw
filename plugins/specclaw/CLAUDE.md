@@ -191,7 +191,7 @@ regression to `yaml_val` passes by luck — nothing in the fixture would collide
 
 ## Session bootstrap (the `SessionStart` hook)
 
-`hooks/hooks.json` registers `hooks/session-start` on `startup|clear|compact`. It injects
+`hooks/hooks.json` registers `hooks/session-start` on `startup|clear|compact`. Codex reads this file too and refuses any key but `description` and `hooks`, so the Claude Code mod is loaded from `hooks/mod.json` instead, which only `.claude-plugin/plugin.json` names (change 048; `run-codex-plugin-tests.sh` checks it). It injects
 `skills/using-specclaw/SKILL.md` — the intent router — plus a live state block from
 `specclaw-bootstrap-snapshot`, as `hookSpecificOutput.additionalContext`.
 
@@ -392,7 +392,7 @@ Suites live in `tests/`, are bash + coreutils only (no jq in the suites themselv
 | `run-task-review-tests.sh` | `check-report`'s three verdicts and the fenced-footer decoy, the last-footer-wins rule, `review-package`'s contents and its git-cleanliness, and the prompt/template/agent wiring |
 | `run-timing-tests.sh` | the span round-trip, eight concurrent writers losing nothing, the unclosed span, both report formats, `agent-runs`, enclosing spans not double-counting, the baseline present and absent, the anomaly threshold either side, `enabled: false`, a corrupt ledger line, and `run-long` with and without `--change` |
 | `run-staged-files-tests.sh` | the four buckets against real git repos: the missing artifact, the undeclared ripple under default and `--strict`, the junk sweep, both escape hatches, the size-aware artifact set, exit-code separation, the loop's scoped add against an untracked junk file, and that no PR-creation command lives in build |
-| `run-mod-tests.sh` | the Claude Code mod (`hooks/register.tsx`, see `MOD.md`): bun tests for `hooks/core/` (reader, band/pane/status text, gate decision), then `claude plugin validate` and `claude plugin test` driving the real hooks, including the `warn` default and the fail-open path. Needs `bun` and `claude` |
+| `run-mod-tests.sh` | the Claude Code mod (`hooks/register.tsx`, see `MOD.md`): bun tests for `hooks/core/` (change parsing, band/pane/status text, gate decision), then `claude plugin validate` and `claude plugin test` driving the real hooks, including the `warn` default and the fail-open path. Needs `bun` and `claude` |
 `shellcheck-gate.sh` fails CI on any shellcheck finding absent from `shellcheck-baseline.txt` (pairs of `<path> <SCxxxx>`, no line numbers, so unrelated edits do not churn it). Fix a new finding or add a targeted `# shellcheck disable=SCxxxx` with a rationale — never silence one by appending to the baseline. It skips with exit 0 when shellcheck is not installed, so the suite still runs locally.
 
 ## Phase time accounting: the ledger is append-only

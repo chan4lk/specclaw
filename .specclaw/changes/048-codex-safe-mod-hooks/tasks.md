@@ -19,13 +19,13 @@ Split the hooks file, guard it with a test, then docs and version.
 
 ### Wave 2 — Ship
 
-- [ ] `T2` — Docs name hooks/mod.json and the Codex reason (AC-6)
+- [x] `T2` — Docs name hooks/mod.json and the Codex reason (AC-6)
   - Files: plugins/specclaw/MOD.md, plugins/specclaw/CLAUDE.md, .specclaw/context.md
   - Estimate: small
   - Kind: docs
   - Depends: T1
 
-- [ ] `T3` — Bump all plugins to 0.8.7
+- [x] `T3` — Bump all plugins to 0.8.7
   - Files: .claude-plugin/marketplace.json, plugins/*/.claude-plugin/plugin.json, plugins/*/.codex-plugin/plugin.json
   - Estimate: small
   - Kind: config

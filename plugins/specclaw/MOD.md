@@ -19,6 +19,8 @@ Installing specclaw installs the mod. There is nothing else to add:
 /plugin install specclaw@chan4lk
 ```
 
+Claude Code loads the mod from `hooks/mod.json`, which `.claude-plugin/plugin.json` names. It is not in `hooks/hooks.json`, because Codex reads that file and refuses unknown keys.
+
 The mod needs Claude Code 2.1.287 or later. Older versions skip the mod and run the rest of specclaw as usual (checked on 2.1.250). Mods do not run in Codex.
 
 ## Propose gate
