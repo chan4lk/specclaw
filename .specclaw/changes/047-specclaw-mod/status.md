@@ -12,7 +12,7 @@
 | Spec | ✅ Done |  |
 | Design | ✅ Done |  |
 | Tasks | ✅ Done |  |
-| Build | 🔨 In_progress | 5/7 tasks — amendment: bundle mod into specclaw, gate default warn |
+| Build | ✅ Done | 7/7 tasks |
 | Verify | ✅ Passed | PASS |
 
 ## Task Progress

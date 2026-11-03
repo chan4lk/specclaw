@@ -8,7 +8,7 @@
     "spec": {"status":"done","at":"2026-11-02T12:35:27Z"},
     "design": {"status":"done","at":"2026-11-02T12:35:27Z"},
     "tasks": {"status":"done","at":"2026-11-02T12:35:27Z"},
-    "build": {"status":"in_progress","at":"2026-11-03T05:08:59Z","tasks":{"done":5,"total":7,"failed":0}},
+    "build": {"status":"done","at":"2026-11-03T05:12:30Z","tasks":{"done":7,"total":7,"failed":0}},
     "verify": {"status":"passed","at":"2026-11-02T16:29:43Z","verdict":"PASS"}
   }
 }
