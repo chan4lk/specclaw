@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-11-03 — 047-specclaw-mod_
+_Last updated: 2026-11-03 — 048-codex-safe-mod-hooks_
 
 ## Architecture Overview
 
@@ -11,7 +11,8 @@ drives the spec-first lifecycle `propose` → `plan` → `build` → `verify` �
   plus `.specclaw/mock/index.html`) or `full` (no `flow` key; skills dispatch to
   `references/full/<phase>.md`).
 - `plugins/specclaw/hooks/register.tsx` — the Claude Code mod (change 047), loaded by `"modules"` in
-  `hooks/hooks.json` next to the SessionStart hook. It adds `/specclaw-pane`, a band above the prompt, a
+  `hooks/mod.json`, which only `.claude-plugin/plugin.json` names (`"hooks"`); Codex reads `hooks/hooks.json`
+  and refuses unknown keys, so that file keeps only the SessionStart hook (change 048). It adds `/specclaw-pane`, a band above the prompt, a
   status line entry and a propose gate on `Edit`/`Write`/`NotebookEdit` (`userConfig.gate`: `warn` default,
   `block`, `off`). Pure logic is in `hooks/core/` (bun specs); `tests/*.test.ts` drive the real hooks under
   `claude plugin test`. It only reads `.specclaw/`, through `$.fs`; see `plugins/specclaw/MOD.md`.
@@ -182,6 +183,9 @@ when `git.merge_on_finalize: true` (default `false`).
 - **A `--force` safety override only overrides its documented failure mode.** For example,
   `specclaw-change-lock acquire --force` clears stale locks but still refuses live ones.
 
+- **`hooks/hooks.json` holds only `description` and `hooks`.** Codex parses it and refuses any other key,
+  dropping the plugin's SessionStart hook (0.8.6 did this with `modules`). Claude-only hook config, such as a
+  mod's `modules`, goes in a file named by `.claude-plugin/plugin.json`. `run-codex-plugin-tests.sh` checks it.
 - **Never put `options` in a plugin's `userConfig`.** Claude Code 2.1.250 rejects the key and drops the
   whole plugin, skills and SessionStart router included. Validate enum-like values in code instead
   (`gateMode()` in the mod).

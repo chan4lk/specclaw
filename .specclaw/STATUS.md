@@ -1,7 +1,7 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** specclaw
-**Last Updated:** 2026-11-03 06:33 UTC
+**Last Updated:** 2026-11-03 08:56 UTC
 
 _4 unnumbered changes · run `/specclaw-extras:renumber` to order them_
 
@@ -14,7 +14,8 @@ _4 unnumbered changes · run `/specclaw-extras:renumber` to order them_
 - 🔀 **044-fast-review-loop** ▣ — pr raised | 11/11 tasks (100%) | 0 failed | PR #97 merged | 3h24m
 - 🔀 **045-project-custom-presets** ▫ — pr raised | 3/3 tasks (100%) | 0 failed | PR #101 merged
 - 🔍 **046-quality-scan-zero-clone** ▫ — verify PARTIAL | 4/4 tasks (100%) | 0 failed
-- 🔍 **047-specclaw-mod** ▣ — verify PASS | 7/7 tasks (100%) | 0 failed | 16h58m
+- 🔀 **047-specclaw-mod** ▣ — pr raised | 7/7 tasks (100%) | 0 failed | PR #105 merged | 16h58m
+- 🔍 **048-codex-safe-mod-hooks** ▫ — verify PASS | 3/3 tasks (100%) | 0 failed | 16s
 
 ## Pending Proposals
 
@@ -70,6 +71,6 @@ _None._
 
 ## Stats
 
-- **Total changes:** 51
-- **Active:** 7
+- **Total changes:** 52
+- **Active:** 8
 - **Completed:** 44
