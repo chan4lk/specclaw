@@ -2,7 +2,7 @@
 
 **Change:** 047-specclaw-mod
 **Started:** 2026-11-02
-**Last Updated:** 2026-11-02
+**Last Updated:** 2026-11-03
 
 ## Progress
 
@@ -14,6 +14,7 @@
 | Tasks | ✅ Done |  |
 | Build | ✅ Done | 7/7 tasks |
 | Verify | ✅ Passed | PASS |
+| PR | ✅ Raised | https://github.com/chan4lk/specclaw/pull/105 |
 
 ## Task Progress
 
