@@ -19,8 +19,6 @@ Installing specclaw installs the mod. There is nothing else to add:
 /plugin install specclaw@chan4lk
 ```
 
-If you installed the old separate `specclaw-mod` plugin, uninstall it with `/plugin uninstall specclaw-mod@chan4lk`. Otherwise two copies of the mod run, and the old one still blocks edits by default.
-
 The mod needs Claude Code 2.1.287 or later. Older versions skip the mod and run the rest of specclaw as usual (checked on 2.1.250). Mods do not run in Codex.
 
 ## Propose gate

@@ -18,8 +18,9 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: 'specclaw-pane' }, async $ => {
     await refreshQuietly($)
-    await $.ui.open({ id: PANE, title: 'specclaw' })
-    return { text: 'specclaw pane opened.' }
+    const opened = await $.ui.open({ id: PANE, title: 'specclaw' }).then(() => true, () => false)
+    if (!opened) await notify($, 'specclaw: the pane could not be opened.')
+    return { text: opened ? 'specclaw pane opened.' : 'specclaw pane could not be opened.' }
   })
   on('turn.complete', async ($, e, next) => {
     await refreshQuietly($)
