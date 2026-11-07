@@ -1,0 +1,9 @@
+{
+  "change": "049-fleet-runner-dispatch",
+  "phase": "proposal",
+  "branch": "",
+  "size": "architectural",
+  "phases": {
+    "proposal": {"status":"approved","at":"2026-11-07T08:31:59Z"}
+  }
+}

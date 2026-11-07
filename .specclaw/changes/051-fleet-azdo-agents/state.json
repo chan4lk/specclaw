@@ -1,0 +1,9 @@
+{
+  "change": "051-fleet-azdo-agents",
+  "phase": "proposal",
+  "branch": "",
+  "size": "bounded",
+  "phases": {
+    "proposal": {"status":"approved","at":"2026-11-07T08:32:00Z"}
+  }
+}
