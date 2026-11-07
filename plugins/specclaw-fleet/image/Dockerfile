@@ -1,4 +1,4 @@
-FROM debian:bookworm-slim AS seed
+FROM debian:bookworm-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687f77a2c422d96a961d3376b179bc AS seed
 
 ARG CLAUDE_CODE_VERSION=2.1.319
 
@@ -16,9 +16,10 @@ COPY plugins /opt/specclaw/plugins
 RUN mkdir -p /opt/fleet/home-seed \
  && HOME=/opt/fleet/home-seed /tmp/claude plugin marketplace add /opt/specclaw \
  && HOME=/opt/fleet/home-seed /tmp/claude plugin install specclaw@chan4lk \
- && HOME=/opt/fleet/home-seed /tmp/claude plugin install specclaw-sync@chan4lk
+ && HOME=/opt/fleet/home-seed /tmp/claude plugin install specclaw-sync@chan4lk \
+ && HOME=/opt/fleet/home-seed /tmp/claude plugin install specclaw-review@chan4lk
 
-FROM node:22-bookworm-slim
+FROM node:22-bookworm-slim@sha256:5ec23b7c622b00547753bc6ffd78085dd868a68aeb41c8e0a1418f033e13d96d
 
 ARG CODEX_VERSION
 ARG PLAYWRIGHT_VERSION=1.65.0

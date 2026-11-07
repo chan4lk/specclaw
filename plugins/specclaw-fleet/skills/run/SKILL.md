@@ -40,6 +40,6 @@ FLEET_VAULT=<vault> specclaw-fleet trigger <change> [--create] [--retry] [--dire
 
 Lead with the outcome:
 - **PR:** link it, and say whether it is a **draft**. Every finished run that pushed work gets a PR: a real one when verify passed, a draft one otherwise.
-- **Failure:** quote the `exit=` reason. `egress-not-ready`, `claude-fetch-failed` (download or network), `claude-verify-failed` (signature, checksum, size or version mismatch: treat as a security event), `clone-failed` and `not-approved-at-ref` are infrastructure or gate stops. Anything else is in the agent summary.
+- **Failure:** quote the `exit=` reason. `egress-not-ready`, `claude-fetch-failed` (download or network), `claude-verify-failed` (signature, checksum, size or version mismatch: treat as a security event), `clone-failed`, `resume-failed` (the existing change branch could not be listed, fetched or checked out) and `not-approved-at-ref` are infrastructure or gate stops. Anything else is in the agent summary.
 
 Then give the open findings from the PR description or `follow-ups.md`, and the next step: merge, retry with `--retry`, or fix on the branch. Work always lands on the change branch, and a retry resumes it.

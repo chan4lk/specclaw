@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 dk() {
-  kubectl ${FLEET_KUBE_CONTEXT:+--context "$FLEET_KUBE_CONTEXT"} --request-timeout=10s "$@" </dev/null 2>/dev/null
+  kc --request-timeout=10s "$@" </dev/null 2>/dev/null
 }
 
 check_context() {

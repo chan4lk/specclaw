@@ -1,5 +1,5 @@
 # shellcheck shell=bash disable=SC2034
-export FLEET_AZDO_ISSUE="$TMP/stub/specclaw-azdo-issue" FLEET_CLAUDE_VERSION=2.1.319 FLEET_VAULT=v SPECCLAW_DIR="$TMP/repo/.specclaw" APPLIED="$TMP/applied" CLAIMS="$TMP/claims" CHANGE="049-x"
+export FLEET_AZDO_ISSUE="$TMP/stub/specclaw-azdo-issue" FLEET_CLAUDE_VERSION=2.1.319 FLEET_VAULT=v SPECCLAW_DIR="$TMP/repo/.specclaw" APPLIED="$TMP/applied" CLAIMS="$TMP/claims" CHANGE="049-x" KCTX="$TMP/kctx"
 export WI_JSON='{"fields":{"System.AssignedTo":{"uniqueName":"Alice@Contoso.com"},"System.Tags":"specclaw; fleet:auto"}}'
 export WI_UPDATES='{"value":[{"revisedBy":{"uniqueName":"alice@contoso.com"},"fields":{"System.Tags":{"oldValue":"specclaw","newValue":"specclaw; Fleet:Auto"}}}]}'
 CANARY="sk-ant-oat01-DISPATCH-CANARY"
@@ -31,6 +31,7 @@ case "$1" in
 esac
 exit 0'
   stub kubectl '
+if [[ "$1" == --context ]]; then echo "$2" >> "$KCTX"; shift 2; else echo none >> "$KCTX"; fi
 name=""; prev=""; for arg in "$@"; do [[ "$prev" == job ]] && name="$arg"; prev="$arg"; done
 claim="$CLAIMS/claim-$name"
 case "$*" in
@@ -75,3 +76,9 @@ add_change() {
 }
 
 marked_failed() { grep -q "specclaw-azdo-issue fields .*state=failed" "$CALLS" && grep -q "specclaw-azdo-issue tag .* fleet:refused" "$CALLS"; }
+
+https_local_remote() {
+  local real; real="$(command -v git)"
+  stub git '[[ "$*" == *"remote get-url local" ]] && { echo https://dev.azure.com/o/p/_git/pushed-r; exit 0; }
+exec '"$real"' "$@"'
+}

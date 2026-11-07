@@ -19,7 +19,7 @@ parse_dispatch_args() {
   F_VAULT="${F_VAULT:-${FLEET_VAULT:-}}"
   [[ -n "$F_VAULT" ]] || die "No Key Vault: pass --vault or set FLEET_VAULT"
   F_NS="${FLEET_NAMESPACE:-specclaw-fleet}"
-  F_IMAGE="${FLEET_IMAGE:-ghcr.io/chan4lk/specclaw-fleet:$(jq -r .version "$FLEET_ROOT/.claude-plugin/plugin.json")}"
+  F_IMAGE="$(default_image)"
   [[ "$F_IMAGE" =~ ^[A-Za-z0-9][A-Za-z0-9._/:@-]*$ ]] || die "FLEET_IMAGE is not a valid image reference"
   [[ "$F_NS" =~ ^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$ ]] || die "FLEET_NAMESPACE is not a valid namespace name"
   [[ "$F_REF" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ && "$F_REF" != *..* ]] || die "the ref '$F_REF' is not a valid branch name"
@@ -63,9 +63,10 @@ fleet_dispatch() {
   F_SECRET_OBJ="$F_JOB-$(rand_suffix)"
   F_WI="$(work_item_id "$F_CHANGE")"
   F_LABEL="$(label_value "$F_CHANGE")"
-  F_REPO="${FLEET_REPO_URL:-$(git -C "$SPECCLAW_DIR/.." remote get-url origin | sed -E 's#://[^@/]+@#://#')}"
+  F_REPO="${FLEET_REPO_URL:-$(https_repo_url origin)}" || exit 1
   F_COMMIT="${FLEET_DISPATCH_COMMIT:-$(git -C "$SPECCLAW_DIR/.." rev-parse HEAD)}" || die "Could not resolve the dispatched commit"
-  [[ "$F_COMMIT" =~ ^[0-9a-f]{40}$ && "$F_REPO" =~ ^https://[^@[:space:]]+$ ]] || die "dispatched commit or repo URL is malformed"
+  [[ "$F_COMMIT" =~ ^[0-9a-f]{40}$ ]] || die "dispatched commit '$F_COMMIT' is not a full 40-character SHA"
+  [[ "$F_REPO" =~ ^https://[^@[:space:]]+$ ]] || die "repo URL '$F_REPO' must be https with no credentials"
   [[ -r "$SPECCLAW_DIR/config.yaml" ]] || die "Cannot read $SPECCLAW_DIR/config.yaml"
   F_AZDO_CONFIG="$(awk '/^azdo:[[:space:]]*(#.*)?$/ { on = 1; print; next } on && /^[^[:space:]#]/ { exit } on { print }' \
     "$SPECCLAW_DIR/config.yaml")" || die "Cannot read $SPECCLAW_DIR/config.yaml"

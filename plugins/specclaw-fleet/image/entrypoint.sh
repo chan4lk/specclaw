@@ -32,7 +32,6 @@ clone() {
 }
 
 run_agent() {
-  prepare_workspace
   case "$FLEET_AGENT" in
     claude)
       seed_claude_auth
@@ -66,6 +65,7 @@ fetch_rc=0; [[ "$FLEET_AGENT" != claude ]] || fetch_claude || fetch_rc=$?
 (( fetch_rc == 0 )) || { record state=failed "exit=$( (( fetch_rc == 3 )) && echo claude-fetch-failed || echo claude-verify-failed)"; finish 2; }
 record state=running "built_commit=$(git -C "$REPO" rev-parse HEAD)" "claude_fetch_s=${FLEET_CLAUDE_FETCH_S:-0}"
 cd "$REPO" || finish 2
+prepare_workspace || { record state=failed exit=resume-failed; finish 2; }
 rc=0; run_agent || rc=$?
 branch="$(push_change_branch)"
 read -r pr draft < <(ensure_pr "$branch")

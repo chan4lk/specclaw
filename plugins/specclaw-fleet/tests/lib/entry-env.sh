@@ -17,6 +17,8 @@ echo "{}"'
 stub git '[[ "$1" == -C && "$3" == merge-base ]] && { [[ -z "${NOT_ANCESTOR:-}" ]]; exit; }
 [[ "$1" == -C && "$3" == rev-parse && "$4" == --abbrev-ref ]] && { echo "${ON_BRANCH-specclaw/049-x}"; exit 0; }
 [[ "$1" == -C && "$3" == rev-parse ]] && { echo deadbeef; exit 0; }
+[[ "$1" == -C && "$3" == ls-remote && -n "${LS_FAIL:-}" ]] && exit 128
+[[ "$1" == -C && "$3" == fetch && -n "${FETCH_FAIL:-}" ]] && exit 128
 [[ "$1" == -C && "$3" == ls-remote ]] && { [[ -n "${REMOTE_BRANCH:-}" ]] && printf "abc\trefs/heads/%s\n" "$REMOTE_BRANCH"; exit 0; }
 [[ "$1" == clone ]] || exit 0
 [[ -n "${CLONE_FAIL:-}" ]] && exit 128

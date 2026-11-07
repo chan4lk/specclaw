@@ -26,13 +26,32 @@ secret_name() {
   esac
 }
 
+kc() {
+  kubectl ${FLEET_KUBE_CONTEXT:+--context "$FLEET_KUBE_CONTEXT"} "$@"
+}
+
+default_image() {
+  printf '%s' "${FLEET_IMAGE:-ghcr.io/chan4lk/specclaw-fleet:$(jq -r .version "$FLEET_ROOT/.claude-plugin/plugin.json")}"
+}
+
+https_repo_url() {
+  local u
+  u="$(git -C "$SPECCLAW_DIR/.." remote get-url "$1")" || die "no git remote '$1'"
+  [[ "$u" =~ ^git@ssh\.dev\.azure\.com:v3/([^/]+)/([^/]+)/([^/]+)$ ]] \
+    && u="https://dev.azure.com/${BASH_REMATCH[1]}/${BASH_REMATCH[2]}/_git/${BASH_REMATCH[3]}"
+  u="$(sed -E 's#://[^@/]+@#://#' <<<"$u")"
+  [[ "$u" =~ ^https://[^@[:space:]]+$ ]] || die "remote '$1' is not an https URL ($u); the pod clones over https"
+  printf '%s' "$u"
+}
+
 load_azdo_env() {
   local line key value
-  [[ -z "${AZDO_ORG:-}" && -f "$SPECCLAW_DIR/.env" ]] || return 0
+  [[ -f "$SPECCLAW_DIR/.env" ]] || return 0
   while IFS= read -r line || [[ -n "$line" ]]; do
     line="${line%$'\r'}"
     [[ "$line" =~ ^(export[[:space:]]+)?(AZDO_ORG|AZDO_PROJECT|AZDO_TOKEN)=(.*)$ ]] || continue
     key="${BASH_REMATCH[2]}" value="${BASH_REMATCH[3]}"
+    [[ -z "${!key:-}" ]] || continue
     if [[ "$value" =~ ^\"([^\"]*)\"$ || "$value" =~ ^\'([^\']*)\'$ ]]; then value="${BASH_REMATCH[1]}"
     else value="${value%%[[:space:]]#*}"; fi
     [[ "$value" =~ ^[^[:space:]\"\']*$ ]] || { warn "ignored unparsable $key line in $SPECCLAW_DIR/.env"; continue; }

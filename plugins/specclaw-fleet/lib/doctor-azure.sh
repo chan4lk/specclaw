@@ -6,7 +6,8 @@ check_vault() {
 }
 
 check_image() {
-  local image="${FLEET_IMAGE:-}" repo tag token
+  local image repo tag token
+  image="$(default_image)"
   [[ "$image" == ghcr.io/*:* ]] || { echo "skip image: only ghcr.io images are checked (${image:-unset})"; return 2; }
   repo="${image#ghcr.io/}"; tag="${repo##*:}"; repo="${repo%:*}"
   token="$(curl -fsS -m 15 "https://ghcr.io/token?scope=repository:$repo:pull" | jq -r '.token // empty')"

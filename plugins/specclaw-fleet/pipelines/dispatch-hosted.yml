@@ -68,7 +68,7 @@ steps:
         esac
         for f in .specclaw/changes/*/state.json; do
           [[ -f "$f" ]] || continue
-          if ! pending="$(jq -r '.phase == "proposal" and .phases.proposal.status == "approved"' "$f")"; then
+          if ! pending="$(jq -r --arg only "$only" '.phases.proposal.status == "approved" and ($only != "" or .phase == "proposal")' "$f")"; then
             echo "##vso[task.logissue type=error]could not read $f"; failed=1; continue
           fi
           [[ "$pending" == true ]] || continue

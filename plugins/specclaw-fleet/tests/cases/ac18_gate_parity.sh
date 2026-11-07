@@ -6,6 +6,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/../lib/harness.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/dispatch-env.sh"
 stub_cluster
 export AZDO_ORG=o AZDO_PROJECT=p FLEET_REMOTE=local
+https_local_remote
 publish() {
   rm -rf "$TMP/remote.git" && git init -q --bare "$TMP/remote.git"
   git -C "$TMP/repo" remote remove local 2>/dev/null; git -C "$TMP/repo" remote add local "$TMP/remote.git"

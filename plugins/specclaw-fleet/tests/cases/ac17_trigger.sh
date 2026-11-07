@@ -6,6 +6,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/../lib/harness.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/dispatch-env.sh"
 stub_cluster
 export AZDO_ORG=o AZDO_PROJECT=p FLEET_REMOTE=local
+https_local_remote
 publish() {
   rm -rf "$TMP/remote.git" && git init -q --bare "$TMP/remote.git"
   git -C "$TMP/repo" remote remove local 2>/dev/null; git -C "$TMP/repo" remote add local "$TMP/remote.git"
@@ -35,6 +36,7 @@ reset_env; : > "$SPECCLAW_DIR/changes/$CHANGE/status.md"; publish; trig --create
 reset_env; publish; trig; queue_rc=$?; queue_out="$(cat "$TMP/out")"; queue_calls="$(cat "$CALLS")"
 reset_env; publish; trig --retry; retry_calls="$(cat "$CALLS")"
 reset_env; publish; trig --direct; direct_rc=$?; direct_out="$(cat "$TMP/out")"; direct_jobs="$(find "$APPLIED" -name '*.yaml' | wc -l | tr -d ' ')"
+direct_repo="$(cat "$APPLIED"/*.yaml | grep -c "FLEET_REPO_URL, value: \"https://dev.azure.com/o/p/_git/pushed-r\"")"
 reset_env; echo '{"phases":{"proposal":{"status":"draft"}}}' > "$SPECCLAW_DIR/changes/$CHANGE/state.json"; publish; : > "$SPECCLAW_DIR/changes/$CHANGE/status.md"
 trig --retry --create; rc=$?; gate 1 "approve it and push first"
 reset_env; publish; WI_UPDATES='{"value":[{"revisedBy":{"uniqueName":"m@c.com"},"fields":{"System.Tags":{"newValue":"fleet:auto"}}}]}' trig --retry; rc=$?
@@ -72,4 +74,6 @@ check "AC8 --create creates the work item and stops (exit 3) so it can be assign
 check "AC8 default path queues the pipeline for exactly this change and agent" queues
 check "AC8 --retry clears fleet:dispatched and fleet:refused" retries
 check "AC8 --direct dispatches a Job instead of queueing" directs
+pushed_remote() { [[ "$direct_repo" == 1 ]]; }
+check "R10 --direct clones from FLEET_REMOTE's URL (the remote that was fetched), not origin" pushed_remote
 finish
