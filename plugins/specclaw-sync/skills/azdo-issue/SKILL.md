@@ -40,9 +40,20 @@ specclaw-azdo-issue link-pr .specclaw <change> <project_id> <repo_id> <pr_id>
 ```
 Called automatically by `/specclaw-sync:pr-azdo`; rarely invoked directly.
 
+**Print the Work Item JSON:**
+```bash
+specclaw-azdo-issue show .specclaw <change>
+```
+
+**Record run fields (used by specclaw-fleet):**
+```bash
+specclaw-azdo-issue fields .specclaw <change> agent=codex job=fleet-049-ab12c state=running
+```
+Each `key` is written only when `azdo.fleet_fields.<key>` names an AzDO field reference (e.g. `Custom.FleetAgent`); `state=<value>` sets `System.State` only when `azdo.fleet_states.<value>` names a state in your process. Unmapped keys are skipped with a warning, so an unmodified process template never gets a PATCH that fails. Every call also posts one comment listing all pairs, which is the run record when no custom fields exist.
+
 ## Notes
 
-- specclaw does **not** transition Work Item state. Auto-transitioning is too easy to break across ADO process templates (Agile / Scrum / Basic). Humans drive state in ADO; specclaw only writes description, comments, and tags.
+- Core specclaw does **not** transition Work Item state; only `fields` does, and only to states you map in `azdo.fleet_states`. Auto-transitioning is too easy to break across ADO process templates (Agile / Scrum / Basic). Humans drive state in ADO; specclaw only writes description, comments, and tags.
 - The Work Item is tagged with `azdo.boards.tag` (default `specclaw`) so you can filter specclaw items in Boards queries.
 - On archive, an additional `closed-by-specclaw` tag is added so completed changes are easy to find.
 - After creation, the Work Item ID and URL are saved to `.specclaw/changes/<change>/status.md` as `**Azure Boards Work Item:** [#1234](url)` — this line is also used for idempotency checks on subsequent runs.

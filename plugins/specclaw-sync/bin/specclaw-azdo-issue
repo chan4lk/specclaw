@@ -7,6 +7,12 @@
 #   specclaw-azdo-issue comment  <specclaw_dir> <change> "<comment text>"
 #   specclaw-azdo-issue close    <specclaw_dir> <change>
 #   specclaw-azdo-issue link-pr  <specclaw_dir> <change> <project_id> <repo_id> <pr_id>
+#   specclaw-azdo-issue show     <specclaw_dir> <change>
+#   specclaw-azdo-issue fields   <specclaw_dir> <change> key=value...
+#
+# `fields` writes only keys mapped under azdo.fleet_fields.<key> (and `state`
+# through azdo.fleet_states.<value>), then always posts one comment listing
+# every pair, so the record survives a process with no custom fields.
 #
 # Reads AZDO_TOKEN / AZDO_ORG / AZDO_PROJECT from .specclaw/.env (set by
 # /specclaw-sync:auth-azdo) and azdo.boards.* from config.yaml.
@@ -375,6 +381,58 @@ PY
   fi
 }
 
+cmd_show() {
+  require_creds
+  local wi_id
+  wi_id="$(existing_wi_id)"
+  [[ -n "$wi_id" ]] || die "No Work Item for this change — run specclaw-azdo-issue create first"
+  ado_get "wit/workitems/${wi_id}?api-version=7.1" || die "ADO read failed for Work Item #${wi_id}"
+}
+
+fleet_field_ref() {
+  local key="$1" val="$2"
+  if [[ "$key" == state ]]; then
+    local mapped
+    mapped="$(yaml_val "$CONFIG_FILE" "azdo.fleet_states.$val")"
+    [[ -n "$mapped" ]] && printf 'System.State\t%s' "$mapped"
+  else
+    local ref
+    ref="$(yaml_val "$CONFIG_FILE" "azdo.fleet_fields.$key")"
+    [[ -n "$ref" ]] && printf '%s\t%s' "$ref" "$val"
+  fi
+  return 0
+}
+
+cmd_fields() {
+  require_creds
+  shift 3
+  [[ $# -gt 0 ]] || die "Usage: specclaw-azdo-issue fields <specclaw_dir> <change> key=value..."
+  local wi_id
+  wi_id="$(existing_wi_id)"
+  [[ -n "$wi_id" ]] || die "No Work Item for this change — run specclaw-azdo-issue create first"
+
+  local pair key mapped ops=() lines=("specclaw-fleet run update:")
+  for pair in "$@"; do
+    [[ "$pair" == *=* ]] || die "Expected key=value, got: $pair"
+    key="${pair%%=*}"
+    lines+=("- ${key}: ${pair#*=}")
+    mapped="$(fleet_field_ref "$key" "${pair#*=}")"
+    if [[ -z "$mapped" ]]; then
+      warn "no azdo.fleet_* mapping for '${key}' — recorded in the comment only"
+      continue
+    fi
+    ops+=("${mapped%%$'\t'*}" "${mapped#*$'\t'}")
+  done
+
+  if (( ${#ops[@]} )); then
+    local body
+    body="$(python3 -c 'import json,sys; a=sys.argv[1:]; print(json.dumps([{"op":"add","path":"/fields/"+a[i],"value":a[i+1]} for i in range(0,len(a),2)]))' "${ops[@]}")"
+    ado_patch_json "wit/workitems/${wi_id}?api-version=7.1" "$body" >/dev/null \
+      || die "ADO field update failed for Work Item #${wi_id}"
+  fi
+  cmd_comment "" "$SPECCLAW_DIR" "$CHANGE_NAME" "$(printf '%s\n' "${lines[@]}")"
+}
+
 # ─── Dispatch ─────────────────────────────────────────────────────────────────
 
 case "$SUBCMD" in
@@ -383,5 +441,7 @@ case "$SUBCMD" in
   comment) cmd_comment "$@" ;;
   close)   cmd_close   "$@" ;;
   link-pr) cmd_link_pr "$@" ;;
+  show)    cmd_show    "$@" ;;
+  fields)  cmd_fields  "$@" ;;
   *) die "Unknown subcommand: $SUBCMD. Run with --help for usage." ;;
 esac

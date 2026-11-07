@@ -18,7 +18,7 @@ Wave 1 lays the packaging and the single Boards writer. Wave 2 adds the credenti
   - Kind: config
   - Notes: version 0.8.7 (matches all others; the PR bump happens later). Codex manifest `"skills": "./skills/"`.
 
-- [ ] `T2` — Add `specclaw-azdo-issue fields` subcommand with mapped-only PATCH plus audit comment (AC-9)
+- [x] `T2` — Add `specclaw-azdo-issue fields` subcommand with mapped-only PATCH plus audit comment (AC-9)
   - Files: plugins/specclaw-sync/bin/specclaw-azdo-issue, plugins/specclaw-sync/skills/azdo-issue/SKILL.md, plugins/specclaw-sync/tests/run-azdo-issue-fields-tests.sh
   - Estimate: medium
   - Kind: impl
