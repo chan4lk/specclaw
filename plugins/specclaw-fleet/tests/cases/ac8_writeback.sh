@@ -44,11 +44,16 @@ check "AC8 claude runs skip write-back and keep the agent's status" claude_skipp
 check "AC8 write-back exits with the agent's recorded status" keeps_agent_status
 injected_status() {
   local payload
-  for payload in 'a[$(touch "$TMP/pwned")]' '1+1' '' 'x' '9999'; do
+  for payload in 'a[$(touch "$TMP/pwned")]' '1+1' '' 'x' '9999' '256' '08x'; do
     run_wb claude "$payload" seed
     (( $? == 1 )) && [[ ! -e "$TMP/pwned" ]] || return 1
   done
 }
 check "AC8 agent-written exit status is validated, never evaluated" injected_status
+decimal_status() {
+  run_wb claude 010 seed; (( $? == 10 )) || return 1
+  run_wb claude 08 seed; (( $? == 8 ))
+}
+check "AC8 leading-zero exit status is read as decimal" decimal_status
 check "AC8 truncated, empty, non-object, token-less or symlinked auth.json never overwrites the vault" invalid_kept
 finish

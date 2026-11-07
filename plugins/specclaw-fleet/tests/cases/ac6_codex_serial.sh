@@ -7,8 +7,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/../lib/dispatch-env.sh"
 stub_cluster
 
 race() {
-  "$FLEET" dispatch "$CHANGE" --agent codex > "$TMP/race1" 2>&1 & local p1=$!
-  "$FLEET" dispatch "$CHANGE" --agent codex > "$TMP/race2" 2>&1 & local p2=$!
+  add_change 049-y
+  "$FLEET" dispatch "$CHANGE" --agent "${1:-codex}" > "$TMP/race1" 2>&1 & local p1=$!
+  "$FLEET" dispatch "${2:-049-y}" --agent "${1:-codex}" > "$TMP/race2" 2>&1 & local p2=$!
   local r1=0 r2=0
   wait "$p1" || r1=$?
   wait "$p2" || r2=$?
@@ -27,6 +28,7 @@ for status in '{"succeeded":1}' '{"failed":1}' '{"conditions":[{"type":"Failed",
 done
 reset_env; race; race_empty=$?
 reset_env; seed_codex_job '{"succeeded":1}'; race; race_finished=$?
+reset_env; race claude "$CHANGE"; same_change=$?; same_jobs="$(grep -l "^kind: Job" "$APPLIED"/*.yaml 2>/dev/null | wc -l | tr -d ' ')"
 reset_env; seed_codex_job '{"active":1}'; dispatch --agent claude; claude_rc=$? claude_calls="$(cat "$CALLS")"
 delete_errors_surface=1
 for err in "Error from server (Forbidden): cannot delete" "Unable to connect to the server: dial tcp" "Error from server: i/o timeout"; do
@@ -42,11 +44,13 @@ done
 serialized() { (( active_refused == 1 && finished_ok == 1 )); }
 newer_run_survives() { (( swap_rc != 0 )) && [[ "$swap_uid" == new-uid ]] && grep -q "unfinished codex job" <<<"$swap_out"; }
 single_winner() { (( race_empty == 0 && race_finished == 0 )); }
+one_claim() { (( same_change == 0 )) && [[ "$same_jobs" == 1 ]]; }
+check "AC6 two concurrent dispatches of one change: the work-item claim lets exactly one through" one_claim
 claude_unbounded() { (( claude_rc == 0 )) && ! grep -q "get job fleet-codex" <<<"$claude_calls"; }
 
 check "AC6 codex refused while active; replaced once finished (succeeded, failed, Failed condition)" serialized
 check "AC6 a newer run created between read and delete is never deleted (UID precondition)" newer_run_survives
-check "AC6 two concurrent codex dispatches, from empty and from a finished Job: exactly one wins" single_winner
+check "AC6 one assignee, two changes, concurrent codex: exactly one wins (from empty and from a finished Job)" single_winner
 fail_closed() { (( read_errors_refused == 1 )); }
 delete_fail_closed() { (( delete_errors_surface == 1 )); }
 check "AC6 a delete error other than a UID conflict surfaces the real error" delete_fail_closed

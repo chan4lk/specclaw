@@ -31,9 +31,9 @@ AzDO pipeline ── specclaw-fleet dispatch ──▶ Job (agent initContainer 
 
 ## Consent
 
-Assigning a work item to someone must not spend their plan without their say. Dispatch runs only when one of these holds:
-- the work item carries the tag `fleet:auto` (any case), and the work-item history shows that the assignee added it. A tag added by anyone else is not consent;
-- the person who triggered the pipeline (`Build.RequestedForEmail`) is the assignee.
+Assigning a work item to someone must not spend their plan without their say. Dispatch runs only when the work item carries the tag `fleet:auto` (any case), and the full work-item history shows that the assignee is the one who added it.
+- A tag added by anyone else is not consent.
+- Triggering the pipeline is not consent either, because a run scans every pending change, not only the one you pushed.
 
 ## Setup
 
@@ -81,7 +81,7 @@ Assigning a work item to someone must not spend their plan without their say. Di
        pr_open: PR Open
        failed: Failed
    ```
-   Fleet settings are **not** read from `config.yaml`. They are flags or environment variables, which the pipeline sets from its parameters:
+   Fleet settings are **not** read from `config.yaml`. They are flags or environment variables, which the pipeline sets from YAML `variables`. Changing them takes a reviewed PR, not a queue-time override. Dispatch validates the image, namespace and ref against strict patterns before rendering anything:
 
    | Variable | Flag | Default |
    |---|---|---|
@@ -93,12 +93,13 @@ Assigning a work item to someone must not spend their plan without their say. Di
    | `FLEET_NAMESPACE` |  | `specclaw-fleet` |
    | `FLEET_DEADLINE_MINUTES` |  | `120` (1 to 1440) |
 
-   `config.yaml` is passed to the pod as-is, so `specclaw-azdo-issue` can apply the mapping above even when the clone fails.
+   Only the `azdo:` block of `config.yaml` is passed to the pod, so `specclaw-azdo-issue` can apply the mapping above even when the clone fails. A missing or unreadable `config.yaml` stops dispatch.
 6. **Pipeline.** Use `pipelines/dispatch.yml`. It runs on `main` whenever a change's `state.json` changes. `batch: true` means runs never overlap. Each run does not diff commits. It scans every change that is approved but not started (`phase: proposal`) and dispatches it. Dispatch is idempotent:
-   - On success it tags the work item `fleet:dispatched`.
-   - On a refusal (consent, credential, busy codex, vault error) it tags it `fleet:refused`.
+   - Before creating anything, dispatch **claims** the work item by adding `fleet:dispatched` in one PATCH guarded by `test /rev`. Two dispatchers of the same change, from a pipeline and a manual run, can never both win. If Job creation then fails, the claim is released.
+   - On a refusal (consent, credential, vault error) it tags the work item `fleet:refused` (exit 4).
    - A change carrying either tag is skipped (exit 3).
-   - To retry, remove the tag, or run `specclaw-fleet dispatch <change> --force`.
+   - A busy codex slot is transient. It exits 5 and leaves the change untagged, so a later run retries it.
+   - To retry a handled change, remove the tag, or run `specclaw-fleet dispatch <change> --force`.
 
    A refusal raises a pipeline warning. Only real errors, such as an unreadable `state.json` or a cluster failure, fail the run. The pipeline agent needs `az`, `kubectl`, `jq`, and `specclaw-fleet` plus `specclaw-azdo-issue` on `PATH`.
 

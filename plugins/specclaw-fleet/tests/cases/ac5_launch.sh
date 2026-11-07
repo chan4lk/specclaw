@@ -24,7 +24,7 @@ job_hardened() {
   grep -q "automountServiceAccountToken: false" "$job" && grep -q "runAsNonRoot: true" "$job" && grep -q "seccompProfile: {type: RuntimeDefault}" "$job" \
     && grep -q "readOnlyRootFilesystem: true" "$job" && grep -q "backoffLimit: 0" "$job"
 }
-tagged_dispatched() { grep -q "specclaw-azdo-issue tag .* 049-x fleet:dispatched" "$CALLS"; }
+tagged_dispatched() { grep -q "specclaw-azdo-issue claim .* 049-x fleet:dispatched fleet:refused" "$CALLS" && [[ -d "$CLAIMS/wi-049-x" ]]; }
 work_item_and_output() {
   grep -q "fields .*agent=claude .*cluster=k3s-a .*requested_by=Alice A dispatched_commit=[0-9a-f]\{40\} state=dispatched" "$CALLS" \
     && jq -e '.ok == true and .agent == "claude" and .work_item == "42"' "$TMP/out" >/dev/null

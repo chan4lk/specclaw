@@ -4,7 +4,7 @@ set -uo pipefail
 STATUS="${FLEET_STATUS_DIR:-/fleet/status}"
 AUTH="${FLEET_CODEX_HOME:-/fleet/codex}/auth.json"
 rc="$(head -c 4 "$STATUS/exit" 2>/dev/null | tr -d '\n')"
-[[ "$rc" =~ ^[0-9]{1,3}$ ]] || rc=1
+if [[ "$rc" =~ ^[0-9]{1,3}$ ]] && (( 10#$rc <= 255 )); then rc=$((10#$rc)); else rc=1; fi
 
 fail() {
   echo "ERROR: $1; the assignee must re-run specclaw-fleet login --agent codex" >&2

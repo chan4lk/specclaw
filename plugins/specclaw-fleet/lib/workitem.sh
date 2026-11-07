@@ -18,6 +18,25 @@ refuse() {
   exit 4
 }
 
+busy() {
+  echo "$F_CHANGE: $1; retry once it finishes" >&2
+  exit 5
+}
+
+claim_change() {
+  local rc=0
+  if (( F_FORCE )); then
+    azdo_issue untag "$SPECCLAW_DIR" "$F_CHANGE" fleet:dispatched >/dev/null || die "$F_CHANGE: could not clear fleet:dispatched"
+    azdo_issue untag "$SPECCLAW_DIR" "$F_CHANGE" fleet:refused >/dev/null || die "$F_CHANGE: could not clear fleet:refused"
+  fi
+  azdo_issue claim "$SPECCLAW_DIR" "$F_CHANGE" fleet:dispatched fleet:refused >/dev/null 2>"$FLEET_TMPDIR/claim.err" || rc=$?
+  case "$rc" in
+    0) ;;
+    3) echo "$F_CHANGE: already handled or claimed by another dispatch" >&2; exit 3 ;;
+    *) die "$F_CHANGE: could not claim the work item: $(head -n1 "$FLEET_TMPDIR/claim.err")" ;;
+  esac
+}
+
 already_handled() {
   (( F_FORCE )) && return 0
   local tag

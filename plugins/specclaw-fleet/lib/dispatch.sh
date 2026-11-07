@@ -20,6 +20,9 @@ parse_dispatch_args() {
   [[ -n "$F_VAULT" ]] || die "No Key Vault: pass --vault or set FLEET_VAULT"
   F_NS="${FLEET_NAMESPACE:-specclaw-fleet}"
   F_IMAGE="${FLEET_IMAGE:-specclaw-fleet:latest}"
+  [[ "$F_IMAGE" =~ ^[A-Za-z0-9][A-Za-z0-9._/:@-]*$ ]] || die "FLEET_IMAGE is not a valid image reference"
+  [[ "$F_NS" =~ ^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$ ]] || die "FLEET_NAMESPACE is not a valid namespace name"
+  [[ "$F_REF" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ && "$F_REF" != *..* ]] || die "the ref '$F_REF' is not a valid branch name"
   local minutes="${FLEET_DEADLINE_MINUTES:-120}"
   [[ "$minutes" =~ ^[1-9][0-9]{0,3}$ ]] && (( 10#$minutes <= 1440 )) \
     || die "FLEET_DEADLINE_MINUTES must be a whole number from 1 to 1440"
@@ -57,7 +60,9 @@ fleet_dispatch() {
   F_LABEL="$(label_value "$F_CHANGE")"
   F_REPO="$(git -C "$SPECCLAW_DIR/.." remote get-url origin | sed -E 's#://[^@/]+@#://#')"
   F_COMMIT="$(git -C "$SPECCLAW_DIR/.." rev-parse HEAD)" || die "Could not resolve the dispatched commit"
-  F_AZDO_CONFIG="$(cat "$SPECCLAW_DIR/config.yaml" 2>/dev/null || true)"
+  [[ -r "$SPECCLAW_DIR/config.yaml" ]] || die "Cannot read $SPECCLAW_DIR/config.yaml"
+  F_AZDO_CONFIG="$(awk '/^azdo:[[:space:]]*(#.*)?$/ { on = 1; print; next } on && /^[^[:space:]#]/ { exit } on { print }' \
+    "$SPECCLAW_DIR/config.yaml")" || die "Cannot read $SPECCLAW_DIR/config.yaml"
   if (( F_DRY_RUN )); then
     render_job
     echo ---

@@ -20,7 +20,14 @@ reset_env() {
 
 stub_cluster() {
   stub_az
-  stub specclaw-azdo-issue '[[ "$1" == show ]] && echo "$WI_JSON"; [[ "$1" == updates ]] && { [[ "$WI_UPDATES" == FAIL ]] && exit 1; echo "$WI_UPDATES"; }; exit 0'
+  stub specclaw-azdo-issue '
+case "$1" in
+  show) echo "$WI_JSON" ;;
+  updates) [[ "$WI_UPDATES" == FAIL ]] && exit 1; echo "$WI_UPDATES" ;;
+  claim) mkdir "$CLAIMS/wi-$3" 2>/dev/null || exit 3 ;;
+  untag) [[ "$4" == fleet:dispatched ]] && rm -rf "$CLAIMS/wi-$3" ;;
+esac
+exit 0'
   stub kubectl '
 claim="$CLAIMS/claim-$5"
 case "$*" in
@@ -57,4 +64,9 @@ dispatch() {
 }
 
 nothing_applied() { [[ -z "$(ls -A "$APPLIED")" ]] && ! grep -q "kubectl.* create -f" "$CALLS"; }
+add_change() {
+  mkdir -p "$SPECCLAW_DIR/changes/$1"
+  cp "$SPECCLAW_DIR/changes/$CHANGE/state.json" "$SPECCLAW_DIR/changes/$CHANGE/status.md" "$SPECCLAW_DIR/changes/$1/"
+}
+
 marked_failed() { grep -q "specclaw-azdo-issue fields .*state=failed" "$CALLS" && grep -q "specclaw-azdo-issue tag .* fleet:refused" "$CALLS"; }

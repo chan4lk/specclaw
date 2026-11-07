@@ -15,8 +15,10 @@ while (($#)); do
 done
 printf '%s %s %s\n' "$method" "$url" "$body" >> "$CURL_LOG"
 case "$method $url" in
-  *"skip=0&"*) python3 -c 'import json; print(json.dumps({"value":[{"id":i} for i in range(200)]}))' ;;
-  *"skip=200&"*) [[ -n "${PAGE2_FAIL:-}" ]] && exit 22; echo '{"value":[{"id":200},{"id":201},{"id":202}]}' ;;
+  *"skip=0&"*|*"skip=200&"*)
+    [[ "$url" == *"skip=200&"* && -n "${PAGE2_FAIL:-}" ]] && exit 22
+    python3 -c 'import json; print(json.dumps({"value":[{"id":i,"revisedBy":{"uniqueName":"u%d@x.com"%i,"descriptor":"x"*1500}} for i in range(200)]}))' ;;
+  *"skip=400&"*) echo '{"value":[]}' ;;
   "GET "*) printf '{"fields":{"System.Tags":"%s"}}\n' "$TAGS" ;;
   *) echo '{}' ;;
 esac
@@ -30,8 +32,11 @@ azdo() {
 check() { if "$2"; then echo "PASS: $1"; else echo "FAIL: $1"; fails=$((fails + 1)); cat "$TMP/out"; fi; }
 
 azdo updates; rc=$?
-all_pages() { (( rc == 0 )) && [[ "$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))["value"]))' "$TMP/out")" == 203 ]]; }
-check "updates pages through the whole history" all_pages
+all_pages() {
+  (( rc == 0 )) && [[ "$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))["value"]))' "$TMP/out")" == 400 ]] \
+    && grep -q 'skip=400&' "$TMP/curl.log"
+}
+check "updates pages a 600 KB history across the exact-200 boundary" all_pages
 PAGE2_FAIL=1 azdo updates; rc=$?
 partial_fails() { (( rc != 0 )) && grep -q "skip 200" "$TMP/out"; }
 check "updates fails instead of returning a partial history" partial_fails

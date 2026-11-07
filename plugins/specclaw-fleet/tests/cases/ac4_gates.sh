@@ -38,8 +38,9 @@ for updates in "$READD" '{"value":[]}' FAIL; do
   reset_env; WI_UPDATES="$updates" dispatch; rc=$?
   check "AC4d tag without an assignee add event (${updates:0:12}…) refused" refused_and_failed
 done
-reset_env; WI_UPDATES=FAIL BUILD_REQUESTEDFOREMAIL=alice@contoso.com dispatch; rc=$?
-check "AC4d requester is the assignee: consent even when history is unreadable" accepted
+reset_env; WI_JSON='{"fields":{"System.AssignedTo":{"uniqueName":"Alice@Contoso.com"},"System.Tags":"specclaw"}}' \
+  BUILD_REQUESTEDFOREMAIL=alice@contoso.com dispatch; rc=$?
+check "AC4d triggering the pipeline is not consent without the assignee's tag" refused_and_failed
 for tag in Fleet:Auto FLEET:AUTO " fleet:auto "; do
   reset_env; WI_JSON="{\"fields\":{\"System.AssignedTo\":{\"uniqueName\":\"Alice@Contoso.com\"},\"System.Tags\":\"x;$tag\"}}" dispatch; rc=$?
   check "AC4d tag '$tag' added by the assignee is consent (case-insensitive)" accepted
@@ -53,7 +54,8 @@ reset_env; AZ_FAIL=1 dispatch; rc=$?
 check "AC4e vault error refused as a vault problem, not the assignee's" failed_vault
 
 reset_env; seed_codex_job '{"active":1}'; dispatch --agent codex; rc=$?
-check "AC4f busy codex assignee refused and marked Failed" refused_and_failed
+busy_retry() { (( rc == 5 )) && ! grep -q "state=failed" "$CALLS" && [[ ! -d "$CLAIMS/wi-$CHANGE" ]]; }
+check "AC4f busy codex assignee: exit 5, not Failed, claim released for a retry" busy_retry
 handled() { (( rc == 3 )) && nothing_applied && ! grep -q "state=failed" "$CALLS"; }
 for tag in fleet:dispatched Fleet:Refused " fleet:dispatched "; do
   reset_env; WI_JSON="{\"fields\":{\"System.AssignedTo\":{\"uniqueName\":\"Alice@Contoso.com\"},\"System.Tags\":\"fleet:auto;$tag\"}}" dispatch; rc=$?

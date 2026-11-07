@@ -52,6 +52,13 @@ specclaw-azdo-issue updates .specclaw <change>
 specclaw-azdo-issue tag .specclaw <change> fleet:dispatched
 ```
 
+**Claim atomically / remove a tag:**
+```bash
+specclaw-azdo-issue claim .specclaw <change> fleet:dispatched fleet:refused
+specclaw-azdo-issue untag .specclaw <change> fleet:dispatched
+```
+`claim` exits 3 when the work item already holds the tag or any blocking tag, or when another writer changed it in between. Its PATCH carries a `test /rev` precondition, so two claimants can never both win.
+
 **Record run fields (used by specclaw-fleet):**
 ```bash
 specclaw-azdo-issue fields .specclaw <change> agent=codex job=fleet-049-ab12c state=running

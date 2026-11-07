@@ -37,13 +37,13 @@ A new add-on plugin, `plugins/specclaw-fleet/`. An approved specclaw change is r
   - (a) the change's proposal phase is not approved;
   - (b) the change has no work item;
   - (c) the work item has no assignee;
-  - (d) **consent is missing:** no `fleet:auto` tag (case-insensitive) added by the assignee according to the work-item history, and the requester is not the assignee;
+  - (d) **consent is missing:** no `fleet:auto` tag (case-insensitive) added by the assignee, according to the full, paged work-item history. Triggering the pipeline is not consent;
   - (e) the assignee has no usable credential for the chosen agent, meaning the secret is missing, empty, or still a placeholder. A vault read error is refused separately, as a vault problem;
   - (f) `--agent codex` is chosen while that assignee already has an unfinished codex Job. The codex Job name `fleet-codex-<h>` is the atomic claim: the API refuses a duplicate, and a finished one is replaced by a delete carrying a UID precondition.
 
   - (g) the work item is already tagged `fleet:dispatched` or `fleet:refused` (case-insensitive). Exits 3, unless `--force` is given.
 
-  Refusals (c)–(f) exit 4, set the work item to `Failed`, comment the reason and tag `fleet:refused`. Dispatch never uses a credential belonging to anyone other than the assignee.
+  Refusals (c)–(e) exit 4, set the work item to `Failed`, comment the reason and tag `fleet:refused`. A busy codex slot (f) exits 5 and tags nothing. On success, dispatch claims the work item before creating anything, by adding `fleet:dispatched` in one PATCH guarded by `test /rev`. It releases the claim if creation fails. Image, namespace and ref are validated against strict patterns. Dispatch never uses a credential belonging to anyone other than the assignee.
 - **FR-5 Dispatch launch.** When every gate passes, dispatch:
   - creates the Job, then a K8s Secret holding only the assignee's credential with `ownerReferences` to that Job already set, so it is garbage-collected with the Job and the dispatcher never needs read or patch access to Secrets;
   - labels the Job `specclaw.fleet/agent`, `specclaw.fleet/assignee=<h>` and `specclaw.fleet/change`;

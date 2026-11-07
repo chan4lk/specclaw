@@ -1,28 +1,12 @@
-parameters:
-  - name: pool
-    type: string
-    default: specclaw-fleet
-  - name: kubeConnection
-    type: string
-    default: specclaw-fleet-k3s
-  - name: azureConnection
-    type: string
-    default: specclaw-fleet-azure
-  - name: vault
-    type: string
-    default: specclaw-fleet-kv
-  - name: image
-    type: string
-    default: specclaw-fleet:latest
-  - name: namespace
-    type: string
-    default: specclaw-fleet
-  - name: deadlineMinutes
-    type: string
-    default: "120"
-  - name: defaultAgent
-    type: string
-    default: claude
+variables:
+  fleetPool: specclaw-fleet
+  fleetKubeConnection: specclaw-fleet-k3s
+  fleetAzureConnection: specclaw-fleet-azure
+  fleetVault: specclaw-fleet-kv
+  fleetImage: specclaw-fleet:latest
+  fleetNamespace: specclaw-fleet
+  fleetDeadlineMinutes: "120"
+  fleetDefaultAgent: claude
 
 trigger:
   batch: true
@@ -33,7 +17,7 @@ trigger:
 pr: none
 
 pool:
-  name: ${{ parameters.pool }}
+  name: ${{ variables.fleetPool }}
 
 steps:
   - checkout: self
@@ -42,12 +26,12 @@ steps:
     displayName: kubectl login
     inputs:
       connectionType: Kubernetes Service Connection
-      kubernetesServiceEndpoint: ${{ parameters.kubeConnection }}
+      kubernetesServiceEndpoint: ${{ variables.fleetKubeConnection }}
       command: login
   - task: AzureCLI@2
     displayName: Dispatch newly approved changes
     inputs:
-      azureSubscription: ${{ parameters.azureConnection }}
+      azureSubscription: ${{ variables.fleetAzureConnection }}
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |
@@ -63,7 +47,7 @@ steps:
           rc=0
           specclaw-fleet dispatch "$(basename "$(dirname "$f")")" || rc=$?
           case "$rc" in
-            0|3) ;;
+            0|3|5) ;;
             4) echo "##vso[task.logissue type=warning]$f: dispatch refused; see the work item" ;;
             *) failed=1 ;;
           esac
@@ -74,9 +58,9 @@ steps:
       AZDO_PROJECT: $(System.TeamProject)
       BUILD_REQUESTEDFOR: $(Build.RequestedFor)
       BUILD_REQUESTEDFOREMAIL: $(Build.RequestedForEmail)
-      FLEET_VAULT: ${{ parameters.vault }}
-      FLEET_IMAGE: ${{ parameters.image }}
-      FLEET_NAMESPACE: ${{ parameters.namespace }}
-      FLEET_DEADLINE_MINUTES: ${{ parameters.deadlineMinutes }}
-      FLEET_DEFAULT_AGENT: ${{ parameters.defaultAgent }}
+      FLEET_VAULT: $(fleetVault)
+      FLEET_IMAGE: $(fleetImage)
+      FLEET_NAMESPACE: $(fleetNamespace)
+      FLEET_DEADLINE_MINUTES: $(fleetDeadlineMinutes)
+      FLEET_DEFAULT_AGENT: $(fleetDefaultAgent)
       FLEET_REF: $(Build.SourceBranchName)
