@@ -24,14 +24,16 @@ stub_cluster() {
 case "$1" in
   show) echo "$WI_JSON" ;;
   updates) [[ "$WI_UPDATES" == FAIL ]] && exit 1; echo "$WI_UPDATES" ;;
-  claim) mkdir "$CLAIMS/wi-$3" 2>/dev/null || exit 3 ;;
-  untag) [[ "$4" == fleet:dispatched ]] && rm -rf "$CLAIMS/wi-$3" ;;
+  claim) [[ -n "${CLAIM_FAIL:-}" ]] && { echo "ERROR: ADO read failed" >&2; exit 1; }
+    mkdir "$CLAIMS/wi-$3" 2>/dev/null || exit 3 ;;
+  untag) [[ -n "${UNTAG_FAIL:-}" ]] && exit 1; [[ "$4" == fleet:dispatched ]] && rm -rf "$CLAIMS/wi-$3" ;;
 esac
 exit 0'
   stub kubectl '
 claim="$CLAIMS/claim-$5"
 case "$*" in
   *" create -f -")
+    [[ -n "${CREATE_ERR:-}" ]] && grep -q "^kind: ${CREATE_KIND:-Job}" && { echo "$CREATE_ERR" >&2; exit 1; }
     doc="$(cat)"; name="$(grep -m1 "^  name: " <<<"$doc" | sed "s/^  name: //")"
     mkdir "$CLAIMS/claim-$name" 2>/dev/null || { echo "Error from server (AlreadyExists): $name" >&2; exit 1; }
     echo "uid-$$-$RANDOM" > "$CLAIMS/claim-$name/uid"; echo "{\"active\":1}" > "$CLAIMS/claim-$name/status"

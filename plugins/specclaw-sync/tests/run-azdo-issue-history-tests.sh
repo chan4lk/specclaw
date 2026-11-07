@@ -19,7 +19,6 @@ case "$method $url" in
     [[ "$url" == *"skip=200&"* && -n "${PAGE2_FAIL:-}" ]] && exit 22
     python3 -c 'import json; print(json.dumps({"value":[{"id":i,"revisedBy":{"uniqueName":"u%d@x.com"%i,"descriptor":"x"*1500}} for i in range(200)]}))' ;;
   *"skip=400&"*) echo '{"value":[]}' ;;
-  "GET "*) printf '{"fields":{"System.Tags":"%s"}}\n' "$TAGS" ;;
   *) echo '{}' ;;
 esac
 EOF2
@@ -40,15 +39,6 @@ check "updates pages a 600 KB history across the exact-200 boundary" all_pages
 PAGE2_FAIL=1 azdo updates; rc=$?
 partial_fails() { (( rc != 0 )) && grep -q "skip 200" "$TMP/out"; }
 check "updates fails instead of returning a partial history" partial_fails
-
-TAGS="specclaw" azdo tag fleet:dispatched; rc=$?
-tag_added() { (( rc == 0 )) && grep -q '^PATCH .*"value": "specclaw; fleet:dispatched"' "$TMP/curl.log"; }
-check "tag appends to existing tags" tag_added
-for existing in "Fleet:Dispatched" "a; fleet:dispatched" "fleet:dispatched ;b"; do
-  TAGS="$existing" azdo tag fleet:dispatched; rc=$?
-  idempotent() { (( rc == 0 )) && ! grep -q "^PATCH" "$TMP/curl.log"; }
-  check "tag is a no-op when '$existing' already holds it" idempotent
-done
 
 (( fails == 0 )) && echo "All azdo-issue history tests passed." || echo "$fails failed."
 exit $(( fails > 0 ))

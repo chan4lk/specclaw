@@ -329,21 +329,68 @@ cmd_close() {
   cmd_comment "" "$SPECCLAW_DIR" "$CHANGE_NAME" "$msg"
 
   # Also add a `closed-by-specclaw` tag (additive — keep existing tags)
-  add_tag "$wi_id" closed-by-specclaw \
+  ( tag_update "$wi_id" add closed-by-specclaw lax ) \
     || warn "Failed to add closed-by-specclaw tag — closing comment was still posted"
   echo "Closed Work Item #${wi_id}"
 }
 
-add_tag() {
-  local wi_id="$1" tag="$2" current_tags body
-  current_tags="$(ado_get "wit/workitems/${wi_id}?api-version=7.1" \
-    | python3 -c 'import json,sys; print(json.load(sys.stdin).get("fields",{}).get("System.Tags",""))')" || return 1
-  if [[ ";$(tr -d ' ' <<<"$current_tags" | tr '[:upper:]' '[:lower:]');" == *";$(tr '[:upper:]' '[:lower:]' <<<"$tag");"* ]]; then
-    return 0
-  fi
-  body="$(python3 -c 'import json,sys; print(json.dumps([{"op":"replace","path":"/fields/System.Tags","value":sys.argv[1]}]))' \
-    "${current_tags:+$current_tags; }$tag")"
-  ado_patch_json "wit/workitems/${wi_id}?api-version=7.1" "$body" >/dev/null
+PY_TAGS='
+import json, sys
+mode, tag, strict, blocking = sys.argv[1], sys.argv[2], sys.argv[3] == "strict", sys.argv[4:]
+item = json.load(sys.stdin)
+tags = [t.strip() for t in item.get("fields", {}).get("System.Tags", "").split(";") if t.strip()]
+held = {t.lower() for t in tags}
+if mode == "add":
+    if any(b.lower() in held for b in blocking) or (strict and tag.lower() in held):
+        sys.exit(3)
+    if tag.lower() in held:
+        sys.exit(10)
+    tags.append(tag)
+else:
+    if tag.lower() not in held:
+        sys.exit(10)
+    tags = [t for t in tags if t.lower() != tag.lower()]
+print(item["rev"])
+print(json.dumps([{"op": "test", "path": "/rev", "value": item["rev"]},
+                  {"op": "replace", "path": "/fields/System.Tags", "value": "; ".join(tags)}]))
+'
+
+tag_update() {
+  local wi_id="$1" mode="$2" tag="$3" strict="$4" attempt item out rc rev now
+  shift 4
+  for attempt in 1 2 3; do
+    item="$(ado_get "wit/workitems/${wi_id}?api-version=7.1")" || die "ADO read failed for Work Item #${wi_id}"
+    rc=0
+    out="$(python3 -c "$PY_TAGS" "$mode" "$tag" "$strict" "$@" <<<"$item")" || rc=$?
+    case "$rc" in 0) ;; 3) return 3 ;; 10) return 0 ;; *) die "Could not read tags of Work Item #${wi_id}" ;; esac
+    rev="${out%%$'\n'*}"
+    ado_patch_json "wit/workitems/${wi_id}?api-version=7.1" "${out#*$'\n'}" >/dev/null && return 0
+    now="$(ado_get "wit/workitems/${wi_id}?api-version=7.1" | python3 -c 'import json,sys; print(json.load(sys.stdin)["rev"])')" \
+      || die "ADO read failed for Work Item #${wi_id} after a failed tag update"
+    [[ "$now" != "$rev" ]] || die "Tag update failed for Work Item #${wi_id}: the item did not change, so this is not a race"
+  done
+  die "Work Item #${wi_id} kept changing; gave up updating ${tag} after ${attempt} attempts"
+}
+
+cmd_claim() {
+  require_creds
+  local tag="${4:-}" wi_id rc=0
+  [[ -n "$tag" ]] || die "Usage: specclaw-azdo-issue claim <specclaw_dir> <change> <tag> [blocking-tag...]"
+  wi_id="$(existing_wi_id)"
+  [[ -n "$wi_id" ]] || die "No Work Item for this change — run specclaw-azdo-issue create first"
+  tag_update "$wi_id" add "$tag" strict "${@:5}" || rc=$?
+  (( rc == 3 )) && { echo "Work Item #${wi_id} already holds ${tag} or a blocking tag" >&2; exit 3; }
+  echo "Claimed Work Item #${wi_id}: ${tag}"
+}
+
+cmd_untag() {
+  require_creds
+  local tag="${4:-}" wi_id
+  [[ -n "$tag" ]] || die "Usage: specclaw-azdo-issue untag <specclaw_dir> <change> <tag>"
+  wi_id="$(existing_wi_id)"
+  [[ -n "$wi_id" ]] || die "No Work Item for this change — run specclaw-azdo-issue create first"
+  tag_update "$wi_id" remove "$tag" lax
+  echo "Untagged Work Item #${wi_id}: ${tag}"
 }
 
 cmd_tag() {
@@ -352,7 +399,7 @@ cmd_tag() {
   [[ -n "$tag" ]] || die "Usage: specclaw-azdo-issue tag <specclaw_dir> <change> <tag>"
   wi_id="$(existing_wi_id)"
   [[ -n "$wi_id" ]] || die "No Work Item for this change — run specclaw-azdo-issue create first"
-  add_tag "$wi_id" "$tag" || die "Could not tag Work Item #${wi_id} with ${tag}"
+  tag_update "$wi_id" add "$tag" lax
   echo "Tagged Work Item #${wi_id}: ${tag}"
 }
 
@@ -414,43 +461,6 @@ cmd_updates() {
   done
   python3 -c 'import glob,json,sys; v=[u for f in sorted(glob.glob(sys.argv[1]+"/*.json")) for u in json.load(open(f))["value"]]; print(json.dumps({"count":len(v),"value":v}))' "$dir" \
     || die "Could not merge the update history for Work Item #${wi_id}"
-}
-
-cmd_claim() {
-  require_creds
-  local tag="${4:-}" wi_id item body rc=0
-  [[ -n "$tag" ]] || die "Usage: specclaw-azdo-issue claim <specclaw_dir> <change> <tag> [blocking-tag...]"
-  wi_id="$(existing_wi_id)"
-  [[ -n "$wi_id" ]] || die "No Work Item for this change — run specclaw-azdo-issue create first"
-  item="$(ado_get "wit/workitems/${wi_id}?api-version=7.1")" || die "ADO read failed for Work Item #${wi_id}"
-  body="$(python3 - "$item" "$tag" "${@:5}" <<'PY'
-import json, sys
-item, tag, blocking = json.loads(sys.argv[1]), sys.argv[2], sys.argv[3:]
-tags = [t.strip() for t in item.get("fields", {}).get("System.Tags", "").split(";") if t.strip()]
-held = {t.lower() for t in tags}
-if any(b.lower() in held for b in blocking + [tag]):
-    sys.exit(3)
-print(json.dumps([{"op": "test", "path": "/rev", "value": item["rev"]},
-                  {"op": "replace", "path": "/fields/System.Tags", "value": "; ".join(tags + [tag])}]))
-PY
-)" || rc=$?
-  case $rc in 0) ;; 3) echo "Work Item #${wi_id} already holds a blocking tag" >&2; exit 3 ;; *) die "Could not read tags of Work Item #${wi_id}" ;; esac
-  ado_patch_json "wit/workitems/${wi_id}?api-version=7.1" "$body" >/dev/null \
-    || { echo "Work Item #${wi_id} changed while claiming ${tag}" >&2; exit 3; }
-  echo "Claimed Work Item #${wi_id}: ${tag}"
-}
-
-cmd_untag() {
-  require_creds
-  local tag="${4:-}" wi_id current body
-  [[ -n "$tag" ]] || die "Usage: specclaw-azdo-issue untag <specclaw_dir> <change> <tag>"
-  wi_id="$(existing_wi_id)"
-  [[ -n "$wi_id" ]] || die "No Work Item for this change — run specclaw-azdo-issue create first"
-  current="$(ado_get "wit/workitems/${wi_id}?api-version=7.1" \
-    | python3 -c 'import json,sys; print(json.load(sys.stdin).get("fields",{}).get("System.Tags",""))')" || die "ADO read failed for Work Item #${wi_id}"
-  body="$(python3 -c 'import json,sys; t=[x.strip() for x in sys.argv[1].split(";") if x.strip() and x.strip().lower()!=sys.argv[2].lower()]; print(json.dumps([{"op":"replace","path":"/fields/System.Tags","value":"; ".join(t)}]))' "$current" "$tag")"
-  ado_patch_json "wit/workitems/${wi_id}?api-version=7.1" "$body" >/dev/null || die "Could not untag Work Item #${wi_id}"
-  echo "Untagged Work Item #${wi_id}: ${tag}"
 }
 
 fleet_field_ref() {

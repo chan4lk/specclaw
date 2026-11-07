@@ -98,7 +98,7 @@ Assigning a work item to someone must not spend their plan without their say. Di
    - Before creating anything, dispatch **claims** the work item by adding `fleet:dispatched` in one PATCH guarded by `test /rev`. Two dispatchers of the same change, from a pipeline and a manual run, can never both win. If Job creation then fails, the claim is released.
    - On a refusal (consent, credential, vault error) it tags the work item `fleet:refused` (exit 4).
    - A change carrying either tag is skipped (exit 3).
-   - A busy codex slot is transient. It exits 5 and leaves the change untagged, so a later run retries it.
+   - A busy codex slot is transient. It exits 5, leaves the change untagged and raises a pipeline warning. The pipeline only runs when a `state.json` changes, so re-run it, or dispatch manually, once the assignee's codex job has finished.
    - To retry a handled change, remove the tag, or run `specclaw-fleet dispatch <change> --force`.
 
    A refusal raises a pipeline warning. Only real errors, such as an unreadable `state.json` or a cluster failure, fail the run. The pipeline agent needs `az`, `kubectl`, `jq`, and `specclaw-fleet` plus `specclaw-azdo-issue` on `PATH`.
