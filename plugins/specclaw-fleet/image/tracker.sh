@@ -12,3 +12,10 @@ record() {
   specclaw-azdo-issue fields "$(tracker_dir)" "$FLEET_CHANGE" "$@" >/dev/null 2>&1 \
     || echo "WARNING: work item update failed: $*" >&2
 }
+
+show_agent_log() {
+  [[ -f "$STATUS/agent.log" ]] || return 0
+  echo "---- agent log (last 4000 bytes, secrets redacted) ----" >&2
+  tail -c 4000 "$STATUS/agent.log" \
+    | sed -E 's/sk-ant-[A-Za-z0-9_-]+/sk-ant-<redacted>/g; s/eyJ[A-Za-z0-9._-]{20,}/<jwt-redacted>/g; s/[A-Za-z0-9+\/_-]{40,}/<redacted>/g' >&2
+}

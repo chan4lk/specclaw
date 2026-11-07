@@ -16,4 +16,8 @@ done
 GATE="" FAKE_PR=1 run_entry; rc=$?
 passes() { (( rc == 0 )) && [[ "$(cat "$TMP/status/exit")" == 0 ]] && grep -q "git clone" "$CALLS"; }
 check "AC7 egress gate open (proxy up, direct blocked): run proceeds" passes
+log_redacted() {
+  grep -q "agent says hi" "$TMP/out" && ! grep -q "SECRETTOKENVALUE" "$TMP/out" && ! grep -q "abcdefghijklmnopqrstuvwxyz0123456789" "$TMP/out"
+}
+check "AC7 agent log tail reaches the container log with tokens redacted" log_redacted
 finish

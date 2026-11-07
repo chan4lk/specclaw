@@ -72,9 +72,9 @@ STATE="$REPO/.specclaw/changes/$FLEET_CHANGE/state.json"
   || { record state=failed exit=not-approved-at-ref; finish 2; }
 record state=running "built_commit=$(git -C "$REPO" rev-parse HEAD)"
 cd "$REPO" || finish 2
-run_agent
-rc=$?
+rc=0; run_agent || rc=$?
 pr="$(jq -r '.phases.pr.url // empty' "$STATE" 2>/dev/null)"
 branch="$(jq -r '.branch // empty' "$STATE" 2>/dev/null)"
-if [[ -n "$pr" ]]; then record state=pr_open "exit=$rc" "branch=$branch"; else record state=failed "exit=$rc" "branch=$branch"; fi
+show_agent_log
+record "state=$([[ -n "$pr" ]] && echo pr_open || echo failed)" "exit=$rc" "branch=$branch"
 finish "$rc"

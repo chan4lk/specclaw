@@ -20,6 +20,7 @@ content="{\"branch\":\"specclaw/049-x\",\"phases\":{\"proposal\":{\"status\":\"$
 exit 0'
 stub claude 'env | grep -E "^(ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|OPENAI_API_KEY|CODEX_API_KEY)=" >> "$TMP/leaked"
 [[ "$CLAUDE_CODE_OAUTH_TOKEN" == oat-token ]] || echo "bad token" >> "$TMP/leaked"
+echo "agent says hi; leaked sk-ant-oat01-SECRETTOKENVALUE and pat abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGH"
 sleep "${AGENT_SLEEP:-0}"
 exit "${AGENT_RC:-0}"'
 export TMP REAL_AZDO=""
