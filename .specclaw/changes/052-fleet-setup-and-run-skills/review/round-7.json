@@ -1,0 +1,71 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 3,
+  "minor": 0
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw-fleet/lib/codex-slot.sh",
+  "plugins/specclaw-fleet/tests/cases/ac17_trigger.sh",
+  "plugins/specclaw-fleet/tests/cases/ac6_codex_serial.sh",
+  "plugins/specclaw-fleet/tests/lib/dispatch-env.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw-fleet/tests/cases/ac17_trigger.sh",
+   "fp": "8cadf10eb73a",
+   "in_delta": true,
+   "line": 44,
+   "message": "This is an instance fix of the previous B2 finding. The one new row (fleet:refused + --retry + missing claude credential) is checked through `gate`, which asserts only rc and message. It still never asserts that `$CALLS` holds no `azdo-issue untag`, `create`, `fields`, `tag`, `claim` or `pipelines run`. The requested `--create` row, where the work item is missing and a later gate fails, was not added. The ac18 detector widening still exercises nothing, because its `row()` does not pass `--retry` or `--create`. Assert that `$CALLS` has no write command in these rows and add the `--create` + missing-credential row.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Revert the write-before-gate reorder so `trigger --retry` untags `fleet:refused` first and then fails on the missing claude-token. The row still returns rc 4 with 'no registered claude credential', so the test stays green while the refused tag has been removed.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/tests/cases/ac6_codex_serial.sh",
+   "fp": "e6f7e940e1be",
+   "in_delta": true,
+   "line": 57,
+   "message": "The junk-Job-JSON test only asserts the dispatch path. The `trigger` call on each row discards its result with `|| true`, so the check-only path (`check_only_busy`, T_BUSY_CHECK) is never verified against empty, unparsable, non-object or uid-less JSON. AC8 covers only GET_ERR, not junk output. Assert that `codex_busy_check` starts with `not-run` for every junk row.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Change `check_only_busy`'s default branch to `*) ;;`, or make it treat an empty state as clear. `trigger` with JOB_RAW='' then reports the busy check as clear, but the test stays green because the trigger output is never inspected.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/lib/codex-slot.sh",
+   "fp": "7d7d426e60fe",
+   "in_delta": true,
+   "line": 1,
+   "message": "This commit changes plugin code under plugins/specclaw-fleet and bumps no version. The earlier finding asked for a bump and this round did not make one. Bump every plugins/*/.claude-plugin/plugin.json, every plugins/*/.codex-plugin/plugin.json and every plugins[] entry in .claude-plugin/marketplace.json to one new identical version.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "R1",
+   "scenario": "Plugin code changed with no version change, so the installed plugin version stays at 0.8.9 and users on 0.8.9 never receive the codex slot fix.",
+   "severity": "major"
+  }
+ ],
+ "head": "0e7cc847068d34da21efb4e31a3e77c19e231de4",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 17272,
+ "round": 7,
+ "since": "5722d8d",
+ "status": "open",
+ "system_chars": 8966,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794062982,
+ "ts_start": 1794062957
+}

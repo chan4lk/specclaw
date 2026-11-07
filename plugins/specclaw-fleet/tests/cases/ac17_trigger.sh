@@ -14,7 +14,7 @@ publish() {
 }
 trig() { "$FLEET" trigger "$CHANGE" "$@" > "$TMP/out" 2>&1; }
 quiet() { ! grep -qE "pipelines run|azdo-issue (fields|tag|untag|claim|create)" "$CALLS" && nothing_applied; }
-gate() { local want_rc="$1" want_msg="$2"; ok() { (( rc == want_rc )) && grep -q "$want_msg" "$TMP/out" && quiet; }; check "AC8 gate: $want_msg" ok; }
+gate() { local want_rc="$1" want_msg="$2"; ok() { (( rc == want_rc )) && grep -q "$want_msg" "$TMP/out" && quiet; }; check "AC8 gate: $want_msg (no untag/create/fields/tag/claim/pipeline call)" ok; }
 
 reset_env; publish; echo '{"phases":{"proposal":{"status":"draft"}}}' > "$SPECCLAW_DIR/changes/$CHANGE/state.json"; trig; remote_rc=$?
 remote_truth() { (( remote_rc == 0 )) && grep -q "pipelines run" "$CALLS"; }
@@ -43,6 +43,16 @@ reset_env; publish; GET_ERR="Error from server (Forbidden): jobs" FLEET_DEFAULT_
 reset_env; publish; rm "$KV/claude-token-$H"
 WI_JSON='{"fields":{"System.AssignedTo":{"uniqueName":"Alice@Contoso.com"},"System.Tags":"fleet:auto; fleet:refused"}}' trig --retry; rc=$?
 gate 4 "no registered claude credential"
+reset_env; publish; : > "$SPECCLAW_DIR/changes/$CHANGE/status.md"; rm "$KV/claude-token-$H"; trig --create; cc_rc=$?; cc_calls="$(cat "$CALLS")"
+create_then_stop() { (( cc_rc == 3 )) && grep -q "azdo-issue create" <<<"$cc_calls" && ! grep -qE "untag|fields|azdo-issue tag|claim|pipelines run" <<<"$cc_calls"; }
+check "AC8 --create creates even when a later gate would fail (a new item can never pass assignee/consent), then stops before any other write" create_then_stop
+junk_notrun=1
+for raw in "" "not json" "[1]" '"x"' '{"status":{"succeeded":1}}'; do
+  reset_env; publish; JOB_RAW="$raw" FLEET_DEFAULT_AGENT=codex trig || junk_notrun=0
+  jq -e '.codex_busy_check | startswith("not-run")' "$TMP/out" >/dev/null 2>&1 || junk_notrun=0
+done
+junk_reported() { (( junk_notrun == 1 )); }
+check "AC8 junk Job JSON makes trigger's busy check not-run for every payload" junk_reported
 unread() { (( unread_rc == 0 )) && jq -e '.codex_busy_check | startswith("not-run")' <<<"$unread_out" >/dev/null; }
 check "AC8 an unreadable cluster makes the busy check not-run, never clear" unread
 creates() { (( create_rc == 3 )) && grep -q "azdo-issue create" <<<"$create_calls" && ! grep -q "pipelines run" <<<"$create_calls" && grep -q "assign it" <<<"$create_out"; }
