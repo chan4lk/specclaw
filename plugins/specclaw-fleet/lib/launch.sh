@@ -17,11 +17,15 @@ YAML
 }
 
 claim_codex_slot() {
-  local state
-  state="$(kubectl -n "$F_NS" get job "$F_JOB" -o json 2>/dev/null | jq -r '
+  local json state err="$FLEET_TMPDIR/get.err"
+  if ! json="$(kubectl -n "$F_NS" get job "$F_JOB" -o json 2>"$err")"; then
+    grep -q NotFound "$err" && return 0
+    die "$F_CHANGE: could not read Job $F_JOB: $(head -n1 "$err")"
+  fi
+  state="$(jq -r '
     if ([.status.conditions[]? | select((.type == "Complete" or .type == "Failed") and .status == "True")] | length) > 0
-      or (.status.succeeded // 0) > 0 or (.status.failed // 0) > 0
-    then "finished \(.metadata.uid)" else "active" end')" || state=""
+      or ((.status.active // 0) == 0 and ((.status.succeeded // 0) > 0 or (.status.failed // 0) > 0))
+    then "finished \(.metadata.uid)" else "active" end' <<<"$json")"
   case "$state" in
     active) refuse "$F_CHANGE" "assignee already has an unfinished codex job" ;;
     finished*) delete_job_if_uid "${state#finished }" ;;

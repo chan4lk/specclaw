@@ -40,13 +40,19 @@ steps:
       inlineScript: |
         set -uo pipefail
         export AZDO_ORG="$(basename "${SYSTEM_COLLECTIONURI%/}")"
-        status_at() { git show "$1:$2" 2>/dev/null | jq -r '.phases.proposal.status // empty'; }
+        status_at() {
+          git cat-file -e "$1:$2" 2>/dev/null || { echo absent; return 0; }
+          git show "$1:$2" | jq -er '.phases.proposal.status // "none"'
+        }
         failed=0
         changed="$AGENT_TEMPDIRECTORY/fleet-changed"
         git diff -z --name-only HEAD^1 HEAD -- '.specclaw/changes/*/state.json' > "$changed" \
           || { echo "##vso[task.logissue type=error]could not list changed state files"; exit 1; }
         while IFS= read -r -d '' f; do
-          [[ "$(status_at HEAD "$f")" == approved && "$(status_at HEAD^1 "$f")" != approved ]] || continue
+          if ! now="$(status_at HEAD "$f")" || ! before="$(status_at HEAD^1 "$f")"; then
+            echo "##vso[task.logissue type=error]could not read proposal status from $f"; failed=1; continue
+          fi
+          [[ "$now" == approved && "$before" != approved ]] || continue
           specclaw-fleet dispatch "$(basename "$(dirname "$f")")" --vault "${{ parameters.vault }}" || failed=1
         done < "$changed"
         exit "$failed"

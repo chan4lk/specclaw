@@ -15,7 +15,12 @@ race() {
   (( (r1 == 0) + (r2 == 0) == 1 ))
 }
 
-reset_env; seed_codex_job '{"active":1}'; dispatch --agent codex; active_rc=$?
+active_refused=1
+for status in '{"active":1}' '{"failed":1,"active":1}' '{}'; do
+  reset_env; seed_codex_job "$status"; dispatch --agent codex && active_refused=0
+done
+reset_env; seed_codex_job '{"succeeded":1}'; SWAP_BEFORE_DELETE=1 dispatch --agent codex; swap_rc=$?
+swap_uid="$(cat "$CLAIMS/claim-fleet-codex-$H/uid")" swap_out="$(cat "$TMP/out")"
 finished_ok=1
 for status in '{"succeeded":1}' '{"failed":1}' '{"conditions":[{"type":"Failed","status":"True"}]}'; do
   reset_env; seed_codex_job "$status"; dispatch --agent codex || finished_ok=0
@@ -24,11 +29,13 @@ reset_env; race; race_empty=$?
 reset_env; seed_codex_job '{"succeeded":1}'; race; race_finished=$?
 reset_env; seed_codex_job '{"active":1}'; dispatch --agent claude; claude_rc=$?
 
-serialized() { (( active_rc != 0 && finished_ok == 1 )); }
+serialized() { (( active_refused == 1 && finished_ok == 1 )); }
+newer_run_survives() { (( swap_rc != 0 )) && [[ "$swap_uid" == new-uid ]] && grep -q "unfinished codex job" <<<"$swap_out"; }
 single_winner() { (( race_empty == 0 && race_finished == 0 )); }
 claude_unbounded() { (( claude_rc == 0 )) && ! grep -q "get job fleet-codex" "$CALLS"; }
 
 check "AC6 codex refused while active; replaced once finished (succeeded, failed, Failed condition)" serialized
+check "AC6 a newer run created between read and delete is never deleted (UID precondition)" newer_run_survives
 check "AC6 two concurrent codex dispatches, from empty and from a finished Job: exactly one wins" single_winner
 check "AC6 claude never refused for concurrency" claude_unbounded
 finish

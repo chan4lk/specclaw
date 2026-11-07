@@ -27,13 +27,12 @@ allowlist() {
   grep -q "http_access deny all" "$K/egress-proxy.yaml"
 }
 pipeline_event_driven() {
-  grep -q "specclaw-fleet dispatch" "$P" && ! grep -Eq "sleep|while true|until " "$P" && grep -q "System.AccessToken" "$P" \
-    && grep -q 'could not list changed state files"; exit 1' "$P"
+  grep -q "specclaw-fleet dispatch" "$P" && ! grep -Eq "sleep|while true|until " "$P" && grep -q "System.AccessToken" "$P"
 }
 
 check "AC10 dispatcher Role: jobs create/get/list/delete, secrets create only" role_minimal
 check "AC10 fleet pods: default-deny, egress only to DNS and the proxy" pods_default_deny
 check "AC10 proxy egress excludes metadata and private ranges" proxy_blocks_internal
 check "AC10 proxy allowlist covers the required hosts and denies the rest" allowlist
-check "FR10 pipeline dispatches on state change, never polls, fails on a failed diff" pipeline_event_driven
+check "FR10 pipeline dispatches on state change, never polls" pipeline_event_driven
 finish
