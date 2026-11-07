@@ -355,8 +355,16 @@ print(json.dumps([{"op": "test", "path": "/rev", "value": item["rev"]},
                   {"op": "replace", "path": "/fields/System.Tags", "value": "; ".join(tags)}]))
 '
 
+ado_patch_status() {
+  local url="https://dev.azure.com/${AZDO_ORG}/${AZDO_PROJECT}/_apis/${1}"
+  curl -s -o /dev/null -w '%{http_code}' --max-time 30 -X PATCH "$url" \
+    -H "Authorization: Basic $(auth_header)" \
+    -H "Content-Type: application/json-patch+json" \
+    -d "$2" || true
+}
+
 tag_update() {
-  local wi_id="$1" mode="$2" tag="$3" strict="$4" attempt item out rc rev now
+  local wi_id="$1" mode="$2" tag="$3" strict="$4" attempt item out rc rev now code
   shift 4
   for attempt in 1 2 3; do
     item="$(ado_get "wit/workitems/${wi_id}?api-version=7.1")" || die "ADO read failed for Work Item #${wi_id}"
@@ -364,10 +372,15 @@ tag_update() {
     out="$(python3 -c "$PY_TAGS" "$mode" "$tag" "$strict" "$@" <<<"$item")" || rc=$?
     case "$rc" in 0) ;; 3) return 3 ;; 10) return 0 ;; *) die "Could not read tags of Work Item #${wi_id}" ;; esac
     rev="${out%%$'\n'*}"
-    ado_patch_json "wit/workitems/${wi_id}?api-version=7.1" "${out#*$'\n'}" >/dev/null && return 0
+    code="$(ado_patch_status "wit/workitems/${wi_id}?api-version=7.1" "${out#*$'\n'}")"
+    case "$code" in
+      2??) return 0 ;;
+      4??) ;;
+      *) die "Tag update for Work Item #${wi_id} has an unknown outcome (HTTP ${code:-none}); check its tags before retrying" ;;
+    esac
     now="$(ado_get "wit/workitems/${wi_id}?api-version=7.1" | python3 -c 'import json,sys; print(json.load(sys.stdin)["rev"])')" \
-      || die "ADO read failed for Work Item #${wi_id} after a failed tag update"
-    [[ "$now" != "$rev" ]] || die "Tag update failed for Work Item #${wi_id}: the item did not change, so this is not a race"
+      || die "ADO read failed for Work Item #${wi_id} after a rejected tag update"
+    [[ "$now" != "$rev" ]] || die "Tag update rejected for Work Item #${wi_id} (HTTP ${code}): the item did not change, so this is not a race"
   done
   die "Work Item #${wi_id} kept changing; gave up updating ${tag} after ${attempt} attempts"
 }

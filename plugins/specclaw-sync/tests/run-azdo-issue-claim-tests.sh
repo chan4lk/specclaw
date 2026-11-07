@@ -9,17 +9,21 @@ mkdir -p "$TMP/stub" "$TMP/sc/changes/049-x"
 printf '**Azure Boards Work Item:** [#42](https://x)\n' > "$TMP/sc/changes/049-x/status.md"
 cat > "$TMP/stub/curl" <<'EOF2'
 #!/usr/bin/env bash
-method=GET body=""
-while (($#)); do case "$1" in -X) method="$2"; shift 2 ;; -d) body="$2"; shift 2 ;; -H|--max-time) shift 2 ;; *) shift ;; esac; done
+method=GET body="" wfmt=""
+while (($#)); do case "$1" in -X) method="$2"; shift 2 ;; -d) body="$2"; shift 2 ;; -w) wfmt="$2"; shift 2 ;; -H|--max-time|-o) shift 2 ;; *) shift ;; esac; done
 rev="$(cat "$S/rev")"
 if [[ "$method" == GET ]]; then printf '{"rev":%s,"fields":{"System.Tags":"%s"}}\n' "$rev" "$(cat "$S/tags")"; exit 0; fi
 echo "$method $body" >> "$S/log"
-[[ -n "${FAIL_503:-}" ]] && exit 22
+reply() { [[ -n "$wfmt" ]] && printf '%s' "$1"; [[ "$1" == 2* ]] || exit "${2:-22}"; exit 0; }
+[[ -n "${FAIL_503:-}" ]] && reply 503
+[[ -n "${FAIL_401:-}" ]] && reply 401
 if [[ -n "${RACE:-}" && ! -e "$S/raced" ]]; then
-  touch "$S/raced"; echo $((rev + 1)) > "$S/rev"; [[ "$RACE" == unrelated ]] || printf '%s' "$RACE" > "$S/tags"; exit 22
+  touch "$S/raced"; echo $((rev + 1)) > "$S/rev"; [[ "$RACE" == unrelated ]] || printf '%s' "$RACE" > "$S/tags"; reply 412
 fi
-[[ "$(jq -r '.[0].value' <<<"$body")" == "$rev" ]] || exit 22
+[[ "$(jq -r '.[0].value' <<<"$body")" == "$rev" ]] || reply 412
 jq -r '.[1].value' <<<"$body" | tr -d '\n' > "$S/tags"; echo $((rev + 1)) > "$S/rev"
+[[ -n "${LOST_RESPONSE:-}" ]] && reply 000 28
+reply 200
 EOF2
 chmod +x "$TMP/stub/curl"
 
@@ -49,9 +53,15 @@ for row in "specclaw|claim fleet:dispatched fleet:refused" "specclaw; fleet:disp
   cmd="${row#*|}"
   # shellcheck disable=SC2086
   TAGS="${row%%|*}" FAIL_503=1 azdo $cmd; rc=$?
-  real_error() { (( rc == 1 )) && grep -q "not a race" "$TMP/out"; }
-  check "'${cmd%% *}' with a failed PATCH and no concurrent edit is an error, never exit 3" real_error
+  unknown() { (( rc == 1 )) && grep -q "unknown outcome (HTTP 503)" "$TMP/out"; }
+  check "'${cmd%% *}' answered 503 is an unknown outcome: exit 1, never 3" unknown
 done
+TAGS="specclaw" FAIL_401=1 azdo claim fleet:dispatched fleet:refused; rc=$?
+rejected() { (( rc == 1 )) && grep -q "rejected .*HTTP 401.*not a race" "$TMP/out"; }
+check "a 4xx rejection with no concurrent edit is an error, never exit 3" rejected
+TAGS="specclaw" LOST_RESPONSE=1 azdo claim fleet:dispatched fleet:refused; rc=$?
+lost_reply() { (( rc == 1 )) && grep -q "unknown outcome" "$TMP/out"; }
+check "an applied PATCH whose reply was lost is reported, never read as taken by someone else" lost_reply
 TAGS="a; Fleet:Dispatched; b" azdo untag fleet:dispatched; rc=$?
 untagged() { (( rc == 0 )) && [[ "$(tags_now)" == "a; b" ]]; }
 check "untag removes the tag case-insensitively and keeps the rest" untagged

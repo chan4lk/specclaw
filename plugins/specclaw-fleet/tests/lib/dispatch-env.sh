@@ -33,8 +33,8 @@ exit 0'
 claim="$CLAIMS/claim-$5"
 case "$*" in
   *" create -f -")
-    [[ -n "${CREATE_ERR:-}" ]] && grep -q "^kind: ${CREATE_KIND:-Job}" && { echo "$CREATE_ERR" >&2; exit 1; }
     doc="$(cat)"; name="$(grep -m1 "^  name: " <<<"$doc" | sed "s/^  name: //")"
+    [[ -n "${CREATE_ERR:-}" ]] && grep -q "^kind: ${CREATE_KIND:-Job}" <<<"$doc" && { echo "$CREATE_ERR" >&2; exit 1; }
     mkdir "$CLAIMS/claim-$name" 2>/dev/null || { echo "Error from server (AlreadyExists): $name" >&2; exit 1; }
     echo "uid-$$-$RANDOM" > "$CLAIMS/claim-$name/uid"; echo "{\"active\":1}" > "$CLAIMS/claim-$name/status"
     printf "%s\\n" "$doc" > "$APPLIED/$(date +%s)-$name.yaml" ;;

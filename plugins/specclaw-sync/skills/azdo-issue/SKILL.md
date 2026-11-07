@@ -57,7 +57,12 @@ specclaw-azdo-issue tag .specclaw <change> fleet:dispatched
 specclaw-azdo-issue claim .specclaw <change> fleet:dispatched fleet:refused
 specclaw-azdo-issue untag .specclaw <change> fleet:dispatched
 ```
-`claim` exits 3 when the work item already holds the tag or any blocking tag, or when another writer changed it in between. Its PATCH carries a `test /rev` precondition, so two claimants can never both win.
+`claim` exits 3 only when the work item already holds the tag or a blocking tag. Every tag edit (claim, untag, tag, close) is one PATCH guarded by `test /rev`:
+- a rejected PATCH (4xx) whose revision moved is a concurrent edit, so it re-reads and retries, up to 3 times;
+- a rejected PATCH with an unchanged revision exits 1;
+- a PATCH with an unknown outcome (5xx, timeout, network) also exits 1, never 3.
+
+So two claimants can never both win, and a failure never reads as "someone else took it".
 
 **Record run fields (used by specclaw-fleet):**
 ```bash

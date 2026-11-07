@@ -13,7 +13,10 @@ check "AC12 a claim that errors exits 1 (never 3, never a silent skip)" claim_er
 for kind in Job Secret; do
   for err in "Error from server (Forbidden): cannot create" "Unable to connect to the server: dial tcp" "Error from server: i/o timeout"; do
     reset_env; CREATE_KIND="$kind" CREATE_ERR="$err" dispatch; rc=$?
-    released() { (( rc == 1 )) && [[ ! -d "$CLAIMS/wi-$CHANGE" ]] && grep -q "untag .* fleet:dispatched" "$CALLS"; }
+    released() {
+      (( rc == 1 )) && [[ ! -d "$CLAIMS/wi-$CHANGE" ]] && grep -q "untag .* fleet:dispatched" "$CALLS" \
+        && { [[ "$kind" == Job ]] || { grep -q "could not create Secret" "$TMP/out" && grep -q " delete job " "$CALLS"; }; }
+    }
     check "AC12 $kind create fails (${err:0:30}…): claim released, exit 1" released
   done
 done
