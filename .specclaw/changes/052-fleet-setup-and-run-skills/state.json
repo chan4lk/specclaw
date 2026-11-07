@@ -2,7 +2,7 @@
   "change": "052-fleet-setup-and-run-skills",
   "phase": "proposal",
   "branch": "",
-  "size": "bounded",
+  "size": "architectural",
   "phases": {
     "proposal": {"status":"approved","at":"2026-11-07T13:18:23Z"}
   }

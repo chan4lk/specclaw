@@ -14,6 +14,7 @@
 | Tasks | ⏳ Pending |  |
 | Build | ⏳ Pending |  |
 | Verify | ⏳ Pending |  |
+| Size | ⬆️ architectural | upgraded from bounded — operator chose MS-hosted default: second deployment mode, public GHCR image with runtime claude fetch+verify, new dispatch inputs |
 
 ## Task Progress
 

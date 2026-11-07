@@ -1,7 +1,7 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** specclaw
-**Last Updated:** 2026-11-07 13:18 UTC
+**Last Updated:** 2026-11-07 13:40 UTC
 
 _4 unnumbered changes · run `/specclaw-extras:renumber` to order them_
 
@@ -23,7 +23,7 @@ _4 unnumbered changes · run `/specclaw-extras:renumber` to order them_
 
 - 📋 **050-fleet-coordinated-features** ▣ — proposal ready, awaiting planning
 - 📋 **051-fleet-azdo-agents** ▫ — proposal ready, awaiting planning
-- 📋 **052-fleet-setup-and-run-skills** ▫ — proposal ready, awaiting planning
+- 📋 **052-fleet-setup-and-run-skills** ▣ — proposal ready, awaiting planning
 
 ## Recently Completed
 
