@@ -34,6 +34,7 @@ stub claude 'env | grep -E "^(ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|OPENAI_API_
 echo "agent says hi; leaked sk-ant-oat01-SECRETTOKENVALUE and pat abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGH"
 sleep "${AGENT_SLEEP:-0}"
 exit "${AGENT_RC:-0}"'
+stub codex 'sleep "${AGENT_SLEEP:-0}"; exit "${AGENT_RC:-0}"'
 export TMP REAL_AZDO=""
 
 run_entry() {
@@ -42,7 +43,7 @@ run_entry() {
   : > "$CALLS"
   printf 'oat-token' > "$TMP/cred"
   env FLEET_STATUS_DIR="$TMP/status" FLEET_WORK="$TMP/work" FLEET_CRED="$TMP/cred" FLEET_SEED="$TMP/seed" \
-    HTTPS_PROXY=http://proxy:3128 FLEET_GATE_TRIES=2 FLEET_GATE_SLEEP=0 AZDO_ORG=o AZDO_PROJECT=p FLEET_WORK_ITEM=42 FLEET_COMMIT=abc123 FLEET_CODEX_HOME="$TMP/codex" FLEET_AZDO_CONFIG=$'azdo:\n  fleet_states:\n    failed: Failed' HOME="$TMP/home" FLEET_AGENT=claude FLEET_CHANGE=049-x FLEET_REF=main AZDO_TOKEN=pat-secret \
+    HTTPS_PROXY=http://proxy:3128 FLEET_GATE_TRIES=2 FLEET_GATE_SLEEP=0 AZDO_ORG=o AZDO_PROJECT=p FLEET_WORK_ITEM=42 FLEET_COMMIT=abc123 FLEET_CODEX_HOME="$TMP/codex" FLEET_AZDO_CONFIG=$'azdo:\n  fleet_states:\n    failed: Failed' HOME="$TMP/home" FLEET_AGENT="${ENTRY_AGENT:-claude}" FLEET_CHANGE=049-x FLEET_REF=main AZDO_TOKEN=pat-secret \
     FLEET_REPO_URL=https://dev.azure.com/o/p/_git/r ANTHROPIC_API_KEY=k ANTHROPIC_AUTH_TOKEN=k OPENAI_API_KEY=k CODEX_API_KEY=k \
     bash "$ENTRY" > "$TMP/out" 2>&1
 }

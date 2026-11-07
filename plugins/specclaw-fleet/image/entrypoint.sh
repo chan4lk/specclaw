@@ -10,7 +10,7 @@ SEED="${FLEET_SEED:-/opt/fleet/home-seed}"
 REPO="$WORK/repo"
 CODEX_DIR="${FLEET_CODEX_HOME:-/fleet/codex}"
 PROMPT="Run the specclaw lifecycle headless for change $FLEET_CHANGE. Use the specclaw skills in order: plan (only if the change has no tasks yet), build, verify, then the specclaw-sync pr-azdo skill. When verify fails only because specclaw-review reports blocker or major findings, run the specclaw-review loop as its skill describes (fix by class, add variant tests, commit, re-review the delta, then the final pass) for at most ${FLEET_REVIEW_ROUNDS:-5} fix rounds in this run (rounds made by earlier runs do not count); stop if the review escalates (exit 4) or the rounds run out. Then re-run verify and, only on PASS, pr-azdo. Nobody is watching: never ask a question. If a phase fails, stop and report why."
-agent_pid=""
+agent_pid="" workspace_ready=0
 for lib in tracker egress-gate agent-auth workspace draft-pr claude-fetch; do
   # shellcheck source=/dev/null
   source "$(dirname "${BASH_SOURCE[0]}")/$lib.sh"
@@ -19,7 +19,8 @@ done
 finish() { printf '%s\n' "$1" > "$STATUS/exit"; exit 0; }
 
 on_term() {
-  [[ -n "$agent_pid" ]] && kill "$agent_pid" 2>/dev/null
+  [[ -n "$agent_pid" ]] && { kill "$agent_pid" 2>/dev/null; wait "$agent_pid" 2>/dev/null; }
+  (( workspace_ready )) && deliver deadline 143
   record state=failed exit=deadline
   finish 143
 }
@@ -66,9 +67,6 @@ fetch_rc=0; [[ "$FLEET_AGENT" != claude ]] || fetch_claude || fetch_rc=$?
 record state=running "built_commit=$(git -C "$REPO" rev-parse HEAD)" "claude_fetch_s=${FLEET_CLAUDE_FETCH_S:-0}"
 cd "$REPO" || finish 2
 prepare_workspace || { record state=failed exit=resume-failed; finish 2; }
+workspace_ready=1
 rc=0; run_agent || rc=$?
-branch="$(push_change_branch)"
-read -r pr draft < <(ensure_pr "$branch")
-show_agent_log
-record "state=$([[ -n "$pr" ]] && echo pr_open || echo failed)" "exit=$rc" "branch=$branch" "pr=${pr:-none}" "draft=${draft:-false}"
-finish "$rc"
+deliver "$rc" "$rc"

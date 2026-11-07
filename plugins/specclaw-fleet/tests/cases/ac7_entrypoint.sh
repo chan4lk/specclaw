@@ -36,7 +36,7 @@ commit_pinned() {
     && grep -q "exit=commit-not-on-ref dispatched_commit=abc123" <<<"$stale_calls" && ! grep -q "state=running" <<<"$stale_calls"
 }
 approval_rechecked() { (( recheck_ok == 1 )); }
-deadline_leaves_room() { (( late_rc == 0 )) && [[ "$late_status" == 143 ]] && grep -q "state=failed exit=deadline" <<<"$late_calls"; }
+deadline_leaves_room() { (( late_rc == 0 )) && [[ "$late_status" == 143 ]] && grep -q "exit=deadline" <<<"$late_calls"; }
 
 check "AC7 API-key variables unset before the agent runs" keys_unset
 check "AC7 clone URL and git args carry no token" no_token_in_url

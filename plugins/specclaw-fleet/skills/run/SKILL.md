@@ -4,7 +4,7 @@ description: Use when someone wants an approved specclaw change run headless by 
 
 # specclaw-fleet run
 
-Puts one approved change through the fleet and reports what happened. Each run spends the **assignee's** Claude plan, so say so before you trigger.
+Puts one approved change through the fleet and reports what happened. Each run spends the **assignee's** Claude or Codex (ChatGPT) plan, so say so before you trigger.
 
 ## 1. Trigger
 

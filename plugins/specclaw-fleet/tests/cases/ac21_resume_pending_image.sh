@@ -18,6 +18,17 @@ done
 resume_stops() { (( resume_rows == 1 )); }
 check "R10 a failed branch lookup, fetch or checkout stops the run (resume-failed); found or absent branches run" resume_stops
 
+deadline_rows=1
+for agent in claude codex; do
+  AGENT_SLEEP=5 FLEET_AGENT_TIMEOUT=1 ENTRY_AGENT="$agent" run_entry; calls="$(cat "$CALLS")"
+  [[ "$(cat "$TMP/status/exit")" == 143 ]] && grep -q "push -q -u origin HEAD" <<<"$calls" \
+    && grep -q "state=pr_open exit=deadline branch=specclaw/049-x pr=.*pullrequest/77 draft=true" <<<"$calls" \
+    || { deadline_rows=0; echo "  $agent: deadline did not push and open the PR"; }
+done
+LS_FAIL=1 run_entry; early_calls="$(cat "$CALLS")"
+saves_on_deadline() { (( deadline_rows == 1 )) && ! grep -q " push " <<<"$early_calls"; }
+check "R11 a deadline pushes the change branch and opens the (draft) PR for claude and codex; nothing is pushed before the workspace exists" saves_on_deadline
+
 pending_rows=1
 for template in dispatch.yml dispatch-hosted.yml; do
   for row in 'build|approved|049-x|yes' 'build|approved||no' 'proposal|approved||yes' 'proposal|draft|049-x|no' 'build|draft|049-x|no'; do
