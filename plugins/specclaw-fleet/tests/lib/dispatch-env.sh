@@ -48,6 +48,7 @@ case "$*" in
       || { echo "Error from server (Conflict): Precondition failed: UID in precondition" >&2; exit 1; }
     rm -rf "$claim" ;;
   *" get job "*" -o json") [[ -n "${GET_ERR:-}" ]] && { echo "$GET_ERR" >&2; exit 1; }
+    [[ -n "${JOB_RAW+x}" ]] && { printf "%s" "$JOB_RAW"; exit 0; }
     [[ -d "$claim" ]] || { echo "Error from server (NotFound): jobs $5" >&2; exit 1; }
     jq -n --arg u "$(cat "$claim/uid")" --argjson s "$(cat "$claim/status")" "{metadata: {uid: \$u}, status: \$s}" ;;
   *" delete job "*) rm -rf "$claim" ;;
