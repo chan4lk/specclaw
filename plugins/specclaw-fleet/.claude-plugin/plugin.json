@@ -1,0 +1,19 @@
+{
+  "name": "specclaw-fleet",
+  "version": "0.8.7",
+  "description": "Fleet add-on for specclaw: run approved changes headless in sandboxed K3s jobs with Claude or Codex on the work-item assignee's own plan, tracked in Azure Boards.",
+  "author": {
+    "name": "Chandima Ranaweera",
+    "email": "chan4lk@gmail.com"
+  },
+  "homepage": "https://github.com/chan4lk/specclaw",
+  "repository": "https://github.com/chan4lk/specclaw",
+  "license": "MIT",
+  "keywords": [
+    "spec-driven",
+    "kubernetes",
+    "k3s",
+    "azure-devops",
+    "codex"
+  ]
+}

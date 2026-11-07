@@ -12,7 +12,7 @@ Wave 1 lays the packaging and the single Boards writer. Wave 2 adds the credenti
 
 ### Wave 1 — packaging and Boards writer
 
-- [ ] `T1` — Scaffold `specclaw-fleet` plugin and register it in both marketplaces (AC-1)
+- [x] `T1` — Scaffold `specclaw-fleet` plugin and register it in both marketplaces (AC-1)
   - Files: plugins/specclaw-fleet/.claude-plugin/plugin.json, plugins/specclaw-fleet/.codex-plugin/plugin.json, .claude-plugin/marketplace.json, .agents/plugins/marketplace.json, plugins/specclaw/tests/run-codex-plugin-tests.sh
   - Estimate: small
   - Kind: config

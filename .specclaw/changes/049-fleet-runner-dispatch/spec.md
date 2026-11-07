@@ -40,7 +40,7 @@ A new add-on plugin, `plugins/specclaw-fleet/`. An approved specclaw change is r
   - (e) the assignee has no usable credential for the chosen agent, meaning the secret is missing, empty, or still a placeholder;
   - (f) `--agent codex` is chosen while that assignee already has an unfinished codex Job in the namespace.
 
-  Every refusal, except (b), also sets the work item to `Failed` and adds a comment naming the reason. Dispatch never uses a credential belonging to anyone other than the assignee.
+  Refusals (c)–(f) also set the work item to `Failed` and adds a comment naming the reason. Dispatch never uses a credential belonging to anyone other than the assignee.
 - **FR-5 Dispatch launch.** When every gate passes, dispatch:
   - creates a K8s Secret holding only the assignee's credential;
   - applies a Job and patches the Secret's `ownerReferences` to that Job, so it is garbage-collected with the Job;
