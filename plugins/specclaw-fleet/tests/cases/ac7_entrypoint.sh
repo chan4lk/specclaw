@@ -2,36 +2,8 @@
 set -uo pipefail
 # shellcheck source=../lib/harness.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/harness.sh"
-ENTRY="$FLEET_ROOT/image/entrypoint.sh"
-stub specclaw-azdo-issue '[[ -n "${REAL_AZDO:-}" ]] && exec "$REAL_AZDO" "$@"; exit 0'
-stub curl 'printf "%s\n" "$*" >> "$TMP/curl.log"; echo "{}"'
-stub git '[[ "$1" == -C && "$3" == merge-base ]] && { [[ -z "${NOT_ANCESTOR:-}" ]]; exit; }
-[[ "$1" == -C && "$3" == rev-parse ]] && { echo deadbeef; exit 0; }
-[[ "$1" == clone ]] || exit 0
-[[ -n "${CLONE_FAIL:-}" ]] && exit 128
-dest="${*: -1}"; mkdir -p "$dest/.specclaw/changes/049-x"
-status=approved; [[ -n "${NOT_APPROVED:-}" ]] && status=draft
-pr=""; [[ -n "${FAKE_PR:-}" ]] && pr=",\"pr\":{\"url\":\"https://pr/1\"}"
-content="{\"branch\":\"specclaw/049-x\",\"phases\":{\"proposal\":{\"status\":\"$status\"}$pr}}"
-[[ -n "${STATE_OVERRIDE+x}" ]] && content="$STATE_OVERRIDE"
-[[ "$content" == MISSING ]] || printf "%s" "$content" > "$dest/.specclaw/changes/049-x/state.json"
-exit 0'
-stub claude 'env | grep -E "^(ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|OPENAI_API_KEY|CODEX_API_KEY)=" >> "$TMP/leaked"
-[[ "$CLAUDE_CODE_OAUTH_TOKEN" == oat-token ]] || echo "bad token" >> "$TMP/leaked"
-sleep "${AGENT_SLEEP:-0}"
-exit "${AGENT_RC:-0}"'
-export TMP REAL_AZDO=""
-
-run_entry() {
-  rm -rf "${TMP:?}/status" "${TMP:?}/work" "${TMP:?}/home"
-  mkdir -p "$TMP/status" "$TMP/work" "$TMP/home" "$TMP/seed"
-  : > "$CALLS"
-  printf 'oat-token' > "$TMP/cred"
-  env FLEET_STATUS_DIR="$TMP/status" FLEET_WORK="$TMP/work" FLEET_CRED="$TMP/cred" FLEET_SEED="$TMP/seed" \
-    FLEET_WORK_ITEM=42 FLEET_COMMIT=abc123 FLEET_CODEX_HOME="$TMP/codex" FLEET_AZDO_CONFIG=$'azdo:\n  fleet_states:\n    failed: Failed' HOME="$TMP/home" FLEET_AGENT=claude FLEET_CHANGE=049-x FLEET_REF=main AZDO_TOKEN=pat-secret \
-    FLEET_REPO_URL=https://dev.azure.com/o/p/_git/r ANTHROPIC_API_KEY=k ANTHROPIC_AUTH_TOKEN=k OPENAI_API_KEY=k CODEX_API_KEY=k \
-    bash "$ENTRY" > "$TMP/out" 2>&1
-}
+# shellcheck source=../lib/entry-env.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../lib/entry-env.sh"
 
 FAKE_PR=1 run_entry; ok_rc=$?; ok_status="$(cat "$TMP/status/exit")"; ok_calls="$(cat "$CALLS")"
 AGENT_RC=5 run_entry; bad_rc=$?; bad_status="$(cat "$TMP/status/exit")"; bad_calls="$(cat "$CALLS")"

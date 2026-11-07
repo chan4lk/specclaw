@@ -12,6 +12,8 @@ PROMPT="Run the specclaw lifecycle headless for change $FLEET_CHANGE. Use the sp
 agent_pid=""
 # shellcheck source=tracker.sh
 source "$(dirname "${BASH_SOURCE[0]}")/tracker.sh"
+# shellcheck source=egress-gate.sh
+source "$(dirname "${BASH_SOURCE[0]}")/egress-gate.sh"
 
 finish() { printf '%s\n' "$1" > "$STATUS/exit"; exit 0; }
 
@@ -59,6 +61,7 @@ run_agent() {
   return "$rc"
 }
 
+wait_for_egress || { record state=failed exit=egress-not-ready; finish 2; }
 clone || { record state=failed exit=clone-failed; finish 2; }
 if [[ -n "${FLEET_COMMIT:-}" ]] && ! git -C "$REPO" merge-base --is-ancestor "$FLEET_COMMIT" HEAD; then
   record state=failed exit=commit-not-on-ref "dispatched_commit=$FLEET_COMMIT"
