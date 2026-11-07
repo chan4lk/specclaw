@@ -27,6 +27,7 @@ parse_dispatch_args() {
   [[ "$minutes" =~ ^[1-9][0-9]{0,3}$ ]] && (( 10#$minutes <= 1440 )) \
     || die "FLEET_DEADLINE_MINUTES must be a whole number from 1 to 1440"
   F_DEADLINE=$(( 10#$minutes * 60 ))
+  parse_pod_inputs
 }
 
 check_gates() {

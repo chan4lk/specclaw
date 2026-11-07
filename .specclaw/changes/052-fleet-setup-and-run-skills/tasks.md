@@ -11,7 +11,7 @@
 - [x] `T1` — Public image: no baked claude; fetch, verify and time at pod start; per-run budget wording (AC-1, AC-2, AC-3, AC-5)
   - Files: plugins/specclaw-fleet/image/Dockerfile, plugins/specclaw-fleet/image/claude-release.asc, plugins/specclaw-fleet/image/claude-fetch.sh, plugins/specclaw-fleet/image/entrypoint.sh, plugins/specclaw-fleet/image/bin/claude, plugins/specclaw-fleet/tests/lib/gpg-env.sh, plugins/specclaw-fleet/tests/cases/ac13_claude_fetch.sh
   - Kind: impl
-- [ ] `T2` — Dispatch inputs: FLEET_CLAUDE_VERSION, FLEET_IMAGE_PULL_SECRET, FLEET_NODE_LABEL (AC-4)
+- [x] `T2` — Dispatch inputs: FLEET_CLAUDE_VERSION, FLEET_IMAGE_PULL_SECRET, FLEET_NODE_LABEL (AC-4)
   - Files: plugins/specclaw-fleet/lib/dispatch.sh, plugins/specclaw-fleet/lib/manifest.sh, plugins/specclaw-fleet/lib/podspec.sh, plugins/specclaw-fleet/tests/cases/ac14_dispatch_inputs.sh
   - Kind: impl
 

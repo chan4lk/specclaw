@@ -1,5 +1,5 @@
 # shellcheck shell=bash disable=SC2034
-export FLEET_AZDO_ISSUE="$TMP/stub/specclaw-azdo-issue" FLEET_VAULT=v SPECCLAW_DIR="$TMP/repo/.specclaw" APPLIED="$TMP/applied" CLAIMS="$TMP/claims" CHANGE="049-x"
+export FLEET_AZDO_ISSUE="$TMP/stub/specclaw-azdo-issue" FLEET_CLAUDE_VERSION=2.1.319 FLEET_VAULT=v SPECCLAW_DIR="$TMP/repo/.specclaw" APPLIED="$TMP/applied" CLAIMS="$TMP/claims" CHANGE="049-x"
 export WI_JSON='{"fields":{"System.AssignedTo":{"uniqueName":"Alice@Contoso.com"},"System.Tags":"specclaw; fleet:auto"}}'
 export WI_UPDATES='{"value":[{"revisedBy":{"uniqueName":"alice@contoso.com"},"fields":{"System.Tags":{"oldValue":"specclaw","newValue":"specclaw; Fleet:Auto"}}}]}'
 CANARY="sk-ant-oat01-DISPATCH-CANARY"
