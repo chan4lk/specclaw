@@ -1,10 +1,7 @@
 # shellcheck shell=bash
 seed_claude_auth() {
-  local settings="$HOME/.claude/settings.json"
-  mkdir -p "$HOME/.claude"
-  [[ -s "$settings" ]] || echo '{}' > "$settings"
-  jq --rawfile token "$CRED" '.env.CLAUDE_CODE_OAUTH_TOKEN = ($token | rtrimstr("\n"))' "$settings" > "$settings.tmp" \
-    && mv "$settings.tmp" "$settings"
-  CLAUDE_CODE_OAUTH_TOKEN="$(cat "$CRED")"
+  mkdir -p "$HOME/.fleet"
+  (umask 077 && tr -d '\n' < "$CRED" > "$HOME/.fleet/claude-token")
+  CLAUDE_CODE_OAUTH_TOKEN="$(cat "$HOME/.fleet/claude-token")"
   export CLAUDE_CODE_OAUTH_TOKEN
 }

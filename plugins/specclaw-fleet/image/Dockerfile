@@ -27,10 +27,11 @@ COPY .claude-plugin /opt/specclaw/.claude-plugin
 COPY .agents /opt/specclaw/.agents
 COPY plugins /opt/specclaw/plugins
 COPY plugins/specclaw-fleet/image/*.sh /opt/fleet/
+COPY plugins/specclaw-fleet/image/bin/claude /opt/fleet/bin/claude
 
 ENV HOME=/home/agent \
     PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright \
-    PATH="/opt/specclaw/plugins/specclaw/bin:/opt/specclaw/plugins/specclaw-sync/bin:/opt/specclaw/plugins/specclaw-extras/bin:/opt/specclaw/plugins/specclaw-review/bin:${PATH}"
+    PATH="/opt/fleet/bin:/opt/specclaw/plugins/specclaw/bin:/opt/specclaw/plugins/specclaw-sync/bin:/opt/specclaw/plugins/specclaw-extras/bin:/opt/specclaw/plugins/specclaw-review/bin:${PATH}"
 
 USER 1000
 

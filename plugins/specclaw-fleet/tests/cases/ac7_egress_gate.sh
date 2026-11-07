@@ -27,9 +27,12 @@ work_survives() {
     && ! grep -q " push " <<<"$base_calls"
 }
 check "AC7 a failed run still pushes the change branch (never the base branch)" work_survives
-GATE="" run_entry; settings="$(cat "$TMP/home/.claude/settings.json" 2>/dev/null)"
-nested_auth() { [[ "$(jq -r '.env.CLAUDE_CODE_OAUTH_TOKEN' <<<"$settings")" == oat-token ]] && [[ ! -s "$TMP/leaked" ]]; }
-check "AC7 claude token reaches nested claude sessions via settings.json env" nested_auth
+GATE="" run_entry; token_file="$(stat -f '%Lp' "$TMP/home/.fleet/claude-token" 2>/dev/null || stat -c '%a' "$TMP/home/.fleet/claude-token")"
+printf '#!/usr/bin/env bash\necho "nested-token=${CLAUDE_CODE_OAUTH_TOKEN:-none}"\n' > "$TMP/real-claude"; chmod +x "$TMP/real-claude"
+nested="$(env -u CLAUDE_CODE_OAUTH_TOKEN HOME="$TMP/home" FLEET_REAL_CLAUDE="$TMP/real-claude" "$FLEET_ROOT/image/bin/claude" -p x)"
+keep="$(CLAUDE_CODE_OAUTH_TOKEN=caller HOME="$TMP/home" FLEET_REAL_CLAUDE="$TMP/real-claude" "$FLEET_ROOT/image/bin/claude" -p x)"
+nested_auth() { [[ "$token_file" == 600 && "$nested" == nested-token=oat-token && "$keep" == nested-token=caller ]]; }
+check "AC7 a nested claude with no token env picks up the pod token (0600 file); an explicit token wins" nested_auth
 REMOTE_BRANCH=specclaw/049-x run_entry; resume_calls="$(cat "$CALLS")"
 REMOTE_BRANCH=specclaw/1049-x run_entry; other_calls="$(cat "$CALLS")"
 resumes() {
