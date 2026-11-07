@@ -9,6 +9,7 @@ stub_cluster
 refused() { (( rc != 0 )) && nothing_applied; }
 refused_4() { (( rc == 4 )) && nothing_applied && marked_failed; }
 refused_and_failed() { refused_4; }
+skipped_silently() { (( rc == 3 )) && nothing_applied && ! grep -qE "specclaw-azdo-issue (fields|tag|claim)" "$CALLS"; }
 failed_unregistered() { refused_and_failed && grep -q "no registered claude credential" "$CALLS"; }
 failed_vault() { refused_and_failed && grep -q "could not read Key Vault" "$CALLS"; }
 
@@ -24,7 +25,7 @@ check "AC4c no assignee refused and marked Failed" refused_and_failed
 for tags in "fleet:autox" "specclaw" "auto; fleet"; do
   reset_env; WI_JSON="{\"fields\":{\"System.AssignedTo\":{\"uniqueName\":\"a@c.com\"},\"System.Tags\":\"$tags\"}}" \
     BUILD_REQUESTEDFOREMAIL=other@c.com dispatch; rc=$?
-  check "AC4d no consent (tags '$tags') refused and marked Failed" refused_and_failed
+  check "AC4d not opted in (tags '$tags'): exit 3, nothing written" skipped_silently
 done
 
 for who in mallory@contoso.com ""; do
@@ -40,7 +41,7 @@ for updates in "$READD" '{"value":[]}' FAIL; do
 done
 reset_env; WI_JSON='{"fields":{"System.AssignedTo":{"uniqueName":"Alice@Contoso.com"},"System.Tags":"specclaw"}}' \
   BUILD_REQUESTEDFOREMAIL=alice@contoso.com dispatch; rc=$?
-check "AC4d triggering the pipeline is not consent without the assignee's tag" refused_and_failed
+check "AC4d triggering the pipeline is not consent: no tag means a silent skip" skipped_silently
 for tag in Fleet:Auto FLEET:AUTO " fleet:auto "; do
   reset_env; WI_JSON="{\"fields\":{\"System.AssignedTo\":{\"uniqueName\":\"Alice@Contoso.com\"},\"System.Tags\":\"x;$tag\"}}" dispatch; rc=$?
   check "AC4d tag '$tag' added by the assignee is consent (case-insensitive)" accepted

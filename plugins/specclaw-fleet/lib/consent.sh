@@ -20,7 +20,6 @@ auto_tagged_by() {
 
 consented() {
   local assignee="$1" tagger
-  has_auto_tag "$2" || return 1
   tagger="$(auto_tagged_by)" || refuse "$F_CHANGE" "could not read the work item history to confirm who added fleet:auto"
   [[ -n "$tagger" && "$(lower "$tagger")" == "$(lower "$assignee")" ]]
 }

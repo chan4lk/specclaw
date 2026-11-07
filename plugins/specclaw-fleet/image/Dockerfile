@@ -2,12 +2,13 @@ FROM node:22-bookworm-slim
 
 ARG CLAUDE_CODE_VERSION
 ARG CODEX_VERSION
+ARG TARGETARCH
 
 RUN test -n "$CLAUDE_CODE_VERSION" && test -n "$CODEX_VERSION" \
  && apt-get update \
  && apt-get install -y --no-install-recommends git curl ca-certificates jq python3 \
  && rm -rf /var/lib/apt/lists/* \
- && curl -fsSL -o /usr/local/bin/claude "https://downloads.claude.ai/claude-code-releases/${CLAUDE_CODE_VERSION}/linux-x64/claude" \
+ && curl -fsSL -o /usr/local/bin/claude "https://downloads.claude.ai/claude-code-releases/${CLAUDE_CODE_VERSION}/linux-$([ "$TARGETARCH" = arm64 ] && echo arm64 || echo x64)/claude" \
  && chmod +x /usr/local/bin/claude \
  && npm install -g "@openai/codex@${CODEX_VERSION}" \
  && git config --system user.name "specclaw-fleet" \

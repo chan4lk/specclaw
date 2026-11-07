@@ -37,9 +37,13 @@ check_gates() {
   assignee="$(jq -r '.fields["System.AssignedTo"].uniqueName // empty' <<<"$wi")"
   tags="$(jq -r '.fields["System.Tags"] // empty' <<<"$wi")"
   already_handled "$tags"
+  if ! has_auto_tag "$tags"; then
+    echo "$F_CHANGE: not opted in (no fleet:auto tag); skipped, nothing written" >&2
+    exit 3
+  fi
   [[ -n "$assignee" ]] || refuse "$F_CHANGE" "work item has no assignee"
   consented "$assignee" "$tags" \
-    || refuse "$F_CHANGE" "assignee $assignee has not consented (add tag fleet:auto, or trigger the run yourself)"
+    || refuse "$F_CHANGE" "fleet:auto was not added by the assignee $assignee"
   F_HASH="$(upn_hash "$assignee")"
   F_SECRET="$(secret_name "$F_AGENT" "$F_HASH")"
   local rc=0
