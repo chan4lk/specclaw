@@ -13,8 +13,8 @@ fail() {
   exit $(( rc != 0 ? rc : 3 ))
 }
 
-jq -e 'type == "object" and length > 0' "$AUTH" >/dev/null 2>&1 \
-  || fail "refreshed auth.json is not a non-empty JSON object, so the vault secret was left unchanged"
+jq -e 'type == "object" and ((.tokens.refresh_token // "") | length) > 0' "$AUTH" >/dev/null 2>&1 \
+  || fail "refreshed auth.json is not a JSON object with tokens.refresh_token, so the vault secret was left unchanged"
 
 vault_token() {
   curl -sf -X POST "https://login.microsoftonline.com/$AZURE_TENANT_ID/oauth2/v2.0/token" \

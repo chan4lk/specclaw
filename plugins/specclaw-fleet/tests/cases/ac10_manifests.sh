@@ -13,7 +13,8 @@ role_minimal() {
 pods_default_deny() {
   grep -A3 "name: fleet-pods" "$K/network-policy.yaml" >/dev/null \
     && [[ $(grep -c "policyTypes: \[Ingress, Egress\]" "$K/network-policy.yaml") == 2 ]] \
-    && grep -q "app: fleet-egress}}" "$K/network-policy.yaml"
+    && grep -A1 "name: specclaw-fleet-egress}}" "$K/network-policy.yaml" | grep -q "app: fleet-egress}}" \
+    && grep -q "enforce: restricted" "$K/namespace.yaml"
 }
 proxy_blocks_internal() {
   grep -q "except: \[.*169.254.0.0/16.*\]" "$K/network-policy.yaml" && grep -q "10.0.0.0/8" "$K/network-policy.yaml"
@@ -26,12 +27,13 @@ allowlist() {
   grep -q "http_access deny all" "$K/egress-proxy.yaml"
 }
 pipeline_event_driven() {
-  grep -q "specclaw-fleet dispatch" "$P" && ! grep -Eq "sleep|while true|until " "$P" && grep -q "System.AccessToken" "$P"
+  grep -q "specclaw-fleet dispatch" "$P" && ! grep -Eq "sleep|while true|until " "$P" && grep -q "System.AccessToken" "$P" \
+    && grep -q 'could not list changed state files"; exit 1' "$P"
 }
 
 check "AC10 dispatcher Role: jobs create/get/list/delete, secrets create only" role_minimal
 check "AC10 fleet pods: default-deny, egress only to DNS and the proxy" pods_default_deny
 check "AC10 proxy egress excludes metadata and private ranges" proxy_blocks_internal
 check "AC10 proxy allowlist covers the required hosts and denies the rest" allowlist
-check "FR10 pipeline dispatches on state change, never polls" pipeline_event_driven
+check "FR10 pipeline dispatches on state change, never polls, fails on a failed diff" pipeline_event_driven
 finish

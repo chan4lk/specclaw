@@ -29,7 +29,7 @@ claude_skipped() { run_wb claude 7 "$NEW"; (( $? == 7 )) && ! grep -q curl "$CAL
 keeps_agent_status() { run_wb codex 4 "$NEW"; (( $? == 4 )) && [[ -f "$TMP/put.body" ]]; }
 invalid_kept() {
   local bad
-  for bad in '{"tokens":{"refr' '{}' '' '[1]'; do
+  for bad in '{"tokens":{"refr' '{}' '' '[1]' '{"tokens":{}}'; do
     run_wb codex 0 "$bad"
     (( $? == 3 )) && ! grep -q "X PUT" "$CALLS" || return 1
   done
@@ -39,5 +39,5 @@ check "AC8 changed auth.json is written back to the assignee's secret" changed_p
 check "AC8 unchanged auth.json is not written" unchanged_skipped
 check "AC8 claude runs skip write-back and keep the agent's status" claude_skipped
 check "AC8 write-back exits with the agent's recorded status" keeps_agent_status
-check "AC8 truncated, empty or non-object auth.json never overwrites the vault" invalid_kept
+check "AC8 truncated, empty, non-object or token-less auth.json never overwrites the vault" invalid_kept
 finish

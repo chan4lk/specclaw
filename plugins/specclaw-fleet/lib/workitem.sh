@@ -43,7 +43,7 @@ consented() {
 fetch_credential() {
   local value err="$FLEET_TMPDIR/fetch.err"
   if ! value="$(az keyvault secret show --vault-name "$1" --name "$2" --query value -o tsv 2>"$err")"; then
-    grep -q NotFound "$err" && return 1
+    secret_not_found "$err" && return 1
     return 2
   fi
   [[ -n "$value" && "$value" != __unset__ ]] || return 1

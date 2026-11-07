@@ -2,7 +2,7 @@
 ensure_placeholder() {
   local err="$FLEET_TMPDIR/show.err"
   az keyvault secret show --vault-name "$1" --name "$2" >/dev/null 2>"$err" && return 0
-  grep -q NotFound "$err" || die "Could not check $2 in $1, leaving it untouched: $(head -n1 "$err")"
+  secret_not_found "$err" || die "Could not check $2 in $1, leaving it untouched: $(head -n1 "$err")"
   az keyvault secret set --vault-name "$1" --name "$2" --value __unset__ >/dev/null
 }
 

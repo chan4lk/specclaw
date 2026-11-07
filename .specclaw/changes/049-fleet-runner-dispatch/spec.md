@@ -38,7 +38,7 @@ A new add-on plugin, `plugins/specclaw-fleet/`. An approved specclaw change is r
   - (c) the work item has no assignee;
   - (d) **consent is missing:** the work item lacks the `fleet:auto` tag, and the requester is not the assignee;
   - (e) the assignee has no usable credential for the chosen agent, meaning the secret is missing, empty, or still a placeholder. A vault read error is refused separately, as a vault problem;
-  - (f) `--agent codex` is chosen while that assignee already has an unfinished codex Job. The codex Job name `fleet-codex-<h>` is the atomic claim: the API refuses a duplicate, and a finished one is replaced.
+  - (f) `--agent codex` is chosen while that assignee already has an unfinished codex Job. The codex Job name `fleet-codex-<h>` is the atomic claim: the API refuses a duplicate, and a finished one is replaced by a delete carrying a UID precondition.
 
   Refusals (c)–(f) also set the work item to `Failed` and adds a comment naming the reason. Dispatch never uses a credential belonging to anyone other than the assignee.
 - **FR-5 Dispatch launch.** When every gate passes, dispatch:
@@ -69,7 +69,7 @@ A new add-on plugin, `plugins/specclaw-fleet/`. An approved specclaw change is r
   - always adds one comment that lists every pair, so the record exists even with no custom fields;
   - exits 0 when nothing maps.
 - **FR-9 Sandbox manifests.** `k8s/` ships:
-  - a namespace (Pod Security `baseline` enforced; `restricted` warned and audited; Jobs set `seccompProfile: RuntimeDefault`);
+  - the `specclaw-fleet` namespace with Pod Security `restricted` enforced (Jobs set `seccompProfile: RuntimeDefault`), and a separate `specclaw-fleet-egress` namespace (`baseline`) for the proxy;
   - a dispatch ServiceAccount whose Role allows only create/get/list/delete on `jobs` and create on `secrets` in that namespace, so it can never read the namespace's other Secrets;
   - a default-deny `NetworkPolicy` that lets fleet pods reach only DNS and the egress proxy;
   - a Squid proxy with an allowlist ConfigMap;

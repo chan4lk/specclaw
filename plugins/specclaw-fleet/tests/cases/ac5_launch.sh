@@ -14,7 +14,7 @@ one_secret_one_job() {
   (( rc == 0 )) && [[ $(find "$APPLIED" -type f | wc -l | tr -d " ") == 2 ]] && [[ -n "$job" && -n "$secret" ]] && grep -q "^kind: Secret" "$secret" && grep -q "^kind: Job" "$job"
 }
 secret_holds_credential() {
-  grep -q "credential: $(printf '%s' "$CANARY" | base64 | tr -d '\n')" "$secret" && grep -A1 ownerReferences "$secret" | grep -q 'kind: Job, name: fleet-049-[0-9a-f]*, uid: "uid-1"' 
+  grep -q "credential: $(printf '%s' "$CANARY" | base64 | tr -d '\n')" "$secret" && grep -A1 ownerReferences "$secret" | grep -q 'kind: Job, name: fleet-049-[0-9a-f]*, uid: "uid-[0-9]*-[0-9]*"' 
 }
 job_labels_and_deadline() {
   grep -q "specclaw.fleet/agent: claude" "$job" && grep -q "specclaw.fleet/assignee: \"$H\"" "$job" \

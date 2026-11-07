@@ -17,7 +17,7 @@ AzDO pipeline ── specclaw-fleet dispatch ──▶ Job (agent initContainer 
 - **Per-secret RBAC:** each user holds `Key Vault Secrets Officer` on their own two secrets only, never on the vault.
 - **At dispatch:** the assignee's secret is copied into a per-Job K8s Secret. That Secret is owned by the Job and garbage-collected with it.
 - **No fallback, ever.** If the assignee has no credential registered, the run fails. Dispatch never uses anyone else's token.
-- **Codex runs are limited to one at a time per person**, because one `auth.json` must never serve concurrent jobs. The person's codex Job has a fixed name, `fleet-codex-<h>`, so the Kubernetes API itself refuses a second one (`AlreadyExists`). A finished one is deleted and replaced. After each run, the refreshed `auth.json` is written back to the vault, but only when it changed and is still a valid JSON object. Claude runs have no such limit.
+- **Codex runs are limited to one at a time per person**, because one `auth.json` must never serve concurrent jobs. The person's codex Job has a fixed name, `fleet-codex-<h>`, so the Kubernetes API itself refuses a second one (`AlreadyExists`). A finished one is replaced by deleting it with a UID precondition, so a concurrent dispatch can never delete a newer run. After each run, the refreshed `auth.json` is written back to the vault, but only when it changed and still carries `tokens.refresh_token`. Claude runs have no such limit.
 - **Cost:** each run spends the assignee's 5-hour and weekly plan allowance.
 
 > **Security.** Code running in the pod can read the mounted token and the AzDO PAT. That includes code steered by prompt injection from repo content. The mitigations:
@@ -42,7 +42,7 @@ Assigning a work item to someone must not spend their plan without their say. Di
    - the Squid egress proxy;
    - the NetworkPolicies.
 
-   The namespace enforces Pod Security `baseline` and warns and audits on `restricted`. Fleet Jobs meet `restricted`. Squid needs `SETUID`/`SETGID` to drop to its proxy user, so it runs under `baseline`. Pin `ubuntu/squid` by digest before production use.
+   `specclaw-fleet` enforces Pod Security `restricted`, which fleet Jobs meet. Squid needs `SETUID`/`SETGID` to drop to its proxy user, so it runs in its own `specclaw-fleet-egress` namespace under `baseline`. That namespace holds no fleet Secrets. Pin `ubuntu/squid` by digest before production use.
 2. **Secrets in the namespace.**
    - `fleet-azdo` holds `AZDO_TOKEN`, `AZDO_ORG` and `AZDO_PROJECT`. Use a PAT scoped to Code (read & write), Work Items (read & write) and Pull Request Threads.
    - `fleet-vault-writer` holds `AZURE_TENANT_ID`, `AZURE_CLIENT_ID` and `AZURE_CLIENT_SECRET`, for a service principal that may set `codex-auth-*` secrets.

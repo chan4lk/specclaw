@@ -33,6 +33,6 @@ dispatch; rc=$?; check "AC4e missing credential refused as unregistered" failed_
 reset_env; AZ_FAIL=1 dispatch; rc=$?
 check "AC4e vault error refused as a vault problem, not the assignee's" failed_vault
 
-reset_env; CODEX_JOB_JSON='{"status":{"active":1}}' dispatch --agent codex; rc=$?
+reset_env; seed_codex_job '{"active":1}'; dispatch --agent codex; rc=$?
 check "AC4f busy codex assignee refused and marked Failed" refused_and_failed
 finish

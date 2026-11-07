@@ -13,21 +13,23 @@ spec:
           podSelector: {matchLabels: {k8s-app: kube-dns}}
       ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
     - to:
-        - podSelector: {matchLabels: {app: fleet-egress}}
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: specclaw-fleet-egress}}
+          podSelector: {matchLabels: {app: fleet-egress}}
       ports: [{protocol: TCP, port: 3128}]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: fleet-egress-proxy
-  namespace: specclaw-fleet
+  namespace: specclaw-fleet-egress
 spec:
   podSelector:
     matchLabels: {app: fleet-egress}
   policyTypes: [Ingress, Egress]
   ingress:
     - from:
-        - podSelector: {matchLabels: {app.kubernetes.io/part-of: specclaw-fleet}}
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: specclaw-fleet}}
+          podSelector: {matchLabels: {app.kubernetes.io/part-of: specclaw-fleet}}
       ports: [{protocol: TCP, port: 3128}]
   egress:
     - to:

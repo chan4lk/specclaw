@@ -18,12 +18,20 @@ YAML
 
 claim_codex_slot() {
   local state
-  state="$(kubectl -n "$F_NS" get job "$F_JOB" -o json 2>/dev/null \
-    | jq -r 'if ((.status.succeeded // 0) > 0 or (.status.failed // 0) > 0) then "finished" else "active" end')" || state=""
+  state="$(kubectl -n "$F_NS" get job "$F_JOB" -o json 2>/dev/null | jq -r '
+    if ([.status.conditions[]? | select((.type == "Complete" or .type == "Failed") and .status == "True")] | length) > 0
+      or (.status.succeeded // 0) > 0 or (.status.failed // 0) > 0
+    then "finished \(.metadata.uid)" else "active" end')" || state=""
   case "$state" in
     active) refuse "$F_CHANGE" "assignee already has an unfinished codex job" ;;
-    finished) kubectl -n "$F_NS" delete job "$F_JOB" --wait=true >/dev/null 2>&1 || true ;;
+    finished*) delete_job_if_uid "${state#finished }" ;;
   esac
+}
+
+delete_job_if_uid() {
+  jq -nc --arg u "$1" '{kind: "DeleteOptions", apiVersion: "v1", propagationPolicy: "Background", preconditions: {uid: $u}}' \
+    > "$FLEET_TMPDIR/delete.json"
+  kubectl delete --raw "/apis/batch/v1/namespaces/$F_NS/jobs/$F_JOB" -f "$FLEET_TMPDIR/delete.json" >/dev/null 2>&1 || true
 }
 
 create_job() {

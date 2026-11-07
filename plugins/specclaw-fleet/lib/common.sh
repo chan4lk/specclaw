@@ -6,6 +6,10 @@ need_value() {
   [[ -n "${2:-}" && "${2:-}" != -* ]] || die "$1 needs a value"
 }
 
+secret_not_found() {
+  grep -q '(SecretNotFound)' "$1"
+}
+
 sha256_hex() {
   if command -v sha256sum >/dev/null 2>&1; then sha256sum; else shasum -a 256; fi | cut -d' ' -f1
 }

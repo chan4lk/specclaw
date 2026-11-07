@@ -42,10 +42,13 @@ steps:
         export AZDO_ORG="$(basename "${SYSTEM_COLLECTIONURI%/}")"
         status_at() { git show "$1:$2" 2>/dev/null | jq -r '.phases.proposal.status // empty'; }
         failed=0
+        changed="$AGENT_TEMPDIRECTORY/fleet-changed"
+        git diff -z --name-only HEAD^1 HEAD -- '.specclaw/changes/*/state.json' > "$changed" \
+          || { echo "##vso[task.logissue type=error]could not list changed state files"; exit 1; }
         while IFS= read -r -d '' f; do
           [[ "$(status_at HEAD "$f")" == approved && "$(status_at HEAD^1 "$f")" != approved ]] || continue
           specclaw-fleet dispatch "$(basename "$(dirname "$f")")" --vault "${{ parameters.vault }}" || failed=1
-        done < <(git diff -z --name-only HEAD^1 HEAD -- '.specclaw/changes/*/state.json')
+        done < "$changed"
         exit "$failed"
     env:
       AZDO_TOKEN: $(System.AccessToken)

@@ -36,8 +36,8 @@ spec:
             - {name: FLEET_REPO_URL, value: $(yaml_str "$F_REPO")}
             - {name: FLEET_WORK_ITEM, value: "$F_WI"}
             - {name: FLEET_AGENT_TIMEOUT, value: "$F_DEADLINE"}
-            - {name: HTTPS_PROXY, value: "http://fleet-egress:3128"}
-            - {name: HTTP_PROXY, value: "http://fleet-egress:3128"}
+            - {name: HTTPS_PROXY, value: "http://fleet-egress.specclaw-fleet-egress:3128"}
+            - {name: HTTP_PROXY, value: "http://fleet-egress.specclaw-fleet-egress:3128"}
             - {name: NO_PROXY, value: "localhost,127.0.0.1"}
           volumeMounts:
             - {name: work, mountPath: /fleet/work}
@@ -54,7 +54,7 @@ spec:
             - {name: FLEET_AGENT, value: $F_AGENT}
             - {name: FLEET_VAULT, value: $(yaml_str "$F_VAULT")}
             - {name: FLEET_SECRET, value: $(yaml_str "$F_SECRET")}
-            - {name: HTTPS_PROXY, value: "http://fleet-egress:3128"}
+            - {name: HTTPS_PROXY, value: "http://fleet-egress.specclaw-fleet-egress:3128"}
           volumeMounts:
             - {name: home, mountPath: /home/agent}
             - {name: status, mountPath: /fleet/status}
