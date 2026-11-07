@@ -30,4 +30,10 @@ check "AC7 a failed run still pushes the change branch (never the base branch)" 
 GATE="" run_entry; settings="$(cat "$TMP/home/.claude/settings.json" 2>/dev/null)"
 nested_auth() { [[ "$(jq -r '.env.CLAUDE_CODE_OAUTH_TOKEN' <<<"$settings")" == oat-token ]] && [[ ! -s "$TMP/leaked" ]]; }
 check "AC7 claude token reaches nested claude sessions via settings.json env" nested_auth
+REMOTE_BRANCH=specclaw/049-x run_entry; resume_calls="$(cat "$CALLS")"
+REMOTE_BRANCH=specclaw/1049-x run_entry; other_calls="$(cat "$CALLS")"
+resumes() {
+  grep -q "checkout -q -B specclaw/049-x origin/specclaw/049-x" <<<"$resume_calls" && ! grep -q "checkout" <<<"$other_calls"
+}
+check "AC7 an existing remote change branch is resumed; a lookalike name is not" resumes
 finish
