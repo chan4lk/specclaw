@@ -20,4 +20,11 @@ log_redacted() {
   grep -q "agent says hi" "$TMP/out" && ! grep -q "SECRETTOKENVALUE" "$TMP/out" && ! grep -q "abcdefghijklmnopqrstuvwxyz0123456789" "$TMP/out"
 }
 check "AC7 agent log tail reaches the container log with tokens redacted" log_redacted
+AGENT_RC=5 run_entry; failed_calls="$(cat "$CALLS")"
+ON_BRANCH=main AGENT_RC=5 run_entry; base_calls="$(cat "$CALLS")"
+work_survives() {
+  grep -q "git -C .* push -q -u origin HEAD" <<<"$failed_calls" && grep -q "state=failed exit=5 branch=specclaw/049-x" <<<"$failed_calls" \
+    && ! grep -q " push " <<<"$base_calls"
+}
+check "AC7 a failed run still pushes the change branch (never the base branch)" work_survives
 finish

@@ -19,3 +19,12 @@ show_agent_log() {
   tail -c 4000 "$STATUS/agent.log" \
     | sed -E 's/sk-ant-[A-Za-z0-9_-]+/sk-ant-<redacted>/g; s/eyJ[A-Za-z0-9._-]{20,}/<jwt-redacted>/g; s/[A-Za-z0-9+\/_-]{40,}/<redacted>/g' >&2
 }
+
+push_change_branch() {
+  local branch
+  branch="$(jq -r '.branch // empty' "$STATE" 2>/dev/null)"
+  if [[ -n "$branch" && "$(git -C "$REPO" rev-parse --abbrev-ref HEAD 2>/dev/null)" == "$branch" ]]; then
+    git -C "$REPO" push -q -u origin HEAD >&2 || echo "WARNING: could not push $branch" >&2
+  fi
+  printf '%s' "$branch"
+}

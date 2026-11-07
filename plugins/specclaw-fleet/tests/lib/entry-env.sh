@@ -8,6 +8,7 @@ case "$*" in
 esac
 echo "{}"'
 stub git '[[ "$1" == -C && "$3" == merge-base ]] && { [[ -z "${NOT_ANCESTOR:-}" ]]; exit; }
+[[ "$1" == -C && "$3" == rev-parse && "$4" == --abbrev-ref ]] && { echo "${ON_BRANCH-specclaw/049-x}"; exit 0; }
 [[ "$1" == -C && "$3" == rev-parse ]] && { echo deadbeef; exit 0; }
 [[ "$1" == clone ]] || exit 0
 [[ -n "${CLONE_FAIL:-}" ]] && exit 128

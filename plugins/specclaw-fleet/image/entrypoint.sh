@@ -74,7 +74,7 @@ record state=running "built_commit=$(git -C "$REPO" rev-parse HEAD)"
 cd "$REPO" || finish 2
 rc=0; run_agent || rc=$?
 pr="$(jq -r '.phases.pr.url // empty' "$STATE" 2>/dev/null)"
-branch="$(jq -r '.branch // empty' "$STATE" 2>/dev/null)"
+branch="$(push_change_branch)"
 show_agent_log
 record "state=$([[ -n "$pr" ]] && echo pr_open || echo failed)" "exit=$rc" "branch=$branch"
 finish "$rc"
