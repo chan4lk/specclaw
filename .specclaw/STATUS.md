@@ -1,7 +1,7 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** specclaw
-**Last Updated:** 2026-11-07 08:35 UTC
+**Last Updated:** 2026-11-07 08:49 UTC
 
 _4 unnumbered changes · run `/specclaw-extras:renumber` to order them_
 
@@ -16,7 +16,7 @@ _4 unnumbered changes · run `/specclaw-extras:renumber` to order them_
 - 🔍 **046-quality-scan-zero-clone** ▫ — verify PARTIAL | 4/4 tasks (100%) | 0 failed
 - 🔀 **047-specclaw-mod** ▣ — pr raised | 7/7 tasks (100%) | 0 failed | PR #105 merged | 16h58m
 - 🔀 **048-codex-safe-mod-hooks** ▫ — pr raised | 3/3 tasks (100%) | 0 failed | PR #106 merged | 16s
-- 📝 **049-fleet-runner-dispatch** ▣ — tasks done | 0/7 tasks (0%) | 0 failed | 1h10m
+- 🔨 **049-fleet-runner-dispatch** ▣ — build done | 7/7 tasks (100%) | 0 failed | 1h13m
 
 ## Pending Proposals
 
