@@ -12,7 +12,7 @@
 | Spec | ✅ Done |  |
 | Design | ✅ Done |  |
 | Tasks | ✅ Done |  |
-| Build | ⏳ Pending |  |
+| Build | 🔨 In-progress |  |
 | Verify | ⏳ Pending |  |
 | Size | ⬆️ architectural | upgraded from bounded — operator chose MS-hosted default: second deployment mode, public GHCR image with runtime claude fetch+verify, new dispatch inputs |
 

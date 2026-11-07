@@ -1,8 +1,13 @@
 # shellcheck shell=bash disable=SC2034
 ENTRY="$FLEET_ROOT/image/entrypoint.sh"
+# shellcheck source=gpg-env.sh
+source "$(dirname "${BASH_SOURCE[0]}")/gpg-env.sh"
+make_release "#!/bin/sh"
 stub specclaw-azdo-issue '[[ -n "${REAL_AZDO:-}" ]] && exec "$REAL_AZDO" "$@"; exit 0'
 stub curl 'printf "%s\n" "$*" >> "$TMP/curl.log"
 case "$*" in
+  *releases.test/*) out=""; prev=""; for arg in "$@"; do [[ "$prev" == -o ]] && out="$arg"; prev="$arg"; done
+    url="${*: -1}"; src="$TMP/releases/${url#https://releases.test/}"; [[ -f "$src" ]] || exit 22; cp "$src" "$out"; exit 0 ;;
   *pullrequests*searchCriteria*) [[ -n "${EXISTING_PR:-}" ]] && echo "{\"value\":[{\"pullRequestId\":$EXISTING_PR}]}" || echo "{\"value\":[]}"; exit 0 ;;
   *pullrequests*) [[ -n "${PR_POST_FAIL:-}" ]] && exit 22; cat > "$TMP/pr-body.json"; echo "{\"pullRequestId\":77}"; exit 0 ;;
   *--noproxy*) [[ "${GATE:-}" == direct-open ]] && exit 0; exit 7 ;;

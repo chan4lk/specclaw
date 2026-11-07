@@ -1,44 +1,60 @@
-FROM node:22-bookworm-slim
+FROM debian:bookworm-slim AS seed
 
-ARG CLAUDE_CODE_VERSION
-ARG CODEX_VERSION
+ARG CLAUDE_CODE_VERSION=2.1.319
 ARG TARGETARCH
-ARG PLAYWRIGHT_VERSION=1.65.0
-ARG JSCPD_VERSION=5.4.2
-ARG LIZARD_VERSION=1.25.1
 
-RUN test -n "$CLAUDE_CODE_VERSION" && test -n "$CODEX_VERSION" \
- && apt-get update \
- && apt-get install -y --no-install-recommends git curl ca-certificates jq python3 python3-pip \
- && pip3 install --no-cache-dir --break-system-packages "lizard==${LIZARD_VERSION}" \
- && npm install -g "playwright@${PLAYWRIGHT_VERSION}" "jscpd@${JSCPD_VERSION}" \
- && PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright playwright install --with-deps chromium \
- && chmod -R a+rX /opt/ms-playwright \
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates git \
  && rm -rf /var/lib/apt/lists/* \
- && curl -fsSL -o /usr/local/bin/claude "https://downloads.claude.ai/claude-code-releases/${CLAUDE_CODE_VERSION}/linux-$([ "$TARGETARCH" = arm64 ] && echo arm64 || echo x64)/claude" \
- && chmod +x /usr/local/bin/claude \
- && npm install -g "@openai/codex@${CODEX_VERSION}" \
- && git config --system user.name "specclaw-fleet" \
- && git config --system user.email "specclaw-fleet@noreply.local" \
- && mkdir -p /opt/fleet/home-seed /home/agent \
- && chown 1000:1000 /opt/fleet/home-seed /home/agent
+ && curl -fsSL -o /tmp/claude "https://downloads.claude.ai/claude-code-releases/${CLAUDE_CODE_VERSION}/linux-$([ "$TARGETARCH" = arm64 ] && echo arm64 || echo x64)/claude" \
+ && chmod +x /tmp/claude
 
 COPY .claude-plugin /opt/specclaw/.claude-plugin
 COPY .agents /opt/specclaw/.agents
 COPY plugins /opt/specclaw/plugins
-COPY plugins/specclaw-fleet/image/*.sh /opt/fleet/
+
+RUN mkdir -p /opt/fleet/home-seed \
+ && HOME=/opt/fleet/home-seed /tmp/claude plugin marketplace add /opt/specclaw \
+ && HOME=/opt/fleet/home-seed /tmp/claude plugin install specclaw@chan4lk \
+ && HOME=/opt/fleet/home-seed /tmp/claude plugin install specclaw-sync@chan4lk
+
+FROM node:22-bookworm-slim
+
+ARG CODEX_VERSION
+ARG PLAYWRIGHT_VERSION=1.65.0
+ARG JSCPD_VERSION=5.4.2
+ARG LIZARD_VERSION=1.25.1
+
+RUN test -n "$CODEX_VERSION" \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends git curl ca-certificates jq python3 python3-pip gnupg \
+ && pip3 install --no-cache-dir --break-system-packages "lizard==${LIZARD_VERSION}" \
+ && npm install -g "@openai/codex@${CODEX_VERSION}" "playwright@${PLAYWRIGHT_VERSION}" "jscpd@${JSCPD_VERSION}" \
+ && PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright playwright install --with-deps chromium \
+ && chmod -R a+rX /opt/ms-playwright \
+ && rm -rf /var/lib/apt/lists/* \
+ && git config --system user.name "specclaw-fleet" \
+ && git config --system user.email "specclaw-fleet@noreply.local" \
+ && mkdir -p /home/agent && chown 1000:1000 /home/agent
+
+COPY .claude-plugin /opt/specclaw/.claude-plugin
+COPY .agents /opt/specclaw/.agents
+COPY plugins /opt/specclaw/plugins
+COPY --from=seed --chown=1000:1000 /opt/fleet/home-seed /opt/fleet/home-seed
+COPY plugins/specclaw-fleet/image/*.sh plugins/specclaw-fleet/image/claude-release.asc /opt/fleet/
 COPY plugins/specclaw-fleet/image/bin/claude /opt/fleet/bin/claude
 
+RUN G="$(mktemp -d)" && gpg --homedir "$G" --batch --quiet --import /opt/fleet/claude-release.asc \
+ && gpg --homedir "$G" --batch --with-colons --fingerprint | grep -q '^fpr:::::::::31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE:$' \
+ && rm -rf "$G"
+
 ENV HOME=/home/agent \
+    DISABLE_UPDATES=1 \
     PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright \
     PATH="/opt/fleet/bin:/opt/specclaw/plugins/specclaw/bin:/opt/specclaw/plugins/specclaw-sync/bin:/opt/specclaw/plugins/specclaw-extras/bin:/opt/specclaw/plugins/specclaw-review/bin:${PATH}"
 
 USER 1000
 
 RUN mkdir -p /opt/fleet/home-seed/.codex \
- && HOME=/opt/fleet/home-seed claude plugin marketplace add /opt/specclaw \
- && HOME=/opt/fleet/home-seed claude plugin install specclaw@chan4lk \
- && HOME=/opt/fleet/home-seed claude plugin install specclaw-sync@chan4lk \
  && CODEX_HOME=/opt/fleet/home-seed/.codex codex plugin marketplace add /opt/specclaw
 
 ENTRYPOINT ["/opt/fleet/entrypoint.sh"]
