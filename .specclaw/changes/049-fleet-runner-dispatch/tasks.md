@@ -26,7 +26,7 @@ Wave 1 lays the packaging and the single Boards writer. Wave 2 adds the credenti
 
 ### Wave 2 — credentials and dispatch
 
-- [ ] `T3` — `specclaw-fleet onboard` and `login`: per-secret RBAC, own-identity upload, no token leakage (AC-2, AC-3)
+- [x] `T3` — `specclaw-fleet onboard` and `login`: per-secret RBAC, own-identity upload, no token leakage (AC-2, AC-3)
   - Files: plugins/specclaw-fleet/bin/specclaw-fleet, plugins/specclaw-fleet/tests/run-fleet-tests.sh
   - Estimate: medium
   - Kind: impl

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+FLEET_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SPECCLAW_DIR="${SPECCLAW_DIR:-.specclaw}"
+for lib in "$FLEET_ROOT"/lib/*.sh; do
+  # shellcheck source=/dev/null
+  source "$lib"
+done
+
+case "${1:-}" in
+  onboard) shift; fleet_onboard "$@" ;;
+  login) shift; fleet_login "$@" ;;
+  dispatch) shift; fleet_dispatch "$@" ;;
+  *) die "Usage: specclaw-fleet onboard <upn> --vault <v> | login --agent claude|codex --vault <v> | dispatch <change> [--agent claude|codex] [--ref <b>] [--vault <v>] [--dry-run]" ;;
+esac
