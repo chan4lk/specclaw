@@ -9,9 +9,9 @@
 | Phase | Status | Notes |
 |-------|--------|-------|
 | Proposal | ✅ Approved |  |
-| Spec | ⏳ Pending |  |
-| Design | ⏳ Pending |  |
-| Tasks | ⏳ Pending |  |
+| Spec | ✅ Done |  |
+| Design | ✅ Done |  |
+| Tasks | ✅ Done |  |
 | Build | ⏳ Pending |  |
 | Verify | ⏳ Pending |  |
 | Size | ⬆️ architectural | upgraded from bounded — operator chose MS-hosted default: second deployment mode, public GHCR image with runtime claude fetch+verify, new dispatch inputs |
