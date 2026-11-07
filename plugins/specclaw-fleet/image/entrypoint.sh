@@ -46,7 +46,7 @@ run_agent() {
     *) return 2 ;;
   esac
   agent_pid=$!
-  (sleep "${FLEET_AGENT_TIMEOUT:-7200}" && kill -TERM $$) &
+  (sleep "$agent_budget" && kill -TERM $$) &
   local watchdog=$! rc=0
   wait "$agent_pid" || rc=$?
   kill "$watchdog" 2>/dev/null
@@ -68,5 +68,7 @@ record state=running "built_commit=$(git -C "$REPO" rev-parse HEAD)" "claude_fet
 cd "$REPO" || finish 2
 prepare_workspace || { record state=failed exit=resume-failed; finish 2; }
 workspace_ready=1
+agent_budget=$(( ${FLEET_AGENT_TIMEOUT:-7200} - SECONDS ))
+(( agent_budget > 0 )) || { record state=failed exit=deadline-before-agent; finish 143; }
 rc=0; run_agent || rc=$?
 deliver "$rc" "$rc"

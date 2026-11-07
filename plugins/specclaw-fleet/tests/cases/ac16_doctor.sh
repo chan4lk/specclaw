@@ -7,7 +7,7 @@ stub kubectl '
 flag() { [[ -n "${!1:-}" ]]; }
 gone() { flag "$1" && { echo "Error from server (NotFound): $1" >&2; exit 1; }; flag KUBE_FLAKY && { echo "Unable to connect to the server: i/o timeout" >&2; exit 1; }; true; }
 case "$*" in
-  *" version -o json"*) flag NO_CLUSTER && exit 1; echo "{\"serverVersion\":{\"gitVersion\":\"v1.36\"}}" ;;
+  *" version -o json"*) flag NO_CLUSTER && { echo "error: context \"x\" does not exist" >&2; exit 1; }; flag KUBE_FLAKY && { echo "Unable to connect to the server" >&2; exit 1; }; echo "{\"serverVersion\":{\"gitVersion\":\"v1.36\"}}" ;;
   *" get ns "*) gone NO_NS; echo ns ;;
   *serviceaccount/fleet-dispatcher*) gone NO_RBAC; echo ok ;;
   *"deploy fleet-egress"*) gone NO_EGRESS_DEPLOY; flag NO_EGRESS && echo 0 || echo 1 ;;
@@ -50,7 +50,7 @@ NO_VAULT=1 FLEET_IMAGE=registry.example.com/x:1 "$FLEET" doctor > "$TMP/out" 2>&
 mixed() { (( mixed_rc == 1 )) && grep -q "1 check(s) need attention, 1 did not run" "$TMP/out"; }
 check "AC7 failures plus skips report both and exit 1" mixed
 skip_rows=1
-for row in "KUBE_FLAKY:namespaces rbac egress netpol secret:fleet-azdo secret:fleet-vault-writer" "AZ_DOWN:vault pipeline service-connections" \
+for row in "KUBE_FLAKY:context namespaces rbac egress netpol secret:fleet-azdo secret:fleet-vault-writer" "AZ_DOWN:vault pipeline service-connections" \
            "GHCR_DOWN:image" "IMAGE_CODE=503:image" "IMAGE_CODE=000:image"; do
   v="${row%%:*}"; [[ "$v" == *=* ]] || v="$v=1"
   env "$v" "$FLEET" doctor > "$TMP/out" 2>&1; rc=$?

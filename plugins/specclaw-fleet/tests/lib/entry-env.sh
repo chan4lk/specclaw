@@ -23,6 +23,7 @@ stub git '[[ "$1" == -C && "$3" == merge-base ]] && { [[ -z "${NOT_ANCESTOR:-}" 
 [[ "$1" == clone ]] || exit 0
 [[ -n "${CLONE_FAIL:-}" ]] && exit 128
 dest="${*: -1}"; mkdir -p "$dest/.specclaw/changes/049-x"
+[[ -n "${CONFIG_PREFIX:-}" ]] && printf "git:\n  branch_prefix: \"%s\"   # p\n" "$CONFIG_PREFIX" > "$dest/.specclaw/config.yaml"
 status=approved; [[ -n "${NOT_APPROVED:-}" ]] && status=draft
 pr=""; [[ -n "${FAKE_PR:-}" ]] && pr=",\"pr\":{\"url\":\"https://pr/1\"}"
 content="{\"branch\":\"specclaw/049-x\",\"phases\":{\"proposal\":{\"status\":\"$status\"}$pr}}"

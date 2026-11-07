@@ -19,6 +19,8 @@ parse_trigger_args() {
 trigger_pushed_tree() {
   local remote="${FLEET_REMOTE:-origin}" ref="${FLEET_REF:-main}" root="$SPECCLAW_DIR/.." sc tree f
   sc="$(basename "$SPECCLAW_DIR")"
+  [[ "$remote" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || die "FLEET_REMOTE '$remote' is not a valid remote name"
+  [[ "$ref" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ && "$ref" != *..* ]] || die "the ref '$ref' is not a valid branch name"
   git -C "$root" fetch -q "$remote" "$ref" 2>/dev/null || die "could not fetch $remote/$ref"
   tree="$FLEET_TMPDIR/pushed/$sc"
   mkdir -p "$tree/changes/$T_CHANGE"

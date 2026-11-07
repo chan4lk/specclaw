@@ -27,7 +27,7 @@ work_survives() {
     && ! grep -q " push " <<<"$base_calls"
 }
 check "AC7 a failed run still pushes the change branch (never the base branch)" work_survives
-GATE="" run_entry; token_file="$(stat -f '%Lp' "$TMP/home/.fleet/claude-token" 2>/dev/null || stat -c '%a' "$TMP/home/.fleet/claude-token")"
+GATE="" run_entry; token_file="$(stat -c '%a' "$TMP/home/.fleet/claude-token" 2>/dev/null || stat -f '%Lp' "$TMP/home/.fleet/claude-token")"
 printf '#!/usr/bin/env bash\necho "nested-token=${CLAUDE_CODE_OAUTH_TOKEN:-none}"\n' > "$TMP/real-claude"; chmod +x "$TMP/real-claude"
 nested="$(env -u CLAUDE_CODE_OAUTH_TOKEN HOME="$TMP/home" FLEET_REAL_CLAUDE="$TMP/real-claude" "$FLEET_ROOT/image/bin/claude" -p x)"
 keep="$(CLAUDE_CODE_OAUTH_TOKEN=caller HOME="$TMP/home" FLEET_REAL_CLAUDE="$TMP/real-claude" "$FLEET_ROOT/image/bin/claude" -p x)"

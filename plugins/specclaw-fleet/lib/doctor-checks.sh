@@ -11,8 +11,10 @@ absent() {
 check_context() {
   local v
   v="$(dk version -o json | jq -r '.serverVersion.gitVersion // empty')"
-  [[ -n "$v" ]] || { echo "missing context: cannot reach the cluster${FLEET_KUBE_CONTEXT:+ ($FLEET_KUBE_CONTEXT)}"; return 1; }
-  echo "ok context: ${FLEET_KUBE_CONTEXT:-current} $v"
+  [[ -n "$v" ]] && { echo "ok context: ${FLEET_KUBE_CONTEXT:-current} $v"; return 0; }
+  grep -Eqi 'context .*(not found|does not exist)|current-context is not set' "$FLEET_TMPDIR/dk.err" \
+    && { echo "missing context: ${FLEET_KUBE_CONTEXT:-current} is not in the kubeconfig"; return 1; }
+  echo "skip context: could not ask the cluster: $(head -n1 "$FLEET_TMPDIR/dk.err")"; return 2
 }
 
 check_namespaces() {

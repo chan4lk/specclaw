@@ -15,12 +15,25 @@ for row in "LS_FAIL=1|resume-failed" "REMOTE_BRANCH=specclaw/049-x FETCH_FAIL=1|
     grep -q "^claude -p" <<<"$calls" && ! grep -q "resume-failed" <<<"$calls" || { resume_rows=0; echo "  ${row%%|*}: expected the agent to run"; }
   fi
 done
-resume_stops() { (( resume_rows == 1 )); }
+match_rows=1
+for row in "REMOTE_BRANCH=other/049-x|no" "REMOTE_BRANCH=specclaw/049-x|specclaw/049-x" \
+           "STATE_OVERRIDE='{\"phases\":{\"proposal\":{\"status\":\"approved\"}}}' CONFIG_PREFIX=feat/ REMOTE_BRANCH=feat/049-x|feat/049-x" \
+           "STATE_OVERRIDE='{\"phases\":{\"proposal\":{\"status\":\"approved\"}}}' CONFIG_PREFIX=feat/ REMOTE_BRANCH=specclaw/049-x|no"; do
+  eval "${row%%|*} run_entry"; calls="$(cat "$CALLS")"; want="${row#*|}"
+  if [[ "$want" == no ]]; then ! grep -q "checkout -q -B" <<<"$calls"; else grep -q "checkout -q -B $want origin/$want" <<<"$calls"; fi \
+    || { match_rows=0; echo "  ${row%%|*}: want $want"; }
+done
+FLEET_AGENT_TIMEOUT=0 run_entry; budget_calls="$(cat "$CALLS")"
+resume_stops() { (( resume_rows == 1 && match_rows == 1 )); }
+only_own_branch() { (( match_rows == 1 )); }
+budget_gone() { grep -q "exit=deadline-before-agent" <<<"$budget_calls" && ! grep -q "^claude -p" <<<"$budget_calls"; }
+check "R12 only the change's own branch (state.json branch, else git.branch_prefix + change) is resumed" only_own_branch
+check "R12 the agent gets only the budget left after setup; none left means it never starts" budget_gone
 check "R10 a failed branch lookup, fetch or checkout stops the run (resume-failed); found or absent branches run" resume_stops
 
 deadline_rows=1
 for agent in claude codex; do
-  AGENT_SLEEP=5 FLEET_AGENT_TIMEOUT=1 ENTRY_AGENT="$agent" run_entry; calls="$(cat "$CALLS")"
+  AGENT_SLEEP=20 FLEET_AGENT_TIMEOUT=8 ENTRY_AGENT="$agent" run_entry; calls="$(cat "$CALLS")"
   [[ "$(cat "$TMP/status/exit")" == 143 ]] && grep -q "push -q -u origin HEAD" <<<"$calls" \
     && grep -q "state=pr_open exit=deadline branch=specclaw/049-x pr=.*pullrequest/77 draft=true" <<<"$calls" \
     || { deadline_rows=0; echo "  $agent: deadline did not push and open the PR"; }

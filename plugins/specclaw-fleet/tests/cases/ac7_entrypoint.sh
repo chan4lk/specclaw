@@ -17,7 +17,7 @@ for st in "NOT_APPROVED" MISSING '{"phases":{' '[]' '{"phases":{}}' '{"phases":{
   if [[ "$st" == NOT_APPROVED ]]; then NOT_APPROVED=1 run_entry; else STATE_OVERRIDE="$st" run_entry; fi
   [[ "$(cat "$TMP/status/exit")" == 2 ]] && grep -q "exit=not-approved-at-ref" "$CALLS" && ! grep -q "state=running" "$CALLS" || recheck_ok=0
 done
-AGENT_SLEEP=5 FLEET_AGENT_TIMEOUT=1 run_entry; late_rc=$?; late_status="$(cat "$TMP/status/exit")"; late_calls="$(cat "$CALLS")"
+AGENT_SLEEP=20 FLEET_AGENT_TIMEOUT=8 run_entry; late_rc=$?; late_status="$(cat "$TMP/status/exit")"; late_calls="$(cat "$CALLS")"
 
 keys_unset() { [[ ! -s "$TMP/leaked" ]]; }
 no_token_in_url() { ! grep -q "pat-secret" <<<"$ok_calls"; }
@@ -36,7 +36,7 @@ commit_pinned() {
     && grep -q "exit=commit-not-on-ref dispatched_commit=abc123" <<<"$stale_calls" && ! grep -q "state=running" <<<"$stale_calls"
 }
 approval_rechecked() { (( recheck_ok == 1 )); }
-deadline_leaves_room() { (( late_rc == 0 )) && [[ "$late_status" == 143 ]] && grep -q "exit=deadline" <<<"$late_calls"; }
+deadline_leaves_room() { (( late_rc == 0 )) && [[ "$late_status" == 143 ]] && grep -q "exit=deadline branch=" <<<"$late_calls"; }
 
 check "AC7 API-key variables unset before the agent runs" keys_unset
 check "AC7 clone URL and git args carry no token" no_token_in_url

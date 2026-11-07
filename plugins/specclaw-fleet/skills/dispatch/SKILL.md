@@ -32,4 +32,4 @@ Exit codes:
 - `5`: the assignee's codex slot is busy. Nothing is tagged, so retry later.
 - `1`: error.
 
-Settings come from flags or environment variables: `FLEET_VAULT`, `FLEET_DEFAULT_AGENT`, `FLEET_REF`, `FLEET_IMAGE`, `FLEET_NAMESPACE`, `FLEET_DEADLINE_MINUTES`. They are never read from `config.yaml`. Setup is in the plugin's `README.md`.
+Settings come from flags or environment variables: `FLEET_VAULT`, `FLEET_DEFAULT_AGENT`, `FLEET_REF`, `FLEET_IMAGE`, `FLEET_NAMESPACE`, `FLEET_DEADLINE_MINUTES`, `FLEET_KUBE_CONTEXT`, `FLEET_CLAUDE_VERSION` (required for claude jobs), and the optional `FLEET_IMAGE_PULL_SECRET` and `FLEET_NODE_LABEL` (`key=value`). They are never read from `config.yaml`. Setup is in the plugin's `README.md`.
