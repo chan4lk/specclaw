@@ -14,14 +14,14 @@ pods_default_deny() {
   grep -A3 "name: fleet-pods" "$K/network-policy.yaml" >/dev/null \
     && [[ $(grep -c "policyTypes: \[Ingress, Egress\]" "$K/network-policy.yaml") == 2 ]] \
     && grep -A1 "name: specclaw-fleet-egress}}" "$K/network-policy.yaml" | grep -q "app: fleet-egress}}" \
-    && grep -q "enforce: restricted" "$K/namespace.yaml"
+    && grep -q "enforce: restricted" "$K/00-namespace.yaml"
 }
 proxy_blocks_internal() {
   grep -q "except: \[.*169.254.0.0/16.*\]" "$K/network-policy.yaml" && grep -q "10.0.0.0/8" "$K/network-policy.yaml"
 }
 allowlist() {
   local host
-  for host in api.anthropic.com api.openai.com auth.openai.com dev.azure.com login.microsoftonline.com .vault.azure.net; do
+  for host in api.anthropic.com api.openai.com auth.openai.com .chatgpt.com .dev.azure.com login.microsoftonline.com .vault.azure.net; do
     grep -q "dstdomain.* $host" "$K/egress-proxy.yaml" || return 1
   done
   grep -q "http_access deny all" "$K/egress-proxy.yaml"

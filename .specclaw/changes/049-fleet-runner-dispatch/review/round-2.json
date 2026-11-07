@@ -18,7 +18,7 @@
   "plugins/specclaw-fleet/image/entrypoint.sh",
   "plugins/specclaw-fleet/image/writeback.sh",
   "plugins/specclaw-fleet/k8s/egress-proxy.yaml",
-  "plugins/specclaw-fleet/k8s/namespace.yaml",
+  "plugins/specclaw-fleet/k8s/00-namespace.yaml",
   "plugins/specclaw-fleet/lib/dispatch.sh",
   "plugins/specclaw-fleet/lib/launch.sh",
   "plugins/specclaw-fleet/lib/manifest.sh",
@@ -125,7 +125,7 @@
    "severity": "minor"
   },
   {
-   "file": "plugins/specclaw-fleet/k8s/namespace.yaml",
+   "file": "plugins/specclaw-fleet/k8s/00-namespace.yaml",
    "fp": "82565cc27c9e",
    "in_delta": true,
    "line": 6,

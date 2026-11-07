@@ -7,8 +7,8 @@ data:
   squid.conf: |
     http_port 3128
     acl fleet_dst dstdomain api.anthropic.com downloads.claude.ai
-    acl fleet_dst dstdomain api.openai.com auth.openai.com chatgpt.com .chatgpt.com
-    acl fleet_dst dstdomain dev.azure.com .dev.azure.com .visualstudio.com
+    acl fleet_dst dstdomain api.openai.com auth.openai.com .chatgpt.com
+    acl fleet_dst dstdomain .dev.azure.com .visualstudio.com
     acl fleet_dst dstdomain login.microsoftonline.com .vault.azure.net
     acl fleet_dst dstdomain registry.npmjs.org
     acl SSL_ports port 443
@@ -17,7 +17,6 @@ data:
     http_access deny CONNECT !SSL_ports
     http_access allow fleet_dst
     http_access deny all
-    access_log stdio:/dev/stdout
     cache deny all
 ---
 apiVersion: apps/v1

@@ -50,7 +50,7 @@ Wave 1 lays the packaging and the single Boards writer. Wave 2 adds the credenti
   - Notes: entrypoint unsets 4 key vars, clones with `http.extraHeader`, SIGTERM trap → `Failed`/`deadline`, always exit 0 with `/status/exit`. Writeback: sha256 compare, client-credentials token via curl, PUT secret, exit with recorded status. Tests run both scripts with stub binaries.
 
 - [x] `T6` — Sandbox manifests and AzDO pipeline template (AC-10 manifest part)
-  - Files: plugins/specclaw-fleet/k8s/namespace.yaml, plugins/specclaw-fleet/k8s/rbac.yaml, plugins/specclaw-fleet/k8s/egress.yaml, plugins/specclaw-fleet/pipelines/dispatch.yml, plugins/specclaw-fleet/tests/run-fleet-tests.sh
+  - Files: plugins/specclaw-fleet/k8s/00-namespace.yaml, plugins/specclaw-fleet/k8s/rbac.yaml, plugins/specclaw-fleet/k8s/egress.yaml, plugins/specclaw-fleet/pipelines/dispatch.yml, plugins/specclaw-fleet/tests/run-fleet-tests.sh
   - Estimate: medium
   - Kind: config
   - Depends: T4

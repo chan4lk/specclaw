@@ -22,7 +22,7 @@
   "plugins/specclaw-fleet/image/tracker.sh",
   "plugins/specclaw-fleet/image/writeback.sh",
   "plugins/specclaw-fleet/k8s/egress-proxy.yaml",
-  "plugins/specclaw-fleet/k8s/namespace.yaml",
+  "plugins/specclaw-fleet/k8s/00-namespace.yaml",
   "plugins/specclaw-fleet/k8s/network-policy.yaml",
   "plugins/specclaw-fleet/k8s/rbac.yaml",
   "plugins/specclaw-fleet/lib/common.sh",

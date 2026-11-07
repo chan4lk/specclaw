@@ -50,7 +50,7 @@ specclaw-fleet dispatch <change>                  Job fleet-<nnn>-<rand>
 | `plugins/specclaw-fleet/image/Dockerfile` | create | debian-slim with git, jq, curl, python3, `claude`, `codex`, specclaw plugins baked in; non-root `agent` user |
 | `plugins/specclaw-fleet/image/entrypoint.sh` | create | agent step (FR-6) |
 | `plugins/specclaw-fleet/image/writeback.sh` | create | write-back step (FR-7), vault REST over curl |
-| `plugins/specclaw-fleet/k8s/namespace.yaml` | create | namespace |
+| `plugins/specclaw-fleet/k8s/00-namespace.yaml` | create | namespace |
 | `plugins/specclaw-fleet/k8s/rbac.yaml` | create | dispatcher ServiceAccount, Role, RoleBinding |
 | `plugins/specclaw-fleet/k8s/egress-proxy.yaml` | create | Squid Deployment, Service, allowlist ConfigMap |
 | `plugins/specclaw-fleet/k8s/network-policy.yaml` | create | default-deny fleet pods; proxy egress 443 minus private/metadata ranges |
