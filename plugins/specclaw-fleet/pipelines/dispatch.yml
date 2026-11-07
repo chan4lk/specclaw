@@ -41,17 +41,20 @@ steps:
         set -uo pipefail
         export AZDO_ORG="$(basename "${SYSTEM_COLLECTIONURI%/}")"
         status_at() {
-          git cat-file -e "$1:$2" 2>/dev/null || { echo absent; return 0; }
-          git show "$1:$2" | jq -er '.phases.proposal.status // "none"'
+          git show "$1:$2" | jq -er 'if type == "object" then (.phases.proposal.status // "none") else error("not an object") end'
         }
+        unreadable() { echo "##vso[task.logissue type=error]could not read proposal status from $1"; failed=1; }
         failed=0
         changed="$AGENT_TEMPDIRECTORY/fleet-changed"
-        git diff -z --name-only HEAD^1 HEAD -- '.specclaw/changes/*/state.json' > "$changed" \
+        git diff -z --no-renames --name-status HEAD^1 HEAD -- '.specclaw/changes/*/state.json' > "$changed" \
           || { echo "##vso[task.logissue type=error]could not list changed state files"; exit 1; }
-        while IFS= read -r -d '' f; do
-          if ! now="$(status_at HEAD "$f")" || ! before="$(status_at HEAD^1 "$f")"; then
-            echo "##vso[task.logissue type=error]could not read proposal status from $f"; failed=1; continue
-          fi
+        while IFS= read -r -d '' kind && IFS= read -r -d '' f; do
+          case "$kind" in
+            D) continue ;;
+            A) before=absent ;;
+            *) before="$(status_at HEAD^1 "$f")" || { unreadable "$f"; continue; } ;;
+          esac
+          now="$(status_at HEAD "$f")" || { unreadable "$f"; continue; }
           [[ "$now" == approved && "$before" != approved ]] || continue
           specclaw-fleet dispatch "$(basename "$(dirname "$f")")" --vault "${{ parameters.vault }}" || failed=1
         done < "$changed"

@@ -27,15 +27,22 @@ for status in '{"succeeded":1}' '{"failed":1}' '{"conditions":[{"type":"Failed",
 done
 reset_env; race; race_empty=$?
 reset_env; seed_codex_job '{"succeeded":1}'; race; race_finished=$?
-reset_env; seed_codex_job '{"active":1}'; dispatch --agent claude; claude_rc=$?
+reset_env; seed_codex_job '{"active":1}'; dispatch --agent claude; claude_rc=$? claude_calls="$(cat "$CALLS")"
+read_errors_refused=1
+for err in "Error from server (Forbidden): jobs is forbidden" "Unable to connect to the server: dial tcp 10.0.0.1:6443" "Error from server: i/o timeout"; do
+  reset_env; GET_ERR="$err" dispatch --agent codex && read_errors_refused=0
+  [[ -z "$(ls -A "$CLAIMS")" ]] && nothing_applied || read_errors_refused=0
+done
 
 serialized() { (( active_refused == 1 && finished_ok == 1 )); }
 newer_run_survives() { (( swap_rc != 0 )) && [[ "$swap_uid" == new-uid ]] && grep -q "unfinished codex job" <<<"$swap_out"; }
 single_winner() { (( race_empty == 0 && race_finished == 0 )); }
-claude_unbounded() { (( claude_rc == 0 )) && ! grep -q "get job fleet-codex" "$CALLS"; }
+claude_unbounded() { (( claude_rc == 0 )) && ! grep -q "get job fleet-codex" <<<"$claude_calls"; }
 
 check "AC6 codex refused while active; replaced once finished (succeeded, failed, Failed condition)" serialized
 check "AC6 a newer run created between read and delete is never deleted (UID precondition)" newer_run_survives
 check "AC6 two concurrent codex dispatches, from empty and from a finished Job: exactly one wins" single_winner
+fail_closed() { (( read_errors_refused == 1 )); }
+check "AC6 a Job read error other than NotFound refuses and creates nothing" fail_closed
 check "AC6 claude never refused for concurrency" claude_unbounded
 finish

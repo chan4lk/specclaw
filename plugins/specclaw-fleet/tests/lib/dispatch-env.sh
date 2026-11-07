@@ -32,7 +32,8 @@ case "$*" in
     [[ -n "${SWAP_BEFORE_DELETE:-}" ]] && { echo new-uid > "$claim/uid"; echo "{\"active\":1}" > "$claim/status"; }
     [[ -f "$claim/uid" && "$(cat "$claim/uid")" == "$(jq -r .preconditions.uid "$5")" ]] || exit 1
     rm -rf "$claim" ;;
-  *" get job "*" -o json") [[ -d "$claim" ]] || { echo "Error from server (NotFound): jobs $5" >&2; exit 1; }
+  *" get job "*" -o json") [[ -n "${GET_ERR:-}" ]] && { echo "$GET_ERR" >&2; exit 1; }
+    [[ -d "$claim" ]] || { echo "Error from server (NotFound): jobs $5" >&2; exit 1; }
     jq -n --arg u "$(cat "$claim/uid")" --argjson s "$(cat "$claim/status")" "{metadata: {uid: \$u}, status: \$s}" ;;
   *" delete job "*) rm -rf "$claim" ;;
   *"specclaw.fleet/change="*) echo job.batch/fleet-049-a ;;
