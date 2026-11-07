@@ -27,11 +27,11 @@ parse_dispatch_args() {
   [[ "$minutes" =~ ^[1-9][0-9]{0,3}$ ]] && (( 10#$minutes <= 1440 )) \
     || die "FLEET_DEADLINE_MINUTES must be a whole number from 1 to 1440"
   F_DEADLINE=$(( 10#$minutes * 60 ))
-  parse_pod_inputs
+  (( ${F_CHECK_ONLY:-0} )) || parse_pod_inputs
 }
 
 check_gates() {
-  proposal_approved "$F_CHANGE" || die "$F_CHANGE: proposal is not approved"
+  if (( ${F_CHECK_ONLY:-0} )); then trigger_ref_approved; else proposal_approved "$F_CHANGE" || die "$F_CHANGE: proposal is not approved"; fi
   [[ -n "$(work_item_id "$F_CHANGE")" ]] || die "$F_CHANGE: no Azure Boards work item (run specclaw-azdo-issue create)"
   local wi rc=0
   wi="$(azdo_issue show "$SPECCLAW_DIR" "$F_CHANGE")" || die "$F_CHANGE: could not read the work item"

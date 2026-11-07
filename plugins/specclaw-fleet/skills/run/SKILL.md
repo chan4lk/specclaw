@@ -14,15 +14,18 @@ FLEET_VAULT=<vault> specclaw-fleet trigger <change> [--create] [--retry] [--dire
 
 | Exit | Meaning | What to do |
 |---|---|---|
-| 0 | queued (`{"mode":"pipeline","run":…}`) or dispatched (`--direct`) | watch it (step 2) |
+| 0 | queued (`{"mode":"queued","run":…}`) or dispatched (`--direct`) | watch it (step 2). Gates passed here; the dispatch outcome lands on the work item. |
 | 1, `not approved on <remote>/<ref>` | approval is read from the **pushed** ref | approve through the lifecycle, push, re-run; never approve on someone's behalf |
 | 1, `pass --create` | no work item | re-run with `--create` |
 | 3, `created work item #N` | `--create` made the item and stopped on purpose | assign it; the assignee adds `fleet:auto`; re-run without `--create` |
-| 1, `has no assignee` | nobody's plan to run it on | ask who owns it; assign in Boards |
-| 4, `must add the fleet:auto tag` | consent missing | the **assignee** adds `fleet:auto` in Boards. Nobody else can add it for them. |
-| 1, `specclaw-fleet login` | no registered credential | the assignee runs `specclaw-fleet login --agent claude` in a real terminal |
+| 3, `not opted in` | no `fleet:auto` tag | the **assignee** adds `fleet:auto` in Boards; nobody else can add it for them |
+| 3, `already handled` | tagged `fleet:dispatched` or `fleet:refused` | re-run with `--retry` |
+| 4, `work item has no assignee` | nobody's plan to run it on | ask who owns it; assign in Boards |
+| 4, `fleet:auto was not added by the assignee` | someone else tagged it | the assignee removes and re-adds the tag themselves |
+| 4, `no registered … credential` | assignee never ran login | the assignee runs `specclaw-fleet login --agent claude` in a real terminal |
+| 5, `codex slot is busy` | the assignee already has a codex run | retry after it finishes |
 
-A queued run carries this change and agent as pipeline parameters, so it dispatches exactly this change. A change already tagged `fleet:dispatched` or `fleet:refused` is skipped by dispatch. Pass `--retry` to clear both tags.
+`trigger` runs exactly dispatch's gates, in a check-only mode that writes nothing to the work item. A queued run carries this change and agent as pipeline parameters, so it dispatches exactly this change. A change already tagged `fleet:dispatched` or `fleet:refused` is skipped by dispatch. Pass `--retry` to clear both tags.
 
 ## 2. Watch
 

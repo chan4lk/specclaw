@@ -1,0 +1,89 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 3,
+  "minor": 1
+ },
+ "escalated": [],
+ "files": [
+  ".github/workflows/ci.yml",
+  ".github/workflows/fleet-image.yml",
+  "plugins/specclaw-fleet/image/claude-fetch.sh",
+  "plugins/specclaw-fleet/lib/consent.sh",
+  "plugins/specclaw-fleet/lib/dispatch.sh",
+  "plugins/specclaw-fleet/lib/doctor.sh",
+  "plugins/specclaw-fleet/lib/trigger-gates.sh",
+  "plugins/specclaw-fleet/lib/trigger.sh",
+  "plugins/specclaw-fleet/tests/cases/ac16_doctor.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw-fleet/lib/trigger-gates.sh",
+   "fp": "b01de84fa5a7",
+   "in_delta": true,
+   "line": 2,
+   "message": "This is an instance fix. Only the assignee and consent steps now share `gate_owner`. `trigger_gates` still re-implements the rest of the dispatch gate sequence: the credential lookup and its case mapping. It still skips the `codex_busy` check and `already_handled`. It also skips the proposal-approved check and the work-item-id check that `check_gates` makes. The previous round asked to reuse `check_gates` or add the busy check, and the queued path should report refusals instead of `ok:true`. Neither was done. Reuse `check_gates` (parameterised so it does not exit or launch), or move the whole gate sequence, including the busy and already-handled checks, into one shared function that both callers use.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B4",
+   "scenario": "The assignee already has a codex job running (or the work item carries the already-handled tag), and everything else is satisfied. `specclaw-fleet trigger` passes `trigger_gates` and queues the pipeline, reporting success. Dispatch then refuses or skips the change on `codex_busy` / `already_handled`, so trigger reported success for a run that never happens.",
+   "severity": "major"
+  },
+  {
+   "file": ".github/workflows/fleet-image.yml",
+   "fp": "11d6719e7adf",
+   "in_delta": true,
+   "line": 45,
+   "message": "The confirmed-404 match is wrong in both directions. `docker manifest inspect` reports a missing tag as `no such manifest: ...`, which the pattern does not match. The pattern `not found` is also too broad: it matches `docker: command not found` and similar unrelated errors. The guard can therefore fail a genuine first publish, or treat a non-404 failure as proof that the tag is absent. Use `docker buildx imagetools inspect` or the registry HTTP status and match only the exact not-found signals (`manifest unknown`, `no such manifest`, HTTP 404). Treat everything else as a failure.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B3",
+   "scenario": "Tag 1.2.3 has never been published, and `docker manifest inspect` prints `no such manifest: ghcr.io/x:1.2.3`. The grep does not match, so the job fails with 'cannot tell whether ... exists' and the release is blocked. In the opposite case, the docker binary or a plugin is missing and the output is `docker: 'manifest' is not a docker command ... not found`. That matches `not found`, so the guard concludes the tag does not exist and the push proceeds.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/tests/cases/ac16_doctor.sh",
+   "fp": "d90d962a0402",
+   "in_delta": true,
+   "line": 41,
+   "message": "The fixes for the three previous majors have no variant tests. The doctor test covers only one case: skipped > 0 with failed == 0. It does not cover failed > 0 with skipped > 0 (exit 1 and its wording), or several skipped checks. There is no test that `trigger_gates` and `check_gates` agree across the gate outcomes (no tag, no assignee, tagger is not the assignee, history unreadable, busy). The workflow guard has no test for the 404, auth-error and network-error variants. `gate_owner` return codes 10/11/12/13 are never exercised through both callers.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Someone changes `gate_owner`'s order of checks or return codes. Trigger and dispatch drift apart and no test fails. Or the `$failed > 0` branch of doctor loses the 'did not run' count and nothing detects it.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/lib/trigger.sh",
+   "fp": "80c7f479824b",
+   "in_delta": true,
+   "line": 23,
+   "message": "The new `.env` regex silently skips any line it does not match. Examples are a value containing a quote, or a trailing comment or space such as `AZDO_TOKEN=abc # x`, which would be loaded with the comment included. An unparsable line leaves the variable unset with no signal. The parser change has no variant test (export prefix, quotes, comments, CRLF).",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B6",
+   "scenario": "`.env` contains `AZDO_TOKEN='ab\"c'`. The regex does not match, the token is never exported, and the failure surfaces later as an unrelated auth error.",
+   "severity": "minor"
+  }
+ ],
+ "head": "453a3100bafdba8ef27bef7f512ec122ecb5c304",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 21741,
+ "round": 3,
+ "since": "2817322",
+ "status": "open",
+ "system_chars": 8911,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794061930,
+ "ts_start": 1794061901
+}

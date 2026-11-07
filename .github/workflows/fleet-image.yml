@@ -36,13 +36,23 @@ jobs:
           TAG_INPUT: ${{ inputs.tag }}
           CODEX_INPUT: ${{ inputs.codex_version }}
           IMAGE: ghcr.io/${{ github.repository_owner }}/specclaw-fleet
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           tag="${TAG_INPUT:-${GITHUB_REF_NAME#fleet-v}}"; codex="${CODEX_INPUT:-0.167.0}"
           [[ "$tag" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z0-9.]+)?$ ]] || { echo "::error::bad tag: $tag"; exit 1; }
           [[ "$codex" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::bad codex version: $codex"; exit 1; }
-          if out="$(docker manifest inspect "$IMAGE:$tag" 2>&1)"; then echo "::error::$IMAGE:$tag already exists"; exit 1; fi
-          grep -qiE "manifest unknown|not found" <<<"$out" || { echo "::error::cannot tell whether $IMAGE:$tag exists: $out"; exit 1; }
+          repo="${IMAGE#ghcr.io/}"
+          token="$(curl -fsS -u "$GITHUB_ACTOR:$GH_TOKEN" "https://ghcr.io/token?scope=repository:$repo:pull" | jq -r '.token // empty')"
+          [[ -n "$token" ]] || { echo "::error::could not get a GHCR token"; exit 1; }
+          code="$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $token" \
+            -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.v2+json" \
+            "https://ghcr.io/v2/$repo/manifests/$tag")"
+          case "$code" in
+            404) ;;
+            200) echo "::error::$IMAGE:$tag already exists"; exit 1 ;;
+            *) echo "::error::cannot tell whether $IMAGE:$tag exists (HTTP $code)"; exit 1 ;;
+          esac
           { echo "tag=$tag"; echo "codex=$codex"; } >> "$GITHUB_OUTPUT"
       - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:

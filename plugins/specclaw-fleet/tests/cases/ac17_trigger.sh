@@ -23,13 +23,13 @@ reset_env; echo '{"phases":{"proposal":{"status":"draft"}}}' > "$SPECCLAW_DIR/ch
 echo '{"phases":{"proposal":{"status":"approved"}}}' > "$SPECCLAW_DIR/changes/$CHANGE/state.json"; trig; rc=$?
 gate 1 "approve it and push first"
 reset_env; publish; : > "$SPECCLAW_DIR/changes/$CHANGE/status.md"; trig; rc=$?; gate 1 "pass --create"
-reset_env; publish; WI_JSON='{"fields":{"System.Tags":"fleet:auto"}}' trig; rc=$?; gate 1 "has no assignee"
+reset_env; publish; WI_JSON='{"fields":{"System.Tags":"fleet:auto"}}' trig; rc=$?; gate 4 "work item has no assignee"
 reset_env; publish; WI_JSON='{"fields":{"System.AssignedTo":{"uniqueName":"alice@contoso.com"},"System.Tags":"specclaw"}}' trig; rc=$?
-gate 4 "alice@contoso.com must add the fleet:auto tag"
+gate 3 "not opted in (no fleet:auto tag)"
 reset_env; publish; WI_UPDATES='{"value":[{"revisedBy":{"uniqueName":"m@c.com"},"fields":{"System.Tags":{"newValue":"fleet:auto"}}}]}' trig; rc=$?
-gate 4 "must add the fleet:auto tag"
-reset_env; publish; WI_UPDATES=FAIL trig; rc=$?; gate 1 "could not read the work item history"
-reset_env; publish; rm "$KV/claude-token-$H"; trig; rc=$?; gate 1 "specclaw-fleet login --agent claude"
+gate 4 "fleet:auto was not added by the assignee"
+reset_env; publish; WI_UPDATES=FAIL trig; rc=$?; gate 4 "could not read the work item history"
+reset_env; publish; rm "$KV/claude-token-$H"; trig; rc=$?; gate 4 "no registered claude credential"
 
 reset_env; publish; : > "$SPECCLAW_DIR/changes/$CHANGE/status.md"; trig --create; create_rc=$?; create_calls="$(cat "$CALLS")"; create_out="$(cat "$TMP/out")"
 reset_env; publish; trig; queue_rc=$?; queue_out="$(cat "$TMP/out")"; queue_calls="$(cat "$CALLS")"
@@ -37,7 +37,7 @@ reset_env; publish; trig --retry; retry_calls="$(cat "$CALLS")"
 reset_env; publish; trig --direct; direct_rc=$?; direct_out="$(cat "$TMP/out")"; direct_jobs="$(find "$APPLIED" -name '*.yaml' | wc -l | tr -d ' ')"
 creates() { (( create_rc == 3 )) && grep -q "azdo-issue create" <<<"$create_calls" && ! grep -q "pipelines run" <<<"$create_calls" && grep -q "assign it" <<<"$create_out"; }
 queues() {
-  (( queue_rc == 0 )) && jq -e '.mode == "pipeline" and .run == "4242" and .change == "049-x" and .agent == "claude"' <<<"$queue_out" >/dev/null \
+  (( queue_rc == 0 )) && jq -e '.mode == "queued" and .run == "4242" and .change == "049-x" and .agent == "claude"' <<<"$queue_out" >/dev/null \
     && grep -q "pipelines run .*--parameters change=049-x agent=claude" <<<"$queue_calls" && ! grep -q untag <<<"$queue_calls"
 }
 retries() { grep -q "untag .* fleet:dispatched" <<<"$retry_calls" && grep -q "untag .* fleet:refused" <<<"$retry_calls"; }

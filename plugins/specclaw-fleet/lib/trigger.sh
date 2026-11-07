@@ -16,16 +16,8 @@ parse_trigger_args() {
   load_azdo_env
 }
 
-load_azdo_env() {
-  local line
-  [[ -z "${AZDO_ORG:-}" && -f "$SPECCLAW_DIR/.env" ]] || return 0
-  while IFS= read -r line; do
-    [[ "$line" =~ ^(export[[:space:]]+)?(AZDO_ORG|AZDO_PROJECT|AZDO_TOKEN)=[\"\']?([^\"\']*)[\"\']?$ ]] \
-      && export "${BASH_REMATCH[2]}=${BASH_REMATCH[3]}"
-  done < "$SPECCLAW_DIR/.env"
-}
-
 trigger_ref_approved() {
+  [[ -n "${T_CHANGE:-}" ]] || T_CHANGE="$F_CHANGE"
   local remote="${FLEET_REMOTE:-origin}" ref="${FLEET_REF:-main}" root="$SPECCLAW_DIR/.." status
   git -C "$root" fetch -q "$remote" "$ref" 2>/dev/null || die "could not fetch $remote/$ref"
   status="$(git -C "$root" show "FETCH_HEAD:$(basename "$SPECCLAW_DIR")/changes/$T_CHANGE/state.json" 2>/dev/null \
@@ -41,20 +33,35 @@ trigger_work_item() {
   exit 3
 }
 
+trigger_codex_busy() {
+  [[ "$T_AGENT" == codex ]] || return 0
+  local state
+  if ! state="$(kubectl -n "$F_NS" --request-timeout=10s get job "fleet-codex-$F_HASH" -o json 2>&1)"; then
+    grep -q NotFound <<<"$state" && return 0
+    T_BUSY_CHECK="not-run (no cluster access here; dispatch will report)"; return 0
+  fi
+  jq -e '(.status.active // 0) > 0' <<<"$state" >/dev/null && { echo "$T_CHANGE: assignee's codex slot is busy; retry once it finishes" >&2; exit 5; }
+  return 0
+}
+
 fleet_trigger() {
   parse_trigger_args "$@"
-  trigger_ref_approved
-  trigger_work_item
-  trigger_gates
   if (( T_RETRY )); then
     azdo_issue untag "$SPECCLAW_DIR" "$T_CHANGE" fleet:dispatched >&2 || die "could not clear fleet:dispatched"
     azdo_issue untag "$SPECCLAW_DIR" "$T_CHANGE" fleet:refused >&2 || die "could not clear fleet:refused"
   fi
+  trigger_work_item
+  F_CHECK_ONLY=1 T_BUSY_CHECK="done"
+  parse_dispatch_args "$T_CHANGE" --agent "$T_AGENT"
+  check_gates
+  trigger_codex_busy
+  F_CHECK_ONLY=0
   if (( T_DIRECT )); then fleet_dispatch "$T_CHANGE" --agent "$T_AGENT"; return; fi
   local -a a; mapfile -t a < <(azdo_args)
   local run
   run="$(az pipelines run --name "${FLEET_PIPELINE:-specclaw-fleet}" --branch "${FLEET_REF:-main}" "${a[@]}" \
     --parameters "change=$T_CHANGE" "agent=$T_AGENT" --query id -o tsv)" || die "$T_CHANGE: could not queue pipeline ${FLEET_PIPELINE:-specclaw-fleet}"
-  jq -nc --arg r "$run" --arg w "$(work_item_id "$T_CHANGE")" --arg c "$T_CHANGE" --arg a "$T_AGENT" \
-    '{ok: true, mode: "pipeline", run: $r, change: $c, agent: $a, work_item: $w}'
+  jq -nc --arg r "$run" --arg w "$(work_item_id "$T_CHANGE")" --arg c "$T_CHANGE" --arg a "$T_AGENT" --arg b "$T_BUSY_CHECK" \
+    '{ok: true, mode: "queued", run: $r, change: $c, agent: $a, work_item: $w, codex_busy_check: $b,
+      note: "gates passed here; the dispatch outcome is recorded on the work item"}'
 }
