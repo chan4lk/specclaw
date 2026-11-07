@@ -1,6 +1,7 @@
 # shellcheck shell=bash disable=SC2034
 export SPECCLAW_DIR="$TMP/repo/.specclaw" APPLIED="$TMP/applied" CLAIMS="$TMP/claims" CHANGE="049-x"
 export WI_JSON='{"fields":{"System.AssignedTo":{"uniqueName":"Alice@Contoso.com"},"System.Tags":"specclaw; fleet:auto"}}'
+export WI_UPDATES='{"value":[{"revisedBy":{"uniqueName":"alice@contoso.com"},"fields":{"System.Tags":{"oldValue":"specclaw","newValue":"specclaw; Fleet:Auto"}}}]}'
 CANARY="sk-ant-oat01-DISPATCH-CANARY"
 H="$(hash_of alice@contoso.com)"
 
@@ -8,6 +9,7 @@ reset_env() {
   rm -rf "$TMP/repo" "$APPLIED" "$KV" "$CLAIMS"
   mkdir -p "$SPECCLAW_DIR/changes/$CHANGE" "$APPLIED" "$KV" "$CLAIMS"
   git -C "$TMP/repo" init -q && git -C "$TMP/repo" remote add origin https://user:pat@dev.azure.com/o/p/_git/r
+  git -C "$TMP/repo" -c user.name=t -c user.email=t@t commit -q --allow-empty -m base
   printf 'fleet:\n  vault: v\n' > "$SPECCLAW_DIR/config.yaml"
   echo '{"phases":{"proposal":{"status":"approved"}}}' > "$SPECCLAW_DIR/changes/$CHANGE/state.json"
   printf '**Azure Boards Work Item:** [#42](https://x)\n' > "$SPECCLAW_DIR/changes/$CHANGE/status.md"
@@ -18,7 +20,7 @@ reset_env() {
 
 stub_cluster() {
   stub_az
-  stub specclaw-azdo-issue '[[ "$1" == show ]] && echo "$WI_JSON"; exit 0'
+  stub specclaw-azdo-issue '[[ "$1" == show ]] && echo "$WI_JSON"; [[ "$1" == updates ]] && echo "$WI_UPDATES"; exit 0'
   stub kubectl '
 claim="$CLAIMS/claim-$5"
 case "$*" in
@@ -28,9 +30,11 @@ case "$*" in
     echo "uid-$$-$RANDOM" > "$CLAIMS/claim-$name/uid"; echo "{\"active\":1}" > "$CLAIMS/claim-$name/status"
     printf "%s\\n" "$doc" > "$APPLIED/$(date +%s)-$name.yaml" ;;
   "delete --raw "*)
+    [[ -n "${DELETE_ERR:-}" ]] && { echo "$DELETE_ERR" >&2; exit 1; }
     claim="$CLAIMS/claim-${3##*/}"
     [[ -n "${SWAP_BEFORE_DELETE:-}" ]] && { echo new-uid > "$claim/uid"; echo "{\"active\":1}" > "$claim/status"; }
-    [[ -f "$claim/uid" && "$(cat "$claim/uid")" == "$(jq -r .preconditions.uid "$5")" ]] || exit 1
+    [[ -f "$claim/uid" && "$(cat "$claim/uid")" == "$(jq -r .preconditions.uid "$5")" ]] \
+      || { echo "Error from server (Conflict): Precondition failed: UID in precondition" >&2; exit 1; }
     rm -rf "$claim" ;;
   *" get job "*" -o json") [[ -n "${GET_ERR:-}" ]] && { echo "$GET_ERR" >&2; exit 1; }
     [[ -d "$claim" ]] || { echo "Error from server (NotFound): jobs $5" >&2; exit 1; }

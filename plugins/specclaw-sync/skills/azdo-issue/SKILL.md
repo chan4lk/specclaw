@@ -40,9 +40,10 @@ specclaw-azdo-issue link-pr .specclaw <change> <project_id> <repo_id> <pr_id>
 ```
 Called automatically by `/specclaw-sync:pr-azdo`; rarely invoked directly.
 
-**Print the Work Item JSON:**
+**Print the Work Item JSON, or its revision history:**
 ```bash
 specclaw-azdo-issue show .specclaw <change>
+specclaw-azdo-issue updates .specclaw <change>
 ```
 
 **Record run fields (used by specclaw-fleet):**

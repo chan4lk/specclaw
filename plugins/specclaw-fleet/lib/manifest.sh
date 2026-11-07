@@ -36,6 +36,9 @@ spec:
             - {name: FLEET_REPO_URL, value: $(yaml_str "$F_REPO")}
             - {name: FLEET_WORK_ITEM, value: "$F_WI"}
             - {name: FLEET_AGENT_TIMEOUT, value: "$F_DEADLINE"}
+            - {name: FLEET_COMMIT, value: "$F_COMMIT"}
+            - {name: FLEET_AZDO_CONFIG, value: $(yaml_str "$F_AZDO_CONFIG")}
+            - {name: TMPDIR, value: /tmp}
             - {name: HTTPS_PROXY, value: "http://fleet-egress.specclaw-fleet-egress:3128"}
             - {name: HTTP_PROXY, value: "http://fleet-egress.specclaw-fleet-egress:3128"}
             - {name: NO_PROXY, value: "localhost,127.0.0.1"}
@@ -44,6 +47,8 @@ spec:
             - {name: home, mountPath: /home/agent}
             - {name: status, mountPath: /fleet/status}
             - {name: cred, mountPath: /run/fleet, readOnly: true}
+            - {name: codex, mountPath: /fleet/codex}
+            - {name: tmp, mountPath: /tmp}
       containers:
         - name: writeback
           image: $F_IMAGE
@@ -54,14 +59,19 @@ spec:
             - {name: FLEET_AGENT, value: $F_AGENT}
             - {name: FLEET_VAULT, value: $(yaml_str "$F_VAULT")}
             - {name: FLEET_SECRET, value: $(yaml_str "$F_SECRET")}
+            - {name: HOME, value: /fleet/wbhome}
             - {name: HTTPS_PROXY, value: "http://fleet-egress.specclaw-fleet-egress:3128"}
           volumeMounts:
-            - {name: home, mountPath: /home/agent}
-            - {name: status, mountPath: /fleet/status}
+            - {name: codex, mountPath: /fleet/codex, readOnly: true}
+            - {name: status, mountPath: /fleet/status, readOnly: true}
+            - {name: wbhome, mountPath: /fleet/wbhome}
       volumes:
         - {name: work, emptyDir: {}}
         - {name: home, emptyDir: {}}
         - {name: status, emptyDir: {}}
+        - {name: codex, emptyDir: {}}
+        - {name: tmp, emptyDir: {}}
+        - {name: wbhome, emptyDir: {}}
         - {name: cred, secret: {secretName: $F_SECRET_OBJ}}
 YAML
 }

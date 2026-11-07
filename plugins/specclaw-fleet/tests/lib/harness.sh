@@ -37,8 +37,8 @@ case "$1 $2 $3" in
     cat "$KV/$name" ;;
   "keyvault secret set")
     if [[ -n "$(arg --file "$@")" ]]; then cp "$(arg --file "$@")" "$KV/$name"; else arg --value "$@" > "$KV/$name"; fi ;;
-  "role assignment list") grep -qxF "$scope" "$KV/ra" 2>/dev/null && echo ra-id ;;
-  "role assignment create") echo "$scope" >> "$KV/ra" ;;
+  "role assignment list") grep -qxF "$(arg --assignee "$@") $scope" "$KV/ra" 2>/dev/null && echo ra-id ;;
+  "role assignment create") echo "$(arg --assignee "$@") $scope" >> "$KV/ra" ;;
   "account show "*) echo "$AZ_UPN" ;;
 esac'
 }

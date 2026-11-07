@@ -18,7 +18,7 @@ RUN test -n "$CLAUDE_CODE_VERSION" && test -n "$CODEX_VERSION" \
 COPY .claude-plugin /opt/specclaw/.claude-plugin
 COPY .agents /opt/specclaw/.agents
 COPY plugins /opt/specclaw/plugins
-COPY plugins/specclaw-fleet/image/entrypoint.sh plugins/specclaw-fleet/image/writeback.sh /opt/fleet/
+COPY plugins/specclaw-fleet/image/entrypoint.sh plugins/specclaw-fleet/image/writeback.sh plugins/specclaw-fleet/image/tracker.sh /opt/fleet/
 
 ENV HOME=/home/agent \
     PATH="/opt/specclaw/plugins/specclaw/bin:/opt/specclaw/plugins/specclaw-sync/bin:/opt/specclaw/plugins/specclaw-extras/bin:/opt/specclaw/plugins/specclaw-review/bin:${PATH}"

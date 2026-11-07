@@ -7,23 +7,13 @@ WORK="${FLEET_WORK:-/fleet/work}"
 CRED="${FLEET_CRED:-/run/fleet/credential}"
 SEED="${FLEET_SEED:-/opt/fleet/home-seed}"
 REPO="$WORK/repo"
+CODEX_DIR="${FLEET_CODEX_HOME:-/fleet/codex}"
 PROMPT="Run the specclaw lifecycle headless for change $FLEET_CHANGE. Use the specclaw skills in order: plan (only if the change has no tasks yet), build, verify, then the specclaw-sync pr-azdo skill. Nobody is watching: never ask a question. If a phase fails, stop and report why."
 agent_pid=""
+# shellcheck source=tracker.sh
+source "$(dirname "${BASH_SOURCE[0]}")/tracker.sh"
 
 finish() { printf '%s\n' "$1" > "$STATUS/exit"; exit 0; }
-
-tracker_dir() {
-  local dir="$WORK/fallback/.specclaw"
-  if [[ -d "$REPO/.specclaw/changes/$FLEET_CHANGE" ]]; then printf '%s' "$REPO/.specclaw"; return 0; fi
-  mkdir -p "$dir/changes/$FLEET_CHANGE"
-  printf '**Azure Boards Work Item:** [#%s](fleet)\n' "${FLEET_WORK_ITEM:-0}" > "$dir/changes/$FLEET_CHANGE/status.md"
-  printf '%s' "$dir"
-}
-
-record() {
-  specclaw-azdo-issue fields "$(tracker_dir)" "$FLEET_CHANGE" "$@" >/dev/null 2>&1 \
-    || echo "WARNING: work item update failed: $*" >&2
-}
 
 on_term() {
   [[ -n "$agent_pid" ]] && kill "$agent_pid" 2>/dev/null
@@ -39,11 +29,12 @@ clone() {
 }
 
 seed_codex() {
-  mkdir -p "$HOME/.codex"
-  cp "$CRED" "$HOME/.codex/auth.json"
-  grep -q cli_auth_credentials_store "$HOME/.codex/config.toml" 2>/dev/null \
-    || printf 'cli_auth_credentials_store = "file"\n' >> "$HOME/.codex/config.toml"
-  sha256sum "$HOME/.codex/auth.json" | cut -d' ' -f1 > "$STATUS/seed.sha"
+  mkdir -p "$CODEX_DIR"
+  cp -a "$SEED/.codex/." "$CODEX_DIR/" 2>/dev/null || true
+  cp "$CRED" "$CODEX_DIR/auth.json"
+  grep -q cli_auth_credentials_store "$CODEX_DIR/config.toml" 2>/dev/null \
+    || printf 'cli_auth_credentials_store = "file"\n' >> "$CODEX_DIR/config.toml"
+  sha256sum "$CODEX_DIR/auth.json" | cut -d' ' -f1 > "$STATUS/seed.sha"
 }
 
 run_agent() {
@@ -55,7 +46,7 @@ run_agent() {
       ;;
     codex)
       seed_codex
-      CODEX_HOME="$HOME/.codex" \
+      CODEX_HOME="$CODEX_DIR" \
         codex exec --dangerously-bypass-approvals-and-sandbox "$PROMPT" > "$STATUS/agent.log" 2>&1 &
       ;;
     *) return 2 ;;
@@ -69,7 +60,11 @@ run_agent() {
 }
 
 clone || { record state=failed exit=clone-failed; finish 2; }
-record state=running
+if [[ -n "${FLEET_COMMIT:-}" ]] && ! git -C "$REPO" merge-base --is-ancestor "$FLEET_COMMIT" HEAD; then
+  record state=failed exit=commit-not-on-ref "commit=$FLEET_COMMIT"
+  finish 2
+fi
+record state=running "commit=$(git -C "$REPO" rev-parse HEAD)"
 cd "$REPO" || finish 2
 run_agent
 rc=$?

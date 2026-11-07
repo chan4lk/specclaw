@@ -24,7 +24,7 @@ pool:
 
 steps:
   - checkout: self
-    fetchDepth: 2
+    fetchDepth: 0
   - task: Kubernetes@1
     displayName: kubectl login
     inputs:
@@ -43,16 +43,23 @@ steps:
         status_at() {
           git show "$1:$2" | jq -er 'if type == "object" then (.phases.proposal.status // "none") else error("not an object") end'
         }
+        base_commit() {
+          [[ -n "${SYSTEM_ACCESSTOKEN:-}" ]] || { echo HEAD^1; return 0; }
+          curl -sf -H "Authorization: Bearer $SYSTEM_ACCESSTOKEN" \
+            "${SYSTEM_COLLECTIONURI}${SYSTEM_TEAMPROJECTID}/_apis/build/builds?definitions=${SYSTEM_DEFINITIONID}&branchName=${BUILD_SOURCEBRANCH}&resultFilter=succeeded&\$top=1&api-version=7.1" \
+            | jq -er '.value[0].sourceVersion // "HEAD^1"'
+        }
+        base="$(base_commit)" || { echo "##vso[task.logissue type=error]could not read the last successful run"; exit 1; }
         unreadable() { echo "##vso[task.logissue type=error]could not read proposal status from $1"; failed=1; }
         failed=0
         changed="$AGENT_TEMPDIRECTORY/fleet-changed"
-        git diff -z --no-renames --name-status HEAD^1 HEAD -- '.specclaw/changes/*/state.json' > "$changed" \
+        git diff -z --no-renames --name-status "$base" HEAD -- '.specclaw/changes/*/state.json' > "$changed" \
           || { echo "##vso[task.logissue type=error]could not list changed state files"; exit 1; }
         while IFS= read -r -d '' kind && IFS= read -r -d '' f; do
           case "$kind" in
             D) continue ;;
             A) before=absent ;;
-            *) before="$(status_at HEAD^1 "$f")" || { unreadable "$f"; continue; } ;;
+            *) before="$(status_at "$base" "$f")" || { unreadable "$f"; continue; } ;;
           esac
           now="$(status_at HEAD "$f")" || { unreadable "$f"; continue; }
           [[ "$now" == approved && "$before" != approved ]] || continue
@@ -61,6 +68,7 @@ steps:
         exit "$failed"
     env:
       AZDO_TOKEN: $(System.AccessToken)
+      SYSTEM_ACCESSTOKEN: $(System.AccessToken)
       AZDO_PROJECT: $(System.TeamProject)
       BUILD_REQUESTEDFOR: $(Build.RequestedFor)
       BUILD_REQUESTEDFOREMAIL: $(Build.RequestedForEmail)

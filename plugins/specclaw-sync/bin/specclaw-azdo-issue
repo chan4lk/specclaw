@@ -8,6 +8,7 @@
 #   specclaw-azdo-issue close    <specclaw_dir> <change>
 #   specclaw-azdo-issue link-pr  <specclaw_dir> <change> <project_id> <repo_id> <pr_id>
 #   specclaw-azdo-issue show     <specclaw_dir> <change>
+#   specclaw-azdo-issue updates  <specclaw_dir> <change>
 #   specclaw-azdo-issue fields   <specclaw_dir> <change> key=value...
 #
 # `fields` writes only keys mapped under azdo.fleet_fields.<key> (and `state`
@@ -389,6 +390,14 @@ cmd_show() {
   ado_get "wit/workitems/${wi_id}?api-version=7.1" || die "ADO read failed for Work Item #${wi_id}"
 }
 
+cmd_updates() {
+  require_creds
+  local wi_id
+  wi_id="$(existing_wi_id)"
+  [[ -n "$wi_id" ]] || die "No Work Item for this change — run specclaw-azdo-issue create first"
+  ado_get "wit/workitems/${wi_id}/updates?api-version=7.1" || die "ADO read failed for Work Item #${wi_id} updates"
+}
+
 fleet_field_ref() {
   local key="$1" val="$2"
   if [[ "$key" == state ]]; then
@@ -442,6 +451,7 @@ case "$SUBCMD" in
   close)   cmd_close   "$@" ;;
   link-pr) cmd_link_pr "$@" ;;
   show)    cmd_show    "$@" ;;
+  updates) cmd_updates "$@" ;;
   fields)  cmd_fields  "$@" ;;
   *) die "Unknown subcommand: $SUBCMD. Run with --help for usage." ;;
 esac

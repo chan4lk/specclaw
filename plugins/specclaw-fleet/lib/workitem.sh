@@ -29,14 +29,31 @@ lower() {
   printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
 }
 
-consented() {
-  local assignee="$1" requester="${BUILD_REQUESTEDFOREMAIL:-}" tag
+has_auto_tag() {
+  local tag
   local -a tags=()
-  IFS=';' read -ra tags <<<"$2"
+  IFS=';' read -ra tags <<<"$1"
   for tag in "${tags[@]}"; do
     tag="${tag#"${tag%%[![:space:]]*}"}"
-    [[ "${tag%"${tag##*[![:space:]]}"}" == fleet:auto ]] && return 0
+    [[ "$(lower "${tag%"${tag##*[![:space:]]}"}")" == fleet:auto ]] && return 0
   done
+  return 1
+}
+
+auto_tagged_by() {
+  azdo_issue updates "$SPECCLAW_DIR" "$F_CHANGE" | jq -r '
+    def auto: ascii_downcase | split(";") | map(gsub("^\\s+|\\s+$"; "")) | index("fleet:auto") != null;
+    [.value[] | .fields["System.Tags"]? as $t | select($t != null)
+      | select(($t.newValue // "" | auto) and (($t.oldValue // "" | auto) | not))]
+    | last | .revisedBy.uniqueName // empty'
+}
+
+consented() {
+  local assignee="$1" requester="${BUILD_REQUESTEDFOREMAIL:-}" tagger
+  if has_auto_tag "$2"; then
+    tagger="$(auto_tagged_by)" || die "$F_CHANGE: could not read the work item history"
+    [[ "$(lower "$tagger")" == "$(lower "$assignee")" ]] && return 0
+  fi
   [[ -n "$requester" && "$(lower "$requester")" == "$(lower "$assignee")" ]]
 }
 

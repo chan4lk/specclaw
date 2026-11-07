@@ -28,6 +28,11 @@ done
 reset_env; race; race_empty=$?
 reset_env; seed_codex_job '{"succeeded":1}'; race; race_finished=$?
 reset_env; seed_codex_job '{"active":1}'; dispatch --agent claude; claude_rc=$? claude_calls="$(cat "$CALLS")"
+delete_errors_surface=1
+for err in "Error from server (Forbidden): cannot delete" "Unable to connect to the server: dial tcp" "Error from server: i/o timeout"; do
+  reset_env; seed_codex_job '{"succeeded":1}'; DELETE_ERR="$err" dispatch --agent codex && delete_errors_surface=0
+  grep -q "could not replace finished Job" "$TMP/out" && ! grep -q "unfinished codex job" "$TMP/out" || delete_errors_surface=0
+done
 read_errors_refused=1
 for err in "Error from server (Forbidden): jobs is forbidden" "Unable to connect to the server: dial tcp 10.0.0.1:6443" "Error from server: i/o timeout"; do
   reset_env; GET_ERR="$err" dispatch --agent codex && read_errors_refused=0
@@ -43,6 +48,8 @@ check "AC6 codex refused while active; replaced once finished (succeeded, failed
 check "AC6 a newer run created between read and delete is never deleted (UID precondition)" newer_run_survives
 check "AC6 two concurrent codex dispatches, from empty and from a finished Job: exactly one wins" single_winner
 fail_closed() { (( read_errors_refused == 1 )); }
+delete_fail_closed() { (( delete_errors_surface == 1 )); }
+check "AC6 a delete error other than a UID conflict surfaces the real error" delete_fail_closed
 check "AC6 a Job read error other than NotFound refuses and creates nothing" fail_closed
 check "AC6 claude never refused for concurrency" claude_unbounded
 finish

@@ -26,7 +26,8 @@ A new add-on plugin, `plugins/specclaw-fleet/`. An approved specclaw change is r
 - **FR-2 Onboard (admin).** `specclaw-fleet onboard <upn> --vault <name>`:
   - creates placeholder secrets `claude-token-<h>` and `codex-auth-<h>` when they are missing;
   - assigns `Key Vault Secrets Officer` to that user at each secret's own scope, never at vault scope;
-  - is idempotent.
+  - with `--writer <object-id>` (or `fleet.vault_writer`), also grants the write-back service principal `Key Vault Secrets Officer` on that user's `codex-auth-<h>` only;
+  - is idempotent, and writes the placeholder only when the secret is `SecretNotFound`.
 - **FR-3 Login (user).** `specclaw-fleet login --agent claude|codex --vault <name>`:
   - derives `<h>` from the caller's own `az` identity;
   - **claude:** runs `claude setup-token` and stores the printed token as a new version of `claude-token-<h>`;
@@ -36,7 +37,7 @@ A new add-on plugin, `plugins/specclaw-fleet/`. An approved specclaw change is r
   - (a) the change's proposal phase is not approved;
   - (b) the change has no work item;
   - (c) the work item has no assignee;
-  - (d) **consent is missing:** the work item lacks the `fleet:auto` tag, and the requester is not the assignee;
+  - (d) **consent is missing:** no `fleet:auto` tag (case-insensitive) added by the assignee according to the work-item history, and the requester is not the assignee;
   - (e) the assignee has no usable credential for the chosen agent, meaning the secret is missing, empty, or still a placeholder. A vault read error is refused separately, as a vault problem;
   - (f) `--agent codex` is chosen while that assignee already has an unfinished codex Job. The codex Job name `fleet-codex-<h>` is the atomic claim: the API refuses a duplicate, and a finished one is replaced by a delete carrying a UID precondition.
 
@@ -59,7 +60,7 @@ A new add-on plugin, `plugins/specclaw-fleet/`. An approved specclaw change is r
   5. sets `PR Open` when the change's `state.json` records a PR URL, otherwise `Failed`, and records the exit status.
 
   The agent step always exits 0 and writes its real status to a shared file, so the follow-on step runs even after a failed run.
-- **FR-7 Codex write-back.** After a codex run, a separate container writes the refreshed `auth.json` back to `codex-auth-<h>`, and only when its sha256 differs from the original.
+- **FR-7 Codex write-back.** After a codex run, a separate container writes the refreshed `auth.json` back to `codex-auth-<h>`. It does so only when its sha256 differs from the original, the file is a regular file (not a symlink), and it holds `tokens.refresh_token`. The container has its own HOME, mounts the codex directory read-only and calls `curl -q`.
   - It holds the vault credential. That credential is mounted into this container only.
   - It never runs for claude.
   - It exits with the agent's recorded status, so the Job's success or failure is truthful.

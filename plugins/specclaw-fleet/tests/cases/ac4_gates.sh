@@ -26,6 +26,17 @@ for tags in "fleet:autox" "specclaw" "auto; fleet"; do
   check "AC4d no consent (tags '$tags') refused and marked Failed" refused_and_failed
 done
 
+for who in mallory@contoso.com ""; do
+  reset_env; WI_UPDATES="{\"value\":[{\"revisedBy\":{\"uniqueName\":\"$who\"},\"fields\":{\"System.Tags\":{\"oldValue\":\"\",\"newValue\":\"fleet:auto\"}}}]}" \
+    dispatch; rc=$?
+  check "AC4d fleet:auto added by '${who:-unknown}', not the assignee, refused" refused_and_failed
+done
+accepted() { (( rc == 0 )); }
+for tag in Fleet:Auto FLEET:AUTO " fleet:auto "; do
+  reset_env; WI_JSON="{\"fields\":{\"System.AssignedTo\":{\"uniqueName\":\"Alice@Contoso.com\"},\"System.Tags\":\"x;$tag\"}}" dispatch; rc=$?
+  check "AC4d tag '$tag' added by the assignee is consent (case-insensitive)" accepted
+done
+
 reset_env; echo __unset__ > "$KV/claude-token-$H"
 dispatch; rc=$?; check "AC4e placeholder credential refused as unregistered" failed_unregistered
 reset_env; rm "$KV/claude-token-$H"

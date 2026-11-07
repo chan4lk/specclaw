@@ -51,6 +51,8 @@ fleet_dispatch() {
   F_WI="$(work_item_id "$F_CHANGE")"
   F_LABEL="$(label_value "$F_CHANGE")"
   F_REPO="$(git -C "$SPECCLAW_DIR/.." remote get-url origin | sed -E 's#://[^@/]+@#://#')"
+  F_COMMIT="$(git -C "$SPECCLAW_DIR/.." rev-parse HEAD)" || die "Could not resolve the dispatched commit"
+  F_AZDO_CONFIG="$(cfg_block azdo)"
   if (( F_DRY_RUN )); then
     render_job
     echo ---

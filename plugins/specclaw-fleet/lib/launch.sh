@@ -35,7 +35,10 @@ claim_codex_slot() {
 delete_job_if_uid() {
   jq -nc --arg u "$1" '{kind: "DeleteOptions", apiVersion: "v1", propagationPolicy: "Background", preconditions: {uid: $u}}' \
     > "$FLEET_TMPDIR/delete.json"
-  kubectl delete --raw "/apis/batch/v1/namespaces/$F_NS/jobs/$F_JOB" -f "$FLEET_TMPDIR/delete.json" >/dev/null 2>&1 || true
+  local err="$FLEET_TMPDIR/delete.err"
+  kubectl delete --raw "/apis/batch/v1/namespaces/$F_NS/jobs/$F_JOB" -f "$FLEET_TMPDIR/delete.json" >/dev/null 2>"$err" && return 0
+  grep -Eq 'Precondition failed|NotFound' "$err" && return 0
+  die "$F_CHANGE: could not replace finished Job $F_JOB: $(head -n1 "$err")"
 }
 
 create_job() {
@@ -60,10 +63,10 @@ create_manifests() {
 launch_job() {
   create_manifests
   local attempt cluster
-  attempt="$(kubectl -n "$F_NS" get jobs -l "specclaw.fleet/change=$F_LABEL" -o name | wc -l | tr -d ' ')"
+  attempt="$(kubectl -n "$F_NS" get jobs -l "specclaw.fleet/change=$F_LABEL" -o name | wc -l | tr -d ' ')" || attempt=unknown
   cluster="$(kubectl config current-context 2>/dev/null || echo unknown)"
   record_run "$F_CHANGE" "agent=$F_AGENT" "job=$F_JOB" "cluster=$cluster" \
     "branch=$(cfg_val git.branch_prefix specclaw/)$F_CHANGE" "attempt=$attempt" \
-    "requested_by=${BUILD_REQUESTEDFOR:-${USER:-unknown}}" state=dispatched
+    "requested_by=${BUILD_REQUESTEDFOR:-${USER:-unknown}}" "commit=$F_COMMIT" state=dispatched
   jq -nc --arg j "$F_JOB" --arg a "$F_AGENT" --arg w "$F_WI" '{ok: true, job: $j, agent: $a, work_item: $w}'
 }

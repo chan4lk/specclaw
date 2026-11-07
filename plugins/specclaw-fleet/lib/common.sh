@@ -28,9 +28,11 @@ secret_name() {
 
 cfg_val() {
   local value
-  value="$(python3 - "$SPECCLAW_DIR/config.yaml" "$1" <<'PY' 2>/dev/null || true
-import re, sys
+  value="$(python3 - "$SPECCLAW_DIR/config.yaml" "$1" <<'PY'
+import os, re, sys
 path, (section, key) = sys.argv[1], sys.argv[2].split(".", 1)
+if not os.path.exists(path):
+    sys.exit(0)
 current = None
 for line in open(path):
     if re.match(r"^[A-Za-z_]", line):
@@ -41,6 +43,11 @@ for line in open(path):
             print(m.group(1).strip("\"'"))
             break
 PY
-)"
+)" || die "Could not read $SPECCLAW_DIR/config.yaml (python3 is required)"
   printf '%s' "${value:-$2}"
+}
+
+cfg_block() {
+  [[ -f "$SPECCLAW_DIR/config.yaml" ]] || return 0
+  awk -v head="$1:" '$0 == head { on = 1; print; next } on && /^[^[:space:]#]/ { exit } on { print }' "$SPECCLAW_DIR/config.yaml"
 }

@@ -23,7 +23,8 @@ AzDO pipeline ── specclaw-fleet dispatch ──▶ Job (agent initContainer 
 > **Security.** Code running in the pod can read the mounted token and the AzDO PAT. That includes code steered by prompt injection from repo content. The mitigations:
 > - the egress allowlist;
 > - the per-Job Secret is deleted with the Job;
-> - the vault writer credential exists only in the write-back container, which starts after the agent has exited;
+> - the vault writer credential exists only in the write-back container. That container starts after the agent has exited, has its own empty HOME, mounts the codex directory read-only, calls `curl -q` so no `.curlrc` is read, and refuses an `auth.json` that is a symlink;
+> - the writer service principal holds `Key Vault Secrets Officer` per secret, on each onboarded user's `codex-auth-<h>` only, never on the vault;
 > - quick revoke and re-register (`specclaw-fleet login`).
 >
 > Rotate a token you suspect was exposed.
@@ -31,7 +32,7 @@ AzDO pipeline ── specclaw-fleet dispatch ──▶ Job (agent initContainer 
 ## Consent
 
 Assigning a work item to someone must not spend their plan without their say. Dispatch runs only when one of these holds:
-- the work item carries the tag `fleet:auto`, set by the assignee;
+- the work item carries the tag `fleet:auto` (any case), and the work-item history shows that the assignee added it. A tag added by anyone else is not consent;
 - the person who triggered the pipeline (`Build.RequestedForEmail`) is the assignee.
 
 ## Setup
@@ -45,7 +46,7 @@ Assigning a work item to someone must not spend their plan without their say. Di
    `specclaw-fleet` enforces Pod Security `restricted`, which fleet Jobs meet. Squid needs `SETUID`/`SETGID` to drop to its proxy user, so it runs in its own `specclaw-fleet-egress` namespace under `baseline`. That namespace holds no fleet Secrets. Pin `ubuntu/squid` by digest before production use.
 2. **Secrets in the namespace.**
    - `fleet-azdo` holds `AZDO_TOKEN`, `AZDO_ORG` and `AZDO_PROJECT`. Use a PAT scoped to Code (read & write), Work Items (read & write) and Pull Request Threads.
-   - `fleet-vault-writer` holds `AZURE_TENANT_ID`, `AZURE_CLIENT_ID` and `AZURE_CLIENT_SECRET`, for a service principal that may set `codex-auth-*` secrets.
+   - `fleet-vault-writer` holds `AZURE_TENANT_ID`, `AZURE_CLIENT_ID` and `AZURE_CLIENT_SECRET`, for a service principal. Do not grant it a vault-wide role. `onboard --writer <its object id>` grants it each user's `codex-auth-<h>` secret individually.
 3. **Image.**
    ```bash
    docker build -f plugins/specclaw-fleet/image/Dockerfile \
@@ -54,7 +55,7 @@ Assigning a work item to someone must not spend their plan without their say. Di
    Set `fleet.image` to that tag. On the first build, check that the `claude plugin install` and `codex plugin marketplace add` steps succeed; their syntax has not been tested against a live image yet.
 4. **Onboard each user** (admin):
    ```bash
-   specclaw-fleet onboard alice@contoso.com --vault <name>
+   specclaw-fleet onboard alice@contoso.com --vault <name> --writer <writer-sp-object-id>
    ```
    Then **each user** runs, themselves:
    ```bash
@@ -84,18 +85,20 @@ Assigning a work item to someone must not spend their plan without their say. Di
      namespace: specclaw-fleet
      deadline_minutes: 120
    ```
-6. **Pipeline.** Use `pipelines/dispatch.yml`. It runs on `main` when a change's `state.json` changes, and dispatches only changes whose proposal flipped to approved in that commit. The pipeline agent needs `az`, `kubectl`, `jq`, and `specclaw-fleet` plus `specclaw-azdo-issue` on `PATH`.
+6. **Pipeline.** Use `pipelines/dispatch.yml`. It runs on `main` when a change's `state.json` changes. It compares against the commit of the pipeline's last successful run, falling back to the parent commit on the first run, so an approval anywhere in a multi-commit push is seen. It dispatches only changes whose proposal became approved in that range. Any read failure fails the step. The pipeline agent needs `az`, `kubectl`, `jq`, `python3`, and `specclaw-fleet` plus `specclaw-azdo-issue` on `PATH`. Grant the build service identity read access to builds.
+
+   **Which commit is built.** Dispatch records the commit that triggered it, and the pod checks that commit is an ancestor of the ref it clones before running. The agent builds on the ref's tip, so the base is fresh and still contains the approval. The work item records both commits.
 
 ## Egress hosts
 
 The proxy allows CONNECT on port 443 to:
 - `api.anthropic.com`, `downloads.claude.ai`
-- `api.openai.com`, `auth.openai.com`, `chatgpt.com`
-- `dev.azure.com`, `*.visualstudio.com`
+- `api.openai.com`, `auth.openai.com`, `chatgpt.com`, `*.chatgpt.com`
+- `dev.azure.com`, `*.dev.azure.com`, `*.visualstudio.com`
 - `login.microsoftonline.com`, `*.vault.azure.net`
 - `registry.npmjs.org`
 
-The full list of hosts Codex needs for its token refresh is not yet confirmed. Run one codex job, then check `kubectl -n specclaw-fleet logs deploy/fleet-egress` for `TCP_DENIED` lines and add the hosts that are missing.
+The full list of hosts Codex needs for its token refresh is not yet confirmed. Run one codex job, then check `kubectl -n specclaw-fleet-egress logs deploy/fleet-egress` for `TCP_DENIED` lines and add the hosts that are missing.
 
 ## Assumptions and known limits
 

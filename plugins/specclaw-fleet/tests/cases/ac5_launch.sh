@@ -25,7 +25,7 @@ job_hardened() {
     && grep -q "readOnlyRootFilesystem: true" "$job" && grep -q "backoffLimit: 0" "$job"
 }
 work_item_and_output() {
-  grep -q "fields .*agent=claude .*cluster=k3s-a .*requested_by=Alice A state=dispatched" "$CALLS" \
+  grep -q "fields .*agent=claude .*cluster=k3s-a .*requested_by=Alice A commit=[0-9a-f]\{40\} state=dispatched" "$CALLS" \
     && jq -e '.ok == true and .agent == "claude" and .work_item == "42"' "$TMP/out" >/dev/null
 }
 no_secret_leak() { ! grep -q "$CANARY" "$TMP/out" "$job" && ! grep -q "user:pat" "$job"; }
