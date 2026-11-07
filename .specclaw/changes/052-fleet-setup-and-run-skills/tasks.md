@@ -30,7 +30,7 @@
 
 ### Wave 3 — skills and docs
 
-- [ ] `T6` — setup and run skills; README (AC-10)
+- [x] `T6` — setup and run skills; README (AC-10)
   - Files: plugins/specclaw-fleet/skills/setup/SKILL.md, plugins/specclaw-fleet/skills/run/SKILL.md, plugins/specclaw-fleet/README.md
   - Kind: docs
   - Depends: T1, T3, T4, T5
