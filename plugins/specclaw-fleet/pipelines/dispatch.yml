@@ -6,6 +6,7 @@ variables:
   fleetNamespace: specclaw-fleet
   fleetDeadlineMinutes: "120"
   fleetDefaultAgent: claude
+  fleetClaudeVersion: "2.1.319"
 
 trigger:
   batch: true
@@ -63,4 +64,5 @@ steps:
       FLEET_NAMESPACE: $(fleetNamespace)
       FLEET_DEADLINE_MINUTES: $(fleetDeadlineMinutes)
       FLEET_DEFAULT_AGENT: $(fleetDefaultAgent)
+      FLEET_CLAUDE_VERSION: $(fleetClaudeVersion)
       FLEET_REF: $(Build.SourceBranchName)

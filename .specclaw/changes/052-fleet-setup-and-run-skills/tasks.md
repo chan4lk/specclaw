@@ -17,7 +17,7 @@
 
 ### Wave 2 — delivery
 
-- [ ] `T3` — GHCR multi-arch workflow and hosted pipeline template (AC-6, AC-9)
+- [x] `T3` — GHCR multi-arch workflow and hosted pipeline template (AC-6, AC-9)
   - Files: .github/workflows/fleet-image.yml, plugins/specclaw-fleet/pipelines/dispatch-hosted.yml, plugins/specclaw-fleet/tests/cases/ac15_delivery.sh
   - Kind: config
 - [ ] `T4` — `specclaw-fleet doctor`, read-only (AC-7)
