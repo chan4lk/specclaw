@@ -2,3 +2,4 @@
 {"ev":"stop","span":"propose","at":"2026-11-07T07:23:17Z","ts":1794036197,"status":"ok"}
 {"ev":"start","span":"plan","kind":"phase","label":"plan","at":"2026-11-07T08:32:24Z","ts":1794040344}
 {"ev":"stop","span":"plan","at":"2026-11-07T08:35:28Z","ts":1794040528,"status":"ok"}
+{"ev":"start","span":"verify-1794041389","kind":"phase","label":"verify","at":"2026-11-07T08:49:49Z","ts":1794041389}

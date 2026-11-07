@@ -31,7 +31,10 @@ arg() { local f="$1"; shift; while (($#)); do [[ "$1" == "$f" ]] && { echo "$2";
 name="$(arg --name "$@")"; scope="$(arg --scope "$@")"
 case "$1 $2 $3" in
   "keyvault show "*) echo "/vaults/v" ;;
-  "keyvault secret show") [[ -f "$KV/$name" ]] || exit 1; cat "$KV/$name" ;;
+  "keyvault secret show")
+    [[ -n "${AZ_FAIL:-}" ]] && { echo "ERROR: (Throttled) Too many requests" >&2; exit 1; }
+    [[ -f "$KV/$name" ]] || { echo "ERROR: (SecretNotFound) A secret with name $name was not found" >&2; exit 1; }
+    cat "$KV/$name" ;;
   "keyvault secret set")
     if [[ -n "$(arg --file "$@")" ]]; then cp "$(arg --file "$@")" "$KV/$name"; else arg --value "$@" > "$KV/$name"; fi ;;
   "role assignment list") grep -qxF "$scope" "$KV/ra" 2>/dev/null && echo ra-id ;;

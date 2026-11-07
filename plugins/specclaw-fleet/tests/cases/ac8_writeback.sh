@@ -19,16 +19,25 @@ run_wb() {
     FLEET_SECRET=codex-auth-abc AZURE_TENANT_ID=t AZURE_CLIENT_ID=c AZURE_CLIENT_SECRET=s bash "$WB" > "$TMP/out" 2>&1
 }
 
+NEW='{"tokens":{"refresh_token":"r2"}}'
 changed_put() {
-  run_wb codex 0 refreshed && grep -q "v.vault.azure.net/secrets/codex-auth-abc" "$CALLS" \
-    && jq -e '.value == "refreshed"' "$TMP/put.body" >/dev/null
+  run_wb codex 0 "$NEW" && grep -q "v.vault.azure.net/secrets/codex-auth-abc" "$CALLS" \
+    && jq -e --arg v "$NEW" '.value == $v' "$TMP/put.body" >/dev/null
 }
 unchanged_skipped() { run_wb codex 0 seed && ! grep -q "X PUT" "$CALLS"; }
-claude_skipped() { run_wb claude 7 refreshed; (( $? == 7 )) && ! grep -q curl "$CALLS"; }
-keeps_agent_status() { run_wb codex 4 refreshed; (( $? == 4 )) && [[ -f "$TMP/put.body" ]]; }
+claude_skipped() { run_wb claude 7 "$NEW"; (( $? == 7 )) && ! grep -q curl "$CALLS"; }
+keeps_agent_status() { run_wb codex 4 "$NEW"; (( $? == 4 )) && [[ -f "$TMP/put.body" ]]; }
+invalid_kept() {
+  local bad
+  for bad in '{"tokens":{"refr' '{}' '' '[1]'; do
+    run_wb codex 0 "$bad"
+    (( $? == 3 )) && ! grep -q "X PUT" "$CALLS" || return 1
+  done
+}
 
 check "AC8 changed auth.json is written back to the assignee's secret" changed_put
 check "AC8 unchanged auth.json is not written" unchanged_skipped
 check "AC8 claude runs skip write-back and keep the agent's status" claude_skipped
 check "AC8 write-back exits with the agent's recorded status" keeps_agent_status
+check "AC8 truncated, empty or non-object auth.json never overwrites the vault" invalid_kept
 finish

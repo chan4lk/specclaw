@@ -424,13 +424,13 @@ cmd_fields() {
     ops+=("${mapped%%$'\t'*}" "${mapped#*$'\t'}")
   done
 
+  cmd_comment "" "$SPECCLAW_DIR" "$CHANGE_NAME" "$(printf '%s\n' "${lines[@]}")"
   if (( ${#ops[@]} )); then
     local body
     body="$(python3 -c 'import json,sys; a=sys.argv[1:]; print(json.dumps([{"op":"add","path":"/fields/"+a[i],"value":a[i+1]} for i in range(0,len(a),2)]))' "${ops[@]}")"
     ado_patch_json "wit/workitems/${wi_id}?api-version=7.1" "$body" >/dev/null \
-      || die "ADO field update failed for Work Item #${wi_id}"
+      || die "ADO field update failed for Work Item #${wi_id} (the comment was posted)"
   fi
-  cmd_comment "" "$SPECCLAW_DIR" "$CHANGE_NAME" "$(printf '%s\n' "${lines[@]}")"
 }
 
 # ─── Dispatch ─────────────────────────────────────────────────────────────────

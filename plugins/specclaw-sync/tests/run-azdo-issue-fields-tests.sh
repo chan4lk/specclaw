@@ -20,6 +20,7 @@ while (($#)); do
   esac
 done
 printf '%s %s %s\n' "$method" "$url" "$body" >> "$CURL_LOG"
+[[ "$method" == PATCH && -n "${FAIL_PATCH:-}" ]] && exit 22
 echo '{}'
 EOF
 chmod +x "$TMP/stub/curl"
@@ -54,6 +55,12 @@ run_fields agent=claude state=failed
 rc=$?
 comment_only() { [[ $rc == 0 ]] && ! grep -q "^PATCH" "$TMP/curl.log" && grep -q "^POST .*comments" "$TMP/curl.log"; }
 check "AC9 nothing mapped: no PATCH, comment only, exit 0" comment_only
+
+printf 'azdo:\n  fleet_states:\n    running: Running\n' > "$TMP/sc/config.yaml"
+FAIL_PATCH=1 run_fields state=running job=fleet-049-cd
+rc=$?
+comment_survives() { [[ $rc != 0 ]] && grep -q "^POST .*comments.*fleet-049-cd" "$TMP/curl.log"; }
+check "AC9 a failed PATCH still leaves the comment record" comment_survives
 
 (( fails == 0 )) && echo "All azdo-issue fields tests passed." || echo "$fails failed."
 exit $(( fails > 0 ))

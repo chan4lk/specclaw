@@ -8,20 +8,20 @@ stub_cluster
 reset_env
 BUILD_REQUESTEDFOR="Alice A" dispatch
 rc=$?
-job="$APPLIED/0.yaml" secret="$APPLIED/1.yaml"
+job="$(grep -l "^kind: Job" "$APPLIED"/*.yaml)" secret="$(grep -l "^kind: Secret" "$APPLIED"/*.yaml)"
 
 one_secret_one_job() {
-  (( rc == 0 )) && [[ $(find "$APPLIED" -type f | wc -l | tr -d " ") == 2 ]] && grep -q "^kind: Secret" "$secret" && grep -q "^kind: Job" "$job"
+  (( rc == 0 )) && [[ $(find "$APPLIED" -type f | wc -l | tr -d " ") == 2 ]] && [[ -n "$job" && -n "$secret" ]] && grep -q "^kind: Secret" "$secret" && grep -q "^kind: Job" "$job"
 }
 secret_holds_credential() {
   grep -q "credential: $(printf '%s' "$CANARY" | base64 | tr -d '\n')" "$secret" && grep -A1 ownerReferences "$secret" | grep -q 'kind: Job, name: fleet-049-[0-9a-f]*, uid: "uid-1"' 
 }
 job_labels_and_deadline() {
   grep -q "specclaw.fleet/agent: claude" "$job" && grep -q "specclaw.fleet/assignee: \"$H\"" "$job" \
-    && grep -q 'specclaw.fleet/change: "049-x"' "$job" && grep -q "activeDeadlineSeconds: 7200" "$job"
+    && grep -q 'specclaw.fleet/change: "049-x"' "$job" && grep -q "activeDeadlineSeconds: 7800" "$job" && grep -q "FLEET_AGENT_TIMEOUT, value: \"7200\"" "$job"
 }
 job_hardened() {
-  grep -q "automountServiceAccountToken: false" "$job" && grep -q "runAsNonRoot: true" "$job" \
+  grep -q "automountServiceAccountToken: false" "$job" && grep -q "runAsNonRoot: true" "$job" && grep -q "seccompProfile: {type: RuntimeDefault}" "$job" \
     && grep -q "readOnlyRootFilesystem: true" "$job" && grep -q "backoffLimit: 0" "$job"
 }
 work_item_and_output() {

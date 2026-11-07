@@ -30,21 +30,23 @@ lower() {
 }
 
 consented() {
-  local assignee="$1" tags="$2" requester="${BUILD_REQUESTEDFOREMAIL:-}"
-  printf '%s' "$tags" | tr ';' '\n' | sed 's/^ *//; s/ *$//' | grep -qxF 'fleet:auto' && return 0
+  local assignee="$1" requester="${BUILD_REQUESTEDFOREMAIL:-}" tag
+  local -a tags=()
+  IFS=';' read -ra tags <<<"$2"
+  for tag in "${tags[@]}"; do
+    tag="${tag#"${tag%%[![:space:]]*}"}"
+    [[ "${tag%"${tag##*[![:space:]]}"}" == fleet:auto ]] && return 0
+  done
   [[ -n "$requester" && "$(lower "$requester")" == "$(lower "$assignee")" ]]
 }
 
 fetch_credential() {
-  local value
-  value="$(az keyvault secret show --vault-name "$1" --name "$2" --query value -o tsv 2>/dev/null)" || return 1
+  local value err="$FLEET_TMPDIR/fetch.err"
+  if ! value="$(az keyvault secret show --vault-name "$1" --name "$2" --query value -o tsv 2>"$err")"; then
+    grep -q NotFound "$err" && return 1
+    return 2
+  fi
   [[ -n "$value" && "$value" != __unset__ ]] || return 1
   printf '%s' "$value"
 }
 
-codex_busy() {
-  local active
-  active="$(kubectl -n "$1" get jobs -l "specclaw.fleet/agent=codex,specclaw.fleet/assignee=$2" -o json \
-    | jq '[.items[] | select(((.status.succeeded // 0) == 0) and ((.status.failed // 0) == 0))] | length')"
-  [[ "$active" != 0 ]]
-}

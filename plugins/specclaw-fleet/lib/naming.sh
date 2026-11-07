@@ -10,12 +10,20 @@ label_value() {
   printf '%s' "$value"
 }
 
+rand_suffix() {
+  od -An -N4 -tx1 /dev/urandom | tr -d ' \n' | cut -c1-5
+}
+
 job_name() {
+  if [[ "$2" == codex ]]; then
+    printf 'fleet-codex-%s' "$3"
+    return 0
+  fi
   local stem
   if [[ "$1" =~ ^([0-9]+)- ]]; then
     stem="$(printf '%s' "${BASH_REMATCH[1]}" | cut -c1-20)"
   else
     stem="$(printf '%s' "$1" | sha256_hex | cut -c1-8)"
   fi
-  printf 'fleet-%s-%s' "$stem" "$(od -An -N4 -tx1 /dev/urandom | tr -d ' \n' | cut -c1-5)"
+  printf 'fleet-%s-%s' "$stem" "$(rand_suffix)"
 }

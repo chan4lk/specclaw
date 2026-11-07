@@ -10,13 +10,18 @@ REPO="$WORK/repo"
 PROMPT="Run the specclaw lifecycle headless for change $FLEET_CHANGE. Use the specclaw skills in order: plan (only if the change has no tasks yet), build, verify, then the specclaw-sync pr-azdo skill. Nobody is watching: never ask a question. If a phase fails, stop and report why."
 agent_pid=""
 
-finish() {
-  printf '%s\n' "$1" > "$STATUS/exit"
-  exit 0
+finish() { printf '%s\n' "$1" > "$STATUS/exit"; exit 0; }
+
+tracker_dir() {
+  local dir="$WORK/fallback/.specclaw"
+  if [[ -d "$REPO/.specclaw/changes/$FLEET_CHANGE" ]]; then printf '%s' "$REPO/.specclaw"; return 0; fi
+  mkdir -p "$dir/changes/$FLEET_CHANGE"
+  printf '**Azure Boards Work Item:** [#%s](fleet)\n' "${FLEET_WORK_ITEM:-0}" > "$dir/changes/$FLEET_CHANGE/status.md"
+  printf '%s' "$dir"
 }
 
 record() {
-  specclaw-azdo-issue fields "$REPO/.specclaw" "$FLEET_CHANGE" "$@" >/dev/null 2>&1 \
+  specclaw-azdo-issue fields "$(tracker_dir)" "$FLEET_CHANGE" "$@" >/dev/null 2>&1 \
     || echo "WARNING: work item update failed: $*" >&2
 }
 
@@ -28,9 +33,8 @@ on_term() {
 trap on_term TERM
 
 clone() {
-  export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraHeader
   GIT_CONFIG_VALUE_0="Authorization: Basic $(printf ':%s' "$AZDO_TOKEN" | base64 | tr -d '\n')"
-  export GIT_CONFIG_VALUE_0
+  export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraHeader GIT_CONFIG_VALUE_0
   git clone --quiet --branch "$FLEET_REF" "$FLEET_REPO_URL" "$REPO"
 }
 
@@ -57,7 +61,11 @@ run_agent() {
     *) return 2 ;;
   esac
   agent_pid=$!
-  wait "$agent_pid"
+  (sleep "${FLEET_AGENT_TIMEOUT:-7200}" && kill -TERM $$) &
+  local watchdog=$! rc=0
+  wait "$agent_pid" || rc=$?
+  kill "$watchdog" 2>/dev/null
+  return "$rc"
 }
 
 clone || { record state=failed exit=clone-failed; finish 2; }

@@ -38,6 +38,10 @@ spec:
         - name: squid
           image: ubuntu/squid:latest
           ports: [{containerPort: 3128}]
+          securityContext:
+            allowPrivilegeEscalation: false
+            seccompProfile: {type: RuntimeDefault}
+            capabilities: {drop: [ALL], add: [SETUID, SETGID]}
           volumeMounts:
             - {name: conf, mountPath: /etc/squid/squid.conf, subPath: squid.conf}
       volumes:

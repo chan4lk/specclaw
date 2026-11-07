@@ -37,14 +37,14 @@ A new add-on plugin, `plugins/specclaw-fleet/`. An approved specclaw change is r
   - (b) the change has no work item;
   - (c) the work item has no assignee;
   - (d) **consent is missing:** the work item lacks the `fleet:auto` tag, and the requester is not the assignee;
-  - (e) the assignee has no usable credential for the chosen agent, meaning the secret is missing, empty, or still a placeholder;
-  - (f) `--agent codex` is chosen while that assignee already has an unfinished codex Job in the namespace.
+  - (e) the assignee has no usable credential for the chosen agent, meaning the secret is missing, empty, or still a placeholder. A vault read error is refused separately, as a vault problem;
+  - (f) `--agent codex` is chosen while that assignee already has an unfinished codex Job. The codex Job name `fleet-codex-<h>` is the atomic claim: the API refuses a duplicate, and a finished one is replaced.
 
   Refusals (c)–(f) also set the work item to `Failed` and adds a comment naming the reason. Dispatch never uses a credential belonging to anyone other than the assignee.
 - **FR-5 Dispatch launch.** When every gate passes, dispatch:
   - creates the Job, then a K8s Secret holding only the assignee's credential with `ownerReferences` to that Job already set, so it is garbage-collected with the Job and the dispatcher never needs read or patch access to Secrets;
   - labels the Job `specclaw.fleet/agent`, `specclaw.fleet/assignee=<h>` and `specclaw.fleet/change`;
-  - sets `activeDeadlineSeconds`, `backoffLimit: 0` and `ttlSecondsAfterFinished`;
+  - sets `backoffLimit: 0`, `ttlSecondsAfterFinished`, and `activeDeadlineSeconds` = agent deadline + 600 s, so the in-pod watchdog (`FLEET_AGENT_TIMEOUT`) fires first and write-back still runs;
   - writes the work item fields (agent, job, cluster, branch, attempt, requested-by) and the state `Dispatched`;
   - prints one JSON line: `{"ok":true,"job":…,"agent":…,"work_item":…}`.
 
@@ -69,7 +69,7 @@ A new add-on plugin, `plugins/specclaw-fleet/`. An approved specclaw change is r
   - always adds one comment that lists every pair, so the record exists even with no custom fields;
   - exits 0 when nothing maps.
 - **FR-9 Sandbox manifests.** `k8s/` ships:
-  - a namespace;
+  - a namespace (Pod Security `baseline` enforced; `restricted` warned and audited; Jobs set `seccompProfile: RuntimeDefault`);
   - a dispatch ServiceAccount whose Role allows only create/get/list/delete on `jobs` and create on `secrets` in that namespace, so it can never read the namespace's other Secrets;
   - a default-deny `NetworkPolicy` that lets fleet pods reach only DNS and the egress proxy;
   - a Squid proxy with an allowlist ConfigMap;
@@ -93,7 +93,7 @@ A new add-on plugin, `plugins/specclaw-fleet/`. An approved specclaw change is r
 - **AC-3:** `login` stores the stub token under the caller's `<h>`. The canary token never appears on stdout or stderr, and the temporary directory is gone afterwards.
 - **AC-4:** Each refusal case FR-4 (a)–(f) exits non-zero and creates no K8s object. For (c)–(f), it also sets the work item to `Failed` with a comment.
 - **AC-5:** With every gate passing, dispatch creates exactly one Job and one Secret. The Secret holds only the assignee's credential and is owned by the Job. The Job carries the three labels and the deadline. The work item gets `Dispatched` and the run fields. The output is the JSON line.
-- **AC-6:** A second codex dispatch for the same assignee is refused while the first Job is active, and allowed once it has finished. Claude dispatches for the same assignee are never refused for concurrency.
+- **AC-6:** A second codex dispatch for the same assignee is refused while the first Job is active, and allowed once it has finished. Of two concurrent codex dispatches, exactly one wins. Claude dispatches for the same assignee are never refused for concurrency.
 - **AC-7:** The in-pod entrypoint unsets all four API-key variables before invoking the agent, and the clone URL contains no token. It sets `Running`, then `PR Open` or `Failed`. It exits 0 even when the agent fails, with the real status in the status file.
 - **AC-8:** Write-back puts `codex-auth-<h>` only when the hash changed. It skips claude runs and exits with the agent's recorded status.
 - **AC-9:** `specclaw-azdo-issue fields` sends PATCH ops only for mapped keys, and adds one comment that lists every pair. With nothing mapped, it sends no PATCH and exits 0.

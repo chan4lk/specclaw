@@ -34,17 +34,21 @@ check_gates() {
     || refuse "$F_CHANGE" "assignee $assignee has not consented (add tag fleet:auto, or trigger the run yourself)"
   F_HASH="$(upn_hash "$assignee")"
   F_SECRET="$(secret_name "$F_AGENT" "$F_HASH")"
-  F_CREDENTIAL="$(fetch_credential "$F_VAULT" "$F_SECRET")" \
-    || refuse "$F_CHANGE" "assignee has no registered $F_AGENT credential (run specclaw-fleet login --agent $F_AGENT)"
-  if [[ "$F_AGENT" == codex ]] && codex_busy "$F_NS" "$F_HASH"; then
-    refuse "$F_CHANGE" "assignee already has an unfinished codex job"
-  fi
+  local rc=0
+  F_CREDENTIAL="$(fetch_credential "$F_VAULT" "$F_SECRET")" || rc=$?
+  case "$rc" in
+    0) ;;
+    1) refuse "$F_CHANGE" "assignee has no registered $F_AGENT credential (run specclaw-fleet login --agent $F_AGENT)" ;;
+    *) refuse "$F_CHANGE" "could not read Key Vault $F_VAULT (dispatcher access or network), not an assignee problem" ;;
+  esac
 }
 
 fleet_dispatch() {
   parse_dispatch_args "$@"
   check_gates
-  F_JOB="$(job_name "$F_CHANGE")"
+  F_JOB="$(job_name "$F_CHANGE" "$F_AGENT" "$F_HASH")"
+  F_SECRET_OBJ="$F_JOB-$(rand_suffix)"
+  F_WI="$(work_item_id "$F_CHANGE")"
   F_LABEL="$(label_value "$F_CHANGE")"
   F_REPO="$(git -C "$SPECCLAW_DIR/.." remote get-url origin | sed -E 's#://[^@/]+@#://#')"
   if (( F_DRY_RUN )); then

@@ -1,4 +1,11 @@
 # shellcheck shell=bash
+ensure_placeholder() {
+  local err="$FLEET_TMPDIR/show.err"
+  az keyvault secret show --vault-name "$1" --name "$2" >/dev/null 2>"$err" && return 0
+  grep -q NotFound "$err" || die "Could not check $2 in $1, leaving it untouched: $(head -n1 "$err")"
+  az keyvault secret set --vault-name "$1" --name "$2" --value __unset__ >/dev/null
+}
+
 fleet_onboard() {
   local upn="" vault=""
   while (($#)); do
@@ -15,8 +22,7 @@ fleet_onboard() {
   vault_id="$(az keyvault show --name "$vault" --query id -o tsv)" || die "Key Vault not found: $vault"
   for agent in claude codex; do
     name="$(secret_name "$agent" "$h")"
-    az keyvault secret show --vault-name "$vault" --name "$name" >/dev/null 2>&1 \
-      || az keyvault secret set --vault-name "$vault" --name "$name" --value __unset__ >/dev/null
+    ensure_placeholder "$vault" "$name"
     scope="$vault_id/secrets/$name"
     [[ -n "$(az role assignment list --assignee "$upn" --role "Key Vault Secrets Officer" --scope "$scope" --query '[].id' -o tsv)" ]] \
       || az role assignment create --assignee "$upn" --role "Key Vault Secrets Officer" --scope "$scope" >/dev/null
@@ -60,10 +66,8 @@ fleet_login() {
   local upn name
   upn="$(az account show --query user.name -o tsv)" || die "Run 'az login' first"
   name="$(secret_name "$agent" "$(upn_hash "$upn")")"
-  FLEET_TMP="$(umask 077 && mktemp -d)"
-  trap 'rm -rf "$FLEET_TMP"' EXIT
-  capture_credential "$agent" "$FLEET_TMP"
-  az keyvault secret set --vault-name "$vault" --name "$name" --file "$FLEET_TMP/credential" >/dev/null \
+  capture_credential "$agent" "$FLEET_TMPDIR"
+  az keyvault secret set --vault-name "$vault" --name "$name" --file "$FLEET_TMPDIR/credential" >/dev/null \
     || die "Could not store $name (were you onboarded with specclaw-fleet onboard?)"
   echo "Stored your $agent credential as $name"
 }

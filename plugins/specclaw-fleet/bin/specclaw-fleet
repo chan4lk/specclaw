@@ -3,6 +3,8 @@ set -euo pipefail
 
 FLEET_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SPECCLAW_DIR="${SPECCLAW_DIR:-.specclaw}"
+FLEET_TMPDIR="$(umask 077 && mktemp -d)"
+trap 'rm -rf "$FLEET_TMPDIR"' EXIT
 for lib in "$FLEET_ROOT"/lib/*.sh; do
   # shellcheck source=/dev/null
   source "$lib"

@@ -1,7 +1,6 @@
 # shellcheck shell=bash disable=SC2034
 export SPECCLAW_DIR="$TMP/repo/.specclaw" APPLIED="$TMP/applied" CHANGE="049-x"
 export WI_JSON='{"fields":{"System.AssignedTo":{"uniqueName":"Alice@Contoso.com"},"System.Tags":"specclaw; fleet:auto"}}'
-export JOBS_JSON='{"items":[]}'
 CANARY="sk-ant-oat01-DISPATCH-CANARY"
 H="$(hash_of alice@contoso.com)"
 
@@ -22,8 +21,12 @@ stub_cluster() {
   stub specclaw-azdo-issue '[[ "$1" == show ]] && echo "$WI_JSON"; exit 0'
   stub kubectl '
 case "$*" in
-  *" create -f -") cat > "$APPLIED/$(find "$APPLIED" -type f | wc -l | tr -d " ").yaml" ;;
-  *"agent=codex,"*) echo "$JOBS_JSON" ;;
+  *" create -f -")
+    doc="$(cat)"; name="$(grep -m1 "^  name: " <<<"$doc" | sed "s/^  name: //")"
+    mkdir "$APPLIED/claim-$name" 2>/dev/null || { echo "Error from server (AlreadyExists): $name" >&2; exit 1; }
+    printf "%s\\n" "$doc" > "$APPLIED/$(date +%s%N)-$name.yaml" ;;
+  *" get job fleet-codex-"*" -o json") [[ -n "${CODEX_JOB_JSON:-}" ]] || exit 1; echo "$CODEX_JOB_JSON" ;;
+  *" delete job "*) rm -rf "$APPLIED/claim-$5" ;;
   *"specclaw.fleet/change="*) echo job.batch/fleet-049-a ;;
   *" get job "*) echo uid-1 ;;
   *"current-context"*) echo k3s-a ;;

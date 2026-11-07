@@ -17,7 +17,7 @@ AzDO pipeline ── specclaw-fleet dispatch ──▶ Job (agent initContainer 
 - **Per-secret RBAC:** each user holds `Key Vault Secrets Officer` on their own two secrets only, never on the vault.
 - **At dispatch:** the assignee's secret is copied into a per-Job K8s Secret. That Secret is owned by the Job and garbage-collected with it.
 - **No fallback, ever.** If the assignee has no credential registered, the run fails. Dispatch never uses anyone else's token.
-- **Codex runs are limited to one at a time per person**, because one `auth.json` must never serve concurrent jobs. After each run, the refreshed `auth.json` is written back to the vault, but only if it changed. Claude runs have no such limit.
+- **Codex runs are limited to one at a time per person**, because one `auth.json` must never serve concurrent jobs. The person's codex Job has a fixed name, `fleet-codex-<h>`, so the Kubernetes API itself refuses a second one (`AlreadyExists`). A finished one is deleted and replaced. After each run, the refreshed `auth.json` is written back to the vault, but only when it changed and is still a valid JSON object. Claude runs have no such limit.
 - **Cost:** each run spends the assignee's 5-hour and weekly plan allowance.
 
 > **Security.** Code running in the pod can read the mounted token and the AzDO PAT. That includes code steered by prompt injection from repo content. The mitigations:
@@ -38,11 +38,11 @@ Assigning a work item to someone must not spend their plan without their say. Di
 
 1. **Cluster.** `kubectl apply -f k8s/`. This creates:
    - the namespace;
-   - the dispatcher ServiceAccount and Role (Jobs: create/get/list/delete; Secrets: create only, so it can never read the namespace's other Secrets);
+   - the dispatcher ServiceAccount and Role (Jobs: create/get/list/delete; Secrets: create only). It cannot read Secrets through the API. It can still create a Job that mounts one, so treat the dispatcher identity, meaning the pipeline and its service connection, as trusted;
    - the Squid egress proxy;
    - the NetworkPolicies.
 
-   Pin `ubuntu/squid` by digest before production use.
+   The namespace enforces Pod Security `baseline` and warns and audits on `restricted`. Fleet Jobs meet `restricted`. Squid needs `SETUID`/`SETGID` to drop to its proxy user, so it runs under `baseline`. Pin `ubuntu/squid` by digest before production use.
 2. **Secrets in the namespace.**
    - `fleet-azdo` holds `AZDO_TOKEN`, `AZDO_ORG` and `AZDO_PROJECT`. Use a PAT scoped to Code (read & write), Work Items (read & write) and Pull Request Threads.
    - `fleet-vault-writer` holds `AZURE_TENANT_ID`, `AZURE_CLIENT_ID` and `AZURE_CLIENT_SECRET`, for a service principal that may set `codex-auth-*` secrets.
@@ -100,5 +100,7 @@ The full list of hosts Codex needs for its token refresh is not yet confirmed. R
 ## Assumptions and known limits
 
 - The org is backed by Entra ID, so a work item's `AssignedTo.uniqueName` equals the user's UPN. Guest or Microsoft-account users whose names differ just fail the credential check.
-- A pod killed without SIGTERM, or a failed clone, can leave the work item in `Running` or `Dispatched`. The Job status in the cluster is the source of truth. A reaper is a follow-up.
-- Two codex dispatches for one person a few seconds apart can both pass the one-at-a-time check.
+- **Deadlines.** The agent gets `fleet.deadline_minutes`. An in-pod watchdog stops it at that point and records `Failed`/`deadline`, then write-back still runs. The Job's own `activeDeadlineSeconds` is 10 minutes longer, as a backstop.
+- **Clone failure.** A failed clone still marks the work item `Failed`, through a minimal tracker directory, as a comment and mapped fields only.
+- **Hard kills.** A pod killed without SIGTERM (node loss, OOM) can leave the work item in `Running`. The Job status in the cluster is the source of truth. A reaper is a follow-up.
+- **Vault errors.** A Key Vault read error at dispatch is reported as a vault problem, not as the assignee's missing credential. `onboard` writes a placeholder only when the secret is genuinely `NotFound`.
