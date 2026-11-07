@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 azdo_issue() {
-  local bin
-  bin="$(command -v specclaw-azdo-issue || echo "$FLEET_ROOT/../specclaw-sync/bin/specclaw-azdo-issue")"
+  local bin="${FLEET_AZDO_ISSUE:-$FLEET_ROOT/../specclaw-sync/bin/specclaw-azdo-issue}"
+  [[ -x "$bin" ]] || bin="$(command -v specclaw-azdo-issue)" || die "specclaw-azdo-issue not found (install specclaw-sync)"
   "$bin" "$@"
 }
 
