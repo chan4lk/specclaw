@@ -26,7 +26,7 @@ A new add-on plugin, `plugins/specclaw-fleet/`. An approved specclaw change is r
 - **FR-2 Onboard (admin).** `specclaw-fleet onboard <upn> --vault <name>`:
   - creates placeholder secrets `claude-token-<h>` and `codex-auth-<h>` when they are missing;
   - assigns `Key Vault Secrets Officer` to that user at each secret's own scope, never at vault scope;
-  - with `--writer <object-id>` (or `fleet.vault_writer`), also grants the write-back service principal `Key Vault Secrets Officer` on that user's `codex-auth-<h>` only;
+  - with `--writer <object-id>` (or `FLEET_VAULT_WRITER`), also grants the write-back service principal `Key Vault Secrets Officer` on that user's `codex-auth-<h>` only;
   - is idempotent, and writes the placeholder only when the secret is `SecretNotFound`.
 - **FR-3 Login (user).** `specclaw-fleet login --agent claude|codex --vault <name>`:
   - derives `<h>` from the caller's own `az` identity;
@@ -41,7 +41,9 @@ A new add-on plugin, `plugins/specclaw-fleet/`. An approved specclaw change is r
   - (e) the assignee has no usable credential for the chosen agent, meaning the secret is missing, empty, or still a placeholder. A vault read error is refused separately, as a vault problem;
   - (f) `--agent codex` is chosen while that assignee already has an unfinished codex Job. The codex Job name `fleet-codex-<h>` is the atomic claim: the API refuses a duplicate, and a finished one is replaced by a delete carrying a UID precondition.
 
-  Refusals (c)–(f) also set the work item to `Failed` and adds a comment naming the reason. Dispatch never uses a credential belonging to anyone other than the assignee.
+  - (g) the work item is already tagged `fleet:dispatched` or `fleet:refused` (case-insensitive). Exits 3, unless `--force` is given.
+
+  Refusals (c)–(f) exit 4, set the work item to `Failed`, comment the reason and tag `fleet:refused`. Dispatch never uses a credential belonging to anyone other than the assignee.
 - **FR-5 Dispatch launch.** When every gate passes, dispatch:
   - creates the Job, then a K8s Secret holding only the assignee's credential with `ownerReferences` to that Job already set, so it is garbage-collected with the Job and the dispatcher never needs read or patch access to Secrets;
   - labels the Job `specclaw.fleet/agent`, `specclaw.fleet/assignee=<h>` and `specclaw.fleet/change`;
@@ -49,7 +51,7 @@ A new add-on plugin, `plugins/specclaw-fleet/`. An approved specclaw change is r
   - writes the work item fields (agent, job, cluster, branch, attempt, requested-by) and the state `Dispatched`;
   - prints one JSON line: `{"ok":true,"job":…,"agent":…,"work_item":…}`.
 
-  The agent defaults to `fleet.default_agent` in config, else `claude`. The ref defaults to the base branch.
+  Settings come from flags or environment variables (`FLEET_VAULT`, `FLEET_DEFAULT_AGENT` default `claude`, `FLEET_REF` default `main`, `FLEET_IMAGE`, `FLEET_NAMESPACE`, `FLEET_DEADLINE_MINUTES` 1–1440 default 120), never from `config.yaml`. On success the work item is tagged `fleet:dispatched`.
 - **FR-6 In-pod agent run.** The Job's agent step:
   1. unsets `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `OPENAI_API_KEY` and `CODEX_API_KEY`;
   2. clones the repo at the ref over HTTPS, using an `Authorization` header, never a token in the URL;
@@ -77,7 +79,7 @@ A new add-on plugin, `plugins/specclaw-fleet/`. An approved specclaw change is r
   - blocking of `169.254.169.254`.
 
   Pods run non-root, with a read-only root filesystem, emptyDir workspace and home, and `automountServiceAccountToken: false`.
-- **FR-10 Pipeline template.** `pipelines/dispatch.yml` triggers on `main` for paths `.specclaw/changes/*/state.json`. It dispatches a change only when its proposal status became `approved` in that commit, so later phase commits never re-dispatch. It never polls.
+- **FR-10 Pipeline template.** `pipelines/dispatch.yml` triggers on `main` for paths `.specclaw/changes/*/state.json`, with `batch: true` so runs never overlap. It scans every change with `phase: proposal` and an approved proposal, and calls dispatch for each. Dispatch is idempotent: a change tagged `fleet:dispatched` or `fleet:refused` exits 3 and is skipped. A refusal exits 4 and only warns. An unreadable `state.json` or any other error fails the step. It never polls and never diffs commits.
 
 ## Non-Functional Requirements
 

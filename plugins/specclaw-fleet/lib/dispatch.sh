@@ -1,27 +1,28 @@
 # shellcheck shell=bash disable=SC2034
 parse_dispatch_args() {
-  F_CHANGE="" F_AGENT="" F_REF="" F_VAULT="" F_DRY_RUN=0
+  F_CHANGE="" F_AGENT="" F_REF="" F_VAULT="" F_DRY_RUN=0 F_FORCE=0
   while (($#)); do
     case "$1" in
       --agent) need_value "$1" "${2:-}"; F_AGENT="$2"; shift 2 ;;
       --ref) need_value "$1" "${2:-}"; F_REF="$2"; shift 2 ;;
       --vault) need_value "$1" "${2:-}"; F_VAULT="$2"; shift 2 ;;
       --dry-run) F_DRY_RUN=1; shift ;;
+      --force) F_FORCE=1; shift ;;
       -*) die "Unknown flag: $1" ;;
       *) F_CHANGE="$1"; shift ;;
     esac
   done
-  [[ -n "$F_CHANGE" ]] || die "Usage: specclaw-fleet dispatch <change> [--agent claude|codex] [--ref <branch>] [--vault <name>] [--dry-run]"
-  F_AGENT="${F_AGENT:-$(cfg_val fleet.default_agent claude)}" || exit 1
+  [[ -n "$F_CHANGE" ]] || die "Usage: specclaw-fleet dispatch <change> [--agent claude|codex] [--ref <branch>] [--vault <name>] [--dry-run] [--force]"
+  F_AGENT="${F_AGENT:-${FLEET_DEFAULT_AGENT:-claude}}"
   [[ "$F_AGENT" == claude || "$F_AGENT" == codex ]] || die "Unknown agent '$F_AGENT' (expected claude or codex)"
-  F_REF="${F_REF:-$(cfg_val git.base_branch main)}" || exit 1
-  F_VAULT="${F_VAULT:-$(cfg_val fleet.vault "")}" || exit 1
-  [[ -n "$F_VAULT" ]] || die "No Key Vault: pass --vault or set fleet.vault in config.yaml"
-  F_NS="$(cfg_val fleet.namespace specclaw-fleet)" || exit 1
-  F_IMAGE="$(cfg_val fleet.image specclaw-fleet:latest)" || exit 1
-  local minutes
-  minutes="$(cfg_val fleet.deadline_minutes 120)" || exit 1
-  [[ "$minutes" =~ ^[0-9]+$ ]] || die "fleet.deadline_minutes must be a whole number of minutes"
+  F_REF="${F_REF:-${FLEET_REF:-main}}"
+  F_VAULT="${F_VAULT:-${FLEET_VAULT:-}}"
+  [[ -n "$F_VAULT" ]] || die "No Key Vault: pass --vault or set FLEET_VAULT"
+  F_NS="${FLEET_NAMESPACE:-specclaw-fleet}"
+  F_IMAGE="${FLEET_IMAGE:-specclaw-fleet:latest}"
+  local minutes="${FLEET_DEADLINE_MINUTES:-120}"
+  [[ "$minutes" =~ ^[1-9][0-9]{0,3}$ ]] && (( 10#$minutes <= 1440 )) \
+    || die "FLEET_DEADLINE_MINUTES must be a whole number from 1 to 1440"
   F_DEADLINE=$(( 10#$minutes * 60 ))
 }
 
@@ -32,6 +33,7 @@ check_gates() {
   wi="$(azdo_issue show "$SPECCLAW_DIR" "$F_CHANGE")" || die "$F_CHANGE: could not read the work item"
   assignee="$(jq -r '.fields["System.AssignedTo"].uniqueName // empty' <<<"$wi")"
   tags="$(jq -r '.fields["System.Tags"] // empty' <<<"$wi")"
+  already_handled "$tags"
   [[ -n "$assignee" ]] || refuse "$F_CHANGE" "work item has no assignee"
   consented "$assignee" "$tags" \
     || refuse "$F_CHANGE" "assignee $assignee has not consented (add tag fleet:auto, or trigger the run yourself)"
@@ -55,7 +57,7 @@ fleet_dispatch() {
   F_LABEL="$(label_value "$F_CHANGE")"
   F_REPO="$(git -C "$SPECCLAW_DIR/.." remote get-url origin | sed -E 's#://[^@/]+@#://#')"
   F_COMMIT="$(git -C "$SPECCLAW_DIR/.." rev-parse HEAD)" || die "Could not resolve the dispatched commit"
-  F_AZDO_CONFIG="$(cfg_block azdo)" || exit 1
+  F_AZDO_CONFIG="$(cat "$SPECCLAW_DIR/config.yaml" 2>/dev/null || true)"
   if (( F_DRY_RUN )); then
     render_job
     echo ---

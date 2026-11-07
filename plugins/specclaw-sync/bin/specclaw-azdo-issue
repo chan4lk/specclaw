@@ -9,6 +9,7 @@
 #   specclaw-azdo-issue link-pr  <specclaw_dir> <change> <project_id> <repo_id> <pr_id>
 #   specclaw-azdo-issue show     <specclaw_dir> <change>
 #   specclaw-azdo-issue updates  <specclaw_dir> <change>
+#   specclaw-azdo-issue tag      <specclaw_dir> <change> <tag>
 #   specclaw-azdo-issue fields   <specclaw_dir> <change> key=value...
 #
 # `fields` writes only keys mapped under azdo.fleet_fields.<key> (and `state`
@@ -326,27 +327,31 @@ cmd_close() {
   cmd_comment "" "$SPECCLAW_DIR" "$CHANGE_NAME" "$msg"
 
   # Also add a `closed-by-specclaw` tag (additive — keep existing tags)
-  local current_tags new_tags body
-  current_tags="$(ado_get "wit/workitems/${wi_id}?api-version=7.1" \
-    | python3 -c 'import json,sys; print(json.load(sys.stdin).get("fields",{}).get("System.Tags",""))')"
-  if [[ "$current_tags" == *"closed-by-specclaw"* ]]; then
-    echo "Closed Work Item #${wi_id} (already tagged closed-by-specclaw)"
-    return 0
-  fi
-  if [[ -z "$current_tags" ]]; then
-    new_tags="closed-by-specclaw"
-  else
-    new_tags="${current_tags}; closed-by-specclaw"
-  fi
-  body="$(python3 - "$new_tags" <<'PY'
-import json, sys
-patch = [{"op":"replace","path":"/fields/System.Tags","value": sys.argv[1]}]
-print(json.dumps(patch))
-PY
-)"
-  ado_patch_json "wit/workitems/${wi_id}?api-version=7.1" "$body" >/dev/null \
+  add_tag "$wi_id" closed-by-specclaw \
     || warn "Failed to add closed-by-specclaw tag — closing comment was still posted"
   echo "Closed Work Item #${wi_id}"
+}
+
+add_tag() {
+  local wi_id="$1" tag="$2" current_tags body
+  current_tags="$(ado_get "wit/workitems/${wi_id}?api-version=7.1" \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin).get("fields",{}).get("System.Tags",""))')" || return 1
+  if [[ ";$(tr -d ' ' <<<"$current_tags" | tr '[:upper:]' '[:lower:]');" == *";$(tr '[:upper:]' '[:lower:]' <<<"$tag");"* ]]; then
+    return 0
+  fi
+  body="$(python3 -c 'import json,sys; print(json.dumps([{"op":"replace","path":"/fields/System.Tags","value":sys.argv[1]}]))' \
+    "${current_tags:+$current_tags; }$tag")"
+  ado_patch_json "wit/workitems/${wi_id}?api-version=7.1" "$body" >/dev/null
+}
+
+cmd_tag() {
+  require_creds
+  local tag="${4:-}" wi_id
+  [[ -n "$tag" ]] || die "Usage: specclaw-azdo-issue tag <specclaw_dir> <change> <tag>"
+  wi_id="$(existing_wi_id)"
+  [[ -n "$wi_id" ]] || die "No Work Item for this change — run specclaw-azdo-issue create first"
+  add_tag "$wi_id" "$tag" || die "Could not tag Work Item #${wi_id} with ${tag}"
+  echo "Tagged Work Item #${wi_id}: ${tag}"
 }
 
 cmd_link_pr() {
@@ -395,7 +400,17 @@ cmd_updates() {
   local wi_id
   wi_id="$(existing_wi_id)"
   [[ -n "$wi_id" ]] || die "No Work Item for this change — run specclaw-azdo-issue create first"
-  ado_get "wit/workitems/${wi_id}/updates?api-version=7.1" || die "ADO read failed for Work Item #${wi_id} updates"
+  local page skip=0 all="[]" count
+  while :; do
+    page="$(ado_get "wit/workitems/${wi_id}/updates?\$top=200&\$skip=${skip}&api-version=7.1")" \
+      || die "ADO read failed for Work Item #${wi_id} updates (skip ${skip})"
+    count="$(python3 -c 'import json,sys; print(len(json.load(sys.stdin)["value"]))' <<<"$page")" \
+      || die "Unreadable updates page for Work Item #${wi_id}"
+    all="$(python3 -c 'import json,sys; print(json.dumps(json.loads(sys.argv[1]) + json.loads(sys.argv[2])["value"]))' "$all" "$page")"
+    (( count < 200 )) && break
+    skip=$((skip + 200))
+  done
+  python3 -c 'import json,sys; print(json.dumps({"count": len(json.loads(sys.argv[1])), "value": json.loads(sys.argv[1])}))' "$all"
 }
 
 fleet_field_ref() {
@@ -452,6 +467,7 @@ case "$SUBCMD" in
   link-pr) cmd_link_pr "$@" ;;
   show)    cmd_show    "$@" ;;
   updates) cmd_updates "$@" ;;
+  tag)     cmd_tag     "$@" ;;
   fields)  cmd_fields  "$@" ;;
   *) die "Unknown subcommand: $SUBCMD. Run with --help for usage." ;;
 esac

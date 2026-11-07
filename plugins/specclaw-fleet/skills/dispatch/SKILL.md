@@ -7,7 +7,7 @@ description: Use when an approved specclaw change should run headless in a sandb
 Hands one approved change to the cluster and returns immediately. The run itself happens in a K8s Job; its progress is recorded on the change's Azure Boards work item, never polled.
 
 ```bash
-specclaw-fleet dispatch <change> [--agent claude|codex] [--ref <branch>] [--vault <name>] [--dry-run]
+specclaw-fleet dispatch <change> [--agent claude|codex] [--ref <branch>] [--vault <name>] [--dry-run] [--force]
 ```
 
 Dispatch refuses, and creates nothing, when:
@@ -24,4 +24,10 @@ On success it prints one JSON line: `{"ok":true,"job":…,"agent":…,"work_item
 
 Each run spends the assignee's own 5-hour and weekly plan allowance. Say so when you dispatch for someone.
 
-Defaults come from `.specclaw/config.yaml`: `fleet.default_agent`, `fleet.namespace`, `fleet.image`, `fleet.vault`, `fleet.deadline_minutes`. Setup is in the plugin's `README.md`.
+Exit codes:
+- `0`: dispatched; the work item is tagged `fleet:dispatched`.
+- `3`: already handled (`fleet:dispatched` or `fleet:refused`). Pass `--force` to dispatch again.
+- `4`: refused; the work item is set to `Failed` and tagged `fleet:refused`.
+- `1`: error.
+
+Settings come from flags or environment variables: `FLEET_VAULT`, `FLEET_DEFAULT_AGENT`, `FLEET_REF`, `FLEET_IMAGE`, `FLEET_NAMESPACE`, `FLEET_DEADLINE_MINUTES`. They are never read from `config.yaml`. Setup is in the plugin's `README.md`.

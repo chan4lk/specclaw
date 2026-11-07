@@ -3,7 +3,8 @@ set -uo pipefail
 
 STATUS="${FLEET_STATUS_DIR:-/fleet/status}"
 AUTH="${FLEET_CODEX_HOME:-/fleet/codex}/auth.json"
-rc="$(cat "$STATUS/exit" 2>/dev/null || echo 1)"
+rc="$(head -c 4 "$STATUS/exit" 2>/dev/null | tr -d '\n')"
+[[ "$rc" =~ ^[0-9]{1,3}$ ]] || rc=1
 
 fail() {
   echo "ERROR: $1; the assignee must re-run specclaw-fleet login --agent codex" >&2

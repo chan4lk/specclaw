@@ -67,6 +67,8 @@ specclaw-fleet dispatch <change>                  Job fleet-<nnn>-<rand>
 
 ## Data Model Changes
 
+> **Redesigned after the final review escalated (2026-11-07).** Fleet settings are flags or environment variables (`FLEET_VAULT`, `FLEET_VAULT_WRITER`, `FLEET_DEFAULT_AGENT`, `FLEET_REF`, `FLEET_IMAGE`, `FLEET_NAMESPACE`, `FLEET_DEADLINE_MINUTES`), so there is no fleet YAML parser. The pipeline no longer diffs commits. It scans approved, not-started changes, and dispatch is idempotent through the `fleet:dispatched` and `fleet:refused` work-item tags. The `fleet.*` config keys listed below are superseded.
+
 Config keys, all optional:
 - `fleet.default_agent`
 - `fleet.namespace` (default `specclaw-fleet`)

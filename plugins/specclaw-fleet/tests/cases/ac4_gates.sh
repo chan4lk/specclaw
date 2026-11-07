@@ -7,7 +7,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/../lib/dispatch-env.sh"
 stub_cluster
 
 refused() { (( rc != 0 )) && nothing_applied; }
-refused_and_failed() { refused && marked_failed; }
+refused_4() { (( rc == 4 )) && nothing_applied && marked_failed; }
+refused_and_failed() { refused_4; }
 failed_unregistered() { refused_and_failed && grep -q "no registered claude credential" "$CALLS"; }
 failed_vault() { refused_and_failed && grep -q "could not read Key Vault" "$CALLS"; }
 
@@ -53,4 +54,12 @@ check "AC4e vault error refused as a vault problem, not the assignee's" failed_v
 
 reset_env; seed_codex_job '{"active":1}'; dispatch --agent codex; rc=$?
 check "AC4f busy codex assignee refused and marked Failed" refused_and_failed
+handled() { (( rc == 3 )) && nothing_applied && ! grep -q "state=failed" "$CALLS"; }
+for tag in fleet:dispatched Fleet:Refused " fleet:dispatched "; do
+  reset_env; WI_JSON="{\"fields\":{\"System.AssignedTo\":{\"uniqueName\":\"Alice@Contoso.com\"},\"System.Tags\":\"fleet:auto;$tag\"}}" dispatch; rc=$?
+  check "AC4g already handled ('$tag') exits 3 and creates nothing" handled
+done
+reset_env; WI_JSON='{"fields":{"System.AssignedTo":{"uniqueName":"Alice@Contoso.com"},"System.Tags":"fleet:auto; fleet:dispatched"}}' \
+  dispatch --force; rc=$?
+check "AC4g --force dispatches a change already handled" accepted
 finish

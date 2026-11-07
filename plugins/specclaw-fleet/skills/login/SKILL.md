@@ -7,7 +7,7 @@ description: Use when a person needs to register or refresh their own Claude or 
 Stores the caller's own credential in Azure Key Vault so fleet jobs assigned to them can run on their plan. The user runs this themselves; never run it for someone else, and never ask them to paste a token into chat.
 
 ```bash
-specclaw-fleet login --agent claude --vault <name>
+specclaw-fleet login --agent claude --vault <name>   # or set FLEET_VAULT
 specclaw-fleet login --agent codex  --vault <name>
 ```
 

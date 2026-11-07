@@ -1,5 +1,5 @@
 # shellcheck shell=bash disable=SC2034
-export SPECCLAW_DIR="$TMP/repo/.specclaw" APPLIED="$TMP/applied" CLAIMS="$TMP/claims" CHANGE="049-x"
+export FLEET_VAULT=v SPECCLAW_DIR="$TMP/repo/.specclaw" APPLIED="$TMP/applied" CLAIMS="$TMP/claims" CHANGE="049-x"
 export WI_JSON='{"fields":{"System.AssignedTo":{"uniqueName":"Alice@Contoso.com"},"System.Tags":"specclaw; fleet:auto"}}'
 export WI_UPDATES='{"value":[{"revisedBy":{"uniqueName":"alice@contoso.com"},"fields":{"System.Tags":{"oldValue":"specclaw","newValue":"specclaw; Fleet:Auto"}}}]}'
 CANARY="sk-ant-oat01-DISPATCH-CANARY"
@@ -10,7 +10,7 @@ reset_env() {
   mkdir -p "$SPECCLAW_DIR/changes/$CHANGE" "$APPLIED" "$KV" "$CLAIMS"
   git -C "$TMP/repo" init -q && git -C "$TMP/repo" remote add origin https://user:pat@dev.azure.com/o/p/_git/r
   git -C "$TMP/repo" -c user.name=t -c user.email=t@t commit -q --allow-empty -m base
-  printf 'fleet:\n  vault: v\n' > "$SPECCLAW_DIR/config.yaml"
+  printf 'azdo:\n  fleet_states:\n    failed: Failed\n' > "$SPECCLAW_DIR/config.yaml"
   echo '{"phases":{"proposal":{"status":"approved"}}}' > "$SPECCLAW_DIR/changes/$CHANGE/state.json"
   printf '**Azure Boards Work Item:** [#42](https://x)\n' > "$SPECCLAW_DIR/changes/$CHANGE/status.md"
   printf '%s' "$CANARY" > "$KV/claude-token-$H"
@@ -57,4 +57,4 @@ dispatch() {
 }
 
 nothing_applied() { [[ -z "$(ls -A "$APPLIED")" ]] && ! grep -q "kubectl.* create -f" "$CALLS"; }
-marked_failed() { grep -q "specclaw-azdo-issue fields .*state=failed" "$CALLS"; }
+marked_failed() { grep -q "specclaw-azdo-issue fields .*state=failed" "$CALLS" && grep -q "specclaw-azdo-issue tag .* fleet:refused" "$CALLS"; }

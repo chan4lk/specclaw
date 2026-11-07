@@ -13,7 +13,23 @@ record_run() {
 
 refuse() {
   record_run "$1" state=failed "exit=refused: $2"
-  die "$1: $2"
+  azdo_issue tag "$SPECCLAW_DIR" "$1" fleet:refused >/dev/null || warn "could not tag the work item fleet:refused"
+  echo "ERROR: $1: $2 (remove the fleet:refused tag to retry)" >&2
+  exit 4
+}
+
+already_handled() {
+  (( F_FORCE )) && return 0
+  local tag
+  local -a tags=()
+  IFS=';' read -ra tags <<<"$1"
+  for tag in "${tags[@]}"; do
+    tag="$(lower "${tag//[[:space:]]/}")"
+    if [[ "$tag" == fleet:dispatched || "$tag" == fleet:refused ]]; then
+      echo "$F_CHANGE: already handled ($tag); remove the tag or pass --force to dispatch again" >&2
+      exit 3
+    fi
+  done
 }
 
 work_item_id() {
@@ -27,33 +43,6 @@ proposal_approved() {
 
 lower() {
   printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
-}
-
-has_auto_tag() {
-  local tag
-  local -a tags=()
-  IFS=';' read -ra tags <<<"$1"
-  for tag in "${tags[@]}"; do
-    tag="${tag#"${tag%%[![:space:]]*}"}"
-    [[ "$(lower "${tag%"${tag##*[![:space:]]}"}")" == fleet:auto ]] && return 0
-  done
-  return 1
-}
-
-auto_tagged_by() {
-  azdo_issue updates "$SPECCLAW_DIR" "$F_CHANGE" | jq -r '
-    def auto: ascii_downcase | split(";") | map(gsub("^\\s+|\\s+$"; "")) | index("fleet:auto") != null;
-    [.value[] | .fields["System.Tags"]? as $t | select($t != null)
-      | select(($t.newValue // "" | auto) and (($t.oldValue // "" | auto) | not))]
-    | last | .revisedBy.uniqueName // empty'
-}
-
-consented() {
-  local assignee="$1" requester="${BUILD_REQUESTEDFOREMAIL:-}" tagger
-  [[ -n "$requester" && "$(lower "$requester")" == "$(lower "$assignee")" ]] && return 0
-  has_auto_tag "$2" || return 1
-  tagger="$(auto_tagged_by)" || refuse "$F_CHANGE" "could not read the work item history to confirm who added fleet:auto"
-  [[ -n "$tagger" && "$(lower "$tagger")" == "$(lower "$assignee")" ]]
 }
 
 fetch_credential() {

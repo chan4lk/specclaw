@@ -57,6 +57,8 @@ jobs:
         run: bash plugins/specclaw-review/tests/run-review-tests.sh
       - name: Run azdo-issue fields tests
         run: bash plugins/specclaw-sync/tests/run-azdo-issue-fields-tests.sh
+      - name: Run azdo-issue history and tag tests
+        run: bash plugins/specclaw-sync/tests/run-azdo-issue-history-tests.sh
       - name: Run specclaw-fleet tests
         run: bash plugins/specclaw-fleet/tests/run-fleet-tests.sh
       - uses: oven-sh/setup-bun@v2

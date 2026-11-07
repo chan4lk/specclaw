@@ -42,5 +42,13 @@ check "AC8 changed auth.json is written back to the assignee's secret" changed_p
 check "AC8 unchanged auth.json is not written" unchanged_skipped
 check "AC8 claude runs skip write-back and keep the agent's status" claude_skipped
 check "AC8 write-back exits with the agent's recorded status" keeps_agent_status
+injected_status() {
+  local payload
+  for payload in 'a[$(touch "$TMP/pwned")]' '1+1' '' 'x' '9999'; do
+    run_wb claude "$payload" seed
+    (( $? == 1 )) && [[ ! -e "$TMP/pwned" ]] || return 1
+  done
+}
+check "AC8 agent-written exit status is validated, never evaluated" injected_status
 check "AC8 truncated, empty, non-object, token-less or symlinked auth.json never overwrites the vault" invalid_kept
 finish

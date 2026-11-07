@@ -24,6 +24,7 @@ job_hardened() {
   grep -q "automountServiceAccountToken: false" "$job" && grep -q "runAsNonRoot: true" "$job" && grep -q "seccompProfile: {type: RuntimeDefault}" "$job" \
     && grep -q "readOnlyRootFilesystem: true" "$job" && grep -q "backoffLimit: 0" "$job"
 }
+tagged_dispatched() { grep -q "specclaw-azdo-issue tag .* 049-x fleet:dispatched" "$CALLS"; }
 work_item_and_output() {
   grep -q "fields .*agent=claude .*cluster=k3s-a .*requested_by=Alice A dispatched_commit=[0-9a-f]\{40\} state=dispatched" "$CALLS" \
     && jq -e '.ok == true and .agent == "claude" and .work_item == "42"' "$TMP/out" >/dev/null
@@ -38,6 +39,7 @@ check "AC5 Secret holds only the credential and is owned by the Job" secret_hold
 check "AC5 Job carries the three labels and the deadline" job_labels_and_deadline
 check "AC10 rendered Job is hardened" job_hardened
 check "AC5 work item gets Dispatched and run fields; JSON line printed" work_item_and_output
+check "AC5 work item tagged fleet:dispatched so reruns skip it" tagged_dispatched
 check "NFR3 no credential or PAT in output or Job" no_secret_leak
 check "AC5 --dry-run redacts and applies nothing" dry_run_redacted
 finish

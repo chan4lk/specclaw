@@ -52,7 +52,7 @@ Assigning a work item to someone must not spend their plan without their say. Di
    docker build -f plugins/specclaw-fleet/image/Dockerfile \
      --build-arg CLAUDE_CODE_VERSION=<x.y.z> --build-arg CODEX_VERSION=<x.y.z> -t <registry>/specclaw-fleet:<tag> .
    ```
-   Set `fleet.image` to that tag. On the first build, check that the `claude plugin install` and `codex plugin marketplace add` steps succeed; their syntax has not been tested against a live image yet.
+   Set the pipeline's `image` parameter (`FLEET_IMAGE`) to that tag. On the first build, check that the `claude plugin install` and `codex plugin marketplace add` steps succeed; their syntax has not been tested against a live image yet.
 4. **Onboard each user** (admin):
    ```bash
    specclaw-fleet onboard alice@contoso.com --vault <name> --writer <writer-sp-object-id>
@@ -80,17 +80,29 @@ Assigning a work item to someone must not spend their plan without their say. Di
        running: Running
        pr_open: PR Open
        failed: Failed
-   fleet:
-     vault: specclaw-fleet-kv
-     vault_writer: <writer-sp-object-id>
-     image: registry.example.com/specclaw-fleet:1
-     default_agent: claude
-     namespace: specclaw-fleet
-     deadline_minutes: 120
    ```
-6. **Pipeline.** Use `pipelines/dispatch.yml`. It runs on `main` when a change's `state.json` changes. It compares against the commit of the pipeline's last successful run, falling back to the parent commit on the first run, so an approval anywhere in a multi-commit push is seen. It dispatches only changes whose proposal became approved in that range. Any read failure fails the step. The pipeline agent needs `az`, `kubectl`, `jq`, `python3`, and `specclaw-fleet` plus `specclaw-azdo-issue` on `PATH`. Grant the build service identity read access to builds.
+   Fleet settings are **not** read from `config.yaml`. They are flags or environment variables, which the pipeline sets from its parameters:
 
-   **Which commit is built.** Dispatch records the commit that triggered it, and the pod checks that commit is an ancestor of the ref it clones before running. The agent builds on the ref's tip, so the base is fresh and still contains the approval. The work item records both commits.
+   | Variable | Flag | Default |
+   |---|---|---|
+   | `FLEET_VAULT` | `--vault` | (required) |
+   | `FLEET_VAULT_WRITER` | `onboard --writer` | none: onboarding warns |
+   | `FLEET_DEFAULT_AGENT` | `--agent` | `claude` |
+   | `FLEET_REF` | `--ref` | `main` |
+   | `FLEET_IMAGE` |  | `specclaw-fleet:latest` |
+   | `FLEET_NAMESPACE` |  | `specclaw-fleet` |
+   | `FLEET_DEADLINE_MINUTES` |  | `120` (1 to 1440) |
+
+   `config.yaml` is passed to the pod as-is, so `specclaw-azdo-issue` can apply the mapping above even when the clone fails.
+6. **Pipeline.** Use `pipelines/dispatch.yml`. It runs on `main` whenever a change's `state.json` changes. `batch: true` means runs never overlap. Each run does not diff commits. It scans every change that is approved but not started (`phase: proposal`) and dispatches it. Dispatch is idempotent:
+   - On success it tags the work item `fleet:dispatched`.
+   - On a refusal (consent, credential, busy codex, vault error) it tags it `fleet:refused`.
+   - A change carrying either tag is skipped (exit 3).
+   - To retry, remove the tag, or run `specclaw-fleet dispatch <change> --force`.
+
+   A refusal raises a pipeline warning. Only real errors, such as an unreadable `state.json` or a cluster failure, fail the run. The pipeline agent needs `az`, `kubectl`, `jq`, and `specclaw-fleet` plus `specclaw-azdo-issue` on `PATH`.
+
+   **Which commit is built.** Dispatch records the commit it ran on. The pod checks that this commit is an ancestor of the ref it clones, and that the proposal is still approved at the ref's tip. Only then does it build on that tip. The work item records both commits and the change branch.
 
 ## Egress hosts
 
@@ -106,7 +118,7 @@ The full list of hosts Codex needs for its token refresh is not yet confirmed. R
 ## Assumptions and known limits
 
 - The org is backed by Entra ID, so a work item's `AssignedTo.uniqueName` equals the user's UPN. Guest or Microsoft-account users whose names differ just fail the credential check.
-- **Deadlines.** The agent gets `fleet.deadline_minutes`. An in-pod watchdog stops it at that point and records `Failed`/`deadline`, then write-back still runs. The Job's own `activeDeadlineSeconds` is 10 minutes longer, as a backstop.
+- **Deadlines.** The agent gets `FLEET_DEADLINE_MINUTES`. An in-pod watchdog stops it at that point and records `Failed`/`deadline`, then write-back still runs. The Job's own `activeDeadlineSeconds` is 10 minutes longer, as a backstop.
 - **Clone failure.** A failed clone still marks the work item `Failed`, through a minimal tracker directory, as a comment and mapped fields only.
 - **Hard kills.** A pod killed without SIGTERM (node loss, OOM) can leave the work item in `Running`. The Job status in the cluster is the source of truth. A reaper is a follow-up.
 - **Vault errors.** A Key Vault read error at dispatch is reported as a vault problem, not as the assignee's missing credential. `onboard` writes a placeholder only when the secret is genuinely `NotFound`.

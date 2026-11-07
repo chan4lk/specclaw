@@ -11,8 +11,21 @@ parameters:
   - name: vault
     type: string
     default: specclaw-fleet-kv
+  - name: image
+    type: string
+    default: specclaw-fleet:latest
+  - name: namespace
+    type: string
+    default: specclaw-fleet
+  - name: deadlineMinutes
+    type: string
+    default: "120"
+  - name: defaultAgent
+    type: string
+    default: claude
 
 trigger:
+  batch: true
   branches:
     include: [main]
   paths:
@@ -24,7 +37,7 @@ pool:
 
 steps:
   - checkout: self
-    fetchDepth: 0
+    fetchDepth: 1
   - task: Kubernetes@1
     displayName: kubectl login
     inputs:
@@ -40,35 +53,30 @@ steps:
       inlineScript: |
         set -uo pipefail
         export AZDO_ORG="$(basename "${SYSTEM_COLLECTIONURI%/}")"
-        status_at() {
-          git show "$1:$2" | jq -er 'if type == "object" then (.phases.proposal.status // "none") else error("not an object") end'
-        }
-        base_commit() {
-          [[ -n "${SYSTEM_ACCESSTOKEN:-}" ]] || return 1
-          curl -sf -H "Authorization: Bearer $SYSTEM_ACCESSTOKEN" \
-            "${SYSTEM_COLLECTIONURI}${SYSTEM_TEAMPROJECTID}/_apis/build/builds?definitions=${SYSTEM_DEFINITIONID}&branchName=${BUILD_SOURCEBRANCH}&resultFilter=succeeded&\$top=1&api-version=7.1" \
-            | jq -er '.value[0].sourceVersion // "HEAD^1"'
-        }
-        base="$(base_commit)" || { echo "##vso[task.logissue type=error]could not read the last successful run"; exit 1; }
-        unreadable() { echo "##vso[task.logissue type=error]could not read proposal status from $1"; failed=1; }
         failed=0
-        changed="$AGENT_TEMPDIRECTORY/fleet-changed"
-        git diff -z --no-renames --name-status "$base" HEAD -- '.specclaw/changes/*/state.json' > "$changed" \
-          || { echo "##vso[task.logissue type=error]could not list changed state files"; exit 1; }
-        while IFS= read -r -d '' kind && IFS= read -r -d '' f; do
-          case "$kind" in
-            D) continue ;;
-            A) before=absent ;;
-            *) before="$(status_at "$base" "$f")" || { unreadable "$f"; continue; } ;;
+        for f in .specclaw/changes/*/state.json; do
+          [[ -f "$f" ]] || continue
+          if ! pending="$(jq -r '.phase == "proposal" and .phases.proposal.status == "approved"' "$f")"; then
+            echo "##vso[task.logissue type=error]could not read $f"; failed=1; continue
+          fi
+          [[ "$pending" == true ]] || continue
+          rc=0
+          specclaw-fleet dispatch "$(basename "$(dirname "$f")")" || rc=$?
+          case "$rc" in
+            0|3) ;;
+            4) echo "##vso[task.logissue type=warning]$f: dispatch refused; see the work item" ;;
+            *) failed=1 ;;
           esac
-          now="$(status_at HEAD "$f")" || { unreadable "$f"; continue; }
-          [[ "$now" == approved && "$before" != approved ]] || continue
-          specclaw-fleet dispatch "$(basename "$(dirname "$f")")" --vault "${{ parameters.vault }}" || failed=1
-        done < "$changed"
+        done
         exit "$failed"
     env:
       AZDO_TOKEN: $(System.AccessToken)
-      SYSTEM_ACCESSTOKEN: $(System.AccessToken)
       AZDO_PROJECT: $(System.TeamProject)
       BUILD_REQUESTEDFOR: $(Build.RequestedFor)
       BUILD_REQUESTEDFOREMAIL: $(Build.RequestedForEmail)
+      FLEET_VAULT: ${{ parameters.vault }}
+      FLEET_IMAGE: ${{ parameters.image }}
+      FLEET_NAMESPACE: ${{ parameters.namespace }}
+      FLEET_DEADLINE_MINUTES: ${{ parameters.deadlineMinutes }}
+      FLEET_DEFAULT_AGENT: ${{ parameters.defaultAgent }}
+      FLEET_REF: $(Build.SourceBranchName)

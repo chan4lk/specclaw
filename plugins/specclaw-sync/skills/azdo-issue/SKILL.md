@@ -45,6 +45,12 @@ Called automatically by `/specclaw-sync:pr-azdo`; rarely invoked directly.
 specclaw-azdo-issue show .specclaw <change>
 specclaw-azdo-issue updates .specclaw <change>
 ```
+`updates` pages through the whole history (200 at a time) and fails rather than return a partial one.
+
+**Add a tag (idempotent, case-insensitive):**
+```bash
+specclaw-azdo-issue tag .specclaw <change> fleet:dispatched
+```
 
 **Record run fields (used by specclaw-fleet):**
 ```bash
