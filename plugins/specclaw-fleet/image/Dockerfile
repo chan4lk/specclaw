@@ -26,7 +26,8 @@ ENV HOME=/home/agent \
 
 USER 1000
 
-RUN HOME=/opt/fleet/home-seed claude plugin marketplace add /opt/specclaw \
+RUN mkdir -p /opt/fleet/home-seed/.codex \
+ && HOME=/opt/fleet/home-seed claude plugin marketplace add /opt/specclaw \
  && HOME=/opt/fleet/home-seed claude plugin install specclaw@chan4lk \
  && HOME=/opt/fleet/home-seed claude plugin install specclaw-sync@chan4lk \
  && CODEX_HOME=/opt/fleet/home-seed/.codex codex plugin marketplace add /opt/specclaw
