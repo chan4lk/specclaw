@@ -1,5 +1,4 @@
 variables:
-  fleetPool: specclaw-fleet
   fleetKubeConnection: specclaw-fleet-k3s
   fleetAzureConnection: specclaw-fleet-azure
   fleetVault: specclaw-fleet-kv
@@ -17,7 +16,7 @@ trigger:
 pr: none
 
 pool:
-  name: ${{ variables.fleetPool }}
+  name: specclaw-fleet   # agent pool; a root-level pool cannot use a template expression
 
 steps:
   - checkout: self
