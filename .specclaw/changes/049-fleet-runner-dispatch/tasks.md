@@ -42,7 +42,7 @@ Wave 1 lays the packaging and the single Boards writer. Wave 2 adds the credenti
 
 ### Wave 3 — in-cluster, docs, CI
 
-- [ ] `T5` — Runner image: Dockerfile, agent `entrypoint.sh`, codex `writeback.sh` (AC-7, AC-8)
+- [x] `T5` — Runner image: Dockerfile, agent `entrypoint.sh`, codex `writeback.sh` (AC-7, AC-8)
   - Files: plugins/specclaw-fleet/image/Dockerfile, plugins/specclaw-fleet/image/entrypoint.sh, plugins/specclaw-fleet/image/writeback.sh, plugins/specclaw-fleet/tests/run-fleet-tests.sh
   - Estimate: medium
   - Kind: impl
