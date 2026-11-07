@@ -1,0 +1,100 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 2,
+  "minor": 3
+ },
+ "escalated": [],
+ "files": [
+  ".github/workflows/fleet-image.yml",
+  "plugins/specclaw-fleet/lib/codex-slot.sh",
+  "plugins/specclaw-fleet/lib/dispatch.sh",
+  "plugins/specclaw-fleet/lib/launch.sh",
+  "plugins/specclaw-fleet/lib/trigger.sh",
+  "plugins/specclaw-fleet/tests/cases/ac18_gate_parity.sh",
+  "plugins/specclaw-fleet/tests/lib/dispatch-env.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw-fleet/lib/codex-slot.sh",
+   "fp": "00278ffffec4",
+   "in_delta": true,
+   "line": 4,
+   "message": "The codex Job name is now spelled two ways. `codex_slot_state` reads the hard-coded `fleet-codex-$F_HASH`, while `delete_job_if_uid` and `create_job` still use `$F_JOB`. The old `claim_codex_slot` read `$F_JOB`, so this is a regression. The literal was most likely added because check-only mode skips `parse_pod_inputs`, so `F_JOB` is unset there. Derive the name once (for example a `codex_job_name` function used by the reader, the deleter and `render_job`), or resolve `F_JOB` in check-only mode too.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B4",
+   "scenario": "The codex Job naming in `parse_pod_inputs` changes (a namespace or agent suffix, say) -> `codex_slot_state` reads `fleet-codex-<hash>`, finds NotFound and reports the slot free -> `create_job` creates `$F_JOB` and the codex slot is no longer exclusive. The same_ns test only asserts the literal name in the trigger's kubectl call, so it stays green.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/tests/cases/ac18_gate_parity.sh",
+   "fp": "4d1f31aa746f",
+   "in_delta": true,
+   "line": 30,
+   "message": "The reorder fix (gates before any write) has no variant test. The write detector greps only `azdo-issue (fields|tag|claim)` and `pipelines run`, so `azdo-issue untag` and work-item creation are not detected. No row runs `trigger --retry` or `trigger --create`. Add rows that run those flags against a refused or unapproved change and assert that no untag or create call reached the stubs.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "A later edit moves the `--retry` untag calls back above `check_gates` -> `trigger --retry` on an unapproved or unassigned change clears `fleet:dispatched` and `fleet:refused`, then refuses. All ten parity rows pass because none uses `--retry` and the grep does not match `untag`.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/tests/cases/ac18_gate_parity.sh",
+   "fp": "8f3d41c85b22",
+   "in_delta": true,
+   "line": 34,
+   "message": "The 'no work item' and 'unapproved' rows use mode `codes`, which compares exit codes only. The check title still claims 'verdict and message' agree on all ten outcomes. These are the two outcomes the previous round named, and message drift between trigger and dispatch there goes unnoticed. Compare the message stem, or rename the check and document why these two differ.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "The trigger's unapproved-proposal message is reworded so it differs from dispatch's -> both exit with the same code -> the row passes, although the title says messages agree.",
+   "severity": "minor"
+  },
+  {
+   "file": "plugins/specclaw-fleet/lib/codex-slot.sh",
+   "fp": "8c9561b0fa52",
+   "in_delta": true,
+   "line": 8,
+   "message": "If `kubectl get job` exits 0 but its output is not valid JSON, `jq` fails and `codex_slot_state` prints nothing. `claim_codex_slot` and `check_only_busy` match no case on the empty string and treat the slot as free. Check-only then reports `codex_busy_check: done` for a check that did not run. Emit `error unparsable Job JSON` when `jq` fails.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B3",
+   "scenario": "A kubectl auth plugin prints a banner on stdout and exits 0 -> `jq` fails -> state is empty -> the busy check reports 'done' with no error.",
+   "severity": "minor"
+  },
+  {
+   "file": "plugins/specclaw-fleet/lib/codex-slot.sh",
+   "fp": "34511aa3108e",
+   "in_delta": true,
+   "line": 37,
+   "message": "The new `error*` branch in `check_only_busy` (sets `T_BUSY_CHECK` to not-run) and the `die` branch in `claim_codex_slot` are not driven by any test. No test makes `get job` fail with something other than NotFound (Forbidden, timeout, connection refused). Add a stub failure and assert the JSON says not-run for trigger and that dispatch refuses.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "The `error*` case is deleted -> an unreadable cluster would be reported as 'done' -> no test fails.",
+   "severity": "minor"
+  }
+ ],
+ "head": "63b575039537a076e0904be938d5c777fd64edab",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 23180,
+ "round": 5,
+ "since": "9688d15",
+ "status": "open",
+ "system_chars": 8908,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794062557,
+ "ts_start": 1794062499
+}

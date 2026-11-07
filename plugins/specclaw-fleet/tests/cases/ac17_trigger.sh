@@ -35,6 +35,13 @@ reset_env; publish; : > "$SPECCLAW_DIR/changes/$CHANGE/status.md"; trig --create
 reset_env; publish; trig; queue_rc=$?; queue_out="$(cat "$TMP/out")"; queue_calls="$(cat "$CALLS")"
 reset_env; publish; trig --retry; retry_calls="$(cat "$CALLS")"
 reset_env; publish; trig --direct; direct_rc=$?; direct_out="$(cat "$TMP/out")"; direct_jobs="$(find "$APPLIED" -name '*.yaml' | wc -l | tr -d ' ')"
+reset_env; echo '{"phases":{"proposal":{"status":"draft"}}}' > "$SPECCLAW_DIR/changes/$CHANGE/state.json"; publish; : > "$SPECCLAW_DIR/changes/$CHANGE/status.md"
+trig --retry --create; rc=$?; gate 1 "approve it and push first"
+reset_env; publish; WI_UPDATES='{"value":[{"revisedBy":{"uniqueName":"m@c.com"},"fields":{"System.Tags":{"newValue":"fleet:auto"}}}]}' trig --retry; rc=$?
+gate 4 "fleet:auto was not added by the assignee"
+reset_env; publish; GET_ERR="Error from server (Forbidden): jobs" FLEET_DEFAULT_AGENT=codex trig; unread_rc=$?; unread_out="$(cat "$TMP/out")"
+unread() { (( unread_rc == 0 )) && jq -e '.codex_busy_check | startswith("not-run")' <<<"$unread_out" >/dev/null; }
+check "AC8 an unreadable cluster makes the busy check not-run, never clear" unread
 creates() { (( create_rc == 3 )) && grep -q "azdo-issue create" <<<"$create_calls" && ! grep -q "pipelines run" <<<"$create_calls" && grep -q "assign it" <<<"$create_out"; }
 queues() {
   (( queue_rc == 0 )) && jq -e '.mode == "queued" and .run == "4242" and .change == "049-x" and .agent == "claude"' <<<"$queue_out" >/dev/null \

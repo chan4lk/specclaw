@@ -17,7 +17,7 @@ row() {
   local label="$1" mode="$2"; shift 2
   reset_env; publish; prep; env "$@" "$FLEET" dispatch "$CHANGE" > "$TMP/d.out" 2>&1; d=$?
   reset_env; publish; prep; env "$@" "$FLEET" trigger "$CHANGE" > "$TMP/t.out" 2>&1; t=$?
-  local quiet=1; grep -qE "azdo-issue (fields|tag|claim)|pipelines run" "$CALLS" && quiet=0
+  local quiet=1; grep -qE "azdo-issue (fields|tag|untag|claim|create)|pipelines run" "$CALLS" && quiet=0
   stem() { sed -E 's/ \(remove the fleet:refused tag to retry\)//; s/^ERROR: //' "$1" | grep -m1 "$CHANGE"; }
   if (( d != t || quiet == 0 )) || { [[ "$mode" == same ]] && [[ "$(stem "$TMP/d.out")" != "$(stem "$TMP/t.out")" ]]; }; then
     agree=0; echo "  differ on $label: dispatch=$d trigger=$t"
@@ -38,5 +38,5 @@ reset_env; publish; FLEET_NAMESPACE=team-a FLEET_DEFAULT_AGENT=codex "$FLEET" tr
 same_ns() { grep -q "kubectl -n team-a --request-timeout=15s get job fleet-codex-$H -o json" <<<"$ns_calls"; }
 check "AC8 trigger's busy check reads the same namespace and Job name dispatch uses" same_ns
 parity() { (( agree == 1 )); }
-check "AC8 trigger and dispatch agree on all ten gate outcomes (verdict and message); trigger writes nothing" parity
+check "AC8 trigger and dispatch agree on the verdict for all ten outcomes and the message for the eight shared ones (approval and missing work item word their remedies differently by design); trigger writes nothing" parity
 finish
