@@ -20,7 +20,7 @@
 - [x] `T3` — GHCR multi-arch workflow and hosted pipeline template (AC-6, AC-9)
   - Files: .github/workflows/fleet-image.yml, plugins/specclaw-fleet/pipelines/dispatch-hosted.yml, plugins/specclaw-fleet/tests/cases/ac15_delivery.sh
   - Kind: config
-- [ ] `T4` — `specclaw-fleet doctor`, read-only (AC-7)
+- [x] `T4` — `specclaw-fleet doctor`, read-only (AC-7)
   - Files: plugins/specclaw-fleet/lib/doctor.sh, plugins/specclaw-fleet/lib/doctor-checks.sh, plugins/specclaw-fleet/bin/specclaw-fleet, plugins/specclaw-fleet/tests/cases/ac16_doctor.sh
   - Kind: impl
 - [ ] `T5` — `specclaw-fleet trigger` (AC-8)

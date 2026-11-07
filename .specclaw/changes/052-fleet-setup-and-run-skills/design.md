@@ -24,7 +24,7 @@ The work builds on 049's structure: one Bash router, small sourced libs, and ima
 | `plugins/specclaw-fleet/lib/dispatch.sh` | modify | validate `FLEET_CLAUDE_VERSION`, `FLEET_IMAGE_PULL_SECRET`, `FLEET_NODE_LABEL` |
 | `plugins/specclaw-fleet/lib/manifest.sh` | modify | emit `FLEET_CLAUDE_VERSION` and the optional pod-spec fragments |
 | `plugins/specclaw-fleet/lib/podspec.sh` | create | the optional fragments (`imagePullSecrets`, `nodeSelector`, `tolerations`), keeping `manifest.sh` at 80 lines or fewer |
-| `plugins/specclaw-fleet/lib/doctor.sh`, `lib/doctor-checks.sh` | create | runner plus check table |
+| `plugins/specclaw-fleet/lib/doctor.sh`, `lib/doctor-checks.sh`, `lib/doctor-azure.sh` | create | runner, cluster checks, Azure/registry checks (split to stay at 80 lines or fewer) |
 | `plugins/specclaw-fleet/lib/trigger.sh` | create | gates, retry, queue or dispatch |
 | `plugins/specclaw-fleet/bin/specclaw-fleet` | modify | route `doctor` and `trigger` |
 | `plugins/specclaw-fleet/pipelines/dispatch-hosted.yml` | create | hosted-agent template |
