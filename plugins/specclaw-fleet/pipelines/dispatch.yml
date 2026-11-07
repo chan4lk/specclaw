@@ -1,3 +1,13 @@
+parameters:
+  - name: change
+    displayName: Only this change (empty = every approved, not-started change)
+    type: string
+    default: " "
+  - name: agent
+    displayName: Agent for this run (empty = fleetDefaultAgent)
+    type: string
+    default: " "
+
 variables:
   fleetKubeConnection: specclaw-fleet-k3s
   fleetAzureConnection: specclaw-fleet-azure
@@ -38,14 +48,18 @@ steps:
         set -uo pipefail
         export AZDO_ORG="$(basename "${SYSTEM_COLLECTIONURI%/}")"
         failed=0
+        only="${FLEET_ONLY_CHANGE:-}"; only="${only// /}"
+        agent="${FLEET_RUN_AGENT:-}"; agent="${agent// /}"
         for f in .specclaw/changes/*/state.json; do
           [[ -f "$f" ]] || continue
           if ! pending="$(jq -r '.phase == "proposal" and .phases.proposal.status == "approved"' "$f")"; then
             echo "##vso[task.logissue type=error]could not read $f"; failed=1; continue
           fi
           [[ "$pending" == true ]] || continue
+          change="$(basename "$(dirname "$f")")"
+          [[ -z "$only" || "$change" == "$only" ]] || continue
           rc=0
-          specclaw-fleet dispatch "$(basename "$(dirname "$f")")" || rc=$?
+          specclaw-fleet dispatch "$change" ${agent:+--agent "$agent"} || rc=$?
           case "$rc" in
             0|3) ;;
             5) echo "##vso[task.logissue type=warning]$f: assignee's codex slot is busy; re-run this pipeline or dispatch manually once it finishes" ;;
@@ -66,3 +80,5 @@ steps:
       FLEET_DEFAULT_AGENT: $(fleetDefaultAgent)
       FLEET_CLAUDE_VERSION: $(fleetClaudeVersion)
       FLEET_REF: $(Build.SourceBranchName)
+      FLEET_ONLY_CHANGE: ${{ parameters.change }}
+      FLEET_RUN_AGENT: ${{ parameters.agent }}

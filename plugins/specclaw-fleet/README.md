@@ -68,7 +68,9 @@ Run **`/specclaw-fleet:run`**, or call the command directly:
 FLEET_VAULT=<vault> specclaw-fleet trigger <change> [--create] [--retry] [--direct]
 ```
 
-`trigger` refuses an unapproved proposal, a work item with no assignee, missing `fleet:auto` consent from the assignee, or a missing credential. Refusals have no side effects. It then queues the pipeline, or dispatches directly with `--direct`. `--retry` clears `fleet:dispatched` and `fleet:refused` first.
+`trigger` reads approval from the **pushed** ref (`FLEET_REMOTE`/`FLEET_REF`, default `origin/main`). It refuses an unapproved proposal, a work item with no assignee, missing `fleet:auto` consent from the assignee, or a missing credential. Refusals have no side effects. `--create` is the one deliberate exception: it creates the missing work item and stops (exit 3), so the item can be assigned and consented.
+
+Once the gates pass, `trigger` queues the pipeline with this change and agent as runtime parameters, or dispatches directly with `--direct`. `--retry` clears `fleet:dispatched` and `fleet:refused` first.
 
 ## Egress hosts
 

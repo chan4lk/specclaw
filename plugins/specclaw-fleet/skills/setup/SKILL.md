@@ -35,7 +35,7 @@ AZDO_ORG=<org> AZDO_PROJECT=<project> specclaw-fleet doctor
 | `secret:fleet-vault-writer` | Create it from the writer service principal's file: tenant, client id and secret. |
 | `secret:fleet-azdo` | Have the operator paste a PAT (Code read/write, Work Items read/write) at a hidden prompt in a real terminal. The prompt writes the secret, plus `.specclaw/.env` in the repo, which must be gitignored first. |
 | `service-connections` | **Kubernetes:** scheme `Kubernetes`, `authorizationType: Kubeconfig`. Use a kubeconfig with a `kubectl create token fleet-dispatcher --duration=…` token, never an admin kubeconfig, and rotate it before it expires. **ARM:** the dispatch service principal. Enable both for pipelines. |
-| `pipeline` | Copy `pipelines/dispatch-hosted.yml` (or `dispatch.yml` for local mode) into the repo, set its variables, push after asking, then `az pipelines create --skip-first-run`. A root-level `pool:` cannot use a template expression. |
+| `pipeline` | Copy `pipelines/dispatch-hosted.yml` (or `dispatch.yml` for local mode) into the repo and set its variables. `fleetSpecclawRef` must be a **full 40-character commit SHA** of specclaw: the pipeline refuses tag names and verifies the fetched commit. Push after asking, then `az pipelines create --skip-first-run`. A root-level `pool:` cannot use a template expression. |
 
 ## Repo config
 

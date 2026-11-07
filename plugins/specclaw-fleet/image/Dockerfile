@@ -1,12 +1,13 @@
 FROM debian:bookworm-slim AS seed
 
 ARG CLAUDE_CODE_VERSION=2.1.319
-ARG TARGETARCH
 
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates git \
- && rm -rf /var/lib/apt/lists/* \
- && curl -fsSL -o /tmp/claude "https://downloads.claude.ai/claude-code-releases/${CLAUDE_CODE_VERSION}/linux-$([ "$TARGETARCH" = arm64 ] && echo arm64 || echo x64)/claude" \
- && chmod +x /tmp/claude
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates git gnupg jq \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY plugins/specclaw-fleet/image/claude-fetch.sh plugins/specclaw-fleet/image/claude-release.asc /opt/fleet/
+RUN bash -c 'set -e; source /opt/fleet/claude-fetch.sh; HOME=/tmp/seedhome FLEET_CLAUDE_VERSION="$CLAUDE_CODE_VERSION" fetch_claude' \
+ && cp /tmp/seedhome/.fleet/bin/claude /tmp/claude
 
 COPY .claude-plugin /opt/specclaw/.claude-plugin
 COPY .agents /opt/specclaw/.agents

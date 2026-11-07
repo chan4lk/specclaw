@@ -12,52 +12,48 @@ parse_trigger_args() {
     shift
   done
   [[ -n "$T_CHANGE" ]] || die "Usage: specclaw-fleet trigger <change> [--retry] [--direct] [--create]"
-  F_CHANGE="$T_CHANGE"
-  if [[ -z "${AZDO_ORG:-}" && -f "$SPECCLAW_DIR/.env" ]]; then set -a; . "$SPECCLAW_DIR/.env"; set +a; fi
+  F_CHANGE="$T_CHANGE" T_AGENT="${FLEET_DEFAULT_AGENT:-claude}"
+  load_azdo_env
+}
+
+load_azdo_env() {
+  local line
+  [[ -z "${AZDO_ORG:-}" && -f "$SPECCLAW_DIR/.env" ]] || return 0
+  while IFS= read -r line; do
+    [[ "$line" =~ ^(AZDO_ORG|AZDO_PROJECT|AZDO_TOKEN)=(.*)$ ]] && export "${BASH_REMATCH[1]}=${BASH_REMATCH[2]}"
+  done < "$SPECCLAW_DIR/.env"
+}
+
+trigger_ref_approved() {
+  local remote="${FLEET_REMOTE:-origin}" ref="${FLEET_REF:-main}" root="$SPECCLAW_DIR/.." status
+  git -C "$root" fetch -q "$remote" "$ref" 2>/dev/null || die "could not fetch $remote/$ref"
+  status="$(git -C "$root" show "FETCH_HEAD:$(basename "$SPECCLAW_DIR")/changes/$T_CHANGE/state.json" 2>/dev/null \
+    | jq -r '.phases.proposal.status // empty')"
+  [[ "$status" == approved ]] || die "$T_CHANGE: proposal is not approved on $remote/$ref; approve it and push first"
 }
 
 trigger_work_item() {
   [[ -n "$(work_item_id "$T_CHANGE")" ]] && return 0
   (( T_CREATE )) || die "$T_CHANGE: no Azure Boards work item; pass --create to create one"
   azdo_issue create "$SPECCLAW_DIR" "$T_CHANGE" >&2 || die "$T_CHANGE: could not create the work item"
-}
-
-trigger_gates() {
-  proposal_approved "$T_CHANGE" || die "$T_CHANGE: proposal is not approved; approve it through the specclaw lifecycle first"
-  trigger_work_item
-  local wi assignee tags tagger rc=0 agent="${FLEET_DEFAULT_AGENT:-claude}"
-  wi="$(azdo_issue show "$SPECCLAW_DIR" "$T_CHANGE")" || die "$T_CHANGE: could not read the work item"
-  assignee="$(jq -r '.fields["System.AssignedTo"].uniqueName // empty' <<<"$wi")"
-  tags="$(jq -r '.fields["System.Tags"] // empty' <<<"$wi")"
-  [[ -n "$assignee" ]] || die "$T_CHANGE: work item #$(work_item_id "$T_CHANGE") has no assignee; assign the person whose plan will run it"
-  has_auto_tag "$tags" || consent_missing "$assignee"
-  tagger="$(auto_tagged_by)" || die "$T_CHANGE: could not read the work item history"
-  [[ "$(lower "$tagger")" == "$(lower "$assignee")" ]] || consent_missing "$assignee"
-  [[ -n "${FLEET_VAULT:-}" ]] || die "No Key Vault: set FLEET_VAULT"
-  fetch_credential "$FLEET_VAULT" "$(secret_name "$agent" "$(upn_hash "$assignee")")" >/dev/null || rc=$?
-  case "$rc" in
-    0) ;;
-    1) die "$T_CHANGE: $assignee has no registered $agent credential; they run: specclaw-fleet login --agent $agent" ;;
-    *) die "$T_CHANGE: could not read Key Vault $FLEET_VAULT" ;;
-  esac
-}
-
-consent_missing() {
-  echo "ERROR: $T_CHANGE: $1 must add the fleet:auto tag to work item #$(work_item_id "$T_CHANGE") themselves" >&2
-  exit 4
+  echo "$T_CHANGE: created work item #$(work_item_id "$T_CHANGE"); assign it, have the assignee add fleet:auto, then re-run trigger" >&2
+  exit 3
 }
 
 fleet_trigger() {
   parse_trigger_args "$@"
+  trigger_ref_approved
+  trigger_work_item
   trigger_gates
   if (( T_RETRY )); then
     azdo_issue untag "$SPECCLAW_DIR" "$T_CHANGE" fleet:dispatched >&2 || die "could not clear fleet:dispatched"
     azdo_issue untag "$SPECCLAW_DIR" "$T_CHANGE" fleet:refused >&2 || die "could not clear fleet:refused"
   fi
-  if (( T_DIRECT )); then fleet_dispatch "$T_CHANGE"; return; fi
+  if (( T_DIRECT )); then fleet_dispatch "$T_CHANGE" --agent "$T_AGENT"; return; fi
   local -a a; mapfile -t a < <(azdo_args)
   local run
-  run="$(az pipelines run --name "${FLEET_PIPELINE:-specclaw-fleet}" --branch "${FLEET_REF:-main}" "${a[@]}" --query id -o tsv)" \
-    || die "$T_CHANGE: could not queue pipeline ${FLEET_PIPELINE:-specclaw-fleet}"
-  jq -nc --arg r "$run" --arg w "$(work_item_id "$T_CHANGE")" '{ok: true, mode: "pipeline", run: $r, work_item: $w}'
+  run="$(az pipelines run --name "${FLEET_PIPELINE:-specclaw-fleet}" --branch "${FLEET_REF:-main}" "${a[@]}" \
+    --parameters "change=$T_CHANGE" "agent=$T_AGENT" --query id -o tsv)" || die "$T_CHANGE: could not queue pipeline ${FLEET_PIPELINE:-specclaw-fleet}"
+  jq -nc --arg r "$run" --arg w "$(work_item_id "$T_CHANGE")" --arg c "$T_CHANGE" --arg a "$T_AGENT" \
+    '{ok: true, mode: "pipeline", run: $r, change: $c, agent: $a, work_item: $w}'
 }

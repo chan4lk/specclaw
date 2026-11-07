@@ -1,0 +1,9 @@
+# Follow-ups
+
+Deferred by the review loop: minors and pre-existing findings.
+
+- [minor B3] `plugins/specclaw-fleet/lib/doctor.sh:13` Only rc==1 counts as a failure. Rc 2 means skip, and any other non-zero rc (a crashed check or a missing command) is silently treated as passing. A skipped item also still ends in 'doctor: all checks ok'. Count every non-zero rc other than 2 as a failure, and print the skip count in the summary. (round 1) <!-- fp:74ca8ed019e7 -->
+- [minor B3] `plugins/specclaw-fleet/image/entrypoint.sh:65` Every `fetch_claude` failure is recorded as exit=claude-verify-failed: a network or egress failure, a missing platform, and a signature mismatch. The run skill tells people this is an infrastructure or gate stop. Egress to downloads.claude.ai at pod runtime is also not visibly allowlisted: the diff touches no Squid or k8s config. Report fetch failures separately from verification failures. (round 1) <!-- fp:da9d3538a8c7 -->
+- [minor B2] `plugins/specclaw-fleet/tests/cases/ac17_trigger.sh:10` The 'no side effects' check looks for `azdo-issue (fields|tag|claim)`. That pattern does not match `untag` or `create`, so a refusal that creates or untags would still pass. Add untag and create to the pattern. (round 1) <!-- fp:17689f10dc8e -->
+- [minor B1] `plugins/specclaw-fleet/README.md:71` The README says refusals have no side effects, but `trigger --create` creates the work item before the assignee and consent gates run. A newly created work item has no assignee, so the first `--create` run always creates the item and then refuses. Fix the wording or move creation after the gates. (round 1) <!-- fp:fd3fe0444223 -->
+- [minor B8] `plugins/specclaw-fleet/lib/trigger.sh:15` `. "$SPECCLAW_DIR/.env"` executes the file as shell with `set -a`. Parse KEY=VALUE lines instead of sourcing. (round 1) <!-- fp:a51f7477801f -->

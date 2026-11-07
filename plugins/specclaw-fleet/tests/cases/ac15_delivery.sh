@@ -12,12 +12,15 @@ workflow_ok() {
   jq -e '.permissions == {"contents":"read","packages":"write"}' <<<"$w" >/dev/null \
     && jq -e '(.on.push.tags // .true.push.tags) == ["fleet-v*"]' <<<"$w" >/dev/null \
     && jq -e '[.jobs.build.steps[] | select(.uses? // "" | startswith("docker/build-push-action"))][0].with
-      | .platforms == "linux/amd64,linux/arm64" and .push == true and (.tags | startswith("ghcr.io/"))' <<<"$w" >/dev/null
+      | .platforms == "linux/amd64,linux/arm64" and .push == true and (.tags | startswith("ghcr.io/"))' <<<"$w" >/dev/null \
+    && jq -e '[.jobs.build.steps[] | .uses? // empty | test("@[0-9a-f]{40}$")] | all' <<<"$w" >/dev/null \
+    && jq -e '.jobs.build.if | contains("refs/heads/main") and contains("refs/tags/fleet-v")' <<<"$w" >/dev/null \
+    && grep -q 'already exists' "$W" && grep -q 'bad tag' "$W"
 }
 hosted_ok() {
   local h; h="$(yq_py "$H")"
   jq -e '.pool == {"vmImage":"ubuntu-latest"} and (.variables.fleetSpecclawRef | length > 0) and (.variables.fleetImage | startswith("ghcr.io/"))' <<<"$h" >/dev/null \
-    && grep -q 'git clone --quiet --depth 1 --branch "$(fleetSpecclawRef)"' "$H" \
+    && grep -q '\^\[0-9a-f\]{40}\$' "$H" && grep -q 'rev-parse HEAD)" == "$ref"' "$H" \
     && grep -q 'task.prependpath\]$(Agent.TempDirectory)/specclaw/plugins/specclaw-fleet/bin' "$H" \
     && grep -q 'task.prependpath\]$(Agent.TempDirectory)/specclaw/plugins/specclaw-sync/bin' "$H"
 }
@@ -27,7 +30,7 @@ same_script() {
     && grep -q 'FLEET_CLAUDE_VERSION: $(fleetClaudeVersion)' "$H" && grep -q 'FLEET_CLAUDE_VERSION: $(fleetClaudeVersion)' "$S"
 }
 
-check "AC6 image workflow builds amd64+arm64, pushes to GHCR, grants only packages: write" workflow_ok
-check "AC9 hosted template runs on ubuntu-latest and fetches specclaw at a pinned ref onto PATH" hosted_ok
+check "AC6 image workflow: amd64+arm64 to GHCR, packages: write only, SHA-pinned actions, validated tags, no overwrite" workflow_ok
+check "AC9 hosted template runs on ubuntu-latest and fetches specclaw at a verified full commit SHA onto PATH" hosted_ok
 check "AC9 hosted and self-hosted templates run the identical dispatch script and pass the claude version" same_script
 finish

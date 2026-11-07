@@ -25,11 +25,12 @@ for bad in "FLEET_CLAUDE_VERSION=" "FLEET_CLAUDE_VERSION=latest" "FLEET_CLAUDE_V
 done
 refuses() { (( refused_all == 1 )); }
 reset_env; FLEET_CLAUDE_VERSION="" FLEET_DEFAULT_AGENT=codex dispatch --dry-run; codex_rc=$?
-codex_free() { (( codex_rc == 0 )); }
+reset_env; FLEET_CLAUDE_VERSION='1.2.3", injected: "x' FLEET_DEFAULT_AGENT=codex dispatch --dry-run; codex_bad_rc=$?
+codex_free() { (( codex_rc == 0 && codex_bad_rc != 0 )); }
 
 check "AC4 the Job carries the pinned claude version" carries_version
 check "AC4 pull secret and node pinning are absent by default" absent_by_default
 check "AC4 pull secret, nodeSelector and toleration appear when set; Job is valid YAML" present_when_set
 check "AC4 missing or invalid version, pull secret or node label is refused before anything is created" refuses
-check "AC4 codex jobs do not need a claude version" codex_free
+check "AC4 codex jobs need no claude version, but a set one is still validated" codex_free
 finish

@@ -20,6 +20,7 @@ make_release() {
   [[ "$mode" == impostor ]] && signer="impostor"
   jq -n --arg s "$sum" --argjson z "$size" '{version: "9.9.9", platforms: {"linux-x64": {binary: "claude", checksum: $s, size: $z}, "linux-arm64": {binary: "claude", checksum: $s, size: $z}}}' \
     > "$dir/manifest.json"
+  [[ "$mode" == rollback ]] && jq '.version = "9.9.8"' "$dir/manifest.json" > "$dir/m" && mv "$dir/m" "$dir/manifest.json"
   [[ "$mode" == noplat ]] && jq '.platforms = {"win32-x64": .platforms["linux-x64"]}' "$dir/manifest.json" > "$dir/m" && mv "$dir/m" "$dir/manifest.json"
   gpg --batch --yes --quiet --local-user "$signer" --detach-sign -o "$dir/manifest.json.sig" "$dir/manifest.json"
   [[ "$mode" == tampered ]] && printf ' ' >> "$dir/manifest.json"

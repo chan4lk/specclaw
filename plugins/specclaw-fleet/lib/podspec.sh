@@ -1,8 +1,8 @@
 # shellcheck shell=bash disable=SC2034
 parse_pod_inputs() {
   F_CLAUDE_VERSION="${FLEET_CLAUDE_VERSION:-}"
-  if [[ "$F_AGENT" == claude ]]; then
-    [[ "$F_CLAUDE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "FLEET_CLAUDE_VERSION must be set to a release like 2.1.319 for claude jobs"
+  if [[ "$F_AGENT" == claude || -n "$F_CLAUDE_VERSION" ]]; then
+    [[ "$F_CLAUDE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "FLEET_CLAUDE_VERSION must be a release like 2.1.319 (required for claude jobs)"
   fi
   F_PULL_SECRET="${FLEET_IMAGE_PULL_SECRET:-}"
   [[ -z "$F_PULL_SECRET" || "$F_PULL_SECRET" =~ ^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$ ]] \

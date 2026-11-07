@@ -62,7 +62,8 @@ fi
 STATE="$REPO/.specclaw/changes/$FLEET_CHANGE/state.json"
 [[ "$(jq -r '.phases.proposal.status // empty' "$STATE" 2>/dev/null)" == approved ]] \
   || { record state=failed exit=not-approved-at-ref; finish 2; }
-[[ "$FLEET_AGENT" != claude ]] || fetch_claude || { record state=failed exit=claude-verify-failed; finish 2; }
+fetch_rc=0; [[ "$FLEET_AGENT" != claude ]] || fetch_claude || fetch_rc=$?
+(( fetch_rc == 0 )) || { record state=failed "exit=$( (( fetch_rc == 3 )) && echo claude-fetch-failed || echo claude-verify-failed)"; finish 2; }
 record state=running "built_commit=$(git -C "$REPO" rev-parse HEAD)" "claude_fetch_s=${FLEET_CLAUDE_FETCH_S:-0}"
 cd "$REPO" || finish 2
 rc=0; run_agent || rc=$?

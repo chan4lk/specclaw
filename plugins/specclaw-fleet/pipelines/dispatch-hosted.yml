@@ -1,9 +1,19 @@
+parameters:
+  - name: change
+    displayName: Only this change (empty = every approved, not-started change)
+    type: string
+    default: " "
+  - name: agent
+    displayName: Agent for this run (empty = fleetDefaultAgent)
+    type: string
+    default: " "
+
 variables:
   fleetKubeConnection: specclaw-fleet-k3s
   fleetAzureConnection: specclaw-fleet-azure
   fleetVault: specclaw-fleet-kv
   fleetImage: ghcr.io/chan4lk/specclaw-fleet:0.8.9
-  fleetSpecclawRef: fleet-v0.8.9
+  fleetSpecclawRef: SET_TO_A_40_CHAR_SPECCLAW_COMMIT_SHA
   fleetNamespace: specclaw-fleet
   fleetDeadlineMinutes: "120"
   fleetDefaultAgent: claude
@@ -25,7 +35,12 @@ steps:
     fetchDepth: 1
   - script: |
       set -euo pipefail
-      git clone --quiet --depth 1 --branch "$(fleetSpecclawRef)" https://github.com/chan4lk/specclaw.git "$(Agent.TempDirectory)/specclaw"
+      ref="$(fleetSpecclawRef)"
+      [[ "$ref" =~ ^[0-9a-f]{40}$ ]] || { echo "##vso[task.logissue type=error]fleetSpecclawRef must be a full commit SHA, got: $ref"; exit 1; }
+      dir="$(Agent.TempDirectory)/specclaw"
+      git init -q "$dir" && git -C "$dir" fetch -q --depth 1 https://github.com/chan4lk/specclaw.git "$ref" && git -C "$dir" checkout -q FETCH_HEAD
+      [[ "$(git -C "$dir" rev-parse HEAD)" == "$ref" ]] || { echo "##vso[task.logissue type=error]fetched commit does not match $ref"; exit 1; }
+      echo "specclaw-fleet code: chan4lk/specclaw@$ref"
       echo "##vso[task.prependpath]$(Agent.TempDirectory)/specclaw/plugins/specclaw-sync/bin"
       echo "##vso[task.prependpath]$(Agent.TempDirectory)/specclaw/plugins/specclaw-fleet/bin"
     displayName: Fetch specclaw-fleet at a pinned ref
@@ -45,14 +60,18 @@ steps:
         set -uo pipefail
         export AZDO_ORG="$(basename "${SYSTEM_COLLECTIONURI%/}")"
         failed=0
+        only="${FLEET_ONLY_CHANGE:-}"; only="${only// /}"
+        agent="${FLEET_RUN_AGENT:-}"; agent="${agent// /}"
         for f in .specclaw/changes/*/state.json; do
           [[ -f "$f" ]] || continue
           if ! pending="$(jq -r '.phase == "proposal" and .phases.proposal.status == "approved"' "$f")"; then
             echo "##vso[task.logissue type=error]could not read $f"; failed=1; continue
           fi
           [[ "$pending" == true ]] || continue
+          change="$(basename "$(dirname "$f")")"
+          [[ -z "$only" || "$change" == "$only" ]] || continue
           rc=0
-          specclaw-fleet dispatch "$(basename "$(dirname "$f")")" || rc=$?
+          specclaw-fleet dispatch "$change" ${agent:+--agent "$agent"} || rc=$?
           case "$rc" in
             0|3) ;;
             5) echo "##vso[task.logissue type=warning]$f: assignee's codex slot is busy; re-run this pipeline or dispatch manually once it finishes" ;;
@@ -73,3 +92,5 @@ steps:
       FLEET_DEFAULT_AGENT: $(fleetDefaultAgent)
       FLEET_CLAUDE_VERSION: $(fleetClaudeVersion)
       FLEET_REF: $(Build.SourceBranchName)
+      FLEET_ONLY_CHANGE: ${{ parameters.change }}
+      FLEET_RUN_AGENT: ${{ parameters.agent }}

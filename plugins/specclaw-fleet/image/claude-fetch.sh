@@ -10,12 +10,12 @@ claude_platform() {
 }
 
 verify_manifest() {
-  local gnupg rc=1
+  local gnupg status rc=1
   gnupg="$(mktemp -d)" || return 1
-  if gpg --homedir "$gnupg" --batch --quiet --import "${FLEET_CLAUDE_KEY:-/opt/fleet/claude-release.asc}" 2>/dev/null \
-    && gpg --homedir "$gnupg" --batch --status-fd 1 --verify "$1/manifest.json.sig" "$1/manifest.json" 2>/dev/null \
-      | grep -q "^\[GNUPG:\] VALIDSIG ${FLEET_CLAUDE_FPR:-$CLAUDE_RELEASE_FPR} "; then
-    rc=0
+  if gpg --homedir "$gnupg" --batch --quiet --import "${FLEET_CLAUDE_KEY:-/opt/fleet/claude-release.asc}" 2>/dev/null; then
+    status="$(gpg --homedir "$gnupg" --batch --status-fd 1 --verify "$1/manifest.json.sig" "$1/manifest.json" 2>/dev/null)"
+    grep -q '^\[GNUPG:\] GOODSIG ' <<<"$status" && ! grep -qE '^\[GNUPG:\] (EXPKEYSIG|REVKEYSIG|EXPSIG|BADSIG|ERRSIG) ' <<<"$status" \
+      && awk -v f="${FLEET_CLAUDE_FPR:-$CLAUDE_RELEASE_FPR}" '$2 == "VALIDSIG" && $NF == f { ok = 1 } END { exit !ok }' <<<"$status" && rc=0
   fi
   gpgconf --homedir "$gnupg" --kill all >/dev/null 2>&1
   rm -rf "$gnupg"
@@ -29,13 +29,14 @@ fetch_claude() {
   start="$(date +%s)"
   rm -rf "$dir" && mkdir -p "$dir" "$bin"
   plat="$(claude_platform)" || return 1
-  curl -fsS -m 60 -o "$dir/manifest.json" "$base/manifest.json" || return 1
-  curl -fsS -m 60 -o "$dir/manifest.json.sig" "$base/manifest.json.sig" || return 1
+  curl -fsS -m 60 -o "$dir/manifest.json" "$base/manifest.json" || return 3
+  curl -fsS -m 60 -o "$dir/manifest.json.sig" "$base/manifest.json.sig" || return 3
   verify_manifest "$dir" || return 1
+  [[ "$(jq -r '.version // empty' "$dir/manifest.json")" == "$FLEET_CLAUDE_VERSION" ]] || return 1
   sum="$(jq -r --arg p "$plat" '.platforms[$p].checksum // empty' "$dir/manifest.json")"
   size="$(jq -r --arg p "$plat" '.platforms[$p].size // empty' "$dir/manifest.json")"
-  [[ -n "$sum" && -n "$size" ]] || return 1
-  curl -fsS -m 900 -o "$bin/claude.part" "$base/$plat/claude" || return 1
+  [[ "$sum" =~ ^[0-9a-f]{64}$ && "$size" =~ ^[0-9]+$ ]] || return 1
+  curl -fsS -m 900 --max-filesize "$size" -o "$bin/claude.part" "$base/$plat/claude" || { rm -f "$bin/claude.part"; return 3; }
   if [[ "$(sha256sum "$bin/claude.part" | cut -d' ' -f1)" != "$sum" || "$(wc -c < "$bin/claude.part" | tr -d ' ')" != "$size" ]]; then
     rm -f "$bin/claude.part"
     return 1

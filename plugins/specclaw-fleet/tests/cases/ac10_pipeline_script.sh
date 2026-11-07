@@ -27,4 +27,10 @@ scenario "$APPROVED" 1 error "dispatch error fails the step"
 scenario '{"phase":"prop' 0 error "truncated state.json"
 scenario '[]' 0 error "array state.json"
 scenario '"x"' 0 error "string state.json"
+FLEET_ONLY_CHANGE=" other-change " run_with_state 049-x "$APPROVED"; only_calls="$(cat "$CALLS")"
+FLEET_ONLY_CHANGE=" 049-x " FLEET_RUN_AGENT=" codex " run_with_state 049-x "$APPROVED"; agent_calls="$(cat "$CALLS")"
+FLEET_ONLY_CHANGE=" " FLEET_RUN_AGENT=" " run_with_state 049-x "$APPROVED"; blank_calls="$(cat "$CALLS")"
+filters() { [[ -z "$only_calls" ]] && grep -qxF "specclaw-fleet dispatch 049-x --agent codex" <<<"$agent_calls" \
+  && grep -qxF "specclaw-fleet dispatch 049-x" <<<"$blank_calls"; }
+check "FR10 change and agent parameters narrow the run; blank parameters mean every change, default agent" filters
 finish
