@@ -19,7 +19,7 @@ parse_dispatch_args() {
   F_VAULT="${F_VAULT:-${FLEET_VAULT:-}}"
   [[ -n "$F_VAULT" ]] || die "No Key Vault: pass --vault or set FLEET_VAULT"
   F_NS="${FLEET_NAMESPACE:-specclaw-fleet}"
-  F_IMAGE="${FLEET_IMAGE:-specclaw-fleet:latest}"
+  F_IMAGE="${FLEET_IMAGE:-ghcr.io/chan4lk/specclaw-fleet:0.8.9}"
   [[ "$F_IMAGE" =~ ^[A-Za-z0-9][A-Za-z0-9._/:@-]*$ ]] || die "FLEET_IMAGE is not a valid image reference"
   [[ "$F_NS" =~ ^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$ ]] || die "FLEET_NAMESPACE is not a valid namespace name"
   [[ "$F_REF" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ && "$F_REF" != *..* ]] || die "the ref '$F_REF' is not a valid branch name"
@@ -31,7 +31,7 @@ parse_dispatch_args() {
 }
 
 check_gates() {
-  if (( ${F_CHECK_ONLY:-0} )); then trigger_ref_approved; else proposal_approved "$F_CHANGE" || die "$F_CHANGE: proposal is not approved"; fi
+  proposal_approved "$F_CHANGE" || die "$F_CHANGE: proposal is not approved${T_REF_LABEL:+ on $T_REF_LABEL; approve it and push first}"
   [[ -n "$(work_item_id "$F_CHANGE")" ]] || die "$F_CHANGE: no Azure Boards work item (run specclaw-azdo-issue create)"
   local wi rc=0
   wi="$(azdo_issue show "$SPECCLAW_DIR" "$F_CHANGE")" || die "$F_CHANGE: could not read the work item"
@@ -44,7 +44,6 @@ check_gates() {
     13) refuse "$F_CHANGE" "could not read the work item history to confirm who added fleet:auto" ;;
     *) refuse "$F_CHANGE" "fleet:auto was not added by the assignee $G_ASSIGNEE" ;;
   esac
-  rc=0
   F_HASH="$(upn_hash "$G_ASSIGNEE")"
   F_SECRET="$(secret_name "$F_AGENT" "$F_HASH")"
   local rc=0
@@ -64,8 +63,8 @@ fleet_dispatch() {
   F_SECRET_OBJ="$F_JOB-$(rand_suffix)"
   F_WI="$(work_item_id "$F_CHANGE")"
   F_LABEL="$(label_value "$F_CHANGE")"
-  F_REPO="$(git -C "$SPECCLAW_DIR/.." remote get-url origin | sed -E 's#://[^@/]+@#://#')"
-  F_COMMIT="$(git -C "$SPECCLAW_DIR/.." rev-parse HEAD)" || die "Could not resolve the dispatched commit"
+  F_REPO="${FLEET_REPO_URL:-$(git -C "$SPECCLAW_DIR/.." remote get-url origin | sed -E 's#://[^@/]+@#://#')}"
+  F_COMMIT="${FLEET_DISPATCH_COMMIT:-$(git -C "$SPECCLAW_DIR/.." rev-parse HEAD)}" || die "Could not resolve the dispatched commit"
   [[ -r "$SPECCLAW_DIR/config.yaml" ]] || die "Cannot read $SPECCLAW_DIR/config.yaml"
   F_AZDO_CONFIG="$(awk '/^azdo:[[:space:]]*(#.*)?$/ { on = 1; print; next } on && /^[^[:space:]#]/ { exit } on { print }' \
     "$SPECCLAW_DIR/config.yaml")" || die "Cannot read $SPECCLAW_DIR/config.yaml"

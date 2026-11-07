@@ -14,11 +14,12 @@ Dispatch refuses, and creates nothing, when:
 
 - the proposal is not approved, or the change has no work item;
 - the work item has no assignee;
-- the assignee has not consented: no `fleet:auto` tag added by the assignee themselves (checked against the work-item history);
+- no `fleet:auto` tag at all: skipped quietly (exit 3), nothing written;
+- a `fleet:auto` tag added by someone other than the assignee, or a history that cannot be read: refused (exit 4);
 - the assignee has no registered credential for the agent (`specclaw-fleet login`);
 - `--agent codex` while that assignee already has an unfinished codex job (exit 5, retry later).
 
-Missing assignee, missing consent and missing credential also set the work item to `Failed` with the reason. Dispatch never falls back to anyone else's credential.
+Refusals (exit 4) set the work item to `Failed` with the reason and tag it `fleet:refused`; a quiet skip (exit 3) writes nothing. Dispatch never falls back to anyone else's credential.
 
 On success it prints one JSON line: `{"ok":true,"job":…,"agent":…,"work_item":…}`. Use `--dry-run` to see the rendered Secret (redacted) and Job without applying them.
 

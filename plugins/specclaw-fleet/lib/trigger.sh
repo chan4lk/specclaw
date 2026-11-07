@@ -16,27 +16,35 @@ parse_trigger_args() {
   load_azdo_env
 }
 
-trigger_ref_approved() {
-  [[ -n "${T_CHANGE:-}" ]] || T_CHANGE="$F_CHANGE"
-  local remote="${FLEET_REMOTE:-origin}" ref="${FLEET_REF:-main}" root="$SPECCLAW_DIR/.." status
+trigger_pushed_tree() {
+  local remote="${FLEET_REMOTE:-origin}" ref="${FLEET_REF:-main}" root="$SPECCLAW_DIR/.." sc tree f
+  sc="$(basename "$SPECCLAW_DIR")"
   git -C "$root" fetch -q "$remote" "$ref" 2>/dev/null || die "could not fetch $remote/$ref"
-  status="$(git -C "$root" show "FETCH_HEAD:$(basename "$SPECCLAW_DIR")/changes/$T_CHANGE/state.json" 2>/dev/null \
-    | jq -r '.phases.proposal.status // empty')"
-  [[ "$status" == approved ]] || die "$T_CHANGE: proposal is not approved on $remote/$ref; approve it and push first"
+  tree="$FLEET_TMPDIR/pushed/$sc"
+  mkdir -p "$tree/changes/$T_CHANGE"
+  git -C "$root" show "FETCH_HEAD:$sc/config.yaml" > "$tree/config.yaml" 2>/dev/null || rm -f "$tree/config.yaml"
+  for f in state.json status.md; do
+    git -C "$root" show "FETCH_HEAD:$sc/changes/$T_CHANGE/$f" > "$tree/changes/$T_CHANGE/$f" 2>/dev/null || rm -f "$tree/changes/$T_CHANGE/$f"
+  done
+  export FLEET_DISPATCH_COMMIT FLEET_REPO_URL
+  FLEET_DISPATCH_COMMIT="$(git -C "$root" rev-parse FETCH_HEAD)"
+  FLEET_REPO_URL="$(git -C "$root" remote get-url "$remote" | sed -E 's#://[^@/]+@#://#')"
+  T_LOCAL_DIR="$SPECCLAW_DIR" SPECCLAW_DIR="$tree" T_REF_LABEL="$remote/$ref"
 }
 
 trigger_work_item() {
   [[ -n "$(work_item_id "$T_CHANGE")" ]] && return 0
   (( T_CREATE )) || die "$T_CHANGE: no Azure Boards work item; pass --create to create one"
-  azdo_issue create "$SPECCLAW_DIR" "$T_CHANGE" >&2 || die "$T_CHANGE: could not create the work item"
-  echo "$T_CHANGE: created work item #$(work_item_id "$T_CHANGE"); assign it, have the assignee add fleet:auto, then re-run trigger" >&2
+  azdo_issue create "$T_LOCAL_DIR" "$T_CHANGE" >&2 || die "$T_CHANGE: could not create the work item"
+  echo "$T_CHANGE: created work item #$(SPECCLAW_DIR="$T_LOCAL_DIR" work_item_id "$T_CHANGE"); commit and push status.md, assign the item, have the assignee add fleet:auto, then re-run trigger" >&2
   exit 3
 }
 
 fleet_trigger() {
   parse_trigger_args "$@"
   T_BUSY_CHECK="done"
-  trigger_ref_approved
+  trigger_pushed_tree
+  proposal_approved "$T_CHANGE" || die "$T_CHANGE: proposal is not approved on $T_REF_LABEL; approve it and push first"
   trigger_work_item
   local -a force=()
   (( T_RETRY )) && force=(--force)

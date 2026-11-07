@@ -15,8 +15,8 @@ OTHER='{"value":[{"revisedBy":{"uniqueName":"m@c.com"},"fields":{"System.Tags":{
 agree=1
 row() {
   local label="$1" mode="$2"; shift 2
-  reset_env; publish; prep; env "$@" "$FLEET" dispatch "$CHANGE" > "$TMP/d.out" 2>&1; d=$?
-  reset_env; publish; prep; env "$@" "$FLEET" trigger "$CHANGE" > "$TMP/t.out" 2>&1; t=$?
+  reset_env; prep; publish; env "$@" "$FLEET" dispatch "$CHANGE" > "$TMP/d.out" 2>&1; d=$?
+  reset_env; prep; publish; env "$@" "$FLEET" trigger "$CHANGE" > "$TMP/t.out" 2>&1; t=$?
   local quiet=1; grep -qE "azdo-issue (fields|tag|untag|claim|create)|pipelines run" "$CALLS" && quiet=0
   stem() { sed -E 's/ \(remove the fleet:refused tag to retry\)//; s/^ERROR: //' "$1" | grep -m1 "$CHANGE"; }
   if (( d != t || quiet == 0 )) || { [[ "$mode" == same ]] && [[ "$(stem "$TMP/d.out")" != "$(stem "$TMP/t.out")" ]]; }; then
@@ -33,7 +33,7 @@ row "vault unreadable" same AZ_FAIL=1
 prep() { rm -f "$KV/claude-token-$H"; }; row "credential missing" same X=1
 prep() { seed_codex_job '{"active":1}'; }; row "codex busy" same FLEET_DEFAULT_AGENT=codex
 prep() { : > "$SPECCLAW_DIR/changes/$CHANGE/status.md"; }; row "no work item" codes X=1
-prep() { echo '{"phases":{"proposal":{"status":"draft"}}}' > "$SPECCLAW_DIR/changes/$CHANGE/state.json"; publish; }; row "unapproved" codes X=1
+prep() { echo '{"phases":{"proposal":{"status":"draft"}}}' > "$SPECCLAW_DIR/changes/$CHANGE/state.json"; }; row "unapproved" codes X=1
 reset_env; publish; FLEET_NAMESPACE=team-a FLEET_DEFAULT_AGENT=codex "$FLEET" trigger "$CHANGE" > "$TMP/out" 2>&1; ns_calls="$(cat "$CALLS")"
 same_ns() { grep -q "kubectl -n team-a --request-timeout=15s get job fleet-codex-$H -o json" <<<"$ns_calls"; }
 check "AC8 trigger's busy check reads the same namespace and Job name dispatch uses" same_ns

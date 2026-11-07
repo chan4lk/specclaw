@@ -60,8 +60,9 @@ steps:
         set -uo pipefail
         export AZDO_ORG="$(basename "${SYSTEM_COLLECTIONURI%/}")"
         failed=0
-        only="${FLEET_ONLY_CHANGE:-}"; only="${only// /}"
-        agent="${FLEET_RUN_AGENT:-}"; agent="${agent// /}"
+        trim() { local v="$1"; v="${v#"${v%%[![:space:]]*}"}"; printf '%s' "${v%"${v##*[![:space:]]}"}"; }
+        only="$(trim "${FLEET_ONLY_CHANGE:-}")"; agent="$(trim "${FLEET_RUN_AGENT:-}")"
+        [[ -z "${FLEET_REF:-}" ]] || export FLEET_REF="${FLEET_REF#refs/heads/}"
         for f in .specclaw/changes/*/state.json; do
           [[ -f "$f" ]] || continue
           if ! pending="$(jq -r '.phase == "proposal" and .phases.proposal.status == "approved"' "$f")"; then
@@ -91,6 +92,6 @@ steps:
       FLEET_DEADLINE_MINUTES: $(fleetDeadlineMinutes)
       FLEET_DEFAULT_AGENT: $(fleetDefaultAgent)
       FLEET_CLAUDE_VERSION: $(fleetClaudeVersion)
-      FLEET_REF: $(Build.SourceBranchName)
+      FLEET_REF: $(Build.SourceBranch)
       FLEET_ONLY_CHANGE: ${{ parameters.change }}
       FLEET_RUN_AGENT: ${{ parameters.agent }}
