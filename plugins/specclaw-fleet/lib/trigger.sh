@@ -33,29 +33,21 @@ trigger_work_item() {
   exit 3
 }
 
-trigger_codex_busy() {
-  [[ "$T_AGENT" == codex ]] || return 0
-  local state
-  if ! state="$(kubectl -n "$F_NS" --request-timeout=10s get job "fleet-codex-$F_HASH" -o json 2>&1)"; then
-    grep -q NotFound <<<"$state" && return 0
-    T_BUSY_CHECK="not-run (no cluster access here; dispatch will report)"; return 0
-  fi
-  jq -e '(.status.active // 0) > 0' <<<"$state" >/dev/null && { echo "$T_CHANGE: assignee's codex slot is busy; retry once it finishes" >&2; exit 5; }
-  return 0
-}
-
 fleet_trigger() {
   parse_trigger_args "$@"
+  T_BUSY_CHECK="done"
+  trigger_ref_approved
+  trigger_work_item
+  local -a force=()
+  (( T_RETRY )) && force=(--force)
+  F_CHECK_ONLY=1
+  parse_dispatch_args "$T_CHANGE" --agent "$T_AGENT" ${force[@]+"${force[@]}"}
+  check_gates
+  F_CHECK_ONLY=0
   if (( T_RETRY )); then
     azdo_issue untag "$SPECCLAW_DIR" "$T_CHANGE" fleet:dispatched >&2 || die "could not clear fleet:dispatched"
     azdo_issue untag "$SPECCLAW_DIR" "$T_CHANGE" fleet:refused >&2 || die "could not clear fleet:refused"
   fi
-  trigger_work_item
-  F_CHECK_ONLY=1 T_BUSY_CHECK="done"
-  parse_dispatch_args "$T_CHANGE" --agent "$T_AGENT"
-  check_gates
-  trigger_codex_busy
-  F_CHECK_ONLY=0
   if (( T_DIRECT )); then fleet_dispatch "$T_CHANGE" --agent "$T_AGENT"; return; fi
   local -a a; mapfile -t a < <(azdo_args)
   local run

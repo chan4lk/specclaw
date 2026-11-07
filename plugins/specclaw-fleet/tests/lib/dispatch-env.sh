@@ -31,7 +31,8 @@ case "$1" in
 esac
 exit 0'
   stub kubectl '
-claim="$CLAIMS/claim-$5"
+name=""; prev=""; for arg in "$@"; do [[ "$prev" == job ]] && name="$arg"; prev="$arg"; done
+claim="$CLAIMS/claim-$name"
 case "$*" in
   *" create -f -")
     doc="$(cat)"; name="$(grep -m1 "^  name: " <<<"$doc" | sed "s/^  name: //")"

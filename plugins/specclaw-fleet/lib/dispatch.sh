@@ -54,6 +54,7 @@ check_gates() {
     1) refuse "$F_CHANGE" "assignee has no registered $F_AGENT credential (run specclaw-fleet login --agent $F_AGENT)" ;;
     *) refuse "$F_CHANGE" "could not read Key Vault $F_VAULT (dispatcher access or network), not an assignee problem" ;;
   esac
+  if (( ${F_CHECK_ONLY:-0} )); then check_only_busy; fi
 }
 
 fleet_dispatch() {

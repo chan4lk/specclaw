@@ -16,31 +16,6 @@ data:
 YAML
 }
 
-claim_codex_slot() {
-  local json state err="$FLEET_TMPDIR/get.err"
-  if ! json="$(kubectl -n "$F_NS" get job "$F_JOB" -o json 2>"$err")"; then
-    grep -q NotFound "$err" && return 0
-    die "$F_CHANGE: could not read Job $F_JOB: $(head -n1 "$err")"
-  fi
-  state="$(jq -r '
-    if ([.status.conditions[]? | select((.type == "Complete" or .type == "Failed") and .status == "True")] | length) > 0
-      or ((.status.active // 0) == 0 and ((.status.succeeded // 0) > 0 or (.status.failed // 0) > 0))
-    then "finished \(.metadata.uid)" else "active" end' <<<"$json")"
-  case "$state" in
-    active) busy "assignee already has an unfinished codex job" ;;
-    finished*) delete_job_if_uid "${state#finished }" ;;
-  esac
-}
-
-delete_job_if_uid() {
-  jq -nc --arg u "$1" '{kind: "DeleteOptions", apiVersion: "v1", propagationPolicy: "Background", preconditions: {uid: $u}}' \
-    > "$FLEET_TMPDIR/delete.json"
-  local err="$FLEET_TMPDIR/delete.err"
-  kubectl delete --raw "/apis/batch/v1/namespaces/$F_NS/jobs/$F_JOB" -f "$FLEET_TMPDIR/delete.json" >/dev/null 2>"$err" && return 0
-  grep -Eq 'Precondition failed|NotFound' "$err" && return 0
-  die "$F_CHANGE: could not replace finished Job $F_JOB: $(head -n1 "$err")"
-}
-
 create_job() {
   local err
   err="$(render_job | kubectl -n "$F_NS" create -f - 2>&1 >/dev/null)" && return 0
