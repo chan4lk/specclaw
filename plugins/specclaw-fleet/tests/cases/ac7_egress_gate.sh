@@ -27,4 +27,7 @@ work_survives() {
     && ! grep -q " push " <<<"$base_calls"
 }
 check "AC7 a failed run still pushes the change branch (never the base branch)" work_survives
+GATE="" run_entry; settings="$(cat "$TMP/home/.claude/settings.json" 2>/dev/null)"
+nested_auth() { [[ "$(jq -r '.env.CLAUDE_CODE_OAUTH_TOKEN' <<<"$settings")" == oat-token ]] && [[ ! -s "$TMP/leaked" ]]; }
+check "AC7 claude token reaches nested claude sessions via settings.json env" nested_auth
 finish

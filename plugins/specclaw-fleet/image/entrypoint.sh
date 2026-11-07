@@ -10,10 +10,10 @@ REPO="$WORK/repo"
 CODEX_DIR="${FLEET_CODEX_HOME:-/fleet/codex}"
 PROMPT="Run the specclaw lifecycle headless for change $FLEET_CHANGE. Use the specclaw skills in order: plan (only if the change has no tasks yet), build, verify, then the specclaw-sync pr-azdo skill. Nobody is watching: never ask a question. If a phase fails, stop and report why."
 agent_pid=""
-# shellcheck source=tracker.sh
-source "$(dirname "${BASH_SOURCE[0]}")/tracker.sh"
-# shellcheck source=egress-gate.sh
-source "$(dirname "${BASH_SOURCE[0]}")/egress-gate.sh"
+for lib in tracker egress-gate claude-auth; do
+  # shellcheck source=/dev/null
+  source "$(dirname "${BASH_SOURCE[0]}")/$lib.sh"
+done
 
 finish() { printf '%s\n' "$1" > "$STATUS/exit"; exit 0; }
 
@@ -43,8 +43,8 @@ run_agent() {
   cp -a "$SEED/." "$HOME/" 2>/dev/null || true
   case "$FLEET_AGENT" in
     claude)
-      CLAUDE_CODE_OAUTH_TOKEN="$(cat "$CRED")" \
-        claude -p "$PROMPT" --dangerously-skip-permissions --output-format json > "$STATUS/agent.log" 2>&1 &
+      seed_claude_auth
+      claude -p "$PROMPT" --dangerously-skip-permissions --output-format json > "$STATUS/agent.log" 2>&1 &
       ;;
     codex)
       seed_codex

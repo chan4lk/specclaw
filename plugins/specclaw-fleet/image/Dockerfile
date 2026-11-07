@@ -26,7 +26,7 @@ RUN test -n "$CLAUDE_CODE_VERSION" && test -n "$CODEX_VERSION" \
 COPY .claude-plugin /opt/specclaw/.claude-plugin
 COPY .agents /opt/specclaw/.agents
 COPY plugins /opt/specclaw/plugins
-COPY plugins/specclaw-fleet/image/entrypoint.sh plugins/specclaw-fleet/image/writeback.sh plugins/specclaw-fleet/image/tracker.sh plugins/specclaw-fleet/image/egress-gate.sh /opt/fleet/
+COPY plugins/specclaw-fleet/image/*.sh /opt/fleet/
 
 ENV HOME=/home/agent \
     PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright \
