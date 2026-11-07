@@ -19,8 +19,8 @@ specclaw-fleet dispatch <change>                  Job fleet-<nnn>-<rand>
   gates: approved · WI · assignee · consent        initContainer  agent   (entrypoint.sh)
          · credential · codex-serial                 env CLAUDE_CODE_OAUTH_TOKEN | CODEX_HOME seed
   az keyvault secret show <agent>-…-<h>              clone → Running → claude -p | codex exec
-  kubectl apply Secret + Job                         → PR Open | Failed → /status/exit
-  patch Secret ownerRef → Job                      container      writeback (writeback.sh)
+  kubectl create Job, then Secret (ownerRef=Job)     → PR Open | Failed → /status/exit
+                                                   container      writeback (writeback.sh)
   azdo-issue fields … state=dispatched               codex: hash changed? → PUT vault secret
                                                      exit $(cat /status/exit)
                                                    egress → squid (allowlist) only
@@ -45,18 +45,21 @@ specclaw-fleet dispatch <change>                  Job fleet-<nnn>-<rand>
 | `.claude-plugin/marketplace.json` | modify | add the `specclaw-fleet` entry |
 | `.agents/plugins/marketplace.json` | modify | add the `specclaw-fleet` entry |
 | `plugins/specclaw/tests/run-codex-plugin-tests.sh` | modify | add the new name to the inventory assertion (line 46) |
-| `plugins/specclaw-fleet/bin/specclaw-fleet` | create | `onboard`, `login`, `dispatch` (gates, secret, Job render, apply, fields) |
+| `plugins/specclaw-fleet/bin/specclaw-fleet` | create | router; sources `lib/*.sh` |
+| `plugins/specclaw-fleet/lib/{common,vault,workitem,naming,manifest,dispatch,launch}.sh` | create | split to keep every file ≤ 80 lines (base preset): helpers, onboard/login, Boards + gates, safe names, Secret/Job render, dispatch flow, create + record |
 | `plugins/specclaw-fleet/image/Dockerfile` | create | debian-slim with git, jq, curl, python3, `claude`, `codex`, specclaw plugins baked in; non-root `agent` user |
 | `plugins/specclaw-fleet/image/entrypoint.sh` | create | agent step (FR-6) |
 | `plugins/specclaw-fleet/image/writeback.sh` | create | write-back step (FR-7), vault REST over curl |
 | `plugins/specclaw-fleet/k8s/namespace.yaml` | create | namespace |
 | `plugins/specclaw-fleet/k8s/rbac.yaml` | create | dispatcher ServiceAccount, Role, RoleBinding |
-| `plugins/specclaw-fleet/k8s/egress.yaml` | create | Squid Deployment, Service, allowlist ConfigMap, NetworkPolicies |
+| `plugins/specclaw-fleet/k8s/egress-proxy.yaml` | create | Squid Deployment, Service, allowlist ConfigMap |
+| `plugins/specclaw-fleet/k8s/network-policy.yaml` | create | default-deny fleet pods; proxy egress 443 minus private/metadata ranges |
 | `plugins/specclaw-fleet/pipelines/dispatch.yml` | create | AzDO pipeline template (FR-10) |
 | `plugins/specclaw-fleet/skills/dispatch/SKILL.md` | create | when and how to dispatch |
 | `plugins/specclaw-fleet/skills/login/SKILL.md` | create | per-user credential registration |
 | `plugins/specclaw-fleet/README.md` | create | setup guide: vault RBAC, fields and states, PAT scope, proxy hosts, consent, cost note |
-| `plugins/specclaw-fleet/tests/run-fleet-tests.sh` | create | AC-2 to AC-8 and AC-10 with stubs |
+| `plugins/specclaw-fleet/tests/run-fleet-tests.sh` | create | runs every `tests/cases/*.sh` |
+| `plugins/specclaw-fleet/tests/lib/{harness,dispatch-env}.sh`, `tests/cases/ac{2,3,4,5,6,7,8,10}_*.sh` | create | stubs and one case file per AC group |
 | `plugins/specclaw-sync/bin/specclaw-azdo-issue` | modify | new `fields` subcommand |
 | `plugins/specclaw-sync/skills/azdo-issue/SKILL.md` | modify | document `fields` |
 | `plugins/specclaw-sync/tests/run-azdo-issue-fields-tests.sh` | create | AC-9 |
@@ -89,6 +92,7 @@ Vault secrets: `claude-token-<h>` and `codex-auth-<h>`, with placeholder value `
 - **Hash of the UPN, not the Entra object ID.** Dispatch needs no Graph permission. The edge case where AssignedTo differs from the UPN is covered by A1 and documented.
 - **Fields go only to mapped keys, plus an audit comment.** An AzDO PATCH that names a missing field fails the whole request. Mapping-only writes keep the fleet working on an unmodified process template.
 - **Squid over Cilium.** It works on stock K3s (flannel plus the built-in policy controller), and the NetworkPolicy reduces egress to "DNS plus proxy".
+- **Job first, then an owned Secret; Secrets verb is `create` only.** `apply` plus an ownerReference patch would need `get`/`patch` on Secrets, letting the dispatcher read `fleet-azdo` and `fleet-vault-writer`. Changed during T6.
 - **The PAT is mounted in the agent container.** The agent must push and open PRs, so it needs the PAT anyway. The PAT's scope is minimised and documented. Workload identity is a follow-up.
 
 ## Risks & Mitigations

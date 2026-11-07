@@ -56,7 +56,7 @@ Wave 1 lays the packaging and the single Boards writer. Wave 2 adds the credenti
   - Depends: T4
   - Notes: Role verbs/resources exactly FR-9; default-deny + allow DNS + proxy; Squid allowlist incl. api.anthropic.com, api.openai.com, auth.openai.com, chatgpt.com, dev.azure.com, .visualstudio.com, login.microsoftonline.com, .vault.azure.net; 169.254.169.254 excluded via ipBlock except. Tests assert structure with grep/python (no cluster).
 
-- [ ] `T7` — Skills, README setup guide, CI registration (AC-11)
+- [x] `T7` — Skills, README setup guide, CI registration (AC-11)
   - Files: plugins/specclaw-fleet/skills/dispatch/SKILL.md, plugins/specclaw-fleet/skills/login/SKILL.md, plugins/specclaw-fleet/README.md, .github/workflows/ci.yml
   - Estimate: small
   - Kind: docs

@@ -76,7 +76,7 @@ A new add-on plugin, `plugins/specclaw-fleet/`. An approved specclaw change is r
   - blocking of `169.254.169.254`.
 
   Pods run non-root, with a read-only root filesystem, emptyDir workspace and home, and `automountServiceAccountToken: false`.
-- **FR-10 Pipeline template.** `pipelines/dispatch.yml` triggers on `main` for paths `.specclaw/changes/*/proposal.md`. For each newly approved change it runs `specclaw-fleet dispatch` once. It never polls.
+- **FR-10 Pipeline template.** `pipelines/dispatch.yml` triggers on `main` for paths `.specclaw/changes/*/state.json`. It dispatches a change only when its proposal status became `approved` in that commit, so later phase commits never re-dispatch. It never polls.
 
 ## Non-Functional Requirements
 
