@@ -26,6 +26,7 @@ case "$1" in
   updates) [[ "$WI_UPDATES" == FAIL ]] && exit 1; echo "$WI_UPDATES" ;;
   claim) [[ -n "${CLAIM_FAIL:-}" ]] && { echo "ERROR: ADO read failed" >&2; exit 1; }
     mkdir "$CLAIMS/wi-$3" 2>/dev/null || exit 3 ;;
+  create) printf "**Azure Boards Work Item:** [#77](https://x)\n" >> "$2/changes/$3/status.md" ;;
   untag) [[ -n "${UNTAG_FAIL:-}" ]] && exit 1; [[ "$4" == fleet:dispatched ]] && rm -rf "$CLAIMS/wi-$3" ;;
 esac
 exit 0'

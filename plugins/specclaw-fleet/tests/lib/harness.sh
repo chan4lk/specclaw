@@ -40,5 +40,6 @@ case "$1 $2 $3" in
   "role assignment list") grep -qxF "$(arg --assignee "$@") $scope" "$KV/ra" 2>/dev/null && echo ra-id ;;
   "role assignment create") echo "$(arg --assignee "$@") $scope" >> "$KV/ra" ;;
   "account show "*) echo "$AZ_UPN" ;;
+  "pipelines run --name") [[ -n "${RUN_FAIL:-}" ]] && exit 1; echo 4242 ;;
 esac'
 }

@@ -23,7 +23,7 @@
 - [x] `T4` — `specclaw-fleet doctor`, read-only (AC-7)
   - Files: plugins/specclaw-fleet/lib/doctor.sh, plugins/specclaw-fleet/lib/doctor-checks.sh, plugins/specclaw-fleet/bin/specclaw-fleet, plugins/specclaw-fleet/tests/cases/ac16_doctor.sh
   - Kind: impl
-- [ ] `T5` — `specclaw-fleet trigger` (AC-8)
+- [x] `T5` — `specclaw-fleet trigger` (AC-8)
   - Files: plugins/specclaw-fleet/lib/trigger.sh, plugins/specclaw-fleet/bin/specclaw-fleet, plugins/specclaw-fleet/tests/cases/ac17_trigger.sh
   - Kind: impl
   - Depends: T2
