@@ -12,15 +12,15 @@ parse_dispatch_args() {
     esac
   done
   [[ -n "$F_CHANGE" ]] || die "Usage: specclaw-fleet dispatch <change> [--agent claude|codex] [--ref <branch>] [--vault <name>] [--dry-run]"
-  F_AGENT="${F_AGENT:-$(cfg_val fleet.default_agent claude)}"
+  F_AGENT="${F_AGENT:-$(cfg_val fleet.default_agent claude)}" || exit 1
   [[ "$F_AGENT" == claude || "$F_AGENT" == codex ]] || die "Unknown agent '$F_AGENT' (expected claude or codex)"
-  F_REF="${F_REF:-$(cfg_val git.base_branch main)}"
-  F_VAULT="${F_VAULT:-$(cfg_val fleet.vault "")}"
+  F_REF="${F_REF:-$(cfg_val git.base_branch main)}" || exit 1
+  F_VAULT="${F_VAULT:-$(cfg_val fleet.vault "")}" || exit 1
   [[ -n "$F_VAULT" ]] || die "No Key Vault: pass --vault or set fleet.vault in config.yaml"
-  F_NS="$(cfg_val fleet.namespace specclaw-fleet)"
-  F_IMAGE="$(cfg_val fleet.image specclaw-fleet:latest)"
+  F_NS="$(cfg_val fleet.namespace specclaw-fleet)" || exit 1
+  F_IMAGE="$(cfg_val fleet.image specclaw-fleet:latest)" || exit 1
   local minutes
-  minutes="$(cfg_val fleet.deadline_minutes 120)"
+  minutes="$(cfg_val fleet.deadline_minutes 120)" || exit 1
   [[ "$minutes" =~ ^[0-9]+$ ]] || die "fleet.deadline_minutes must be a whole number of minutes"
   F_DEADLINE=$(( 10#$minutes * 60 ))
 }
@@ -55,7 +55,7 @@ fleet_dispatch() {
   F_LABEL="$(label_value "$F_CHANGE")"
   F_REPO="$(git -C "$SPECCLAW_DIR/.." remote get-url origin | sed -E 's#://[^@/]+@#://#')"
   F_COMMIT="$(git -C "$SPECCLAW_DIR/.." rev-parse HEAD)" || die "Could not resolve the dispatched commit"
-  F_AZDO_CONFIG="$(cfg_block azdo)"
+  F_AZDO_CONFIG="$(cfg_block azdo)" || exit 1
   if (( F_DRY_RUN )); then
     render_job
     echo ---

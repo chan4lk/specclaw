@@ -29,7 +29,7 @@ fleet_login() {
       *) die "Unknown argument: $1" ;;
     esac
   done
-  vault="${vault:-$(cfg_val fleet.vault "")}"
+  vault="${vault:-$(cfg_val fleet.vault "")}" || exit 1
   [[ -n "$vault" ]] || die "Usage: specclaw-fleet login --agent claude|codex --vault <name>"
 
   local upn name

@@ -63,7 +63,7 @@ create_manifests() {
 launch_job() {
   create_manifests
   local attempt cluster prefix
-  prefix="$(cfg_val git.branch_prefix specclaw/)"
+  prefix="$(cfg_val git.branch_prefix specclaw/)" || exit 1
   attempt="$(kubectl -n "$F_NS" get jobs -l "specclaw.fleet/change=$F_LABEL" -o name | wc -l | tr -d ' ')" || attempt=unknown
   cluster="$(kubectl config current-context 2>/dev/null || echo unknown)"
   record_run "$F_CHANGE" "agent=$F_AGENT" "job=$F_JOB" "cluster=$cluster" \

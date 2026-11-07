@@ -23,7 +23,7 @@ fleet_onboard() {
     esac
   done
   [[ -n "$upn" && -n "$vault" ]] || die "Usage: specclaw-fleet onboard <upn> --vault <name> [--writer <object-id>]"
-  writer="${writer:-$(cfg_val fleet.vault_writer "")}"
+  writer="${writer:-$(cfg_val fleet.vault_writer "")}" || exit 1
   [[ -n "$writer" ]] || warn "no --writer / fleet.vault_writer: codex runs for $upn will not persist refreshed tokens until the write-back service principal is granted codex-auth-$(upn_hash "$upn")"
 
   local h vault_id agent name scope
