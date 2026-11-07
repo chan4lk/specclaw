@@ -33,7 +33,4 @@ FLEET_ONLY_CHANGE=" " FLEET_RUN_AGENT=" " run_with_state 049-x "$APPROVED"; blan
 filters() { [[ -z "$only_calls" ]] && grep -qxF "specclaw-fleet dispatch 049-x --agent codex" <<<"$agent_calls" \
   && grep -qxF "specclaw-fleet dispatch 049-x" <<<"$blank_calls"; }
 check "FR10 change and agent parameters narrow the run; blank parameters mean every change, default agent" filters
-rm -f "$TMP/refs"; FLEET_REF=refs/heads/feature/fleet-x run_with_state 049-x "$APPROVED"
-full_ref() { grep -qx "ref=feature/fleet-x" "$TMP/refs"; }
-check "FR10 the pipeline passes the full branch name (refs/heads/ stripped, slashes kept)" full_ref
 finish

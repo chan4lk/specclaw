@@ -33,4 +33,7 @@ same_script() {
 check "AC6 image workflow: amd64+arm64 to GHCR, packages: write only, SHA-pinned actions, validated tags, no overwrite" workflow_ok
 check "AC9 hosted template runs on ubuntu-latest and fetches specclaw at a verified full commit SHA onto PATH" hosted_ok
 check "AC9 hosted and self-hosted templates run the identical dispatch script and pass the claude version" same_script
+V="$(jq -r .version "$FLEET_ROOT/.claude-plugin/plugin.json")"
+one_version() { grep -q "fleetImage: ghcr.io/chan4lk/specclaw-fleet:$V$" "$H" && grep -q "fleetImage: ghcr.io/chan4lk/specclaw-fleet:$V$" "$S"; }
+check "AC9 both templates default to the image tagged with the plugin version; dispatch derives the same tag" one_version
 finish

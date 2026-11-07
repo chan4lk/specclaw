@@ -1,8 +1,8 @@
 # shellcheck shell=bash disable=SC2034
-export TMP AGENT_TEMPDIRECTORY="$TMP" SYSTEM_COLLECTIONURI=https://dev.azure.com/o/
+export TMP AGENT_TEMPDIRECTORY="$TMP" SYSTEM_COLLECTIONURI=https://dev.azure.com/o/ FLEET_REF=refs/heads/main
 APPROVED='{"phase":"proposal","phases":{"proposal":{"status":"approved"}}}'
 stub specclaw-fleet 'echo "ref=${FLEET_REF:-}" >> "$TMP/refs"; exit "${DISPATCH_RC:-0}"'
-sed -n '/inlineScript: |/,/^    env:/p' "$FLEET_ROOT/pipelines/dispatch.yml" | sed '1d;$d;s/^        //' > "$TMP/step.sh"
+sed -n '/inlineScript: |/,/^    env:/p' "$FLEET_ROOT/pipelines/${PIPELINE_FILE:-dispatch.yml}" | sed '1d;$d;s/^        //' > "$TMP/step.sh"
 
 run_with_state() {
   rm -rf "$TMP/r" && mkdir -p "$TMP/r/.specclaw/changes/$1"

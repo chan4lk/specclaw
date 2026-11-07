@@ -28,7 +28,7 @@ trigger_pushed_tree() {
   done
   export FLEET_DISPATCH_COMMIT FLEET_REPO_URL
   FLEET_DISPATCH_COMMIT="$(git -C "$root" rev-parse FETCH_HEAD)"
-  FLEET_REPO_URL="$(git -C "$root" remote get-url "$remote" | sed -E 's#://[^@/]+@#://#')"
+  FLEET_REPO_URL="$(git -C "$root" remote get-url origin | sed -E 's#://[^@/]+@#://#')"
   T_LOCAL_DIR="$SPECCLAW_DIR" SPECCLAW_DIR="$tree" T_REF_LABEL="$remote/$ref"
 }
 

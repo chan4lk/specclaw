@@ -19,7 +19,8 @@ present_when_set() {
 }
 refused_all=1
 for bad in "FLEET_CLAUDE_VERSION=" "FLEET_CLAUDE_VERSION=latest" "FLEET_CLAUDE_VERSION=2.1.319;x" \
-           "FLEET_IMAGE_PULL_SECRET=Bad_Name" "FLEET_NODE_LABEL=noequals" "FLEET_NODE_LABEL=a=b c"; do
+           "FLEET_IMAGE_PULL_SECRET=Bad_Name" "FLEET_NODE_LABEL=noequals" "FLEET_NODE_LABEL=a=b c" \
+           "FLEET_DISPATCH_COMMIT=abc" "FLEET_REPO_URL=file:///tmp/r" "FLEET_REPO_URL=https://u:p@h/r"; do
   reset_env; env "$bad" "$FLEET" dispatch "$CHANGE" > "$TMP/out" 2>&1 && refused_all=0
   nothing_applied || refused_all=0
 done
