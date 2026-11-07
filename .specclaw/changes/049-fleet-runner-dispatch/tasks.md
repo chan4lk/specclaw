@@ -33,7 +33,7 @@ Wave 1 lays the packaging and the single Boards writer. Wave 2 adds the credenti
   - Depends: T1
   - Notes: `<h>` = first 16 hex of sha256(lowercase UPN). Onboard: `az keyvault secret set` placeholder `__unset__` only if missing; `az role assignment list/create --scope <vault-id>/secrets/<name>`. Login: temp dir with trap cleanup; token passed to `az` via `--file`, never argv. Canary-token test.
 
-- [ ] `T4` — `specclaw-fleet dispatch`: gates (a)–(f), per-Job Secret owned by Job, Job render, fields + `Dispatched`, JSON output, `--dry-run` (AC-4, AC-5, AC-6, AC-10 rendered-YAML part)
+- [x] `T4` — `specclaw-fleet dispatch`: gates (a)–(f), per-Job Secret owned by Job, Job render, fields + `Dispatched`, JSON output, `--dry-run` (AC-4, AC-5, AC-6, AC-10 rendered-YAML part)
   - Files: plugins/specclaw-fleet/bin/specclaw-fleet, plugins/specclaw-fleet/tests/run-fleet-tests.sh
   - Estimate: large
   - Kind: impl
