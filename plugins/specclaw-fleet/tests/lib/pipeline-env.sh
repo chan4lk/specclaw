@@ -1,6 +1,8 @@
 # shellcheck shell=bash disable=SC2034
 REAL_GIT="$(command -v git)"
-export AGENT_TEMPDIRECTORY="$TMP" SYSTEM_COLLECTIONURI=https://dev.azure.com/o/ REAL_GIT
+export AGENT_TEMPDIRECTORY="$TMP" SYSTEM_COLLECTIONURI=https://dev.azure.com/o/ REAL_GIT SYSTEM_ACCESSTOKEN=t
+export SYSTEM_TEAMPROJECTID=p SYSTEM_DEFINITIONID=7 BUILD_SOURCEBRANCH=refs/heads/main BUILDS_JSON='{"value":[]}'
+stub curl '[[ -n "${CURL_FAIL:-}" ]] && exit 22; echo "$BUILDS_JSON"'
 OK='{"phases":{"proposal":{"status":"approved"}}}'
 DRAFT='{"phases":{"proposal":{"status":"draft"}}}'
 stub specclaw-fleet 'exit 0'

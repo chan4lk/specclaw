@@ -73,6 +73,8 @@ Assigning a work item to someone must not spend their plan without their say. Di
        exit: Custom.FleetExit
        attempt: Custom.FleetAttempt
        requested_by: Custom.FleetRequestedBy
+       dispatched_commit: Custom.FleetDispatchedCommit
+       built_commit: Custom.FleetBuiltCommit
      fleet_states:
        dispatched: Dispatched
        running: Running
@@ -80,6 +82,7 @@ Assigning a work item to someone must not spend their plan without their say. Di
        failed: Failed
    fleet:
      vault: specclaw-fleet-kv
+     vault_writer: <writer-sp-object-id>
      image: registry.example.com/specclaw-fleet:1
      default_agent: claude
      namespace: specclaw-fleet

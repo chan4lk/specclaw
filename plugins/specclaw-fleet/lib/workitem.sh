@@ -50,11 +50,10 @@ auto_tagged_by() {
 
 consented() {
   local assignee="$1" requester="${BUILD_REQUESTEDFOREMAIL:-}" tagger
-  if has_auto_tag "$2"; then
-    tagger="$(auto_tagged_by)" || die "$F_CHANGE: could not read the work item history"
-    [[ "$(lower "$tagger")" == "$(lower "$assignee")" ]] && return 0
-  fi
-  [[ -n "$requester" && "$(lower "$requester")" == "$(lower "$assignee")" ]]
+  [[ -n "$requester" && "$(lower "$requester")" == "$(lower "$assignee")" ]] && return 0
+  has_auto_tag "$2" || return 1
+  tagger="$(auto_tagged_by)" || refuse "$F_CHANGE" "could not read the work item history to confirm who added fleet:auto"
+  [[ -n "$tagger" && "$(lower "$tagger")" == "$(lower "$assignee")" ]]
 }
 
 fetch_credential() {

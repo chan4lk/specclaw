@@ -26,28 +26,42 @@ secret_name() {
   esac
 }
 
+CFG_PY='
+import re, sys
+mode, path, name = sys.argv[1], sys.argv[2], sys.argv[3]
+header = re.compile(r"^([A-Za-z_][\w-]*)\s*:\s*(#.*)?$")
+section, key = (name.split(".", 1) + [None])[:2]
+current, out = None, []
+for line in open(path):
+    m = header.match(line)
+    if m or re.match(r"^\S", line) and not line.startswith("#"):
+        current = m.group(1) if m else None
+        if mode == "block" and current == section:
+            out.append(line.rstrip("\n"))
+        continue
+    if current != section:
+        continue
+    if mode == "block":
+        out.append(line.rstrip("\n"))
+        continue
+    v = re.match(r"^  " + re.escape(key) + r":\s*(.*?)\s*(#.*)?$", line)
+    if v:
+        out.append(v.group(1).strip("\"\x27"))
+        break
+print("\n".join(out))
+'
+
+cfg_read() {
+  [[ -r "$SPECCLAW_DIR/config.yaml" ]] || die "Cannot read $SPECCLAW_DIR/config.yaml"
+  python3 -c "$CFG_PY" "$1" "$SPECCLAW_DIR/config.yaml" "$2" || die "Could not parse $SPECCLAW_DIR/config.yaml (python3 is required)"
+}
+
 cfg_val() {
   local value
-  value="$(python3 - "$SPECCLAW_DIR/config.yaml" "$1" <<'PY'
-import os, re, sys
-path, (section, key) = sys.argv[1], sys.argv[2].split(".", 1)
-if not os.path.exists(path):
-    sys.exit(0)
-current = None
-for line in open(path):
-    if re.match(r"^[A-Za-z_]", line):
-        current = line.split(":", 1)[0].strip()
-    elif current == section:
-        m = re.match(r"^  " + re.escape(key) + r":\s*(.*?)\s*(#.*)?$", line)
-        if m:
-            print(m.group(1).strip("\"'"))
-            break
-PY
-)" || die "Could not read $SPECCLAW_DIR/config.yaml (python3 is required)"
+  value="$(cfg_read value "$1")" || exit 1
   printf '%s' "${value:-$2}"
 }
 
 cfg_block() {
-  [[ -f "$SPECCLAW_DIR/config.yaml" ]] || return 0
-  awk -v head="$1:" '$0 == head { on = 1; print; next } on && /^[^[:space:]#]/ { exit } on { print }' "$SPECCLAW_DIR/config.yaml"
+  cfg_read block "$1" || exit 1
 }

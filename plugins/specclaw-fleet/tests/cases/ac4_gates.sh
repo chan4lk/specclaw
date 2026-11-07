@@ -32,6 +32,13 @@ for who in mallory@contoso.com ""; do
   check "AC4d fleet:auto added by '${who:-unknown}', not the assignee, refused" refused_and_failed
 done
 accepted() { (( rc == 0 )); }
+READD='{"value":[{"revisedBy":{"uniqueName":"alice@contoso.com"},"fields":{"System.Tags":{"oldValue":"","newValue":"fleet:auto"}}},{"revisedBy":{"uniqueName":"alice@contoso.com"},"fields":{"System.Tags":{"oldValue":"fleet:auto","newValue":""}}},{"revisedBy":{"uniqueName":"mallory@contoso.com"},"fields":{"System.Tags":{"oldValue":"","newValue":"fleet:auto"}}}]}'
+for updates in "$READD" '{"value":[]}' FAIL; do
+  reset_env; WI_UPDATES="$updates" dispatch; rc=$?
+  check "AC4d tag without an assignee add event (${updates:0:12}…) refused" refused_and_failed
+done
+reset_env; WI_UPDATES=FAIL BUILD_REQUESTEDFOREMAIL=alice@contoso.com dispatch; rc=$?
+check "AC4d requester is the assignee: consent even when history is unreadable" accepted
 for tag in Fleet:Auto FLEET:AUTO " fleet:auto "; do
   reset_env; WI_JSON="{\"fields\":{\"System.AssignedTo\":{\"uniqueName\":\"Alice@Contoso.com\"},\"System.Tags\":\"x;$tag\"}}" dispatch; rc=$?
   check "AC4d tag '$tag' added by the assignee is consent (case-insensitive)" accepted

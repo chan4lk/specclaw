@@ -61,10 +61,10 @@ run_agent() {
 
 clone || { record state=failed exit=clone-failed; finish 2; }
 if [[ -n "${FLEET_COMMIT:-}" ]] && ! git -C "$REPO" merge-base --is-ancestor "$FLEET_COMMIT" HEAD; then
-  record state=failed exit=commit-not-on-ref "commit=$FLEET_COMMIT"
+  record state=failed exit=commit-not-on-ref "dispatched_commit=$FLEET_COMMIT"
   finish 2
 fi
-record state=running "commit=$(git -C "$REPO" rev-parse HEAD)"
+record state=running "built_commit=$(git -C "$REPO" rev-parse HEAD)"
 cd "$REPO" || finish 2
 run_agent
 rc=$?

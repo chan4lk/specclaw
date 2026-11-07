@@ -62,11 +62,12 @@ create_manifests() {
 
 launch_job() {
   create_manifests
-  local attempt cluster
+  local attempt cluster prefix
+  prefix="$(cfg_val git.branch_prefix specclaw/)"
   attempt="$(kubectl -n "$F_NS" get jobs -l "specclaw.fleet/change=$F_LABEL" -o name | wc -l | tr -d ' ')" || attempt=unknown
   cluster="$(kubectl config current-context 2>/dev/null || echo unknown)"
   record_run "$F_CHANGE" "agent=$F_AGENT" "job=$F_JOB" "cluster=$cluster" \
-    "branch=$(cfg_val git.branch_prefix specclaw/)$F_CHANGE" "attempt=$attempt" \
-    "requested_by=${BUILD_REQUESTEDFOR:-${USER:-unknown}}" "commit=$F_COMMIT" state=dispatched
+    "branch=$prefix$F_CHANGE" "attempt=$attempt" \
+    "requested_by=${BUILD_REQUESTEDFOR:-${USER:-unknown}}" "dispatched_commit=$F_COMMIT" state=dispatched
   jq -nc --arg j "$F_JOB" --arg a "$F_AGENT" --arg w "$F_WI" '{ok: true, job: $j, agent: $a, work_item: $w}'
 }

@@ -3,7 +3,8 @@ set -uo pipefail
 # shellcheck source=../lib/harness.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/harness.sh"
 ENTRY="$FLEET_ROOT/image/entrypoint.sh"
-stub specclaw-azdo-issue 'exit 0'
+stub specclaw-azdo-issue '[[ -n "${REAL_AZDO:-}" ]] && exec "$REAL_AZDO" "$@"; exit 0'
+stub curl 'printf "%s\n" "$*" >> "$TMP/curl.log"; echo "{}"'
 stub git '[[ "$1" == -C && "$3" == merge-base ]] && { [[ -z "${NOT_ANCESTOR:-}" ]]; exit; }
 [[ "$1" == -C && "$3" == rev-parse ]] && { echo deadbeef; exit 0; }
 [[ "$1" == clone ]] || exit 0
@@ -15,7 +16,7 @@ stub claude 'env | grep -E "^(ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|OPENAI_API_
 [[ "$CLAUDE_CODE_OAUTH_TOKEN" == oat-token ]] || echo "bad token" >> "$TMP/leaked"
 sleep "${AGENT_SLEEP:-0}"
 exit "${AGENT_RC:-0}"'
-export TMP
+export TMP REAL_AZDO=""
 
 run_entry() {
   rm -rf "${TMP:?}/status" "${TMP:?}/work" "${TMP:?}/home"
@@ -30,7 +31,8 @@ run_entry() {
 
 FAKE_PR=1 run_entry; ok_rc=$?; ok_status="$(cat "$TMP/status/exit")"; ok_calls="$(cat "$CALLS")"
 AGENT_RC=5 run_entry; bad_rc=$?; bad_status="$(cat "$TMP/status/exit")"; bad_calls="$(cat "$CALLS")"
-CLONE_FAIL=1 run_entry; clone_rc=$?; clone_status="$(cat "$TMP/status/exit")"; clone_calls="$(cat "$CALLS")"
+CLONE_FAIL=1 REAL_AZDO="$FLEET_ROOT/../specclaw-sync/bin/specclaw-azdo-issue" AZDO_ORG=o AZDO_PROJECT=p run_entry; clone_rc=$?
+clone_patch="$(grep -- "-X PATCH" "$TMP/curl.log" 2>/dev/null)"; clone_status="$(cat "$TMP/status/exit")"; clone_calls="$(cat "$CALLS")"
 clone_wi="$(cat "$TMP/work/fallback/.specclaw/changes/049-x/status.md" 2>/dev/null)"
 clone_cfg="$(cat "$TMP/work/fallback/.specclaw/config.yaml" 2>/dev/null)"
 NOT_ANCESTOR=1 run_entry; stale_rc=$?; stale_status="$(cat "$TMP/status/exit")"; stale_calls="$(cat "$CALLS")"
@@ -45,11 +47,12 @@ failed_flow() { (( bad_rc == 0 )) && [[ "$bad_status" == 5 ]] && grep -q "state=
 
 clone_failure_recorded() {
   (( clone_rc == 0 )) && [[ "$clone_status" == 2 ]] && grep -q "fallback/.specclaw 049-x state=failed exit=clone-failed" <<<"$clone_calls" \
-    && grep -q "#42" <<<"$clone_wi" && grep -q "failed: Failed" <<<"$clone_cfg"
+    && grep -q "#42" <<<"$clone_wi" && grep -q "failed: Failed" <<<"$clone_cfg" \
+    && grep -q 'workitems/42.*"path": "/fields/System.State", "value": "Failed"' <<<"$clone_patch"
 }
 commit_pinned() {
-  grep -q "state=running commit=deadbeef" <<<"$ok_calls" && (( stale_rc == 0 )) && [[ "$stale_status" == 2 ]] \
-    && grep -q "exit=commit-not-on-ref commit=abc123" <<<"$stale_calls" && ! grep -q "state=running" <<<"$stale_calls"
+  grep -q "state=running built_commit=deadbeef" <<<"$ok_calls" && (( stale_rc == 0 )) && [[ "$stale_status" == 2 ]] \
+    && grep -q "exit=commit-not-on-ref dispatched_commit=abc123" <<<"$stale_calls" && ! grep -q "state=running" <<<"$stale_calls"
 }
 deadline_leaves_room() { (( late_rc == 0 )) && [[ "$late_status" == 143 ]] && grep -q "state=failed exit=deadline" <<<"$late_calls"; }
 

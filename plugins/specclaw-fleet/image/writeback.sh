@@ -31,4 +31,5 @@ if [[ -n "$token" ]] && jq -n --rawfile v "$AUTH" '{value: $v}' | curl -q -sf -X
   echo "codex credential refreshed in $FLEET_SECRET"
   exit "$rc"
 fi
-fail "codex credential write-back failed"
+echo "ERROR: codex credential write-back failed: check that the writer service principal holds $FLEET_SECRET (specclaw-fleet onboard --writer) and that the vault is reachable" >&2
+exit $(( rc != 0 ? rc : 3 ))

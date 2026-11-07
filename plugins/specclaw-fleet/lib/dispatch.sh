@@ -19,7 +19,10 @@ parse_dispatch_args() {
   [[ -n "$F_VAULT" ]] || die "No Key Vault: pass --vault or set fleet.vault in config.yaml"
   F_NS="$(cfg_val fleet.namespace specclaw-fleet)"
   F_IMAGE="$(cfg_val fleet.image specclaw-fleet:latest)"
-  F_DEADLINE=$(( 10#$(cfg_val fleet.deadline_minutes 120) * 60 ))
+  local minutes
+  minutes="$(cfg_val fleet.deadline_minutes 120)"
+  [[ "$minutes" =~ ^[0-9]+$ ]] || die "fleet.deadline_minutes must be a whole number of minutes"
+  F_DEADLINE=$(( 10#$minutes * 60 ))
 }
 
 check_gates() {

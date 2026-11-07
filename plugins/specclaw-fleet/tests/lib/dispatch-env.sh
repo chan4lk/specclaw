@@ -20,7 +20,7 @@ reset_env() {
 
 stub_cluster() {
   stub_az
-  stub specclaw-azdo-issue '[[ "$1" == show ]] && echo "$WI_JSON"; [[ "$1" == updates ]] && echo "$WI_UPDATES"; exit 0'
+  stub specclaw-azdo-issue '[[ "$1" == show ]] && echo "$WI_JSON"; [[ "$1" == updates ]] && { [[ "$WI_UPDATES" == FAIL ]] && exit 1; echo "$WI_UPDATES"; }; exit 0'
   stub kubectl '
 claim="$CLAIMS/claim-$5"
 case "$*" in
