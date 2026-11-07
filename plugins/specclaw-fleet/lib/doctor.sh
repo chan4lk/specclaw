@@ -13,6 +13,7 @@ fleet_doctor() {
     (( rc == 2 )) && skipped=$((skipped + 1))
     (( rc != 0 && rc != 2 )) && failed=$((failed + 1))
   done
-  (( failed == 0 )) && echo "doctor: all checks ok ($skipped skipped)" || echo "doctor: $failed check(s) need attention ($skipped skipped)"
-  (( failed == 0 ))
+  if (( failed > 0 )); then echo "doctor: $failed check(s) need attention, $skipped did not run"; return 1; fi
+  if (( skipped > 0 )); then echo "doctor: incomplete, $skipped check(s) did not run"; return 2; fi
+  echo "doctor: all checks ok"
 }

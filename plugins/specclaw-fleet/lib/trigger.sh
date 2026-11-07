@@ -20,7 +20,8 @@ load_azdo_env() {
   local line
   [[ -z "${AZDO_ORG:-}" && -f "$SPECCLAW_DIR/.env" ]] || return 0
   while IFS= read -r line; do
-    [[ "$line" =~ ^(AZDO_ORG|AZDO_PROJECT|AZDO_TOKEN)=(.*)$ ]] && export "${BASH_REMATCH[1]}=${BASH_REMATCH[2]}"
+    [[ "$line" =~ ^(export[[:space:]]+)?(AZDO_ORG|AZDO_PROJECT|AZDO_TOKEN)=[\"\']?([^\"\']*)[\"\']?$ ]] \
+      && export "${BASH_REMATCH[2]}=${BASH_REMATCH[3]}"
   done < "$SPECCLAW_DIR/.env"
 }
 

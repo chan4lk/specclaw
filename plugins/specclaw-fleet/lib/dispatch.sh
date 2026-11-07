@@ -33,19 +33,19 @@ parse_dispatch_args() {
 check_gates() {
   proposal_approved "$F_CHANGE" || die "$F_CHANGE: proposal is not approved"
   [[ -n "$(work_item_id "$F_CHANGE")" ]] || die "$F_CHANGE: no Azure Boards work item (run specclaw-azdo-issue create)"
-  local wi assignee tags
+  local wi rc=0
   wi="$(azdo_issue show "$SPECCLAW_DIR" "$F_CHANGE")" || die "$F_CHANGE: could not read the work item"
-  assignee="$(jq -r '.fields["System.AssignedTo"].uniqueName // empty' <<<"$wi")"
-  tags="$(jq -r '.fields["System.Tags"] // empty' <<<"$wi")"
-  already_handled "$tags"
-  if ! has_auto_tag "$tags"; then
-    echo "$F_CHANGE: not opted in (no fleet:auto tag); skipped, nothing written" >&2
-    exit 3
-  fi
-  [[ -n "$assignee" ]] || refuse "$F_CHANGE" "work item has no assignee"
-  consented "$assignee" "$tags" \
-    || refuse "$F_CHANGE" "fleet:auto was not added by the assignee $assignee"
-  F_HASH="$(upn_hash "$assignee")"
+  already_handled "$(jq -r '.fields["System.Tags"] // empty' <<<"$wi")"
+  gate_owner "$wi" || rc=$?
+  case "$rc" in
+    0) ;;
+    10) echo "$F_CHANGE: not opted in (no fleet:auto tag); skipped, nothing written" >&2; exit 3 ;;
+    11) refuse "$F_CHANGE" "work item has no assignee" ;;
+    13) refuse "$F_CHANGE" "could not read the work item history to confirm who added fleet:auto" ;;
+    *) refuse "$F_CHANGE" "fleet:auto was not added by the assignee $G_ASSIGNEE" ;;
+  esac
+  rc=0
+  F_HASH="$(upn_hash "$G_ASSIGNEE")"
   F_SECRET="$(secret_name "$F_AGENT" "$F_HASH")"
   local rc=0
   F_CREDENTIAL="$(fetch_credential "$F_VAULT" "$F_SECRET")" || rc=$?

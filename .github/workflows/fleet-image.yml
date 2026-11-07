@@ -41,7 +41,8 @@ jobs:
           tag="${TAG_INPUT:-${GITHUB_REF_NAME#fleet-v}}"; codex="${CODEX_INPUT:-0.167.0}"
           [[ "$tag" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z0-9.]+)?$ ]] || { echo "::error::bad tag: $tag"; exit 1; }
           [[ "$codex" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::bad codex version: $codex"; exit 1; }
-          if docker manifest inspect "$IMAGE:$tag" >/dev/null 2>&1; then echo "::error::$IMAGE:$tag already exists"; exit 1; fi
+          if out="$(docker manifest inspect "$IMAGE:$tag" 2>&1)"; then echo "::error::$IMAGE:$tag already exists"; exit 1; fi
+          grep -qiE "manifest unknown|not found" <<<"$out" || { echo "::error::cannot tell whether $IMAGE:$tag exists: $out"; exit 1; }
           { echo "tag=$tag"; echo "codex=$codex"; } >> "$GITHUB_OUTPUT"
       - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:

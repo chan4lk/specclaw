@@ -36,7 +36,9 @@ fetch_claude() {
   sum="$(jq -r --arg p "$plat" '.platforms[$p].checksum // empty' "$dir/manifest.json")"
   size="$(jq -r --arg p "$plat" '.platforms[$p].size // empty' "$dir/manifest.json")"
   [[ "$sum" =~ ^[0-9a-f]{64}$ && "$size" =~ ^[0-9]+$ ]] || return 1
-  curl -fsS -m 900 --max-filesize "$size" -o "$bin/claude.part" "$base/$plat/claude" || { rm -f "$bin/claude.part"; return 3; }
+  local crc=0
+  curl -fsS -m 900 --max-filesize "$size" -o "$bin/claude.part" "$base/$plat/claude" || crc=$?
+  (( crc == 0 )) || { rm -f "$bin/claude.part"; (( crc == 63 )) && return 1; return 3; }
   if [[ "$(sha256sum "$bin/claude.part" | cut -d' ' -f1)" != "$sum" || "$(wc -c < "$bin/claude.part" | tr -d ' ')" != "$size" ]]; then
     rm -f "$bin/claude.part"
     return 1

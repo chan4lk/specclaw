@@ -38,8 +38,8 @@ reports_each() { (( each_fails == 1 )); }
 check "AC7 each broken item is named with its fix and makes doctor exit non-zero" reports_each
 
 FLEET_IMAGE=registry.example.com/x:1 "$FLEET" doctor > "$TMP/out" 2>&1; skip_rc=$?
-skips_other() { (( skip_rc == 0 )) && grep -q "^skip image" "$TMP/out"; }
-check "AC7 non-GHCR images are skipped, not failed" skips_other
+skips_other() { (( skip_rc == 2 )) && grep -q "^skip image" "$TMP/out" && grep -q "incomplete, 1 check(s) did not run" "$TMP/out" && ! grep -q "all checks ok" "$TMP/out"; }
+check "AC7 a check that did not run makes doctor incomplete (exit 2), never all ok" skips_other
 read_only() { ! grep -Eq " (create|apply|delete|patch|update|set|run|label|taint)( |$)|-X (POST|PUT|PATCH|DELETE)" "$CALLS"; }
 check "AC7 doctor made no mutating call across all runs" read_only
 finish
