@@ -43,7 +43,8 @@ already_handled() {
   local -a tags=()
   IFS=';' read -ra tags <<<"$1"
   for tag in "${tags[@]}"; do
-    tag="$(lower "${tag//[[:space:]]/}")"
+    tag="${tag#"${tag%%[![:space:]]*}"}"
+    tag="$(lower "${tag%"${tag##*[![:space:]]}"}")"
     if [[ "$tag" == fleet:dispatched || "$tag" == fleet:refused ]]; then
       echo "$F_CHANGE: already handled ($tag); remove the tag or pass --force to dispatch again" >&2
       exit 3
