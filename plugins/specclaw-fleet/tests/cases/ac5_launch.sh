@@ -8,13 +8,13 @@ stub_cluster
 reset_env
 BUILD_REQUESTEDFOR="Alice A" dispatch
 rc=$?
-secret="$APPLIED/0.yaml" job="$APPLIED/1.yaml"
+job="$APPLIED/0.yaml" secret="$APPLIED/1.yaml"
 
 one_secret_one_job() {
   (( rc == 0 )) && [[ $(find "$APPLIED" -type f | wc -l | tr -d " ") == 2 ]] && grep -q "^kind: Secret" "$secret" && grep -q "^kind: Job" "$job"
 }
 secret_holds_credential() {
-  grep -q "credential: $(printf '%s' "$CANARY" | base64 | tr -d '\n')" "$secret" && grep -q 'ownerReferences.*"uid":"uid-1"' "$CALLS"
+  grep -q "credential: $(printf '%s' "$CANARY" | base64 | tr -d '\n')" "$secret" && grep -A1 ownerReferences "$secret" | grep -q 'kind: Job, name: fleet-049-[0-9a-f]*, uid: "uid-1"' 
 }
 job_labels_and_deadline() {
   grep -q "specclaw.fleet/agent: claude" "$job" && grep -q "specclaw.fleet/assignee: \"$H\"" "$job" \

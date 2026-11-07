@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fleet-egress
+  namespace: specclaw-fleet
+data:
+  squid.conf: |
+    http_port 3128
+    acl fleet_dst dstdomain api.anthropic.com downloads.claude.ai
+    acl fleet_dst dstdomain api.openai.com auth.openai.com chatgpt.com .chatgpt.com
+    acl fleet_dst dstdomain dev.azure.com .dev.azure.com .visualstudio.com
+    acl fleet_dst dstdomain login.microsoftonline.com .vault.azure.net
+    acl fleet_dst dstdomain registry.npmjs.org
+    acl SSL_ports port 443
+    acl CONNECT method CONNECT
+    http_access deny !CONNECT
+    http_access deny CONNECT !SSL_ports
+    http_access allow fleet_dst
+    http_access deny all
+    access_log stdio:/dev/stdout
+    cache deny all
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fleet-egress
+  namespace: specclaw-fleet
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: fleet-egress}
+  template:
+    metadata:
+      labels: {app: fleet-egress}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: squid
+          image: ubuntu/squid:latest
+          ports: [{containerPort: 3128}]
+          volumeMounts:
+            - {name: conf, mountPath: /etc/squid/squid.conf, subPath: squid.conf}
+      volumes:
+        - {name: conf, configMap: {name: fleet-egress}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fleet-egress
+  namespace: specclaw-fleet
+spec:
+  selector: {app: fleet-egress}
+  ports: [{port: 3128, targetPort: 3128}]

@@ -48,9 +48,9 @@ fleet_dispatch() {
   F_LABEL="$(label_value "$F_CHANGE")"
   F_REPO="$(git -C "$SPECCLAW_DIR/.." remote get-url origin | sed -E 's#://[^@/]+@#://#')"
   if (( F_DRY_RUN )); then
-    render_secret REDACTED
-    echo ---
     render_job
+    echo ---
+    render_secret REDACTED "<job-uid>"
     return 0
   fi
   launch_job

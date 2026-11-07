@@ -22,7 +22,7 @@ stub_cluster() {
   stub specclaw-azdo-issue '[[ "$1" == show ]] && echo "$WI_JSON"; exit 0'
   stub kubectl '
 case "$*" in
-  *" apply -f -") cat > "$APPLIED/$(find "$APPLIED" -type f | wc -l | tr -d " ").yaml" ;;
+  *" create -f -") cat > "$APPLIED/$(find "$APPLIED" -type f | wc -l | tr -d " ").yaml" ;;
   *"agent=codex,"*) echo "$JOBS_JSON" ;;
   *"specclaw.fleet/change="*) echo job.batch/fleet-049-a ;;
   *" get job "*) echo uid-1 ;;
@@ -34,5 +34,5 @@ dispatch() {
   "$FLEET" dispatch "$CHANGE" "$@" > "$TMP/out" 2>&1
 }
 
-nothing_applied() { [[ -z "$(ls -A "$APPLIED")" ]] && ! grep -q "kubectl.* apply" "$CALLS"; }
+nothing_applied() { [[ -z "$(ls -A "$APPLIED")" ]] && ! grep -q "kubectl.* create -f" "$CALLS"; }
 marked_failed() { grep -q "specclaw-azdo-issue fields .*state=failed" "$CALLS"; }

@@ -8,6 +8,8 @@ metadata:
   namespace: $F_NS
   labels:
     app.kubernetes.io/part-of: specclaw-fleet
+  ownerReferences:
+    - {apiVersion: batch/v1, kind: Job, name: $F_JOB, uid: "$2"}
 type: Opaque
 data:
   credential: $1

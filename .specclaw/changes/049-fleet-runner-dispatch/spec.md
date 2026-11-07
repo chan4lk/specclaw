@@ -42,8 +42,7 @@ A new add-on plugin, `plugins/specclaw-fleet/`. An approved specclaw change is r
 
   Refusals (c)–(f) also set the work item to `Failed` and adds a comment naming the reason. Dispatch never uses a credential belonging to anyone other than the assignee.
 - **FR-5 Dispatch launch.** When every gate passes, dispatch:
-  - creates a K8s Secret holding only the assignee's credential;
-  - applies a Job and patches the Secret's `ownerReferences` to that Job, so it is garbage-collected with the Job;
+  - creates the Job, then a K8s Secret holding only the assignee's credential with `ownerReferences` to that Job already set, so it is garbage-collected with the Job and the dispatcher never needs read or patch access to Secrets;
   - labels the Job `specclaw.fleet/agent`, `specclaw.fleet/assignee=<h>` and `specclaw.fleet/change`;
   - sets `activeDeadlineSeconds`, `backoffLimit: 0` and `ttlSecondsAfterFinished`;
   - writes the work item fields (agent, job, cluster, branch, attempt, requested-by) and the state `Dispatched`;
@@ -71,7 +70,7 @@ A new add-on plugin, `plugins/specclaw-fleet/`. An approved specclaw change is r
   - exits 0 when nothing maps.
 - **FR-9 Sandbox manifests.** `k8s/` ships:
   - a namespace;
-  - a dispatch ServiceAccount whose Role allows create/get/list/patch/delete on `jobs` and `secrets` in that namespace only;
+  - a dispatch ServiceAccount whose Role allows only create/get/list/delete on `jobs` and create on `secrets` in that namespace, so it can never read the namespace's other Secrets;
   - a default-deny `NetworkPolicy` that lets fleet pods reach only DNS and the egress proxy;
   - a Squid proxy with an allowlist ConfigMap;
   - blocking of `169.254.169.254`.
@@ -93,7 +92,7 @@ A new add-on plugin, `plugins/specclaw-fleet/`. An approved specclaw change is r
 - **AC-2:** `onboard` issues role assignments whose scopes end in `/secrets/claude-token-<h>` and `/secrets/codex-auth-<h>`, and none at vault scope. A second run makes no duplicate assignments.
 - **AC-3:** `login` stores the stub token under the caller's `<h>`. The canary token never appears on stdout or stderr, and the temporary directory is gone afterwards.
 - **AC-4:** Each refusal case FR-4 (a)–(f) exits non-zero and creates no K8s object. For (c)–(f), it also sets the work item to `Failed` with a comment.
-- **AC-5:** With every gate passing, dispatch applies exactly one Secret and one Job. The Secret holds only the assignee's credential and is owned by the Job. The Job carries the three labels and the deadline. The work item gets `Dispatched` and the run fields. The output is the JSON line.
+- **AC-5:** With every gate passing, dispatch creates exactly one Job and one Secret. The Secret holds only the assignee's credential and is owned by the Job. The Job carries the three labels and the deadline. The work item gets `Dispatched` and the run fields. The output is the JSON line.
 - **AC-6:** A second codex dispatch for the same assignee is refused while the first Job is active, and allowed once it has finished. Claude dispatches for the same assignee are never refused for concurrency.
 - **AC-7:** The in-pod entrypoint unsets all four API-key variables before invoking the agent, and the clone URL contains no token. It sets `Running`, then `PR Open` or `Failed`. It exits 0 even when the agent fails, with the real status in the status file.
 - **AC-8:** Write-back puts `codex-auth-<h>` only when the hash changed. It skips claude runs and exits with the agent's recorded status.
@@ -107,7 +106,7 @@ A new add-on plugin, `plugins/specclaw-fleet/`. An approved specclaw change is r
 - The secret version holds the onboarding placeholder `__unset__`. That is treated as missing (FR-4e).
 - AssignedTo uses different case from the `az` UPN. Hashing lowercases first, so the names still match.
 - An unfinished codex Job is one that has neither `succeeded` nor `failed` status. A Job whose pod is Pending still counts as unfinished.
-- `kubectl apply` of the Job fails after the Secret was created. Dispatch deletes the Secret before exiting non-zero.
+- Creating the Secret fails after the Job was created. Dispatch deletes the Job before exiting non-zero.
 - `activeDeadlineSeconds` kills the agent. The SIGTERM trap writes `Failed` with exit reason `deadline`.
 
 ## Out of Scope
