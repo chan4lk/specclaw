@@ -22,9 +22,9 @@ AGENT_SLEEP=5 FLEET_AGENT_TIMEOUT=1 run_entry; late_rc=$?; late_status="$(cat "$
 keys_unset() { [[ ! -s "$TMP/leaked" ]]; }
 no_token_in_url() { ! grep -q "pat-secret" <<<"$ok_calls"; }
 pr_open_flow() {
-  (( ok_rc == 0 )) && [[ "$ok_status" == 0 ]] && grep -q "state=running" <<<"$ok_calls" && grep -q "state=pr_open exit=0 branch=specclaw/049-x" <<<"$ok_calls"
+  (( ok_rc == 0 )) && [[ "$ok_status" == 0 ]] && grep -q "state=running" <<<"$ok_calls" && grep -q "state=pr_open exit=0 branch=specclaw/049-x pr=https://pr/1 draft=false" <<<"$ok_calls"
 }
-failed_flow() { (( bad_rc == 0 )) && [[ "$bad_status" == 5 ]] && grep -q "state=failed exit=5" <<<"$bad_calls"; }
+failed_flow() { (( bad_rc == 0 )) && [[ "$bad_status" == 5 ]] && grep -q "state=pr_open exit=5 .*draft=true" <<<"$bad_calls"; }
 
 clone_failure_recorded() {
   (( clone_rc == 0 )) && [[ "$clone_status" == 2 ]] && grep -q "fallback/.specclaw 049-x state=failed exit=clone-failed" <<<"$clone_calls" \
@@ -41,7 +41,7 @@ deadline_leaves_room() { (( late_rc == 0 )) && [[ "$late_status" == 143 ]] && gr
 check "AC7 API-key variables unset before the agent runs" keys_unset
 check "AC7 clone URL and git args carry no token" no_token_in_url
 check "AC7 Running then PR Open when a PR is recorded" pr_open_flow
-check "AC7 agent failure: exits 0, records Failed and the real status" failed_flow
+check "AC7 agent failure: exits 0, keeps the real status, opens a draft PR" failed_flow
 check "AC7 clone failure carries the state mapping, so Failed is a real state change" clone_failure_recorded
 check "AC7 cloned commit recorded; a ref missing the dispatched commit fails before the agent runs" commit_pinned
 check "AC7 in-pod deadline stops the agent, records it, exits 0 so write-back runs" deadline_leaves_room

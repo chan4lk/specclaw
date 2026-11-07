@@ -10,7 +10,7 @@ REPO="$WORK/repo"
 CODEX_DIR="${FLEET_CODEX_HOME:-/fleet/codex}"
 PROMPT="Run the specclaw lifecycle headless for change $FLEET_CHANGE. Use the specclaw skills in order: plan (only if the change has no tasks yet), build, verify, then the specclaw-sync pr-azdo skill. When verify fails only because specclaw-review reports blocker or major findings, run the specclaw-review loop as its skill describes (fix by class, add variant tests, commit, re-review the delta, then the final pass) for at most ${FLEET_REVIEW_ROUNDS:-5} fix rounds; stop if the review escalates (exit 4) or the rounds run out. Then re-run verify and, only on PASS, pr-azdo. Nobody is watching: never ask a question. If a phase fails, stop and report why."
 agent_pid=""
-for lib in tracker egress-gate claude-auth workspace; do
+for lib in tracker egress-gate claude-auth workspace draft-pr; do
   # shellcheck source=/dev/null
   source "$(dirname "${BASH_SOURCE[0]}")/$lib.sh"
 done
@@ -73,8 +73,8 @@ STATE="$REPO/.specclaw/changes/$FLEET_CHANGE/state.json"
 record state=running "built_commit=$(git -C "$REPO" rev-parse HEAD)"
 cd "$REPO" || finish 2
 rc=0; run_agent || rc=$?
-pr="$(jq -r '.phases.pr.url // empty' "$STATE" 2>/dev/null)"
 branch="$(push_change_branch)"
+read -r pr draft < <(ensure_pr "$branch")
 show_agent_log
-record "state=$([[ -n "$pr" ]] && echo pr_open || echo failed)" "exit=$rc" "branch=$branch"
+record "state=$([[ -n "$pr" ]] && echo pr_open || echo failed)" "exit=$rc" "branch=$branch" "pr=${pr:-none}" "draft=${draft:-false}"
 finish "$rc"
