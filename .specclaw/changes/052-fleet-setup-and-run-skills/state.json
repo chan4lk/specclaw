@@ -1,6 +1,6 @@
 {
   "change": "052-fleet-setup-and-run-skills",
-  "phase": "build",
+  "phase": "verify",
   "branch": "",
   "size": "architectural",
   "phases": {
@@ -8,6 +8,7 @@
     "spec": {"status":"done","at":"2026-11-07T13:42:59Z"},
     "design": {"status":"done","at":"2026-11-07T13:42:59Z"},
     "tasks": {"status":"done","at":"2026-11-07T13:42:59Z"},
-    "build": {"status":"done","at":"2026-11-07T14:00:30Z","tasks":{"done":6,"total":6,"failed":0}}
+    "build": {"status":"done","at":"2026-11-07T14:00:30Z","tasks":{"done":6,"total":6,"failed":0}},
+    "verify": {"status":"failed","at":"2026-11-08T01:20:38Z","verdict":"FAIL"}
   }
 }
