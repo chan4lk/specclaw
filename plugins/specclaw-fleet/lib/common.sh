@@ -64,3 +64,7 @@ azdo_rest() {
   curl -sf -m 15 -H "Authorization: Basic $(printf ':%s' "$AZDO_TOKEN" | base64 | tr -d '\n')" \
     "https://dev.azure.com/$AZDO_ORG/$AZDO_PROJECT/_apis/$1"
 }
+
+azdo_pipeline_id() {
+  azdo_rest "build/definitions?name=$(jq -rn --arg v "$1" '$v|@uri')&api-version=7.1" | jq -er '.value | if type == "array" then (.[0].id // "") else error("no list") end'
+}

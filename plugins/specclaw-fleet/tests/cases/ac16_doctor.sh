@@ -24,7 +24,7 @@ stub curl 'case "$*" in
   *ghcr.io/token*) [[ -n "${GHCR_DOWN:-}" ]] && exit 7; echo "{\"token\":\"t\"}"; printf %s "${TOKEN_CODE:-200}" ;;
   *manifests*) printf %s "${IMAGE_CODE:-200}" ;;
   *dev.azure.com*) [[ -n "${AZDO_DOWN:-}" ]] && exit 22 ;;&
-  *"_apis/pipelines?"*) [[ -n "${NO_PIPELINE:-}" ]] && echo "{\"value\":[]}" || echo "{\"value\":[{\"name\":\"specclaw-fleet\"}]}" ;;
+  *"build/definitions?name=specclaw-fleet"*) [[ -n "${NO_PIPELINE:-}" ]] && echo "{\"value\":[]}" || echo "{\"value\":[{\"id\":44,\"name\":\"specclaw-fleet\"}]}" ;;
   *serviceendpoint*) echo "{\"value\":[{\"name\":\"specclaw-fleet-k3s\",\"isReady\":true},{\"name\":\"specclaw-fleet-azure\",\"isReady\":$([[ -n "${NO_CONN:-}" ]] && echo false || echo true)}]}" ;;
 esac'
 

@@ -20,7 +20,7 @@ case "$*" in
   *"get pods -l job-name=fleet-002-new"*) printf Running ;;
 esac'
 stub curl 'case "$*" in
-  *"/pipelines?"*) echo "{\"value\":[{\"id\":44,\"name\":\"specclaw-fleet\"}]}" ;;
+  *"build/definitions?name=specclaw-fleet"*) echo "{\"value\":[{\"id\":44,\"name\":\"specclaw-fleet\"}]}" ;;
   *"/pipelines/44/runs"*) echo "{\"value\":[{\"id\":2437,\"state\":\"completed\",\"result\":\"succeeded\"}]}" ;;
 esac'
 mk() {
@@ -50,11 +50,17 @@ check "R053 AC-4 status: pipeline header, approved changes by default, item/stat
 reset; touch "$WI/002-a/noread"; KUBE_DOWN=1 st --json 002-a; u="$(cat "$TMP/out")"
 unknown_not_guessed() { jq -e '.changes[0] | .state == "?" and .assignee == "?" and .record.state == "?" and .cluster.job == "?" and (.terminal | not)' <<<"$u" >/dev/null; }
 check "R053 AC-4 unreadable AzDO or cluster shows ? and is never terminal" unknown_not_guessed
+reset; REC 2026-11-08T00:00:00.500Z dispatched '' '' '' > "$WI/004-c/records"; printf 'specclaw; fleet:auto' > "$WI/004-c/tags"
+st --json 004-c --since 2026-11-08T00:00:00Z; same_second="$(jq -r '.changes[0].record.state' "$TMP/out")"
+reset; REC 2026-11-09T00:00:00Z refused '' '' '' > "$WI/002-a/records"; printf 'specclaw; fleet:auto; fleet:refused' > "$WI/003-b/tags"
+st 002-a 003-b --watch 0 --since 2026-11-08T00:00:00Z; refused_rc=$?; refused_frames="$(grep -c '^--- ' "$TMP/out")"
 reset; REC 2026-12-01T00:00:00Z running '' '' '' > "$WI/003-b/records.1"; REC 2026-12-01T00:00:00Z running '' '' '' > "$WI/003-b/records.2"
 REC 2026-12-01T00:05:00Z pr_open 0 https://x/pr/2 false > "$WI/003-b/records.3"
 st 002-a 003-b --watch 0 --since 2026-11-08T00:00:00Z; watch_rc=$?; w="$(cat "$TMP/out")"
 watch_ends() { (( watch_rc == 0 )) && [[ $(grep -c '^--- ' <<<"$w") == 3 ]] && grep -q "003-b .*pr_open exit=0 pr=https://x/pr/2" <<<"$w" && grep -q "^CHANGE" <<<"$w"; }
 check "R053 AC-4 --watch re-renders until every listed change has a terminal record" watch_ends
+refused_ends() { (( refused_rc == 0 && refused_frames == 1 )) && [[ "$same_second" == dispatched ]]; }
+check "R053 --watch also ends on a refused record or a fleet:refused tag; a record in the same second as --since (fractional) counts" refused_ends
 read_only() { ! grep -Eq "azdo-issue (optin|tag|untag|claim|fields|create|comment)|kubectl.* (create|apply|delete|patch)|-X (POST|PATCH|PUT|DELETE)" "$CALLS"; }
 check "R053 AC-4 status makes no write call" read_only
 finish

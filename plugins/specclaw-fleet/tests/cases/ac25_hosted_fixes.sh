@@ -7,7 +7,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/../lib/dispatch-env.sh"
 stub_cluster
 stub az 'echo "ERROR: Please run az login" >&2; exit 1'
 stub curl 'echo "$*" >> "$TMP/curl.log"; case "$*" in
-  *"_apis/pipelines?"*) echo "{\"value\":[{\"name\":\"specclaw-fleet\"}]}" ;;
+  *"build/definitions?name=specclaw-fleet"*) echo "{\"value\":[{\"id\":44,\"name\":\"specclaw-fleet\"}]}" ;;
   *serviceendpoint*) echo "{\"value\":[{\"name\":\"specclaw-fleet-k3s\",\"isReady\":true},{\"name\":\"specclaw-fleet-azure\",\"isReady\":true}]}" ;;
   *ghcr.io/token*) echo "{}"; printf %s "$TOKEN_CODE" ;;
 esac'

@@ -37,11 +37,11 @@ status_row() {
   recs="$(azdo_issue records "$SPECCLAW_DIR" "$c" 2>/dev/null)" || recs='{"unreadable":true}'
   jq -nc --arg c "$c" --arg id "$id" --arg since "$S_SINCE" --argjson wi "$wi" --argjson r "$recs" --argjson job "$(status_job "$c")" '
     ($wi.fields["System.Tags"] // "" | ascii_downcase | split(";") | map(gsub("^\\s+|\\s+$"; ""))) as $t
-    | ([$r.records[]? | select(.at > $since)] | first) as $rec
+    | ([$r.records[]? | select((.at | sub("\\.[0-9]+"; "")) >= $since)] | first) as $rec
     | {change: $c, work_item: $id, state: (if $wi.unreadable then "?" else $wi.fields["System.State"] end),
        assignee: (if $wi.unreadable then "?" else ($wi.fields["System.AssignedTo"].uniqueName // "-") end),
        tags: [("auto", "dispatched", "refused") | select(("fleet:" + .) as $x | $t | index($x))],
        record: (if $r.unreadable then {state: "?"} elif $rec then $rec
          elif ($wi.unreadable | not) and ($t | index("fleet:auto") | not) then {state: "not-opted-in"} else {state: "waiting"} end), cluster: $job}
-    | .terminal = ((.record.state == "pr_open" or .record.state == "failed") or ($wi.unreadable | not) and ((.tags | index("auto")) | not))'
+    | .terminal = ((.record.state | IN("pr_open", "failed", "refused")) or (.tags | index("refused")) or ($wi.unreadable | not) and ((.tags | index("auto")) | not))'
 }
