@@ -6,27 +6,30 @@ mkdir -p "$TMP/sc"
 cfg() { printf '%s\n' "$@" > "$TMP/sc/config.yaml"; }
 load() {
   env -u FLEET_VAULT -u FLEET_KUBE_CONTEXT -u FLEET_IMAGE -u KUBECONFIG -u FLEET_DEADLINE_MINUTES "$@" bash -c '
-    SPECCLAW_DIR="$1"; source "$2/lib/common.sh"; source "$2/lib/settings.sh"; load_fleet_settings || exit $?
+    SPECCLAW_DIR="$1"; source "$2/lib/common.sh"; source "$2/lib/settings.sh"; load_local_env; load_fleet_settings || exit $?
     echo "vault=[${FLEET_VAULT-unset}] ctx=[${FLEET_KUBE_CONTEXT-unset}] image=[${FLEET_IMAGE-unset}] kc=[${KUBECONFIG-unset}] dl=[${FLEET_DEADLINE_MINUTES-unset}]"' _ "$TMP/sc" "$FLEET_ROOT" 2>&1
 }
 rows=1
 row() { local want="$1"; shift; local got; got="$(load "$@")"; [[ "$got" == *"$want"* ]] || { rows=0; echo "  want [$want] got [$got]"; }; }
 cfg 'git:' '  vault: not-this' 'fleet:' '  vault: kv-scfleet-965892   # the vault' "  kube_context: 'bistec-dev-uat'" \
     '  image: "ghcr.io/o/specclaw-fleet:0.9.0"' $'  kubeconfig: /k/cfg\r' '  deadline_minutes: 90' 'azdo:' '  vault: nor-this'
-row "vault=[kv-scfleet-965892] ctx=[bistec-dev-uat] image=[ghcr.io/o/specclaw-fleet:0.9.0] kc=[/k/cfg] dl=[90]"
-row "vault=[env-kv] ctx=[bistec-dev-uat]" FLEET_VAULT=env-kv
-row "ctx=[]" FLEET_KUBE_CONTEXT=
-row "vault=[kv-scfleet-965892] ctx=[unset] image=[ghcr.io/o/specclaw-fleet:0.9.0] kc=[unset]" TF_BUILD=True
+row "vault=[kv-scfleet-965892] ctx=[unset] image=[ghcr.io/o/specclaw-fleet:0.9.0] kc=[unset] dl=[90]"
+row "WARNING: ignored fleet.kube_context"; row "set KUBECONFIG in"
+row "vault=[env-kv]" FLEET_VAULT=env-kv
+printf 'FLEET_KUBE_CONTEXT=bistec-dev-uat\nKUBECONFIG=./scratch/hetzner/kubeconfig\n' > "$TMP/sc/.env"
+row "ctx=[bistec-dev-uat] image=[ghcr.io/o/specclaw-fleet:0.9.0] kc=[$(cd "$TMP" && pwd)/scratch/hetzner/kubeconfig]"
+row "ctx=[mine] image=[ghcr.io/o/specclaw-fleet:0.9.0] kc=[/abs/k]" FLEET_KUBE_CONTEXT=mine KUBECONFIG=/abs/k
+rm -f "$TMP/sc/.env"
 cfg 'fleet:' '  vault: kv1' '  colour: blue'
 row "WARNING: ignored unknown fleet.colour" ; row "vault=[kv1]"
 cfg 'fleet:' '  vault: top' '  extra:' '    vault: nested'
 row "WARNING: ignored nested key vault under fleet:"; row "vault=[top]"
 cfg 'fleet:' '  image: ghcr.io/o/x@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
 row "image=[ghcr.io/o/x@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef]"
-cfg 'fleet:' '  kubeconfig: /Users/someone/very/long/path/to/a/kubeconfig-for-the-bistec-dev-uat-cluster-isolated'
-row "kc=[/Users/someone/very/long/path/to/a/kubeconfig-for-the-bistec-dev-uat-cluster-isolated]"
-cfg 'fleet:' '  kubeconfig: ./scratch/hetzner/kubeconfig'; row "kc=[./scratch/hetzner/kubeconfig]"
-cfg 'fleet:' '  vault: kv1' '  pipeline_file: pipelines/azure-devops/fleet/specclaw-fleet-dispatch-hosted-bistec-dev-uat.yml'; row "vault=[kv1]"
+for p in /Users/someone/very/long/path/to/a/pipeline-for-the-bistec-dev-uat-cluster-isolated.yml \
+         pipelines/azure-devops/fleet/specclaw-fleet-dispatch-hosted-bistec-dev-uat.yml; do
+  cfg 'fleet:' '  vault: kv1' "  pipeline_file: $p"; row "vault=[kv1]"
+done
 secret_rows=1 T="~"
 for v in "sk-ant-oat01-abcdef" "eyJhbGciOiJIUzI1NiJ9.e30.x" "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQR" \
          "ab/cdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN+OPQRS/tuvw==" "/home/u/abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQR" "$T/abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRx" \
@@ -36,7 +39,7 @@ for v in "sk-ant-oat01-abcdef" "eyJhbGciOiJIUzI1NiJ9.e30.x" "abcdefghijklmnopqrs
 done
 precedence() { (( rows == 1 )); }
 secrets() { (( secret_rows == 1 )); }
-check "R053 AC-1 fleet: config fills unset env only; env (even empty) wins; quotes, comments, CRLF; only the fleet: block; unknown keys warn; local-only keys skipped in a pipeline (TF_BUILD); long paths are not secrets" precedence
+check "R053 AC-1 fleet: config fills unset env only; env (even empty) wins; quotes, comments, CRLF; only the fleet: block; unknown keys warn; the local cluster pointer comes only from env or .specclaw/.env (relative KUBECONFIG resolved at the repo root), never fleet:; long paths are not secrets" precedence
 check "R053 AC-1 a secret-looking fleet: value is refused without printing it" secrets
 mkdir -p "$TMP/repo/.specclaw"; printf 'fleet:\n  vault: cfg-kv\n' > "$TMP/repo/.specclaw/config.yaml"
 flag_out="$(cd "$TMP/repo" && "$FLEET" dispatch x --vault flag-kv --dry-run 2>&1)"

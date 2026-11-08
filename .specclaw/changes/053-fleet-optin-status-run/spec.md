@@ -7,8 +7,9 @@
 ## Functional Requirements
 
 - **FR-1 `fleet:` config block.** At startup, `specclaw-fleet` reads `fleet:` from `$SPECCLAW_DIR/config.yaml`. For each known key, it exports the mapped env variable **only when that variable is unset**. An empty but set variable still wins over config. Flags are parsed afterwards, so the precedence is: flag, then env, then config, then built-in default.
-  - **Keys:** `vault`, `kube_context`, `kubeconfig`, `cluster_name`, `namespace`, `image`, `claude_version`, `default_agent`, `deadline_minutes`, `pipeline`, `pipeline_file`, `remote`, `ref`, `image_pull_secret`, `node_label`.
-  - **Mapping:** each key goes to `FLEET_<KEY>`, except `kubeconfig`, which goes to `KUBECONFIG`.
+  - **Keys:** `vault`, `cluster_name`, `namespace`, `image`, `claude_version`, `default_agent`, `deadline_minutes`, `pipeline`, `pipeline_file`, `remote`, `ref`, `image_pull_secret`, `node_label`.
+  - **Mapping:** each key goes to `FLEET_<KEY>`.
+  - **Local, not shared (operator decision 2026-11-09, after review escalation):** which cluster this machine talks to (`FLEET_KUBE_CONTEXT`, `KUBECONFIG`) comes only from the environment or the gitignored `.specclaw/.env`. A relative `KUBECONFIG` resolves at the repo root. `kube_context` and `kubeconfig` under `fleet:` are ignored with a warning.
   - **Values:** quotes, inline `#` comments and CRLF are handled. An unknown key gets a warning and is ignored.
   - **Secrets refused:** a value that looks like a secret (an `sk-` prefix, a JWT `eyJ…`, or a run of 52 or more base64 characters that is not an `@sha256:` digest) makes the command die, naming the key and never the value.
 - **FR-2 Pipelines use config.**

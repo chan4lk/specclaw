@@ -60,7 +60,6 @@ Run **`/specclaw-fleet:setup`**. It works until `specclaw-fleet doctor` is clean
 ```yaml
 fleet:
   vault: kv-scfleet-965892
-  kube_context: bistec-dev-uat      # local commands only; the pipeline uses its logged-in kubeconfig
   cluster_name: bistec-dev-uat      # what the run record calls the cluster
   image: ghcr.io/chan4lk/specclaw-fleet:0.9.0
   claude_version: "2.1.319"         # required for claude jobs
@@ -68,9 +67,10 @@ fleet:
   pipeline_file: azure-pipelines/specclaw-fleet.yml   # doctor reads the connection names from it
 ```
 
-- **Other keys:** `kubeconfig` (local commands only, like `kube_context`; both are ignored inside a pipeline run, where `TF_BUILD` is set), `namespace`, `default_agent`, `deadline_minutes`, `remote`, `ref`, `image_pull_secret` (private registries only), and `node_label` (`key=value`, which pins Jobs to a labelled, tainted node).
+- **Which cluster your machine talks to is local, not shared:** set `FLEET_KUBE_CONTEXT` and `KUBECONFIG` in the gitignored `.specclaw/.env`. A relative `KUBECONFIG` resolves against the repo root. They are never read from `fleet:`, and the pipeline always uses the kubeconfig its Kubernetes task logged in.
+- **Other keys:** `namespace`, `default_agent`, `deadline_minutes`, `remote`, `ref`, `image_pull_secret` (private registries only), and `node_label` (`key=value`, which pins Jobs to a labelled, tainted node).
 - **Connection names** live only in the pipeline YAML (AzDO needs them at compile time). `doctor` reads them from `pipeline_file`.
-- **Precedence:** a flag, then an env variable (`FLEET_<KEY>`, or `KUBECONFIG` for `kubeconfig`), then config, then the default.
+- **Precedence:** a flag, then an env variable (`FLEET_<KEY>`), then config, then the default.
 - **Secrets never go here.** The PAT stays in the gitignored `.specclaw/.env`, and a secret-looking value is refused.
 
 ## Running a change

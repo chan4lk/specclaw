@@ -460,7 +460,8 @@ cmd_optin() {
   tag_update "$wi_id" optin "$tag" lax "$upn" || rc=$?
   if (( rc == 5 )); then
     tag_update "$wi_id" remove "$tag" lax
-    rc=0; tag_update "$wi_id" optin "$tag" lax "$upn" || rc=$?
+    rc=0; ( tag_update "$wi_id" optin "$tag" lax "$upn" ) || rc=$?
+    (( rc == 0 )) || { ( tag_update "$wi_id" add "$tag" lax ) || warn "could not restore ${tag} on Work Item #${wi_id}"; }
   fi
   (( rc == 4 )) && { echo "Work Item #${wi_id} is assigned to someone else; only they can opt in" >&2; exit 4; }
   (( rc == 0 )) || die "Could not opt in Work Item #${wi_id}"

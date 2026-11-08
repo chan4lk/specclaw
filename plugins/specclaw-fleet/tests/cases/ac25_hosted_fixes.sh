@@ -28,7 +28,7 @@ done
 for one in "  fleetKubeConnection: k" "  fleetAzureConnection: z"; do
   mkdir -p "$TMP/one/.specclaw" "$TMP/one/azure-pipelines"; printf 'variables:\n%s\n' "$one" > "$TMP/one/azure-pipelines/specclaw-fleet.yml"
   o="$(AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t SPECCLAW_DIR="$TMP/one/.specclaw" bash -c 'source "$1/lib/common.sh"; source "$1/lib/doctor-azure.sh"; check_connections; echo "rc=$?"' _ "$FLEET_ROOT" 2>&1)"
-  [[ "$o" == *"not both found in $TMP/one/.specclaw/../azure-pipelines/specclaw-fleet.yml"*"rc=2"* ]] || { junk_rows=0; echo "  one name [$one]: $o"; }
+  [[ "$o" == *"not both found"*"in $TMP/one/.specclaw/../azure-pipelines/specclaw-fleet.yml"*"rc=2"* ]] || { junk_rows=0; echo "  one name [$one]: $o"; }
 done
 nofile="$(AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t SPECCLAW_DIR="$TMP/nowhere/.specclaw" bash -c 'source "$1/lib/common.sh"; source "$1/lib/doctor-azure.sh"; check_connections; echo "rc=$?"' _ "$FLEET_ROOT" 2>&1)"
 printf 'variables:\n  fleetKubeConnection: "Fleet Hetzner K8s"   # spaces\n  fleetAzureConnection: Specclaw-Fleet-Azure # case\n' > "$TMP/pf/azure-pipelines/specclaw-fleet.yml"
@@ -67,6 +67,17 @@ printf 'azdo:\n  fleet_states:\n    failed: Failed\nfleet:\n  vault: pushed-kv\n
 git -C "$TMP/repo" add -A && git -C "$TMP/repo" -c user.name=t -c user.email=t@t commit -q -m cfg && git -C "$TMP/repo" push -q local HEAD:main
 printf 'azdo:\n  fleet_states:\n    failed: Failed\nfleet:\n  vault: local-kv\n' > "$SPECCLAW_DIR/config.yaml"
 : > "$CALLS"; (cd "$TMP/repo" && env -u FLEET_VAULT "$FLEET" trigger "$CHANGE") > "$TMP/out-cfg" 2>&1
+local_rows=1
+for row in "FLEET_KUBE_CONTEXT=local-ctx|local-ctx|unset" "KUBECONFIG=./k/local|none|$TMP/repo/k/local" "FLEET_KUBE_CONTEXT=local-ctx KUBECONFIG=/abs/k|local-ctx|/abs/k"; do
+  IFS='|' read -r envs want_ctx want_cfg <<<"$row"; printf '%s\n' $envs > "$SPECCLAW_DIR/.env"; rm -f "$KCTX" "$KCTX.cfg"
+  git -C "$TMP/repo" update-ref -d refs/claims 2>/dev/null; rm -rf "$CLAIMS"/wi-*
+  (cd "$TMP/repo" && env -u FLEET_VAULT -u FLEET_KUBE_CONTEXT -u KUBECONFIG "$FLEET" trigger "$CHANGE" --direct --retry) > "$TMP/out-direct" 2>&1
+  [[ -s "$KCTX" && "$(sort -u "$KCTX")" == "$want_ctx" && "$(sort -u "$KCTX.cfg")" == "$want_cfg" ]] \
+    || { local_rows=0; echo "  [$envs]: ctx=$(sort -u "$KCTX" 2>/dev/null | tr '\n' ' ') cfg=$(sort -u "$KCTX.cfg" 2>/dev/null | tr '\n' ' ') $(tail -2 "$TMP/out-direct")"; }
+done
+rm -f "$SPECCLAW_DIR/.env"
+local_kept() { (( local_rows == 1 )); }
+check "R053 trigger --direct keeps this machine's cluster pointer (.env context, kubeconfig, both) when it reloads the pushed fleet: settings" local_kept
 pushed_vault() { grep -q "keyvault secret show.*pushed-kv" "$CALLS" && ! grep -q "local-kv" "$CALLS"; }
 check "R053 trigger gates with the fleet: settings of the pushed ref, not unpushed local config" pushed_vault
 finish

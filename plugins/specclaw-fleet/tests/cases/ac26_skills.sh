@@ -9,7 +9,7 @@ run_skill() {
     && grep -q 'parallel' "$R" && grep -q -- '--sequential' "$R" && grep -q 'status <change>... --watch 30 --since' "$R" \
     && ! grep -q 'FLEET_VAULT=<vault>' "$R"
 }
-setup_skill() { grep -q 'under `fleet:`' "$S" && grep -q 'Never write a secret there' "$S"; }
+setup_skill() { grep -q 'under `fleet:`' "$S" && grep -q 'Never write a secret in `fleet:`' "$S" && grep -q 'write `FLEET_KUBE_CONTEXT` and `KUBECONFIG`.*to the gitignored `.specclaw/.env`' "$S"; }
 registered() { grep -q 'run-fleet-tests.sh' "$CI" && grep -q 'run-azdo-issue-optin-tests.sh' "$CI"; }
 check "R053 AC-5 run skill: dry-run opt-in of the caller only, parallel trigger with --sequential, watch since trigger, no env prefix" run_skill
 check "R053 AC-5 setup skill records confirmed values in fleet: and never a secret" setup_skill
