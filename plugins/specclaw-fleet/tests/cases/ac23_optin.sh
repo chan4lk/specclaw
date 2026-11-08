@@ -8,7 +8,9 @@ d="$WI/$3"
 case "$1" in
   whoami) [[ -n "${NO_WHOAMI:-}" ]] && exit 1; echo "{\"upn\":\"alice@contoso.com\"}" ;;
   show) jq -nc --arg w "$(cat "$d/who")" --arg t "$(cat "$d/tags")" "{fields: ({\"System.Tags\": \$t} + (if \$w == \"\" then {} else {\"System.AssignedTo\": {uniqueName: \$w}} end))}" ;;
-  optin) w="$(cat "$d/who")"; [[ -n "$w" && "$w" != "$5" ]] && exit 4; echo "$5" > "$d/who"; echo "$4" > "$d/tags" ;;
+  updates) jq -nc --arg by "$(cat "$d/tagger" 2>/dev/null)" "{value: (if \$by == \"\" then [] else [{revisedBy: {uniqueName: \$by}, fields: {\"System.Tags\": {oldValue: \"specclaw\", newValue: \"specclaw; fleet:auto\"}}}] end)}" ;;
+  untag) printf specclaw > "$d/tags"; rm -f "$d/tagger" ;;
+  optin) w="$(cat "$d/who")"; [[ -n "$w" && "$w" != "$5" ]] && exit 4; echo "$5" > "$d/who"; echo "specclaw; $4" > "$d/tags"; echo "$5" > "$d/tagger" ;;
 esac'
 mk() {
   mkdir -p "$SPECCLAW_DIR/changes/$1" "$WI/$1"; printf '%s' "$2" > "$WI/$1/who"; printf 'specclaw' > "$WI/$1/tags"
@@ -32,6 +34,19 @@ dry_writes_nothing() {
 }
 no_wi() { (( nowi_rc == 1 )) && grep -q "no work item; run: specclaw-fleet trigger 005-d --create" <<<"$nowi_out"; }
 no_identity() { (( who_rc == 1 && who_calls == 0 )); }
+consent_rows=1
+crow() {
+  reset; printf 'specclaw; fleet:auto' > "$WI/002-a/tags"; printf '%s' "$2" > "$WI/002-a/who"; printf '%s' "$3" > "$WI/002-a/tagger"
+  optin 002-a $1; local rc=$? out; out="$(cat "$TMP/out")"
+  [[ "$rc" == 0 && "$out" == *"$4"* && "$(grep -c "azdo-issue untag" "$CALLS")" == "$5" ]] || { consent_rows=0; echo "  [$2|$3|$1]: rc=$rc untags=$(grep -c "azdo-issue untag" "$CALLS") $out"; }
+  [[ "$1" == --dry-run ]] || [[ "$(cat "$WI/002-a/tagger")" == alice@contoso.com ]] || { consent_rows=0; echo "  [$2|$3]: tagger now $(cat "$WI/002-a/tagger")"; }
+}
+crow "" alice@contoso.com bob@contoso.com "opted in" 1
+crow "" "" bob@contoso.com "opted in" 1
+crow "" alice@contoso.com alice@contoso.com "already opted in by alice@contoso.com" 0
+crow --dry-run alice@contoso.com bob@contoso.com "re-add fleet:auto as alice@contoso.com (it was not added by the assignee)" 0
+consent_fixed() { (( consent_rows == 1 )); }
+check "R053 optin re-adds a fleet:auto that the assignee did not add (untag, then tag as the caller); one added by the caller is a no-op" consent_fixed
 check "R053 AC-3 optin assigns to the AZDO_TOKEN identity and tags; someone else's item is refused (exit 4) while the rest proceed" self_only
 check "R053 AC-3 --dry-run shows the plan, names the other assignee, and writes nothing" dry_writes_nothing
 check "R053 AC-3 a change with no work item exits 1 naming --create" no_wi

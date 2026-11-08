@@ -19,6 +19,8 @@ row "ctx=[]" FLEET_KUBE_CONTEXT=
 row "vault=[kv-scfleet-965892] ctx=[unset] image=[ghcr.io/o/specclaw-fleet:0.9.0] kc=[unset]" TF_BUILD=True
 cfg 'fleet:' '  vault: kv1' '  colour: blue'
 row "WARNING: ignored unknown fleet.colour" ; row "vault=[kv1]"
+cfg 'fleet:' '  vault: top' '  extra:' '    vault: nested'
+row "WARNING: ignored nested key vault under fleet:"; row "vault=[top]"
 cfg 'fleet:' '  image: ghcr.io/o/x@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
 row "image=[ghcr.io/o/x@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef]"
 cfg 'fleet:' '  kubeconfig: /Users/someone/very/long/path/to/a/kubeconfig-for-the-bistec-dev-uat-cluster-isolated'

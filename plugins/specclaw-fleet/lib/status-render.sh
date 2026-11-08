@@ -1,8 +1,8 @@
 # shellcheck shell=bash
 status_pipeline() {
   local name="${FLEET_PIPELINE:-specclaw-fleet}" id run
-  id="$(azdo_pipeline_id "$name" 2>/dev/null)"
-  [[ -n "$id" ]] || { jq -nc --arg n "$name" '{pipeline: $n, run: "?"}'; return; }
+  id="$(azdo_pipeline_id "$name" 2>/dev/null)" || { jq -nc --arg n "$name" '{pipeline: $n, run: "?", status: "unknown (AzDO unreadable)"}'; return; }
+  [[ -n "$id" ]] || { jq -nc --arg n "$name" '{pipeline: $n, run: "-", status: "missing (no pipeline with this name)"}'; return; }
   run="$(azdo_rest "pipelines/$id/runs?\$top=1&api-version=7.1" | jq -c '.value[0] // {}' 2>/dev/null)" || run='{}'
   jq -nc --arg n "$name" --argjson r "${run:-{\}}" '{pipeline: $n, run: ($r.id // "?"), status: ($r.state // "?"), result: ($r.result // "-")}'
 }

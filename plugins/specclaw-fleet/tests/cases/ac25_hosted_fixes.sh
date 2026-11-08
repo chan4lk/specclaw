@@ -60,4 +60,10 @@ git -C "$TMP/repo" add -A && git -C "$TMP/repo" -c user.name=t -c user.email=t@t
 : > "$CALLS"; (cd "$TMP/repo" && "$FLEET" trigger 999-nope) > "$TMP/out" 2>&1; miss_rc=$?
 names_missing() { (( miss_rc == 1 )) && grep -q "no change 999-nope on local/main" "$TMP/out" && ! grep -q "azdo-issue" "$CALLS"; }
 check "R053 AC-6 trigger names a change that does not exist on the pushed ref" names_missing
+printf 'azdo:\n  fleet_states:\n    failed: Failed\nfleet:\n  vault: pushed-kv\n' > "$SPECCLAW_DIR/config.yaml"
+git -C "$TMP/repo" add -A && git -C "$TMP/repo" -c user.name=t -c user.email=t@t commit -q -m cfg && git -C "$TMP/repo" push -q local HEAD:main
+printf 'azdo:\n  fleet_states:\n    failed: Failed\nfleet:\n  vault: local-kv\n' > "$SPECCLAW_DIR/config.yaml"
+: > "$CALLS"; (cd "$TMP/repo" && env -u FLEET_VAULT "$FLEET" trigger "$CHANGE") > "$TMP/out-cfg" 2>&1
+pushed_vault() { grep -q "keyvault secret show.*pushed-kv" "$CALLS" && ! grep -q "local-kv" "$CALLS"; }
+check "R053 trigger gates with the fleet: settings of the pushed ref, not unpushed local config" pushed_vault
 finish

@@ -1,24 +1,33 @@
-# shellcheck shell=bash
-optin_plan() {
-  local wi who tags
-  wi="$(azdo_issue show "$SPECCLAW_DIR" "$1")" || { echo "$1: could not read the work item"; return 1; }
-  who="$(jq -r '.fields["System.AssignedTo"].uniqueName // empty' <<<"$wi")"
-  tags="$(jq -r '.fields["System.Tags"] // empty' <<<"$wi")"
-  if [[ -n "$who" && "$(lower "$who")" != "$(lower "$2")" ]]; then
-    echo "$1: refused: assigned to $who; only they can opt in"; return 4
-  fi
-  if [[ -n "$who" ]] && has_auto_tag "$tags"; then echo "$1: already opted in"; return 0; fi
-  if [[ -n "$who" ]]; then echo "$1: would add fleet:auto as $2"; else echo "$1: would assign to $2 and add fleet:auto"; fi
+# shellcheck shell=bash disable=SC2034
+optin_decide() {
+  local wi rc=0
+  F_CHANGE="$1"
+  O_ACTION=error O_WHY="could not read the work item history"
+  wi="$(azdo_issue show "$SPECCLAW_DIR" "$1")" || { O_WHY="could not read the work item"; return; }
+  O_WHO="$(jq -r '.fields["System.AssignedTo"].uniqueName // empty' <<<"$wi")"
+  if [[ -n "$O_WHO" && "$(lower "$O_WHO")" != "$(lower "$2")" ]]; then O_ACTION=refuse; return; fi
+  gate_owner "$wi" || rc=$?
+  case "$rc" in 0) O_ACTION=opted ;; 10) O_ACTION=add ;; 11|12) O_ACTION=readd ;; esac
 }
 
 optin_one() {
   local rc=0
   [[ -d "$SPECCLAW_DIR/changes/$1" ]] || { echo "$1: no such change in $SPECCLAW_DIR/changes" >&2; return 1; }
   [[ -n "$(work_item_id "$1")" ]] || { echo "$1: no work item; run: specclaw-fleet trigger $1 --create" >&2; return 1; }
-  if (( O_DRY )); then optin_plan "$1" "$2"; return; fi
+  optin_decide "$1" "$2"
+  case "$O_ACTION" in
+    refuse) echo "$1: refused: assigned to $O_WHO; only they can opt in" >&2; return 4 ;;
+    opted) echo "$1: already opted in by $2"; return 0 ;;
+    error) echo "$1: $O_WHY" >&2; return 1 ;;
+  esac
+  if (( O_DRY )); then
+    echo "$1: would ${O_WHO:+keep the assignment and }${O_WHO:-assign to $2 and }$([[ $O_ACTION == readd ]] && echo "re-add fleet:auto as $2 (it was not added by the assignee)" || echo "add fleet:auto as $2")"
+    return 0
+  fi
+  if [[ "$O_ACTION" == readd ]]; then azdo_issue untag "$SPECCLAW_DIR" "$1" fleet:auto >/dev/null || { echo "$1: could not remove the old fleet:auto" >&2; return 1; }; fi
   azdo_issue optin "$SPECCLAW_DIR" "$1" fleet:auto "$2" >/dev/null 2>"$FLEET_TMPDIR/optin.err" || rc=$?
   case "$rc" in
-    0) echo "$1: opted in (#$(work_item_id "$1"), assigned to $2, fleet:auto)" ;;
+    0) echo "$1: opted in (#$(work_item_id "$1"), assigned to $2, fleet:auto added by $2)" ;;
     4) echo "$1: refused: work item is assigned to someone else; only they can opt in" >&2 ;;
     *) echo "$1: could not opt in: $(head -n1 "$FLEET_TMPDIR/optin.err")" >&2 ;;
   esac

@@ -33,6 +33,7 @@ trigger_pushed_tree() {
   FLEET_DISPATCH_COMMIT="$(git -C "$root" rev-parse FETCH_HEAD)"
   FLEET_REPO_URL="$(https_repo_url "$remote")" || exit 1
   T_LOCAL_DIR="$SPECCLAW_DIR" SPECCLAW_DIR="$tree" T_REF_LABEL="$remote/$ref"
+  reload_fleet_settings
 }
 
 trigger_work_item() {
