@@ -2,7 +2,7 @@
 set -uo pipefail
 # shellcheck source=../lib/harness.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/harness.sh"
-export FLEET_VAULT=kv FLEET_IMAGE=ghcr.io/acme/specclaw-fleet:1 AZDO_ORG=o AZDO_PROJECT=p
+export FLEET_VAULT=kv FLEET_IMAGE=ghcr.io/acme/specclaw-fleet:1 AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t
 stub kubectl '
 flag() { [[ -n "${!1:-}" ]]; }
 gone() { flag "$1" && { echo "Error from server (NotFound): $1" >&2; exit 1; }; flag KUBE_FLAKY && { echo "Unable to connect to the server: i/o timeout" >&2; exit 1; }; true; }
@@ -19,12 +19,13 @@ stub az '
 [[ -n "${AZ_DOWN:-}" ]] && { echo "ERROR: Please run az login" >&2; exit 1; }
 case "$*" in
   "keyvault list"*) [[ -n "${NO_VAULT:-}" ]] || echo kv ;;
-  "pipelines list"*) [[ -n "${NO_PIPELINE:-}" ]] || echo 44 ;;
-  "devops service-endpoint list"*) echo specclaw-fleet-k3s; [[ -n "${NO_CONN:-}" ]] || echo specclaw-fleet-azure ;;
 esac'
 stub curl 'case "$*" in
-  *ghcr.io/token*) [[ -n "${GHCR_DOWN:-}" ]] && exit 7; echo "{\"token\":\"t\"}" ;;
+  *ghcr.io/token*) [[ -n "${GHCR_DOWN:-}" ]] && exit 7; echo "{\"token\":\"t\"}"; printf %s "${TOKEN_CODE:-200}" ;;
   *manifests*) printf %s "${IMAGE_CODE:-200}" ;;
+  *dev.azure.com*) [[ -n "${AZDO_DOWN:-}" ]] && exit 22 ;;&
+  *"_apis/pipelines?"*) [[ -n "${NO_PIPELINE:-}" ]] && echo "{\"value\":[]}" || echo "{\"value\":[{\"name\":\"specclaw-fleet\"}]}" ;;
+  *serviceendpoint*) echo "{\"value\":[{\"name\":\"specclaw-fleet-k3s\",\"isReady\":true},{\"name\":\"specclaw-fleet-azure\",\"isReady\":$([[ -n "${NO_CONN:-}" ]] && echo false || echo true)}]}" ;;
 esac'
 
 doctor() { "$FLEET" doctor > "$TMP/out" 2>&1; }
@@ -35,7 +36,7 @@ check "AC7 a healthy setup reports 11 ok lines and exits 0" all_ok
 each_fails=1
 for case in "NO_CLUSTER:missing context" "NO_NS:missing namespaces" "NO_RBAC:missing rbac" "NO_EGRESS:wrong egress" \
             "NO_NETPOL:missing netpol" "PARTIAL_SECRET:wrong secret:fleet-azdo: lacks key AZDO_TOKEN" "NO_VAULT:missing vault" \
-            "IMAGE_CODE=404:missing image" "IMAGE_CODE=401:missing image" "NO_SECRET:missing secret:fleet-azdo" "NO_EGRESS_DEPLOY:missing egress" "NO_PIPELINE:missing pipeline" "NO_CONN:missing service-connections: specclaw-fleet-azure"; do
+            "IMAGE_CODE=404:missing image" "TOKEN_CODE=403:package missing or private" "IMAGE_CODE=401:missing image" "NO_SECRET:missing secret:fleet-azdo" "NO_EGRESS_DEPLOY:missing egress" "NO_PIPELINE:missing pipeline" "NO_CONN:missing service-connections: specclaw-fleet-azure"; do
   v="${case%%:*}"; [[ "$v" == *=* ]] || v="$v=1"
   env "$v" "$FLEET" doctor > "$TMP/out" 2>&1 && { each_fails=0; echo "  passed despite ${case%%:*}"; }
   grep -qF "${case#*:}" "$TMP/out" || { each_fails=0; echo "  no line for ${case%%:*}"; }
@@ -50,7 +51,7 @@ NO_VAULT=1 FLEET_IMAGE=registry.example.com/x:1 "$FLEET" doctor > "$TMP/out" 2>&
 mixed() { (( mixed_rc == 1 )) && grep -q "1 check(s) need attention, 1 did not run" "$TMP/out"; }
 check "AC7 failures plus skips report both and exit 1" mixed
 skip_rows=1
-for row in "KUBE_FLAKY:context namespaces rbac egress netpol secret:fleet-azdo secret:fleet-vault-writer" "AZ_DOWN:vault pipeline service-connections" \
+for row in "KUBE_FLAKY:context namespaces rbac egress netpol secret:fleet-azdo secret:fleet-vault-writer" "AZ_DOWN:vault" "AZDO_DOWN:pipeline service-connections" \
            "GHCR_DOWN:image" "IMAGE_CODE=503:image" "IMAGE_CODE=000:image"; do
   v="${row%%:*}"; [[ "$v" == *=* ]] || v="$v=1"
   env "$v" "$FLEET" doctor > "$TMP/out" 2>&1; rc=$?

@@ -25,7 +25,7 @@
   - Files: plugins/specclaw-fleet/lib/status.sh, plugins/specclaw-fleet/lib/status-render.sh, plugins/specclaw-fleet/bin/specclaw-fleet, plugins/specclaw-fleet/tests/cases/ac24_status.sh
   - Kind: impl
   - Depends: T1, T2
-- [ ] `T5` — Hosted-run fixes: doctor AzDO over PAT REST, GHCR 401/403 wording, `cluster=` order, delivery in the prompt, trigger missing-change message (AC-6)
+- [x] `T5` — Hosted-run fixes: doctor AzDO over PAT REST, GHCR 401/403 wording, `cluster=` order, delivery in the prompt, trigger missing-change message (AC-6)
   - Files: plugins/specclaw-fleet/lib/doctor-azure.sh, plugins/specclaw-fleet/lib/launch.sh, plugins/specclaw-fleet/lib/trigger.sh, plugins/specclaw-fleet/image/entrypoint.sh, plugins/specclaw-fleet/tests/cases/ac25_hosted_fixes.sh, plugins/specclaw-fleet/tests/cases/ac16_doctor.sh
   - Kind: impl
   - Depends: T1

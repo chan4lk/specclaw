@@ -22,6 +22,7 @@ trigger_pushed_tree() {
   [[ "$remote" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || die "FLEET_REMOTE '$remote' is not a valid remote name"
   [[ "$ref" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ && "$ref" != *..* ]] || die "the ref '$ref' is not a valid branch name"
   git -C "$root" fetch -q "$remote" "$ref" 2>/dev/null || die "could not fetch $remote/$ref"
+  git -C "$root" cat-file -e "FETCH_HEAD:$sc/changes/$T_CHANGE/state.json" 2>/dev/null || die "no change $T_CHANGE on $remote/$ref"
   tree="$FLEET_TMPDIR/pushed/$sc"
   mkdir -p "$tree/changes/$T_CHANGE"
   git -C "$root" show "FETCH_HEAD:$sc/config.yaml" > "$tree/config.yaml" 2>/dev/null || rm -f "$tree/config.yaml"
