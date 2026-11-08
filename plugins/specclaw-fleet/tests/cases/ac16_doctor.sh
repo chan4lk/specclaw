@@ -2,7 +2,7 @@
 set -uo pipefail
 # shellcheck source=../lib/harness.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/harness.sh"
-export FLEET_VAULT=kv FLEET_IMAGE=ghcr.io/acme/specclaw-fleet:1 AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t
+export FLEET_VAULT=kv FLEET_IMAGE=ghcr.io/acme/specclaw-fleet:1 AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t FLEET_KUBE_CONNECTION=specclaw-fleet-k3s FLEET_AZURE_CONNECTION=specclaw-fleet-azure
 stub kubectl '
 flag() { [[ -n "${!1:-}" ]]; }
 gone() { flag "$1" && { echo "Error from server (NotFound): $1" >&2; exit 1; }; flag KUBE_FLAKY && { echo "Unable to connect to the server: i/o timeout" >&2; exit 1; }; true; }

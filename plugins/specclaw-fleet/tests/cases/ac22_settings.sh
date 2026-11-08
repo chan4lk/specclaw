@@ -23,8 +23,10 @@ cfg 'fleet:' '  image: ghcr.io/o/x@sha256:0123456789abcdef0123456789abcdef012345
 row "image=[ghcr.io/o/x@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef]"
 cfg 'fleet:' '  kubeconfig: /Users/someone/very/long/path/to/a/kubeconfig-for-the-bistec-dev-uat-cluster-isolated'
 row "kc=[/Users/someone/very/long/path/to/a/kubeconfig-for-the-bistec-dev-uat-cluster-isolated]"
-secret_rows=1
-for v in "sk-ant-oat01-abcdef" "eyJhbGciOiJIUzI1NiJ9.e30.x" "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQR"; do
+cfg 'fleet:' '  kubeconfig: ./scratch/hetzner/kubeconfig'; row "kc=[./scratch/hetzner/kubeconfig]"
+secret_rows=1 T="~"
+for v in "sk-ant-oat01-abcdef" "eyJhbGciOiJIUzI1NiJ9.e30.x" "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQR" \
+         "ab/cdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN+OPQRS/tuvw==" "/home/u/abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQR" "$T/abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRx"; do
   cfg 'fleet:' "  vault: $v"; out="$(load)"; rc=$?
   (( rc != 0 )) && [[ "$out" == *"fleet.vault"*"looks like a secret"* && "$out" != *"$v"* ]] || { secret_rows=0; echo "  secret not refused: rc=$rc $out"; }
 done

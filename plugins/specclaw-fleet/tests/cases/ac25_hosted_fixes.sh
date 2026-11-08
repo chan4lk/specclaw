@@ -12,17 +12,24 @@ stub curl 'echo "$*" >> "$TMP/curl.log"; case "$*" in
   *ghcr.io/token*) echo "{}"; printf %s "$TOKEN_CODE" ;;
 esac'
 export TMP
-azdo_checks="$(AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t bash -c 'source "$1/lib/common.sh"; source "$1/lib/doctor-azure.sh"; check_pipeline; check_connections' _ "$FLEET_ROOT" 2>&1)"
+azdo_checks="$(AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t FLEET_KUBE_CONNECTION=specclaw-fleet-k3s FLEET_AZURE_CONNECTION=specclaw-fleet-azure bash -c 'source "$1/lib/common.sh"; source "$1/lib/doctor-azure.sh"; check_pipeline; check_connections' _ "$FLEET_ROOT" 2>&1)"
 pat_rest() { grep -q "^ok pipeline" <<<"$azdo_checks" && grep -q "^ok service-connections" <<<"$azdo_checks" && grep -q "Authorization: Basic" "$TMP/curl.log" && ! grep -Eq "^az (devops|pipelines)" "$CALLS"; }
 check "R053 AC-6 doctor checks the pipeline and connections with AZDO_TOKEN over REST, even with no az login" pat_rest
 mkdir -p "$TMP/pf/.specclaw" "$TMP/pf/azure-pipelines"; printf 'variables:\n  fleetKubeConnection: specclaw-fleet-hetzner\n  fleetAzureConnection: specclaw-fleet-azure\n' > "$TMP/pf/azure-pipelines/specclaw-fleet.yml"
 from_file="$(AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t SPECCLAW_DIR="$TMP/pf/.specclaw" bash -c 'source "$1/lib/common.sh"; source "$1/lib/doctor-azure.sh"; check_connections' _ "$FLEET_ROOT" 2>&1)"
-stub curl 'echo "$*" >> "$TMP/curl.log"; case "$*" in *dev.azure.com*) echo "<html>sign in</html>" ;; esac'
-junk="$(AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t SPECCLAW_DIR="$TMP/pf/.specclaw" bash -c 'source "$1/lib/common.sh"; source "$1/lib/doctor-azure.sh"; check_pipeline; echo "rc=$?"; check_connections; echo "rc=$?"' _ "$FLEET_ROOT" 2>&1)"
+junk_rows=1
+for body in "<html>sign in</html>" "" '{"message":"x"}' '{"value":null}' '{"value":"x"}'; do
+  printf '%s' "$body" > "$TMP/body"
+  stub curl 'cat "$TMP/body"'
+  junk="$(AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t SPECCLAW_DIR="$TMP/pf/.specclaw" bash -c 'source "$1/lib/common.sh"; source "$1/lib/doctor-azure.sh"; check_pipeline; echo "rc=$?"; check_connections; echo "rc=$?"' _ "$FLEET_ROOT" 2>&1)"
+  [[ "$(grep -c '^skip ' <<<"$junk")" == 2 && "$(grep -c '^rc=2' <<<"$junk")" == 2 ]] && ! grep -Eq '^(ok|missing) ' <<<"$junk" \
+    || { junk_rows=0; echo "  body [$body]: $junk"; }
+done
+nofile="$(AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t SPECCLAW_DIR="$TMP/nowhere/.specclaw" bash -c 'source "$1/lib/common.sh"; source "$1/lib/doctor-azure.sh"; check_connections; echo "rc=$?"' _ "$FLEET_ROOT" 2>&1)"
 names_from_pipeline() { [[ "$from_file" == "missing service-connections: specclaw-fleet-hetzner" ]]; }
-junk_is_skip() { [[ "$(grep -c '^skip ' <<<"$junk")" == 2 && "$(grep -c '^rc=2' <<<"$junk")" == 2 ]] && ! grep -Eq '^(ok|missing) ' <<<"$junk"; }
+junk_is_skip() { (( junk_rows == 1 )) && [[ "$nofile" == *"skip service-connections: no connection names"*"rc=2"* ]]; }
 check "R053 doctor checks the connection names the pipeline YAML actually uses" names_from_pipeline
-check "R053 an unparsable AzDO answer is skip for both REST checks, never ok or missing" junk_is_skip
+check "R053 any malformed AzDO answer (html, empty, no value, null, non-list) is skip for both REST checks; unreadable pipeline YAML is skip" junk_is_skip
 stub curl 'echo "$*" >> "$TMP/curl.log"; case "$*" in *ghcr.io/token*) echo "{}"; printf %s "$TOKEN_CODE" ;; esac'
 words=1
 for code in 401 403; do
