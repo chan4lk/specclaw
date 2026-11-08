@@ -58,3 +58,9 @@ load_azdo_env() {
     export "$key=$value"
   done < "$SPECCLAW_DIR/.env"
 }
+
+azdo_rest() {
+  [[ -n "${AZDO_TOKEN:-}" && -n "${AZDO_ORG:-}" && -n "${AZDO_PROJECT:-}" ]] || return 2
+  curl -sf -m 15 -H "Authorization: Basic $(printf ':%s' "$AZDO_TOKEN" | base64 | tr -d '\n')" \
+    "https://dev.azure.com/$AZDO_ORG/$AZDO_PROJECT/_apis/$1"
+}

@@ -21,7 +21,7 @@
   - Files: plugins/specclaw-fleet/lib/optin.sh, plugins/specclaw-fleet/bin/specclaw-fleet, plugins/specclaw-fleet/tests/cases/ac23_optin.sh
   - Kind: impl
   - Depends: T1, T2
-- [ ] `T4` — `specclaw-fleet status` with `--json`, `--watch` and `--since` (AC-4)
+- [x] `T4` — `specclaw-fleet status` with `--json`, `--watch` and `--since` (AC-4)
   - Files: plugins/specclaw-fleet/lib/status.sh, plugins/specclaw-fleet/lib/status-render.sh, plugins/specclaw-fleet/bin/specclaw-fleet, plugins/specclaw-fleet/tests/cases/ac24_status.sh
   - Kind: impl
   - Depends: T1, T2

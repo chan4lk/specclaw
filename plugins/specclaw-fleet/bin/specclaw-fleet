@@ -18,5 +18,6 @@ case "${1:-}" in
   doctor) shift; fleet_doctor "$@" ;;
   trigger) shift; fleet_trigger "$@" ;;
   optin) shift; fleet_optin "$@" ;;
-  *) die "Usage: specclaw-fleet onboard <upn> --vault <v> | login --agent claude|codex --vault <v> | doctor | optin <change>... [--dry-run] | trigger <change> [--retry] [--direct] [--create] | dispatch <change> [--agent claude|codex] [--ref <b>] [--vault <v>] [--dry-run] [--force]" ;;
+  status) shift; fleet_status "$@" ;;
+  *) die "Usage: specclaw-fleet onboard <upn> --vault <v> | login --agent claude|codex --vault <v> | doctor | optin <change>... [--dry-run] | status [<change>...] [--json] [--watch [N]] [--since ISO] | trigger <change> [--retry] [--direct] [--create] | dispatch <change> [--agent claude|codex] [--ref <b>] [--vault <v>] [--dry-run] [--force]" ;;
 esac
