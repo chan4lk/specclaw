@@ -51,6 +51,9 @@ row "specclaw" "" "yes" 0 "specclaw; fleet:auto" alice@contoso.com 2
 one_patch() { (( rows == 1 )) && TAGS=specclaw WHO="" RACE="" azdo optin fleet:auto alice@contoso.com \
   && jq -e '.[0].op == "test" and ([.[] | .path] | index("/fields/System.AssignedTo")) and ([.[] | .path] | index("/fields/System.Tags"))' <<<"$(sed 's/^PATCH //' "$S/log")" >/dev/null; }
 check "optin assigns and tags in one rev-guarded PATCH; an existing tag is removed then re-added by the caller; someone else's item exits 4 with no write; a race retries" one_patch
+TAGS="specclaw" WHO="" RACE="" azdo optin fleet:auto bob@contoso.com; other_rc=$?; other_patches="$(grep -c . "$S/log")"
+not_for_others() { (( other_rc != 0 && other_patches == 0 )) && grep -q "only to the AZDO_TOKEN identity (alice@contoso.com), not bob@contoso.com" "$TMP/out"; }
+check "optin refuses to assign anyone but the AZDO_TOKEN identity" not_for_others
 TAGS="" WHO="" azdo whoami
 whoami_ok() { jq -e '.upn == "alice@contoso.com" and .name == "Alice"' "$TMP/out" >/dev/null; }
 check "whoami names the identity behind AZDO_TOKEN" whoami_ok

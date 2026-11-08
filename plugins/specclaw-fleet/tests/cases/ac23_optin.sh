@@ -21,6 +21,7 @@ optin() { (cd "$TMP/repo" && "$FLEET" optin "$@") > "$TMP/out" 2>&1; }
 optins() { grep -c "^specclaw-azdo-issue optin" "$CALLS"; }
 reset; optin 002-a 003-b; ok_rc=$?; ok_out="$(cat "$TMP/out")"; ok_calls="$(optins)"
 reset; optin 002-a 004-c; mixed_rc=$?; mixed_out="$(cat "$TMP/out")"; bob="$(cat "$WI/004-c/who")"
+reset; optin 004-c 005-d; err_rc=$?
 reset; optin 005-d; nowi_rc=$?; nowi_out="$(cat "$TMP/out")"
 reset; optin 002-a 004-c --dry-run; dry_rc=$?; dry_out="$(cat "$TMP/out")"; dry_calls="$(optins)"
 reset; NO_WHOAMI=1 optin 002-a; who_rc=$?; who_calls="$(optins)"
@@ -32,7 +33,7 @@ dry_writes_nothing() {
   (( dry_calls == 0 && dry_rc == 4 )) && grep -q "002-a: would assign to alice@contoso.com and add fleet:auto" <<<"$dry_out" \
     && grep -q "004-c: refused: assigned to bob@contoso.com" <<<"$dry_out"
 }
-no_wi() { (( nowi_rc == 1 )) && grep -q "no work item; run: specclaw-fleet trigger 005-d --create" <<<"$nowi_out"; }
+no_wi() { (( err_rc == 1 && nowi_rc == 1 )) && grep -q "no work item; run: specclaw-fleet trigger 005-d --create" <<<"$nowi_out"; }
 no_identity() { (( who_rc == 1 && who_calls == 0 )); }
 consent_rows=1
 crow() {
@@ -52,6 +53,6 @@ consent_fixed() { (( consent_rows == 1 && hist_rc == 1 && hist_writes == 0 )) &&
 check "R053 optin re-adds a fleet:auto the assignee did not add (as the caller); one added by the caller is a no-op; unreadable history is an error with no write; exact dry-run text" consent_fixed
 check "R053 AC-3 optin assigns to the AZDO_TOKEN identity and tags; someone else's item is refused (exit 4) while the rest proceed" self_only
 check "R053 AC-3 --dry-run shows the plan, names the other assignee, and writes nothing" dry_writes_nothing
-check "R053 AC-3 a change with no work item exits 1 naming --create" no_wi
+check "R053 AC-3 a change with no work item exits 1 naming --create, and an error is not hidden behind another change's refusal" no_wi
 check "R053 AC-3 an unreadable caller identity stops before any write" no_identity
 finish

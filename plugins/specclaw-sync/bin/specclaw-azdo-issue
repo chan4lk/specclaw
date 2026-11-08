@@ -451,6 +451,10 @@ cmd_optin() {
   require_creds
   local tag="${4:-}" upn="${5:-}" wi_id rc=0
   [[ -n "$tag" && -n "$upn" ]] || die "Usage: specclaw-azdo-issue optin <specclaw_dir> <change> <tag> <upn>"
+  local me
+  me="$(cmd_whoami | python3 -c 'import json,sys; print(json.load(sys.stdin)["upn"])')" || die "Could not read the identity behind AZDO_TOKEN"
+  [[ "$(printf '%s' "$me" | tr '[:upper:]' '[:lower:]')" == "$(printf '%s' "$upn" | tr '[:upper:]' '[:lower:]')" ]] \
+    || die "optin assigns only to the AZDO_TOKEN identity ($me), not $upn"
   wi_id="$(existing_wi_id)"
   [[ -n "$wi_id" ]] || die "No Work Item for this change — run specclaw-azdo-issue create first"
   tag_update "$wi_id" optin "$tag" lax "$upn" || rc=$?

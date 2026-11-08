@@ -6,7 +6,7 @@ export SPECCLAW_DIR="$TMP/repo/.specclaw" FLEET_AZDO_ISSUE="$TMP/stub/specclaw-a
 stub specclaw-azdo-issue '
 d="$WI/$3"
 case "$1" in
-  show) [[ -f "$d/noread" ]] && exit 1; jq -nc --arg t "$(cat "$d/tags")" "{fields: {\"System.State\": \"Doing\", \"System.Tags\": \$t, \"System.AssignedTo\": {uniqueName: \"alice@contoso.com\"}}}" ;;
+  show) [[ -f "$d/noread" ]] && exit 1; jq -nc --arg t "$(cat "$d/tags")" "{fields: {\"System.Title\": \"Fix unreadable errors\", \"System.State\": \"Doing\", \"System.Tags\": \$t, \"System.AssignedTo\": {uniqueName: \"alice@contoso.com\"}}}" ;;
   records) [[ -f "$d/noread" ]] && exit 1
     n=$(( $(cat "$d/n" 2>/dev/null || echo 0) + 1 )); echo $n > "$d/n"
     f="$d/records"; [[ -f "$d/records.$n" ]] && f="$d/records.$n"; cat "$f" ;;
