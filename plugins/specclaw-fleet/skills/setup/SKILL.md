@@ -6,10 +6,7 @@ description: Use when someone wants to set up, repair or check specclaw-fleet in
 
 The goal is a clean `specclaw-fleet doctor`. Run it first, then fix every line that isn't `ok`, in the order printed, and run it again after each fix. Re-running the skill skips work that's already done.
 
-```bash
-FLEET_KUBE_CONTEXT=<ctx> FLEET_VAULT=<vault> FLEET_IMAGE=ghcr.io/<owner>/specclaw-fleet:<tag> \
-AZDO_ORG=<org> AZDO_PROJECT=<project> specclaw-fleet doctor
-```
+**Record every confirmed value in `.specclaw/config.yaml` as you go**, under `fleet:`. That covers `vault`, `kube_context`, `kubeconfig`, `cluster_name`, `image`, `claude_version`, `pipeline`, `kube_connection` and `azure_connection`. After that, `specclaw-fleet doctor`, `trigger`, `optin` and `status` need no env prefix. Never write a secret there: the PAT goes in the gitignored `.specclaw/.env`, and credentials go in Key Vault. Commit the config change, asking before you push.
 
 ## Rules
 

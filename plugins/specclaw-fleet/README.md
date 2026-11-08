@@ -55,18 +55,35 @@ Run **`/specclaw-fleet:setup`**. It works until `specclaw-fleet doctor` is clean
 - It records the download time as `claude_fetch_s`.
 - `DISABLE_UPDATES=1` keeps it on that version.
 
-**Dispatch settings** (environment variables):
-- `FLEET_CLAUDE_VERSION` (required for claude jobs);
-- `FLEET_IMAGE_PULL_SECRET` (private registries only);
-- `FLEET_NODE_LABEL=key=value`, which pins Jobs to a labelled, tainted node.
+**Settings** live in the `fleet:` block of `.specclaw/config.yaml`, so no command needs an env prefix:
+
+```yaml
+fleet:
+  vault: kv-scfleet-965892
+  kube_context: bistec-dev-uat      # local commands only; the pipeline uses its logged-in kubeconfig
+  cluster_name: bistec-dev-uat      # what the run record calls the cluster
+  image: ghcr.io/chan4lk/specclaw-fleet:0.9.0
+  claude_version: "2.1.319"         # required for claude jobs
+  pipeline: specclaw-fleet
+  kube_connection: specclaw-fleet-hetzner
+  azure_connection: specclaw-fleet-azure
+```
+
+- **Other keys:** `kubeconfig`, `namespace`, `default_agent`, `deadline_minutes`, `remote`, `ref`, `image_pull_secret` (private registries only), and `node_label` (`key=value`, which pins Jobs to a labelled, tainted node).
+- **Precedence:** a flag, then an env variable (`FLEET_<KEY>`, or `KUBECONFIG` for `kubeconfig`), then config, then the default.
+- **Secrets never go here.** The PAT stays in the gitignored `.specclaw/.env`, and a secret-looking value is refused.
 
 ## Running a change
 
-Run **`/specclaw-fleet:run`**, or call the command directly:
+Run **`/specclaw-fleet:run <change>...`**. It opts the changes in, triggers them in parallel, and watches each one until it has a PR or a recorded failure. The commands it uses:
 
 ```bash
-FLEET_VAULT=<vault> specclaw-fleet trigger <change> [--create] [--retry] [--direct]
+specclaw-fleet optin 002-catalog 003-detail      # assign to you + fleet:auto, as you (never anyone else)
+specclaw-fleet trigger 002-catalog [--create] [--retry] [--direct]
+specclaw-fleet status --watch                    # one line per change: item, tags, last record, Job
 ```
+
+`optin` uses the identity behind `AZDO_TOKEN`. It refuses an item assigned to someone else, and `--dry-run` shows the plan without writing. `status` is read-only. A change shows `not-opted-in` until `fleet:auto` is added by its assignee.
 
 `trigger` reads approval from the **pushed** ref (`FLEET_REMOTE`/`FLEET_REF`, default `origin/main`). It refuses an unapproved proposal, a work item with no assignee, missing `fleet:auto` consent from the assignee, or a missing credential. Refusals have no side effects. `--create` is the one deliberate exception: it creates the missing work item and stops (exit 3), so the item can be assigned and consented.
 

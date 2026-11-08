@@ -1,45 +1,61 @@
 ---
-description: Use when someone wants an approved specclaw change run headless by specclaw-fleet, wants to retry a fleet run, or asks how a fleet run went.
+description: Use when someone wants one or more approved specclaw changes run headless by specclaw-fleet, wants to opt changes in or retry a fleet run, or asks what is happening on the fleet cluster.
 ---
 
 # specclaw-fleet run
 
-Puts one approved change through the fleet and reports what happened. Each run spends the **assignee's** Claude or Codex (ChatGPT) plan, so say so before you trigger.
+Puts one or more approved changes through the fleet and watches them through to the end. Settings come from the `fleet:` block in `.specclaw/config.yaml`, so commands need no env prefix. If `doctor` fails, use `/specclaw-fleet:setup` first.
 
-## 1. Trigger
+## 1. Look
 
-```bash
-FLEET_VAULT=<vault> specclaw-fleet trigger <change> [--create] [--retry] [--direct]
-```
+Run `specclaw-fleet status <change>...`, or `status` with no arguments to see every approved change.
+- `not-opted-in`: the work item lacks `fleet:auto`.
+- `no work item`: the change has no work item yet. Run `specclaw-fleet trigger <c> --create`, then opt it in.
+
+## 2. Opt in (one confirmation)
+
+1. Run `specclaw-fleet optin <change>... --dry-run`. It names **the caller** (the `AZDO_TOKEN` identity) and what it will do for each item.
+2. Show that plan and ask **once**. Say that every run spends the **caller's** Claude or Codex plan, and that the caller's UPN must be the one onboarded in the vault.
+3. On a yes, run `specclaw-fleet optin <change>...`.
+
+Rules:
+- Never assign an item to someone else.
+- Never opt in an item assigned to someone else. `optin` refuses it (exit 4). Tell the user who has to opt in.
+
+## 3. Trigger
+
+Trigger in **parallel** by default: `specclaw-fleet trigger <c>` for each change, then go to step 4.
+
+Before triggering, warn about two things:
+- every parallel run spends the caller's plan at the same time;
+- changes that touch the same area each branch from the base and may produce PRs that conflict.
+
+With `--sequential`, or when the user asks for it, trigger one change, watch it to the end, then trigger the next.
 
 | Exit | Meaning | What to do |
 |---|---|---|
-| 0 | queued (`{"mode":"queued","run":…}`) or dispatched (`--direct`) | watch it (step 2). Gates passed here; the dispatch outcome lands on the work item. |
-| 1, `not approved on <remote>/<ref>` | approval is read from the **pushed** ref | approve through the lifecycle, push, re-run; never approve on someone's behalf |
-| 1, `pass --create` | no work item | re-run with `--create` |
-| 3, `created work item #N` | `--create` made the item and stopped on purpose | assign it; the assignee adds `fleet:auto`; re-run without `--create` |
-| 3, `not opted in` | no `fleet:auto` tag | the **assignee** adds `fleet:auto` in Boards; nobody else can add it for them |
-| 3, `already handled` | tagged `fleet:dispatched` or `fleet:refused` | re-run with `--retry` |
-| 4, `work item has no assignee` | nobody's plan to run it on | ask who owns it; assign in Boards |
-| 4, `fleet:auto was not added by the assignee` | someone else tagged it | the assignee removes and re-adds the tag themselves |
-| 4, `no registered … credential` | assignee never ran login | the assignee runs `specclaw-fleet login --agent claude` in a real terminal |
-| 5, `codex slot is busy` | the assignee already has a codex run | retry after it finishes |
+| 0 | queued (or dispatched with `--direct`) | watch it |
+| 1, `no change … on <remote>/<ref>` | the change name is wrong, or it isn't pushed | check the name; push |
+| 1, `not approved on <remote>/<ref>` | approval is read from the pushed ref | approve through the lifecycle and push; never approve for someone |
+| 3, `not opted in` | no `fleet:auto` | step 2 |
+| 3, `already handled` | tagged `fleet:dispatched` or `fleet:refused` | `--retry` |
+| 4 | no assignee, someone else's consent, or no registered credential | the assignee assigns the item, opts in, or runs `specclaw-fleet login` in a real terminal |
+| 5 | codex slot busy | retry after the earlier run |
 
-`trigger` runs exactly dispatch's gates, in a check-only mode that writes nothing to the work item. A queued run carries this change and agent as pipeline parameters, so it dispatches exactly this change. A change already tagged `fleet:dispatched` or `fleet:refused` is skipped by dispatch. Pass `--retry` to clear both tags.
+## 4. Watch
 
-## 2. Watch
+Note the time you triggered, then run `specclaw-fleet status <change>... --watch 30 --since <that time>`. It returns once every change is `pr_open` or `failed`.
+- **Row columns:** each row shows the work item, its fleet tags, the last record (`dispatched`, `running`, `pr_open` or `failed`, with `exit=`), and the newest Job with its pod phase.
+- **Pipeline:** the header line shows the latest pipeline run.
+- **Detail:** use `kubectl -n specclaw-fleet logs <pod> -c agent` with the fleet kubeconfig. It ends with the agent's summary, with tokens redacted.
 
-- **Pipeline:** `az pipelines runs show --id <run>` until it completes. Its log names the Job (`{"job":"fleet-…"}`).
-- **Job:** use the fleet kubeconfig. `kubectl -n specclaw-fleet get job <job>` shows the outcome. `kubectl logs <pod> -c agent` ends with the agent's own summary, with tokens redacted.
-- **Work item:** its comments record each step:
-  - `dispatched`
-  - `running` (with `claude_fetch_s`, the per-run Claude download time)
-  - `pr_open`, or `failed` with an `exit=` reason.
+## 5. Report
 
-## 3. Report
+For each change, lead with the outcome:
+- **PR:** link it, and say whether it is a **draft**. A draft means verify didn't pass, and the work is still on the branch.
+- **Failure:** quote the `exit=` reason.
+  - `egress-not-ready`, `clone-failed`, `resume-failed`, `not-approved-at-ref` and `claude-fetch-failed` are infrastructure or gate stops.
+  - `claude-verify-failed` is a security event.
+  - Anything else is explained in the agent summary.
 
-Lead with the outcome:
-- **PR:** link it, and say whether it is a **draft**. Every finished run that pushed work gets a PR: a real one when verify passed, a draft one otherwise.
-- **Failure:** quote the `exit=` reason. `egress-not-ready`, `claude-fetch-failed` (download or network), `claude-verify-failed` (signature, checksum, size or version mismatch: treat as a security event), `clone-failed`, `resume-failed` (the existing change branch could not be listed, fetched or checked out) and `not-approved-at-ref` are infrastructure or gate stops. Anything else is in the agent summary.
-
-Then give the open findings from the PR description or `follow-ups.md`, and the next step: merge, retry with `--retry`, or fix on the branch. Work always lands on the change branch, and a retry resumes it.
+Then give the open findings (from the PR description or `follow-ups.md`) and the next step: merge, `trigger --retry` (which resumes the branch), or fix on the branch.

@@ -32,7 +32,7 @@
 
 ### Wave 3: skills and docs
 
-- [ ] `T6` — run skill for many changes, setup skill writes `fleet:`, dispatch skill settings, README (AC-5)
+- [x] `T6` — run skill for many changes, setup skill writes `fleet:`, dispatch skill settings, README (AC-5)
   - Files: plugins/specclaw-fleet/skills/run/SKILL.md, plugins/specclaw-fleet/skills/setup/SKILL.md, plugins/specclaw-fleet/skills/dispatch/SKILL.md, plugins/specclaw-fleet/README.md
   - Kind: docs
   - Depends: T3, T4, T5
