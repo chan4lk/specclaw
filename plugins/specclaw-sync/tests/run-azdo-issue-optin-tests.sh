@@ -44,12 +44,13 @@ row() {
 }
 row "specclaw" "" "" 0 "specclaw; fleet:auto" alice@contoso.com 1
 row "specclaw" "Alice@Contoso.com" "" 0 "specclaw; fleet:auto" Alice@Contoso.com 1
-row "specclaw; fleet:auto" "alice@contoso.com" "" 0 "specclaw; fleet:auto" alice@contoso.com 0
+row "specclaw; fleet:auto" "alice@contoso.com" "" 0 "specclaw; fleet:auto" alice@contoso.com 2
+row "specclaw; fleet:auto" "" "" 0 "specclaw; fleet:auto" alice@contoso.com 2
 row "specclaw" "bob@contoso.com" "" 4 "specclaw" bob@contoso.com 0
 row "specclaw" "" "yes" 0 "specclaw; fleet:auto" alice@contoso.com 2
 one_patch() { (( rows == 1 )) && TAGS=specclaw WHO="" RACE="" azdo optin fleet:auto alice@contoso.com \
   && jq -e '.[0].op == "test" and ([.[] | .path] | index("/fields/System.AssignedTo")) and ([.[] | .path] | index("/fields/System.Tags"))' <<<"$(sed 's/^PATCH //' "$S/log")" >/dev/null; }
-check "optin assigns an unassigned item and tags it in one rev-guarded PATCH; refuses someone else's item (exit 4, no write); no-op when done; retries a race" one_patch
+check "optin assigns and tags in one rev-guarded PATCH; an existing tag is removed then re-added by the caller; someone else's item exits 4 with no write; a race retries" one_patch
 TAGS="" WHO="" azdo whoami
 whoami_ok() { jq -e '.upn == "alice@contoso.com" and .name == "Alice"' "$TMP/out" >/dev/null; }
 check "whoami names the identity behind AZDO_TOKEN" whoami_ok

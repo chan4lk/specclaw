@@ -8,7 +8,7 @@ d="$WI/$3"
 case "$1" in
   whoami) [[ -n "${NO_WHOAMI:-}" ]] && exit 1; echo "{\"upn\":\"alice@contoso.com\"}" ;;
   show) jq -nc --arg w "$(cat "$d/who")" --arg t "$(cat "$d/tags")" "{fields: ({\"System.Tags\": \$t} + (if \$w == \"\" then {} else {\"System.AssignedTo\": {uniqueName: \$w}} end))}" ;;
-  updates) jq -nc --arg by "$(cat "$d/tagger" 2>/dev/null)" "{value: (if \$by == \"\" then [] else [{revisedBy: {uniqueName: \$by}, fields: {\"System.Tags\": {oldValue: \"specclaw\", newValue: \"specclaw; fleet:auto\"}}}] end)}" ;;
+  updates) [[ -n "${BAD_HISTORY:-}" ]] && { echo "<html>"; exit 0; }; jq -nc --arg by "$(cat "$d/tagger" 2>/dev/null)" "{value: (if \$by == \"\" then [] else [{revisedBy: {uniqueName: \$by}, fields: {\"System.Tags\": {oldValue: \"specclaw\", newValue: \"specclaw; fleet:auto\"}}}] end)}" ;;
   untag) printf specclaw > "$d/tags"; rm -f "$d/tagger" ;;
   optin) w="$(cat "$d/who")"; [[ -n "$w" && "$w" != "$5" ]] && exit 4; echo "$5" > "$d/who"; echo "specclaw; $4" > "$d/tags"; echo "$5" > "$d/tagger" ;;
 esac'
@@ -41,12 +41,15 @@ crow() {
   [[ "$rc" == 0 && "$out" == *"$4"* && "$(grep -c "azdo-issue untag" "$CALLS")" == "$5" ]] || { consent_rows=0; echo "  [$2|$3|$1]: rc=$rc untags=$(grep -c "azdo-issue untag" "$CALLS") $out"; }
   [[ "$1" == --dry-run ]] || [[ "$(cat "$WI/002-a/tagger")" == alice@contoso.com ]] || { consent_rows=0; echo "  [$2|$3]: tagger now $(cat "$WI/002-a/tagger")"; }
 }
-crow "" alice@contoso.com bob@contoso.com "opted in" 1
-crow "" "" bob@contoso.com "opted in" 1
+crow "" alice@contoso.com bob@contoso.com "opted in" 0
+crow "" "" bob@contoso.com "opted in" 0
 crow "" alice@contoso.com alice@contoso.com "already opted in by alice@contoso.com" 0
 crow --dry-run alice@contoso.com bob@contoso.com "re-add fleet:auto as alice@contoso.com (it was not added by the assignee)" 0
-consent_fixed() { (( consent_rows == 1 )); }
-check "R053 optin re-adds a fleet:auto that the assignee did not add (untag, then tag as the caller); one added by the caller is a no-op" consent_fixed
+reset; printf 'specclaw; fleet:auto' > "$WI/002-a/tags"; printf alice@contoso.com > "$WI/002-a/who"; BAD_HISTORY=1 optin 002-a; hist_rc=$?; hist_writes="$(grep -cE "azdo-issue (optin|untag)" "$CALLS")"
+reset; printf 'specclaw; fleet:auto' > "$WI/002-a/tags"; printf alice@contoso.com > "$WI/002-a/who"; echo bob@contoso.com > "$WI/002-a/tagger"; optin 002-a --dry-run
+dry_text="$(cat "$TMP/out")"
+consent_fixed() { (( consent_rows == 1 && hist_rc == 1 && hist_writes == 0 )) && [[ "$dry_text" == "002-a: would keep the assignment and re-add fleet:auto as alice@contoso.com (it was not added by the assignee)" ]]; }
+check "R053 optin re-adds a fleet:auto the assignee did not add (as the caller); one added by the caller is a no-op; unreadable history is an error with no write; exact dry-run text" consent_fixed
 check "R053 AC-3 optin assigns to the AZDO_TOKEN identity and tags; someone else's item is refused (exit 4) while the rest proceed" self_only
 check "R053 AC-3 --dry-run shows the plan, names the other assignee, and writes nothing" dry_writes_nothing
 check "R053 AC-3 a change with no work item exits 1 naming --create" no_wi

@@ -7,7 +7,7 @@ optin_decide() {
   O_WHO="$(jq -r '.fields["System.AssignedTo"].uniqueName // empty' <<<"$wi")"
   if [[ -n "$O_WHO" && "$(lower "$O_WHO")" != "$(lower "$2")" ]]; then O_ACTION=refuse; return; fi
   gate_owner "$wi" || rc=$?
-  case "$rc" in 0) O_ACTION=opted ;; 10) O_ACTION=add ;; 11|12) O_ACTION=readd ;; esac
+  case "$rc" in 0) O_ACTION=opted ;; 10) O_ACTION=add ;; 11|12) O_ACTION=readd ;; *) O_ACTION=error ;; esac
 }
 
 optin_one() {
@@ -21,10 +21,10 @@ optin_one() {
     error) echo "$1: $O_WHY" >&2; return 1 ;;
   esac
   if (( O_DRY )); then
-    echo "$1: would ${O_WHO:+keep the assignment and }${O_WHO:-assign to $2 and }$([[ $O_ACTION == readd ]] && echo "re-add fleet:auto as $2 (it was not added by the assignee)" || echo "add fleet:auto as $2")"
+    local how="assign to $2 and "; [[ -n "$O_WHO" ]] && how="keep the assignment and "
+    echo "$1: would $how$([[ $O_ACTION == readd ]] && echo "re-add fleet:auto as $2 (it was not added by the assignee)" || echo "add fleet:auto as $2")"
     return 0
   fi
-  if [[ "$O_ACTION" == readd ]]; then azdo_issue untag "$SPECCLAW_DIR" "$1" fleet:auto >/dev/null || { echo "$1: could not remove the old fleet:auto" >&2; return 1; }; fi
   azdo_issue optin "$SPECCLAW_DIR" "$1" fleet:auto "$2" >/dev/null 2>"$FLEET_TMPDIR/optin.err" || rc=$?
   case "$rc" in
     0) echo "$1: opted in (#$(work_item_id "$1"), assigned to $2, fleet:auto added by $2)" ;;

@@ -31,9 +31,12 @@ for one in "  fleetKubeConnection: k" "  fleetAzureConnection: z"; do
   [[ "$o" == *"not both found in $TMP/one/.specclaw/../azure-pipelines/specclaw-fleet.yml"*"rc=2"* ]] || { junk_rows=0; echo "  one name [$one]: $o"; }
 done
 nofile="$(AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t SPECCLAW_DIR="$TMP/nowhere/.specclaw" bash -c 'source "$1/lib/common.sh"; source "$1/lib/doctor-azure.sh"; check_connections; echo "rc=$?"' _ "$FLEET_ROOT" 2>&1)"
-names_from_pipeline() { [[ "$from_file" == "missing service-connections: specclaw-fleet-hetzner" ]]; }
+printf 'variables:\n  fleetKubeConnection: "Fleet Hetzner K8s"   # spaces\n  fleetAzureConnection: Specclaw-Fleet-Azure # case\n' > "$TMP/pf/azure-pipelines/specclaw-fleet.yml"
+stub curl 'echo "$*" >> "$TMP/curl.log"; echo "{\"value\":[{\"name\":\"Fleet Hetzner K8s\",\"isReady\":true},{\"name\":\"specclaw-fleet-azure\",\"isReady\":true}]}"'
+spaced="$(AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t SPECCLAW_DIR="$TMP/pf/.specclaw" bash -c 'source "$1/lib/common.sh"; source "$1/lib/doctor-azure.sh"; check_connections' _ "$FLEET_ROOT" 2>&1)"
+names_from_pipeline() { [[ "$spaced" == "ok service-connections: ready" ]] && grep -q "endpointNames=Fleet%20Hetzner%20K8s,Specclaw-Fleet-Azure" "$TMP/curl.log" || return 1; [[ "$from_file" == "missing service-connections: specclaw-fleet-hetzner" ]]; }
 junk_is_skip() { (( junk_rows == 1 )) && [[ "$nofile" == *"skip service-connections: fleetKubeConnection and fleetAzureConnection not both found"*"rc=2"* ]]; }
-check "R053 doctor checks the connection names the pipeline YAML actually uses" names_from_pipeline
+check "R053 doctor checks the connection names the pipeline YAML uses: quoted names with spaces, case-insensitive match, encoded query" names_from_pipeline
 check "R053 any malformed AzDO answer (html, empty, no value, null, non-list) is skip for both REST checks; unreadable pipeline YAML is skip" junk_is_skip
 stub curl 'echo "$*" >> "$TMP/curl.log"; case "$*" in *ghcr.io/token*) echo "{}"; printf %s "$TOKEN_CODE" ;; esac'
 words=1

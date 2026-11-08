@@ -26,6 +26,7 @@ row "image=[ghcr.io/o/x@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0
 cfg 'fleet:' '  kubeconfig: /Users/someone/very/long/path/to/a/kubeconfig-for-the-bistec-dev-uat-cluster-isolated'
 row "kc=[/Users/someone/very/long/path/to/a/kubeconfig-for-the-bistec-dev-uat-cluster-isolated]"
 cfg 'fleet:' '  kubeconfig: ./scratch/hetzner/kubeconfig'; row "kc=[./scratch/hetzner/kubeconfig]"
+cfg 'fleet:' '  vault: kv1' '  pipeline_file: pipelines/azure-devops/fleet/specclaw-fleet-dispatch-hosted-bistec-dev-uat.yml'; row "vault=[kv1]"
 secret_rows=1 T="~"
 for v in "sk-ant-oat01-abcdef" "eyJhbGciOiJIUzI1NiJ9.e30.x" "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQR" \
          "ab/cdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN+OPQRS/tuvw==" "/home/u/abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQR" "$T/abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRx" \

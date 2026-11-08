@@ -46,7 +46,7 @@ status_row() {
        assignee: (if $wi.unreadable then "?" else ($wi.fields["System.AssignedTo"].uniqueName // "-") end),
        tags: [("auto", "dispatched", "refused") | select(("fleet:" + .) as $x | $t | index($x))],
        record: (if $r.unreadable then {state: "?"} elif $rec then $rec
-         elif $consent == "none" then {state: "not-opted-in"} elif $consent == "other" then {state: "not-opted-in (fleet:auto not added by the assignee)"}
+         elif $consent == "unknown" then {state: "?"} elif $consent == "none" then {state: "not-opted-in"} elif $consent == "other" then {state: "not-opted-in (fleet:auto not added by the assignee)"}
          else {state: "waiting"} end), cluster: $job}
     | .terminal = ((.record.state | IN("pr_open", "failed", "refused")) or (.tags | index("refused")) or ($consent | IN("none", "other"))
         or (.cluster.phase == "failed" and (.cluster.created // "") >= $since))'

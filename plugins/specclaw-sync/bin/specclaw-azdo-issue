@@ -17,8 +17,10 @@
 #   specclaw-azdo-issue optin    <specclaw_dir> <change> <tag> <upn>
 #   specclaw-azdo-issue records  <specclaw_dir> <change>
 #
-# `optin` assigns the item to <upn> when it is unassigned and adds <tag>, in one
-# rev-guarded PATCH; it exits 4 when the item is assigned to someone else.
+# `optin` assigns the item to <upn> when it is unassigned and adds <tag> as the
+# caller, in one rev-guarded PATCH. An existing <tag> is removed first and then
+# re-added, so the revision history always shows the caller adding it. It exits 4
+# when the item is assigned to someone else.
 # `whoami` prints the identity behind AZDO_TOKEN; `records` prints the fleet
 # run-update comments, newest first, as JSON.
 #
@@ -355,11 +357,10 @@ if mode == "optin":
     if who and who.lower() != upn.lower():
         print(who, file=sys.stderr)
         sys.exit(4)
-    if who and tag.lower() in held:
-        sys.exit(10)
+    if tag.lower() in held:
+        sys.exit(5)
     assign = None if who else upn
-    if tag.lower() not in held:
-        tags.append(tag)
+    tags.append(tag)
 elif mode == "add":
     if any(b.lower() in held for b in blocking) or (strict and tag.lower() in held):
         sys.exit(3)
@@ -393,7 +394,7 @@ tag_update() {
     item="$(ado_get "wit/workitems/${wi_id}?api-version=7.1")" || die "ADO read failed for Work Item #${wi_id}"
     rc=0
     out="$(python3 -c "$PY_TAGS" "$mode" "$tag" "$strict" "$@" <<<"$item")" || rc=$?
-    case "$rc" in 0) ;; 3|4) return "$rc" ;; 10) return 0 ;; *) die "Could not read tags of Work Item #${wi_id}" ;; esac
+    case "$rc" in 0) ;; 3|4|5) return "$rc" ;; 10) return 0 ;; *) die "Could not read tags of Work Item #${wi_id}" ;; esac
     rev="${out%%$'\n'*}"
     code="$(ado_patch_status "wit/workitems/${wi_id}?api-version=7.1" "${out#*$'\n'}")"
     case "$code" in
@@ -453,7 +454,12 @@ cmd_optin() {
   wi_id="$(existing_wi_id)"
   [[ -n "$wi_id" ]] || die "No Work Item for this change — run specclaw-azdo-issue create first"
   tag_update "$wi_id" optin "$tag" lax "$upn" || rc=$?
+  if (( rc == 5 )); then
+    tag_update "$wi_id" remove "$tag" lax
+    rc=0; tag_update "$wi_id" optin "$tag" lax "$upn" || rc=$?
+  fi
   (( rc == 4 )) && { echo "Work Item #${wi_id} is assigned to someone else; only they can opt in" >&2; exit 4; }
+  (( rc == 0 )) || die "Could not opt in Work Item #${wi_id}"
   echo "Opted in Work Item #${wi_id}: assigned to ${upn}, ${tag}"
 }
 

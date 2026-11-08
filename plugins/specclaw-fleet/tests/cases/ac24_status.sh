@@ -10,7 +10,7 @@ case "$1" in
   records) [[ -f "$d/noread" ]] && exit 1
     n=$(( $(cat "$d/n" 2>/dev/null || echo 0) + 1 )); echo $n > "$d/n"
     f="$d/records"; [[ -f "$d/records.$n" ]] && f="$d/records.$n"; cat "$f" ;;
-  updates) jq -nc --arg by "$(cat "$d/tagger" 2>/dev/null || echo alice@contoso.com)" "{value: [{revisedBy: {uniqueName: \$by}, fields: {\"System.Tags\": {oldValue: \"specclaw\", newValue: \"specclaw; fleet:auto\"}}}]}" ;;
+  updates) [[ -f "$d/badhist" ]] && { echo "<html>"; exit 0; }; jq -nc --arg by "$(cat "$d/tagger" 2>/dev/null || echo alice@contoso.com)" "{value: [{revisedBy: {uniqueName: \$by}, fields: {\"System.Tags\": {oldValue: \"specclaw\", newValue: \"specclaw; fleet:auto\"}}}]}" ;;
 esac'
 stub kubectl '
 [[ "$1" == --context ]] && shift 2
@@ -67,10 +67,11 @@ reset; echo bob@contoso.com > "$WI/003-b/tagger"; st --json 003-b --since 2026-1
 reset; DEAD_JOB=2026-11-09T00:00:00Z st --json 003-b --since 2026-11-08T00:00:00Z; dead_new="$(jq -r '.changes[0].terminal' "$TMP/out")"
 reset; DEAD_JOB=2026-11-07T00:00:00Z st --json 003-b --since 2026-11-08T00:00:00Z; dead_old="$(jq -r '.changes[0].terminal' "$TMP/out")"
 bad_since=1; for v in 2026-11-08 "2026-11-08T03:00:00+05:30" 2026-11-08T03:00:00.5Z yesterday; do st --since "$v" && bad_since=0; grep -q -- "--since must be UTC" "$TMP/out" || bad_since=0; done
-consent_from_history() { jq -e '.changes[0] | .record.state == "not-opted-in (fleet:auto not added by the assignee)" and .terminal' <<<"$other" >/dev/null; }
+reset; touch "$WI/003-b/badhist"; st --json 003-b --since 2026-11-08T00:00:00Z; badhist="$(cat "$TMP/out")"
+consent_from_history() { jq -e '.changes[0] | .record.state == "?" and (.terminal | not)' <<<"$badhist" >/dev/null || return 1; jq -e '.changes[0] | .record.state == "not-opted-in (fleet:auto not added by the assignee)" and .terminal' <<<"$other" >/dev/null; }
 dead_job_ends() { [[ "$dead_new" == true && "$dead_old" == false ]]; }
 since_checked() { (( bad_since == 1 )); }
-check "R053 status uses the consent rule: a fleet:auto not added by the assignee is not-opted-in (terminal)" consent_from_history
+check "R053 status uses the consent rule: fleet:auto not added by the assignee is not-opted-in (terminal); unreadable history is ? and never terminal" consent_from_history
 check "R053 a failed Job created after --since is terminal even with no record; an older one is not" dead_job_ends
 check "R053 --since rejects anything but YYYY-MM-DDTHH:MM:SSZ" since_checked
 read_only() { ! grep -Eq "azdo-issue (optin|tag|untag|claim|fields|create|comment)|kubectl.* (create|apply|delete|patch)|-X (POST|PATCH|PUT|DELETE)" "$CALLS"; }
