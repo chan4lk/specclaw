@@ -1,7 +1,7 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** specclaw
-**Last Updated:** 2026-11-08 01:20 UTC
+**Last Updated:** 2026-11-08 03:20 UTC
 
 _4 unnumbered changes · run `/specclaw-extras:renumber` to order them_
 
@@ -16,14 +16,15 @@ _4 unnumbered changes · run `/specclaw-extras:renumber` to order them_
 - 🔍 **046-quality-scan-zero-clone** ▫ — verify PARTIAL | 4/4 tasks (100%) | 0 failed
 - 🔀 **047-specclaw-mod** ▣ — pr raised | 7/7 tasks (100%) | 0 failed | PR #105 merged | 16h58m
 - 🔀 **048-codex-safe-mod-hooks** ▫ — pr raised | 3/3 tasks (100%) | 0 failed | PR #106 merged | 16s
-- 🔍 **049-fleet-runner-dispatch** ▣ — verify FAIL | 7/7 tasks (100%) | 0 failed | 1h27m
-- 🔍 **052-fleet-setup-and-run-skills** ▣ — verify FAIL | 6/6 tasks (100%) | 0 failed | 1h5m
+- 🔍 **049-fleet-runner-dispatch** ▣ — verify FAIL | 7/7 tasks (100%) | 0 failed | PR #111 merged | 1h27m
+- 🔍 **052-fleet-setup-and-run-skills** ▣ — verify FAIL | 6/6 tasks (100%) | 0 failed | PR #112 merged | 1h5m
 
 ## Pending Proposals
 
 
 - 📋 **050-fleet-coordinated-features** ▣ — proposal ready, awaiting planning
 - 📋 **051-fleet-azdo-agents** ▫ — proposal ready, awaiting planning
+- 📋 **053-fleet-optin-status-run** ▫ — proposal ready, awaiting planning
 
 ## Recently Completed
 
