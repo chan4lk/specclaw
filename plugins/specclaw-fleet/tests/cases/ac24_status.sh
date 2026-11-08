@@ -22,8 +22,8 @@ case "$*" in
   *"get pods -l job-name=fleet-002-new"*) printf Running ;;
 esac'
 stub curl 'case "$*" in
-  *"build/definitions?name=specclaw-fleet"*) echo "{\"value\":[{\"id\":44,\"name\":\"specclaw-fleet\"}]}" ;;
-  *"/pipelines/44/runs"*) echo "{\"value\":[{\"id\":2437,\"state\":\"completed\",\"result\":\"succeeded\"}]}" ;;
+  *"build/definitions?name=specclaw-fleet"*) echo "{\"value\":[{\"id\":44,\"name\":\"specclaw-fleet\"}]}"; printf "\n%s" "${HTTP_CODE:-200}" ;;
+  *"/pipelines/44/runs"*) echo "{\"value\":[{\"id\":2437,\"state\":\"completed\",\"result\":\"succeeded\"}]}"; printf "\n%s" "${HTTP_CODE:-200}" ;;
 esac'
 mk() {
   mkdir -p "$SPECCLAW_DIR/changes/$1" "$WI/$1"; printf '%s' "$2" > "$WI/$1/tags"; printf '%s' "$3" > "$WI/$1/records"

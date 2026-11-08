@@ -23,9 +23,9 @@ esac'
 stub curl 'case "$*" in
   *ghcr.io/token*) [[ -n "${GHCR_DOWN:-}" ]] && exit 7; echo "{\"token\":\"t\"}"; printf %s "${TOKEN_CODE:-200}" ;;
   *manifests*) printf %s "${IMAGE_CODE:-200}" ;;
-  *dev.azure.com*) [[ -n "${AZDO_DOWN:-}" ]] && exit 22 ;;&
-  *"build/definitions?name=specclaw-fleet"*) [[ -n "${NO_PIPELINE:-}" ]] && echo "{\"value\":[]}" || echo "{\"value\":[{\"id\":44,\"name\":\"specclaw-fleet\"}]}" ;;
-  *serviceendpoint*) echo "{\"value\":[{\"name\":\"specclaw-fleet-k3s\",\"isReady\":true},{\"name\":\"specclaw-fleet-azure\",\"isReady\":$([[ -n "${NO_CONN:-}" ]] && echo false || echo true)}]}" ;;
+  *dev.azure.com*) [[ -n "${AZDO_DOWN:-}" ]] && exit 22; [[ -n "${PAT_SCOPE:-}" ]] && { printf "\n401"; exit 0; } ;;&
+  *"build/definitions?name=specclaw-fleet"*) [[ -n "${NO_PIPELINE:-}" ]] && echo "{\"value\":[]}" || echo "{\"value\":[{\"id\":44,\"name\":\"specclaw-fleet\"}]}"; printf "\n%s" "${HTTP_CODE:-200}" ;;
+  *serviceendpoint*) echo "{\"value\":[{\"name\":\"specclaw-fleet-k3s\",\"isReady\":true},{\"name\":\"specclaw-fleet-azure\",\"isReady\":$([[ -n "${NO_CONN:-}" ]] && echo false || echo true)}]}"; printf "\n%s" "${HTTP_CODE:-200}" ;;
 esac'
 
 doctor() { "$FLEET" doctor > "$TMP/out" 2>&1; }
@@ -51,14 +51,16 @@ NO_VAULT=1 FLEET_IMAGE=registry.example.com/x:1 "$FLEET" doctor > "$TMP/out" 2>&
 mixed() { (( mixed_rc == 1 )) && grep -q "1 check(s) need attention, 1 did not run" "$TMP/out"; }
 check "AC7 failures plus skips report both and exit 1" mixed
 skip_rows=1
-for row in "KUBE_FLAKY:context namespaces rbac egress netpol secret:fleet-azdo secret:fleet-vault-writer" "AZ_DOWN:vault" "AZDO_DOWN:pipeline service-connections" \
+for row in "KUBE_FLAKY:context namespaces rbac egress netpol secret:fleet-azdo secret:fleet-vault-writer" "AZ_DOWN:vault" "AZDO_DOWN:pipeline service-connections" "PAT_SCOPE:pipeline service-connections" \
            "GHCR_DOWN:image" "IMAGE_CODE=503:image" "IMAGE_CODE=000:image"; do
   v="${row%%:*}"; [[ "$v" == *=* ]] || v="$v=1"
   env "$v" "$FLEET" doctor > "$TMP/out" 2>&1; rc=$?
   for name in ${row#*:}; do grep -q "^skip $name" "$TMP/out" || { skip_rows=0; echo "  $v: $name not skipped"; }; done
   (( rc == 2 )) && ! grep -Eq "^(missing|wrong) " "$TMP/out" || { skip_rows=0; echo "  $v: rc=$rc or a missing/wrong line"; }
 done
-unasked_is_skip() { (( skip_rows == 1 )); }
+PAT_SCOPE=1 "$FLEET" doctor > "$TMP/out" 2>&1
+scope_named() { grep -q "skip pipeline: AZDO_TOKEN lacks the Build (Read) scope" "$TMP/out" && grep -q "skip service-connections: AZDO_TOKEN lacks the Service Connections (Read) scope" "$TMP/out"; }
+unasked_is_skip() { (( skip_rows == 1 )) && scope_named; }
 check "R11 a check that could not ask (network, auth, 5xx) is skip (rc 2), never missing/wrong" unasked_is_skip
 read_only() { ! grep -Eq " (create|apply|delete|patch|update|set|run|label|taint)( |$)|-X (POST|PUT|PATCH|DELETE)" "$CALLS"; }
 check "AC7 doctor made no mutating call across all runs" read_only

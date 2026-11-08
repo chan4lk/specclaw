@@ -7,33 +7,33 @@ source "$(dirname "${BASH_SOURCE[0]}")/../lib/dispatch-env.sh"
 stub_cluster
 stub az 'echo "ERROR: Please run az login" >&2; exit 1'
 stub curl 'echo "$*" >> "$TMP/curl.log"; case "$*" in
-  *"build/definitions?name=specclaw-fleet"*) echo "{\"value\":[{\"id\":44,\"name\":\"specclaw-fleet\"}]}" ;;
-  *serviceendpoint*) echo "{\"value\":[{\"name\":\"specclaw-fleet-k3s\",\"isReady\":true},{\"name\":\"specclaw-fleet-azure\",\"isReady\":true}]}" ;;
+  *"build/definitions?name=specclaw-fleet"*) echo "{\"value\":[{\"id\":44,\"name\":\"specclaw-fleet\"}]}"; printf "\n%s" "${HTTP_CODE:-200}" ;;
+  *serviceendpoint*) echo "{\"value\":[{\"name\":\"specclaw-fleet-k3s\",\"isReady\":true},{\"name\":\"specclaw-fleet-azure\",\"isReady\":true}]}"; printf "\n%s" "${HTTP_CODE:-200}" ;;
   *ghcr.io/token*) echo "{}"; printf %s "$TOKEN_CODE" ;;
 esac'
 export TMP
-azdo_checks="$(AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t FLEET_KUBE_CONNECTION=specclaw-fleet-k3s FLEET_AZURE_CONNECTION=specclaw-fleet-azure bash -c 'source "$1/lib/common.sh"; source "$1/lib/doctor-azure.sh"; check_pipeline; check_connections' _ "$FLEET_ROOT" 2>&1)"
+azdo_checks="$(AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t FLEET_KUBE_CONNECTION=specclaw-fleet-k3s FLEET_AZURE_CONNECTION=specclaw-fleet-azure bash -c 'source "$1/lib/common.sh"; source "$1/lib/azdo-rest.sh"; source "$1/lib/doctor-azure.sh"; check_pipeline; check_connections' _ "$FLEET_ROOT" 2>&1)"
 pat_rest() { grep -q "^ok pipeline" <<<"$azdo_checks" && grep -q "^ok service-connections" <<<"$azdo_checks" && grep -q "Authorization: Basic" "$TMP/curl.log" && ! grep -Eq "^az (devops|pipelines)" "$CALLS"; }
 check "R053 AC-6 doctor checks the pipeline and connections with AZDO_TOKEN over REST, even with no az login" pat_rest
 mkdir -p "$TMP/pf/.specclaw" "$TMP/pf/azure-pipelines"; printf 'variables:\n  fleetKubeConnection: specclaw-fleet-hetzner\n  fleetAzureConnection: specclaw-fleet-azure\n' > "$TMP/pf/azure-pipelines/specclaw-fleet.yml"
-from_file="$(AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t SPECCLAW_DIR="$TMP/pf/.specclaw" bash -c 'source "$1/lib/common.sh"; source "$1/lib/doctor-azure.sh"; check_connections' _ "$FLEET_ROOT" 2>&1)"
+from_file="$(AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t SPECCLAW_DIR="$TMP/pf/.specclaw" bash -c 'source "$1/lib/common.sh"; source "$1/lib/azdo-rest.sh"; source "$1/lib/doctor-azure.sh"; check_connections' _ "$FLEET_ROOT" 2>&1)"
 junk_rows=1
 for body in "<html>sign in</html>" "" '{"message":"x"}' '{"value":null}' '{"value":"x"}'; do
   printf '%s' "$body" > "$TMP/body"
-  stub curl 'cat "$TMP/body"'
-  junk="$(AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t SPECCLAW_DIR="$TMP/pf/.specclaw" bash -c 'source "$1/lib/common.sh"; source "$1/lib/doctor-azure.sh"; check_pipeline; echo "rc=$?"; check_connections; echo "rc=$?"' _ "$FLEET_ROOT" 2>&1)"
+  stub curl 'cat "$TMP/body"; printf "\n200"'
+  junk="$(AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t SPECCLAW_DIR="$TMP/pf/.specclaw" bash -c 'source "$1/lib/common.sh"; source "$1/lib/azdo-rest.sh"; source "$1/lib/doctor-azure.sh"; check_pipeline; echo "rc=$?"; check_connections; echo "rc=$?"' _ "$FLEET_ROOT" 2>&1)"
   [[ "$(grep -c '^skip ' <<<"$junk")" == 2 && "$(grep -c '^rc=2' <<<"$junk")" == 2 ]] && ! grep -Eq '^(ok|missing) ' <<<"$junk" \
     || { junk_rows=0; echo "  body [$body]: $junk"; }
 done
 for one in "  fleetKubeConnection: k" "  fleetAzureConnection: z"; do
   mkdir -p "$TMP/one/.specclaw" "$TMP/one/azure-pipelines"; printf 'variables:\n%s\n' "$one" > "$TMP/one/azure-pipelines/specclaw-fleet.yml"
-  o="$(AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t SPECCLAW_DIR="$TMP/one/.specclaw" bash -c 'source "$1/lib/common.sh"; source "$1/lib/doctor-azure.sh"; check_connections; echo "rc=$?"' _ "$FLEET_ROOT" 2>&1)"
+  o="$(AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t SPECCLAW_DIR="$TMP/one/.specclaw" bash -c 'source "$1/lib/common.sh"; source "$1/lib/azdo-rest.sh"; source "$1/lib/doctor-azure.sh"; check_connections; echo "rc=$?"' _ "$FLEET_ROOT" 2>&1)"
   [[ "$o" == *"not both found"*"in $TMP/one/.specclaw/../azure-pipelines/specclaw-fleet.yml"*"rc=2"* ]] || { junk_rows=0; echo "  one name [$one]: $o"; }
 done
-nofile="$(AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t SPECCLAW_DIR="$TMP/nowhere/.specclaw" bash -c 'source "$1/lib/common.sh"; source "$1/lib/doctor-azure.sh"; check_connections; echo "rc=$?"' _ "$FLEET_ROOT" 2>&1)"
+nofile="$(AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t SPECCLAW_DIR="$TMP/nowhere/.specclaw" bash -c 'source "$1/lib/common.sh"; source "$1/lib/azdo-rest.sh"; source "$1/lib/doctor-azure.sh"; check_connections; echo "rc=$?"' _ "$FLEET_ROOT" 2>&1)"
 printf 'variables:\n  fleetKubeConnection: "Fleet Hetzner K8s"   # spaces\n  fleetAzureConnection: Specclaw-Fleet-Azure # case\n' > "$TMP/pf/azure-pipelines/specclaw-fleet.yml"
-stub curl 'echo "$*" >> "$TMP/curl.log"; echo "{\"value\":[{\"name\":\"Fleet Hetzner K8s\",\"isReady\":true},{\"name\":\"specclaw-fleet-azure\",\"isReady\":true}]}"'
-spaced="$(AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t SPECCLAW_DIR="$TMP/pf/.specclaw" bash -c 'source "$1/lib/common.sh"; source "$1/lib/doctor-azure.sh"; check_connections' _ "$FLEET_ROOT" 2>&1)"
+stub curl 'echo "$*" >> "$TMP/curl.log"; echo "{\"value\":[{\"name\":\"Fleet Hetzner K8s\",\"isReady\":true},{\"name\":\"specclaw-fleet-azure\",\"isReady\":true}]}"; printf "\n200"'
+spaced="$(AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t SPECCLAW_DIR="$TMP/pf/.specclaw" bash -c 'source "$1/lib/common.sh"; source "$1/lib/azdo-rest.sh"; source "$1/lib/doctor-azure.sh"; check_connections' _ "$FLEET_ROOT" 2>&1)"
 names_from_pipeline() { [[ "$spaced" == "ok service-connections: ready" ]] && grep -q "endpointNames=Fleet%20Hetzner%20K8s,Specclaw-Fleet-Azure" "$TMP/curl.log" || return 1; [[ "$from_file" == "missing service-connections: specclaw-fleet-hetzner" ]]; }
 junk_is_skip() { (( junk_rows == 1 )) && [[ "$nofile" == *"skip service-connections: fleetKubeConnection and fleetAzureConnection not both found"*"rc=2"* ]]; }
 check "R053 doctor checks the connection names the pipeline YAML uses: quoted names with spaces, case-insensitive match, encoded query" names_from_pipeline
@@ -41,7 +41,7 @@ check "R053 any malformed AzDO answer (html, empty, no value, null, non-list) is
 stub curl 'echo "$*" >> "$TMP/curl.log"; case "$*" in *ghcr.io/token*) echo "{}"; printf %s "$TOKEN_CODE" ;; esac'
 words=1
 for code in 401 403; do
-  out="$(TOKEN_CODE=$code FLEET_IMAGE=ghcr.io/o/x:1 bash -c 'source "$1/lib/common.sh"; source "$1/lib/doctor-azure.sh"; check_image; echo "rc=$?"' _ "$FLEET_ROOT")"
+  out="$(TOKEN_CODE=$code FLEET_IMAGE=ghcr.io/o/x:1 bash -c 'source "$1/lib/common.sh"; source "$1/lib/azdo-rest.sh"; source "$1/lib/doctor-azure.sh"; check_image; echo "rc=$?"' _ "$FLEET_ROOT")"
   [[ "$out" == *"missing image: ghcr.io/o/x:1: package missing or private"*"rc=1"* ]] || { words=0; echo "  $code: $out"; }
 done
 token_wording() { (( words == 1 )); }
