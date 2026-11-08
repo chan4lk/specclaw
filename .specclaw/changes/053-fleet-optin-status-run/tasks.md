@@ -8,7 +8,7 @@
 
 ### Wave 1: config and AzDO primitives
 
-- [ ] `T1` — `fleet:` config loader wired into the router; pipelines drop per-setting variables and clear the kube context (AC-1, AC-2)
+- [x] `T1` — `fleet:` config loader wired into the router; pipelines drop per-setting variables and clear the kube context (AC-1, AC-2)
   - Files: plugins/specclaw-fleet/lib/settings.sh, plugins/specclaw-fleet/bin/specclaw-fleet, plugins/specclaw-fleet/pipelines/dispatch.yml, plugins/specclaw-fleet/pipelines/dispatch-hosted.yml, plugins/specclaw-fleet/tests/cases/ac22_settings.sh, plugins/specclaw-fleet/tests/cases/ac10_pipeline_refs.sh, plugins/specclaw-fleet/tests/lib/pipeline-env.sh
   - Kind: impl
 - [ ] `T2` — `specclaw-azdo-issue whoami | optin | records` (AC-3, AC-4)

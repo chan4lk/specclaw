@@ -4,20 +4,14 @@ parameters:
     type: string
     default: " "
   - name: agent
-    displayName: Agent for this run (empty = fleetDefaultAgent)
+    displayName: Agent for this run (empty = fleet.default_agent in config)
     type: string
     default: " "
 
 variables:
   fleetKubeConnection: specclaw-fleet-k3s
   fleetAzureConnection: specclaw-fleet-azure
-  fleetVault: specclaw-fleet-kv
-  fleetImage: ghcr.io/chan4lk/specclaw-fleet:0.8.9
   fleetSpecclawRef: SET_TO_A_40_CHAR_SPECCLAW_COMMIT_SHA
-  fleetNamespace: specclaw-fleet
-  fleetDeadlineMinutes: "120"
-  fleetDefaultAgent: claude
-  fleetClaudeVersion: "2.1.319"
 
 trigger:
   batch: true
@@ -66,6 +60,7 @@ steps:
           refs/heads/?*) export FLEET_REF="${FLEET_REF#refs/heads/}" ;;
           *) echo "##vso[task.logissue type=error]not a branch run: ${FLEET_REF:-unset}"; exit 1 ;;
         esac
+        export FLEET_KUBE_CONTEXT=
         for f in .specclaw/changes/*/state.json; do
           [[ -f "$f" ]] || continue
           if ! pending="$(jq -r --arg only "$only" '.phases.proposal.status == "approved" and ($only != "" or .phase == "proposal")' "$f")"; then
@@ -89,12 +84,6 @@ steps:
       AZDO_PROJECT: $(System.TeamProject)
       BUILD_REQUESTEDFOR: $(Build.RequestedFor)
       BUILD_REQUESTEDFOREMAIL: $(Build.RequestedForEmail)
-      FLEET_VAULT: $(fleetVault)
-      FLEET_IMAGE: $(fleetImage)
-      FLEET_NAMESPACE: $(fleetNamespace)
-      FLEET_DEADLINE_MINUTES: $(fleetDeadlineMinutes)
-      FLEET_DEFAULT_AGENT: $(fleetDefaultAgent)
-      FLEET_CLAUDE_VERSION: $(fleetClaudeVersion)
       FLEET_REF: $(Build.SourceBranch)
       FLEET_ONLY_CHANGE: ${{ parameters.change }}
       FLEET_RUN_AGENT: ${{ parameters.agent }}

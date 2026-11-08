@@ -19,7 +19,7 @@ workflow_ok() {
 }
 hosted_ok() {
   local h; h="$(yq_py "$H")"
-  jq -e '.pool == {"vmImage":"ubuntu-latest"} and (.variables.fleetSpecclawRef | length > 0) and (.variables.fleetImage | startswith("ghcr.io/"))' <<<"$h" >/dev/null \
+  jq -e '.pool == {"vmImage":"ubuntu-latest"} and (.variables.fleetSpecclawRef | length > 0)' <<<"$h" >/dev/null \
     && grep -q '\^\[0-9a-f\]{40}\$' "$H" && grep -q 'rev-parse HEAD)" == "$ref"' "$H" \
     && grep -q 'task.prependpath\]$(Agent.TempDirectory)/specclaw/plugins/specclaw-fleet/bin' "$H" \
     && grep -q 'task.prependpath\]$(Agent.TempDirectory)/specclaw/plugins/specclaw-sync/bin' "$H"
@@ -27,13 +27,18 @@ hosted_ok() {
 same_script() {
   [[ "$(yq_py "$H" | jq -r '.steps[] | select(.task? == "AzureCLI@2") | .inputs.inlineScript')" \
     == "$(yq_py "$S" | jq -r '.steps[] | select(.task? == "AzureCLI@2") | .inputs.inlineScript')" ]] \
-    && grep -q 'FLEET_CLAUDE_VERSION: $(fleetClaudeVersion)' "$H" && grep -q 'FLEET_CLAUDE_VERSION: $(fleetClaudeVersion)' "$S"
+    && grep -q 'export FLEET_KUBE_CONTEXT=$' "$H"
 }
 
 check "AC6 image workflow: amd64+arm64 to GHCR, packages: write only, SHA-pinned actions, validated tags, no overwrite" workflow_ok
 check "AC9 hosted template runs on ubuntu-latest and fetches specclaw at a verified full commit SHA onto PATH" hosted_ok
-check "AC9 hosted and self-hosted templates run the identical dispatch script and pass the claude version" same_script
-V="$(jq -r .version "$FLEET_ROOT/.claude-plugin/plugin.json")"
-one_version() { grep -q "fleetImage: ghcr.io/chan4lk/specclaw-fleet:$V$" "$H" && grep -q "fleetImage: ghcr.io/chan4lk/specclaw-fleet:$V$" "$S"; }
-check "AC9 both templates default to the image tagged with the plugin version; dispatch derives the same tag" one_version
+check "AC9 hosted and self-hosted templates run the identical dispatch script, which uses the logged-in kubeconfig" same_script
+no_settings() {
+  [[ "$(yq_py "$H" | jq -r '.variables | keys | sort | join(",")')" == fleetAzureConnection,fleetKubeConnection,fleetSpecclawRef ]] || return 1
+  [[ "$(yq_py "$S" | jq -r '.variables | keys | sort | join(",")')" == fleetAzureConnection,fleetKubeConnection ]] || return 1
+  local t; for t in "$H" "$S"; do
+    ! grep -Eq 'FLEET_(VAULT|IMAGE|NAMESPACE|DEADLINE_MINUTES|DEFAULT_AGENT|CLAUDE_VERSION):' "$t" || return 1
+  done
+}
+check "R053 AC-2 templates keep only the compile-time names; every other setting comes from fleet: config" no_settings
 finish
