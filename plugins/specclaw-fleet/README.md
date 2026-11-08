@@ -83,7 +83,7 @@ specclaw-fleet trigger 002-catalog [--create] [--retry] [--direct]
 specclaw-fleet status --watch                    # one line per change: item, tags, last record, Job
 ```
 
-`optin` uses the identity behind `AZDO_TOKEN`. It refuses an item assigned to someone else, and `--dry-run` shows the plan without writing. `status` is read-only. A change shows `not-opted-in` until `fleet:auto` is added by its assignee.
+`optin` uses the identity behind `AZDO_TOKEN`. It refuses an item assigned to someone else, and `--dry-run` shows the plan without writing. `status` is read-only. A change shows `not-opted-in` until `fleet:auto` is added by its assignee, and `did-not-run` when its pipeline run finished without dispatching it. `--watch` ends when every change has ended, or after `--timeout` minutes (exit 2).
 
 `trigger` reads approval from the **pushed** ref (`FLEET_REMOTE`/`FLEET_REF`, default `origin/main`). It refuses an unapproved proposal, a work item with no assignee, missing `fleet:auto` consent from the assignee, or a missing credential. Refusals have no side effects. `--create` is the one deliberate exception: it creates the missing work item and stops (exit 3), so the item can be assigned and consented.
 

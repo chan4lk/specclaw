@@ -1,11 +1,12 @@
 # shellcheck shell=bash disable=SC2034
 parse_status_args() {
-  S_JSON=0 S_WATCH=0 S_INTERVAL=20 S_SINCE="" S_CHANGES=()
+  S_JSON=0 S_WATCH=0 S_INTERVAL=20 S_SINCE="" S_CHANGES=() S_TIMEOUT=$(( ${FLEET_DEADLINE_MINUTES:-120} + 20 ))
   while (($#)); do
     case "$1" in
       --json) S_JSON=1 ;;
       --watch) S_WATCH=1; [[ "${2:-}" =~ ^[0-9]+$ ]] && { S_INTERVAL="$2"; shift; } ;;
       --since) need_value "$1" "${2:-}"; S_SINCE="$2"; shift ;;
+      --timeout) need_value "$1" "${2:-}"; [[ "$2" =~ ^[1-9][0-9]{0,4}$ ]] || die "--timeout takes whole minutes"; S_TIMEOUT="$2"; shift ;;
       -*) die "Unknown flag: $1" ;;
       *) S_CHANGES+=("$1") ;;
     esac
@@ -39,7 +40,7 @@ status_row() {
   recs="$(azdo_issue records "$SPECCLAW_DIR" "$c" 2>/dev/null)" && jq -e 'type == "object"' <<<"$recs" >/dev/null 2>&1 || { recs='{}'; recs_ok=0; }
   if (( wi_ok )); then F_CHANGE="$c"; gate_owner "$wi" || rc=$?
     case "$rc" in 0) consent=assignee ;; 10) consent=none ;; 11|12) consent=other ;; esac; fi
-  jq -nc --arg c "$c" --arg id "$id" --arg since "$S_SINCE" --arg consent "$consent" --argjson wiok "$wi_ok" --argjson recok "$recs_ok" --argjson wi "$wi" --argjson r "$recs" --argjson job "$(status_job "$c")" '
+  jq -nc --arg c "$c" --arg id "$id" --arg since "$S_SINCE" --arg consent "$consent" --argjson wiok "$wi_ok" --argjson recok "$recs_ok" --argjson wi "$wi" --argjson r "$recs" --argjson job "$(status_job "$c")" --argjson runs "${S_RUNS:-[]}" '
     ($wi.fields["System.Tags"] // "" | ascii_downcase | split(";") | map(gsub("^\\s+|\\s+$"; ""))) as $t
     | ([$r.records[]? | select((.at | sub("\\.[0-9]+"; "")) >= $since)] | first) as $rec
     | {change: $c, work_item: $id, state: (if $wiok == 0 then "?" else $wi.fields["System.State"] end),
@@ -48,6 +49,9 @@ status_row() {
        record: (if $recok == 0 then {state: "?"} elif $rec then $rec
          elif $consent == "unknown" then {state: "?"} elif $consent == "none" then {state: "not-opted-in"} elif $consent == "other" then {state: "not-opted-in (fleet:auto not added by the assignee)"}
          else {state: "waiting"} end), cluster: $job}
-    | .terminal = ((.record.state | IN("pr_open", "failed", "refused")) or (.tags | index("refused")) or ($consent | IN("none", "other"))
+    | ([$runs[] | select(.status == "completed" and (.change == "" or .change == $c))] | last) as $run
+    | if .record.state == "waiting" and $run and ((.cluster.created // "") < $since)
+      then .record = {state: "did-not-run", exit: "pipeline \($run.id) \($run.result)"} else . end
+    | .terminal = ((.record.state | IN("pr_open", "failed", "refused", "did-not-run")) or (.tags | index("refused")) or ($consent | IN("none", "other"))
         or (.cluster.phase == "failed" and (.cluster.created // "") >= $since))'
 }

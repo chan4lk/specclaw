@@ -22,6 +22,7 @@ case "$*" in
   *"get pods -l job-name=fleet-002-new"*) printf Running ;;
 esac'
 stub curl 'case "$*" in
+  *"build/builds?definitions=44"*) cat "$TMP/builds" 2>/dev/null || echo "{\"value\":[]}"; printf "\n200" ;;
   *"build/definitions?name=specclaw-fleet"*) echo "{\"value\":[{\"id\":44,\"name\":\"specclaw-fleet\"}]}"; printf "\n%s" "${HTTP_CODE:-200}" ;;
   *"/pipelines/44/runs"*) echo "{\"value\":[{\"id\":2437,\"state\":\"completed\",\"result\":\"succeeded\"}]}"; printf "\n%s" "${HTTP_CODE:-200}" ;;
 esac'
@@ -74,6 +75,23 @@ since_checked() { (( bad_since == 1 )); }
 check "R053 status uses the consent rule: fleet:auto not added by the assignee is not-opted-in (terminal); unreadable history is ? and never terminal" consent_from_history
 check "R053 a failed Job created after --since is terminal even with no record; an older one is not" dead_job_ends
 check "R053 --since rejects anything but YYYY-MM-DDTHH:MM:SSZ" since_checked
+builds() { printf '{"value":[%s]}' "$1" > "$TMP/builds"; }
+dnr_rows=1
+drow() {
+  reset; builds "$1"; [[ -n "$2" ]] && export DEAD_JOB="$2" || unset DEAD_JOB
+  st --json 003-b --since 2026-11-08T00:00:00Z; local got; got="$(jq -r '.changes[0] | "\(.record.state)|\(.terminal)"' "$TMP/out")"
+  [[ "$got" == "$3" ]] || { dnr_rows=0; echo "  builds [$1] job [$2]: got $got want $3"; }
+}
+drow '{"id":9,"status":"completed","result":"succeeded","templateParameters":{"change":"003-b"}}' "" "did-not-run|true"
+drow '{"id":9,"status":"completed","result":"failed","templateParameters":{"change":" "}}' "" "did-not-run|true"
+drow '{"id":9,"status":"inProgress","templateParameters":{"change":"003-b"}}' "" "waiting|false"
+drow '{"id":9,"status":"completed","result":"succeeded","templateParameters":{"change":"004-c"}}' "" "waiting|false"
+unset DEAD_JOB; rm -f "$TMP/builds"
+did_not_run() { (( dnr_rows == 1 )); }
+check "R053 a change whose pipeline run (its own, or a scan run) completed with no record or new Job is did-not-run and terminal; a running run or another change's run is not" did_not_run
+reset; FLEET_WATCH_TIMEOUT_S=1 st 003-b --watch 0 --since 2026-11-08T00:00:00Z; to_rc=$?
+watch_times_out() { (( to_rc == 2 )) && grep -q "status: watch timed out after .* min; still running: 003-b" "$TMP/out"; }
+check "R053 --watch always returns: past --timeout it exits 2 naming the changes still running" watch_times_out
 read_only() { ! grep -Eq "azdo-issue (optin|tag|untag|claim|fields|create|comment)|kubectl.* (create|apply|delete|patch)|-X (POST|PATCH|PUT|DELETE)" "$CALLS"; }
 check "R053 AC-4 status makes no write call" read_only
 finish

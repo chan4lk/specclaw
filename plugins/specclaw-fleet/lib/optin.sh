@@ -7,7 +7,7 @@ optin_decide() {
   O_WHO="$(jq -r '.fields["System.AssignedTo"].uniqueName // empty' <<<"$wi")"
   if [[ -n "$O_WHO" && "$(lower "$O_WHO")" != "$(lower "$2")" ]]; then O_ACTION=refuse; return; fi
   gate_owner "$wi" || rc=$?
-  case "$rc" in 0) O_ACTION=opted ;; 10) O_ACTION=add ;; 11|12) O_ACTION=readd ;; *) O_ACTION=error ;; esac
+  case "$rc" in 0) O_ACTION=opted ;; 10) O_ACTION=add ;; 11|12) O_ACTION=readd ;; 13) ;; *) O_WHY="unexpected consent check result $rc" ;; esac
 }
 
 optin_one() {

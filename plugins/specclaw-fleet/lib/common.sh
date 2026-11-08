@@ -51,7 +51,7 @@ load_dotenv() {
     line="${line%$'\r'}"
     [[ "$line" =~ ^(export[[:space:]]+)?([A-Z_]+)=(.*)$ && " $keys " == *" ${BASH_REMATCH[2]} "* ]] || continue
     key="${BASH_REMATCH[2]}" value="${BASH_REMATCH[3]}"
-    [[ -z "${!key:-}" ]] || continue
+    [[ -z "${!key+x}" ]] || continue
     if [[ "$value" =~ ^\"([^\"]*)\"$ || "$value" =~ ^\'([^\']*)\'$ ]]; then value="${BASH_REMATCH[1]}"
     else value="${value%%[[:space:]]#*}"; fi
     [[ "$value" =~ ^[^[:space:]\"\']*$ ]] || { warn "ignored unparsable $key line in $SPECCLAW_DIR/.env"; continue; }
@@ -62,9 +62,10 @@ load_dotenv() {
 load_azdo_env() { load_dotenv AZDO_ORG AZDO_PROJECT AZDO_TOKEN; }
 
 load_local_env() {
+  local had="${KUBECONFIG+x}" root
   load_dotenv FLEET_KUBE_CONTEXT KUBECONFIG
-  [[ -z "${KUBECONFIG:-}" || "$KUBECONFIG" == /* || "$KUBECONFIG" == *:* ]] && return 0
-  KUBECONFIG="$(cd "$SPECCLAW_DIR/.." && pwd)/${KUBECONFIG#./}"
-  export KUBECONFIG
+  [[ -n "$had" || -z "${KUBECONFIG:-}" || "$KUBECONFIG" == /* || "$KUBECONFIG" == *:* ]] && return 0
+  root="$(cd "$SPECCLAW_DIR/.." 2>/dev/null && pwd)" || die "cannot resolve KUBECONFIG from $SPECCLAW_DIR/.env: no repo root"
+  export KUBECONFIG="$root/${KUBECONFIG#./}"
 }
 

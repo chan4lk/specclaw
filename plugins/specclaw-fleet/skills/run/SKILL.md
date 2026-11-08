@@ -44,7 +44,7 @@ With `--sequential`, or when the user asks for it, trigger one change, watch it 
 
 ## 4. Watch
 
-Note the time you triggered, then run `specclaw-fleet status <change>... --watch 30 --since <that time>`. It returns once every change has ended: `pr_open`, `failed` (including refusals), a failed Job, `not-opted-in`, or `no work item`.
+Note the time you triggered, then run `specclaw-fleet status <change>... --watch 30 --since <that time>`. It returns once every change has ended: `pr_open`, `failed` (including refusals), a failed Job, `did-not-run` (its pipeline run completed without dispatching it, e.g. a busy codex slot or a pipeline error; open that run's log), `not-opted-in`, or `no work item`. It always returns: after `--timeout` minutes (default: the run deadline plus 20) it exits 2 and names the changes still running.
 - **Row columns:** each row shows the work item, its fleet tags, the last record (`dispatched`, `running`, `pr_open` or `failed`, with `exit=`), and the newest Job with its pod phase.
 - **Pipeline:** the header line shows the latest pipeline run.
 - **Detail:** use `kubectl -n specclaw-fleet logs <pod> -c agent` with the fleet kubeconfig. It ends with the agent's summary, with tokens redacted.

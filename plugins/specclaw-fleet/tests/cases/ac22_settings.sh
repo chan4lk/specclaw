@@ -19,6 +19,7 @@ row "vault=[env-kv]" FLEET_VAULT=env-kv
 printf 'FLEET_KUBE_CONTEXT=bistec-dev-uat\nKUBECONFIG=./scratch/hetzner/kubeconfig\n' > "$TMP/sc/.env"
 row "ctx=[bistec-dev-uat] image=[ghcr.io/o/specclaw-fleet:0.9.0] kc=[$(cd "$TMP" && pwd)/scratch/hetzner/kubeconfig]"
 row "ctx=[mine] image=[ghcr.io/o/specclaw-fleet:0.9.0] kc=[/abs/k]" FLEET_KUBE_CONTEXT=mine KUBECONFIG=/abs/k
+row "ctx=[] image=[ghcr.io/o/specclaw-fleet:0.9.0] kc=[rel/k]" FLEET_KUBE_CONTEXT= KUBECONFIG=rel/k
 rm -f "$TMP/sc/.env"
 cfg 'fleet:' '  vault: kv1' '  colour: blue'
 row "WARNING: ignored unknown fleet.colour" ; row "vault=[kv1]"

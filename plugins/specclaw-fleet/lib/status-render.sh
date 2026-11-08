@@ -1,4 +1,4 @@
-# shellcheck shell=bash
+# shellcheck shell=bash disable=SC2034
 status_pipeline() {
   local name="${FLEET_PIPELINE:-specclaw-fleet}" id run
   local rc=0; id="$(azdo_pipeline_id "$name" 2>/dev/null)" || rc=$?
@@ -20,17 +20,25 @@ status_print() {
       { printf "%-34s %-6s %-8s %-28s %-18s %-40s %s\n", $1, $2, $3, $4, $5, $6, $7 }'
 }
 
+status_runs() {
+  local id out
+  [[ -n "$S_SINCE" ]] && id="$(azdo_pipeline_id "${FLEET_PIPELINE:-specclaw-fleet}" 2>/dev/null)" && [[ -n "$id" ]] || { echo '[]'; return; }
+  out="$(azdo_rest "build/builds?definitions=$id&minTime=$S_SINCE&api-version=7.1")" || { echo '[]'; return; }
+  jq -c '[.value[]? | {id, status, result: (.result // "-"), change: ((.templateParameters.change // "") | gsub("^\\s+|\\s+$"; ""))}]' <<<"$out" 2>/dev/null || echo '[]'
+}
+
 fleet_status() {
   parse_status_args "$@"
   load_azdo_env
-  local rows head c
+  local rows head c end=$(( SECONDS + ${FLEET_WATCH_TIMEOUT_S:-$(( S_TIMEOUT * 60 ))} ))
   while :; do
-    head="$(status_pipeline)"; rows=""
+    head="$(status_pipeline)"; rows=""; S_RUNS="$(status_runs)"
     for c in "${S_CHANGES[@]}"; do rows+="$(status_row "$c")"$'\n'; done
     if (( S_JSON )); then jq -c --argjson h "$head" -s '{pipeline: $h, changes: .}' <<<"$rows"
     else (( S_WATCH )) && echo "--- $(date -u +%H:%M:%SZ)"; status_print "$head" "$rows"; fi
     (( S_WATCH )) || return 0
     jq -e -s 'all(.terminal)' <<<"$rows" >/dev/null && return 0
+    (( SECONDS < end )) || { echo "status: watch timed out after $S_TIMEOUT min; still running: $(jq -r -s '[.[] | select(.terminal | not) | .change] | join(" ")' <<<"$rows")" >&2; return 2; }
     sleep "$S_INTERVAL"
   done
 }
