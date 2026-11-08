@@ -10,7 +10,7 @@ setting_var() {
 looks_secret() {
   [[ "$1" =~ ^sk- || "$1" =~ eyJ[A-Za-z0-9_-]{10,} ]] && return 0
   [[ "$1" == *@sha256:* ]] && return 1
-  if [[ "$1" =~ ^(~|\.{0,2})/[^[:space:]]*$ ]]; then
+  if [[ "$1" =~ ^(~|\.{0,2})/[^[:space:]]*$ && "$1" =~ [.-] ]]; then
     local seg; local -a segs; IFS=/ read -ra segs <<<"$1"
     for seg in "${segs[@]}"; do [[ "$seg" =~ [A-Za-z0-9+_-]{52,} ]] && return 0; done
     return 1

@@ -25,9 +25,14 @@ for body in "<html>sign in</html>" "" '{"message":"x"}' '{"value":null}' '{"valu
   [[ "$(grep -c '^skip ' <<<"$junk")" == 2 && "$(grep -c '^rc=2' <<<"$junk")" == 2 ]] && ! grep -Eq '^(ok|missing) ' <<<"$junk" \
     || { junk_rows=0; echo "  body [$body]: $junk"; }
 done
+for one in "  fleetKubeConnection: k" "  fleetAzureConnection: z"; do
+  mkdir -p "$TMP/one/.specclaw" "$TMP/one/azure-pipelines"; printf 'variables:\n%s\n' "$one" > "$TMP/one/azure-pipelines/specclaw-fleet.yml"
+  o="$(AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t SPECCLAW_DIR="$TMP/one/.specclaw" bash -c 'source "$1/lib/common.sh"; source "$1/lib/doctor-azure.sh"; check_connections; echo "rc=$?"' _ "$FLEET_ROOT" 2>&1)"
+  [[ "$o" == *"not both found in $TMP/one/.specclaw/../azure-pipelines/specclaw-fleet.yml"*"rc=2"* ]] || { junk_rows=0; echo "  one name [$one]: $o"; }
+done
 nofile="$(AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t SPECCLAW_DIR="$TMP/nowhere/.specclaw" bash -c 'source "$1/lib/common.sh"; source "$1/lib/doctor-azure.sh"; check_connections; echo "rc=$?"' _ "$FLEET_ROOT" 2>&1)"
 names_from_pipeline() { [[ "$from_file" == "missing service-connections: specclaw-fleet-hetzner" ]]; }
-junk_is_skip() { (( junk_rows == 1 )) && [[ "$nofile" == *"skip service-connections: no connection names"*"rc=2"* ]]; }
+junk_is_skip() { (( junk_rows == 1 )) && [[ "$nofile" == *"skip service-connections: fleetKubeConnection and fleetAzureConnection not both found"*"rc=2"* ]]; }
 check "R053 doctor checks the connection names the pipeline YAML actually uses" names_from_pipeline
 check "R053 any malformed AzDO answer (html, empty, no value, null, non-list) is skip for both REST checks; unreadable pipeline YAML is skip" junk_is_skip
 stub curl 'echo "$*" >> "$TMP/curl.log"; case "$*" in *ghcr.io/token*) echo "{}"; printf %s "$TOKEN_CODE" ;; esac'

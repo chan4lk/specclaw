@@ -1,0 +1,59 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 2
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw-fleet/lib/doctor-azure.sh",
+  "plugins/specclaw-fleet/lib/settings.sh",
+  "plugins/specclaw-fleet/tests/cases/ac16_doctor.sh",
+  "plugins/specclaw-fleet/tests/cases/ac22_settings.sh",
+  "plugins/specclaw-fleet/tests/cases/ac25_hosted_fixes.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw-fleet/lib/settings.sh",
+   "fp": "58e7728fe8ee",
+   "in_delta": true,
+   "line": 13,
+   "message": "The path exemption is still open to one slash-bearing secret shape. A value that starts with `/` counts as path-shaped, and the check then looks for a 52+ character run in each `/`-split segment on its own. A base64 key that begins with `/` and has internal `/` characters passes as a path once every segment is under 52 characters, even though the whole value is a long token. Use the path exemption only when the value has a path-like structure, for example it has a path-looking prefix such as /home, /Users, /etc, /var or /tmp, or at least one segment contains `.` or `-` as a filename. Alternatively, apply the whole-value `[A-Za-z0-9+/_-]{52,}` test when the value has no `.` or `-` segment separators. Add a variant row for a leading-slash base64 secret.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "`vault: /Ab1cdefghijklmnopqrstuvwxyz01234/ABCDEFGHIJKLMNOPQRSTUVWXYZ012345` (about 70 characters, a base64-style key whose first character is `/`) matches the path-shaped regex. Both segments are under 52 characters, so looks_secret returns 1 and the secret is accepted into config.",
+   "severity": "minor"
+  },
+  {
+   "file": "plugins/specclaw-fleet/tests/cases/ac25_hosted_fixes.sh",
+   "fp": "d3ec4efd41cc",
+   "in_delta": true,
+   "line": 28,
+   "message": "The new skip branch `[[ -n \"$k\" && -n \"$z\" ]]` is exercised only when both names are absent (the `nofile` case). The one-name-resolved case is untested: only the kube name found, or only the azure name found, from the pipeline file or from the environment. The branch also drops the old per-name defaults, so a pipeline file that declares only one of the two variables now skips permanently. Add table rows for each single-name case. Also fix the skip message, which names `FLEET_PIPELINE_FILE` or the default path and may not be the file `pipeline_var` actually read when `fleet.pipeline_file` is set.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "The pipeline YAML declares only `fleetKubeConnection`, and `FLEET_AZURE_CONNECTION` is unset. check_connections prints `skip service-connections: no connection names...` and returns 2. No test covers this, and it is a behaviour change from the earlier default `specclaw-fleet-azure`.",
+   "severity": "minor"
+  }
+ ],
+ "head": "19b6f108e72392e31fde4aee138e10ba2ed35377",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 19243,
+ "round": 3,
+ "since": "6078b6caaddf9290bc3ecd97a01ab1b9eb26f4fe",
+ "status": "clean",
+ "system_chars": 8959,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794111321,
+ "ts_start": 1794111287
+}

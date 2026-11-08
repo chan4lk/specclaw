@@ -49,7 +49,7 @@ pipeline_var() {
 check_connections() {
   local k z out missing
   k="${FLEET_KUBE_CONNECTION:-$(pipeline_var fleetKubeConnection)}"; z="${FLEET_AZURE_CONNECTION:-$(pipeline_var fleetAzureConnection)}"
-  [[ -n "$k" && -n "$z" ]] || { echo "skip service-connections: no connection names in ${FLEET_PIPELINE_FILE:-azure-pipelines/specclaw-fleet.yml} (set fleet.pipeline_file)"; return 2; }
+  [[ -n "$k" && -n "$z" ]] || { echo "skip service-connections: fleetKubeConnection and fleetAzureConnection not both found in $SPECCLAW_DIR/../${FLEET_PIPELINE_FILE:-azure-pipelines/specclaw-fleet.yml}"; return 2; }
   out="$(azdo_rest "serviceendpoint/endpoints?endpointNames=$k,$z&api-version=7.1")" \
     || { echo "skip service-connections: could not list them with AZDO_TOKEN (set in .specclaw/.env?)"; return 2; }
   missing="$(jq -er --arg k "$k" --arg z "$z" '.value | if type == "array" then [$k, $z] - [.[] | select(.isReady) | .name] | join(" ") else error("no list") end' <<<"$out" 2>/dev/null)" \
