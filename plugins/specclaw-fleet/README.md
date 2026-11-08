@@ -65,11 +65,11 @@ fleet:
   image: ghcr.io/chan4lk/specclaw-fleet:0.9.0
   claude_version: "2.1.319"         # required for claude jobs
   pipeline: specclaw-fleet
-  kube_connection: specclaw-fleet-hetzner
-  azure_connection: specclaw-fleet-azure
+  pipeline_file: azure-pipelines/specclaw-fleet.yml   # doctor reads the connection names from it
 ```
 
-- **Other keys:** `kubeconfig`, `namespace`, `default_agent`, `deadline_minutes`, `remote`, `ref`, `image_pull_secret` (private registries only), and `node_label` (`key=value`, which pins Jobs to a labelled, tainted node).
+- **Other keys:** `kubeconfig` (local commands only, like `kube_context`; both are ignored inside a pipeline run, where `TF_BUILD` is set), `namespace`, `default_agent`, `deadline_minutes`, `remote`, `ref`, `image_pull_secret` (private registries only), and `node_label` (`key=value`, which pins Jobs to a labelled, tainted node).
+- **Connection names** live only in the pipeline YAML (AzDO needs them at compile time). `doctor` reads them from `pipeline_file`.
 - **Precedence:** a flag, then an env variable (`FLEET_<KEY>`, or `KUBECONFIG` for `kubeconfig`), then config, then the default.
 - **Secrets never go here.** The PAT stays in the gitignored `.specclaw/.env`, and a secret-looking value is refused.
 

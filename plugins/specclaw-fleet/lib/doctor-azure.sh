@@ -36,15 +36,24 @@ azdo_args() {
 check_pipeline() {
   local name="${FLEET_PIPELINE:-specclaw-fleet}" out
   out="$(azdo_rest "pipelines?api-version=7.1")" || { echo "skip pipeline: could not list pipelines with AZDO_TOKEN (set in .specclaw/.env?)"; return 2; }
+  jq -e '.value | type == "array"' <<<"$out" >/dev/null 2>&1 || { echo "skip pipeline: AzDO answered with something that is not a pipeline list"; return 2; }
   jq -e --arg n "$name" 'any(.value[]; .name == $n)' <<<"$out" >/dev/null && { echo "ok pipeline: $name"; return 0; }
   echo "missing pipeline: $name in ${AZDO_ORG:-?}/${AZDO_PROJECT:-?}"; return 1
 }
 
+pipeline_var() {
+  local f="${FLEET_PIPELINE_FILE:-azure-pipelines/specclaw-fleet.yml}"
+  sed -nE "s/^  $1:[[:space:]]*\"?([^\"#[:space:]]+)\"?.*/\1/p" "$SPECCLAW_DIR/../$f" 2>/dev/null | head -n1
+}
+
 check_connections() {
-  local k="${FLEET_KUBE_CONNECTION:-specclaw-fleet-k3s}" z="${FLEET_AZURE_CONNECTION:-specclaw-fleet-azure}" out missing
+  local k z out missing
+  k="${FLEET_KUBE_CONNECTION:-$(pipeline_var fleetKubeConnection)}"; k="${k:-specclaw-fleet-k3s}"
+  z="${FLEET_AZURE_CONNECTION:-$(pipeline_var fleetAzureConnection)}"; z="${z:-specclaw-fleet-azure}"
   out="$(azdo_rest "serviceendpoint/endpoints?endpointNames=$k,$z&api-version=7.1")" \
     || { echo "skip service-connections: could not list them with AZDO_TOKEN (set in .specclaw/.env?)"; return 2; }
-  missing="$(jq -r --arg k "$k" --arg z "$z" '[$k, $z] - [.value[] | select(.isReady) | .name] | join(" ")' <<<"$out")"
+  missing="$(jq -er --arg k "$k" --arg z "$z" '.value | if type == "array" then [$k, $z] - [.[] | select(.isReady) | .name] | join(" ") else error("no list") end' <<<"$out" 2>/dev/null)" \
+    || { echo "skip service-connections: AzDO answered with something that is not an endpoint list"; return 2; }
   [[ -z "$missing" ]] && { echo "ok service-connections: ready"; return 0; }
   echo "missing service-connections: $missing"; return 1
 }

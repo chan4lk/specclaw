@@ -7,7 +7,7 @@
 ## Functional Requirements
 
 - **FR-1 `fleet:` config block.** At startup, `specclaw-fleet` reads `fleet:` from `$SPECCLAW_DIR/config.yaml`. For each known key, it exports the mapped env variable **only when that variable is unset**. An empty but set variable still wins over config. Flags are parsed afterwards, so the precedence is: flag, then env, then config, then built-in default.
-  - **Keys:** `vault`, `kube_context`, `kubeconfig`, `cluster_name`, `namespace`, `image`, `claude_version`, `default_agent`, `deadline_minutes`, `pipeline`, `kube_connection`, `azure_connection`, `remote`, `ref`, `image_pull_secret`, `node_label`.
+  - **Keys:** `vault`, `kube_context`, `kubeconfig`, `cluster_name`, `namespace`, `image`, `claude_version`, `default_agent`, `deadline_minutes`, `pipeline`, `pipeline_file`, `remote`, `ref`, `image_pull_secret`, `node_label`.
   - **Mapping:** each key goes to `FLEET_<KEY>`, except `kubeconfig`, which goes to `KUBECONFIG`.
   - **Values:** quotes, inline `#` comments and CRLF are handled. An unknown key gets a warning and is ignored.
   - **Secrets refused:** a value that looks like a secret (an `sk-` prefix, a JWT `eyJ…`, or a run of 52 or more base64 characters that is not an `@sha256:` digest) makes the command die, naming the key and never the value.

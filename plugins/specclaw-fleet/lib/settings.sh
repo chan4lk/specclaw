@@ -1,5 +1,6 @@
 # shellcheck shell=bash
-FLEET_SETTING_KEYS="vault kube_context kubeconfig cluster_name namespace image claude_version default_agent deadline_minutes pipeline kube_connection azure_connection remote ref image_pull_secret node_label"
+FLEET_SETTING_KEYS="vault kube_context kubeconfig cluster_name namespace image claude_version default_agent deadline_minutes pipeline pipeline_file remote ref image_pull_secret node_label"
+FLEET_LOCAL_KEYS="kube_context kubeconfig"
 
 setting_var() {
   [[ "$1" == kubeconfig ]] && { printf KUBECONFIG; return; }
@@ -7,8 +8,9 @@ setting_var() {
 }
 
 looks_secret() {
-  [[ "$1" == *@sha256:* ]] && return 1
-  [[ "$1" =~ ^sk- || "$1" =~ eyJ[A-Za-z0-9_-]{10,} || "$1" =~ [A-Za-z0-9+/_-]{52,} ]]
+  [[ "$1" =~ ^sk- || "$1" =~ eyJ[A-Za-z0-9_-]{10,} ]] && return 0
+  [[ "$1" == *@sha256:* || "$1" == */* ]] && return 1
+  [[ "$1" =~ [A-Za-z0-9+_-]{52,} ]]
 }
 
 fleet_config_lines() {
@@ -26,6 +28,7 @@ load_fleet_settings() {
     else value="${value%%[[:space:]]#*}"; value="${value%"${value##*[![:space:]]}"}"; fi
     [[ " $FLEET_SETTING_KEYS " == *" $key "* ]] || { warn "ignored unknown fleet.$key in $cfg"; continue; }
     looks_secret "$value" && die "fleet.$key in $cfg looks like a secret; keep secrets in .specclaw/.env or Key Vault"
+    [[ -n "${TF_BUILD:-}" && " $FLEET_LOCAL_KEYS " == *" $key "* ]] && continue
     var="$(setting_var "$key")"
     [[ -z "${!var+x}" && -n "$value" ]] && export "$var=$value"
   done < <(fleet_config_lines "$cfg")
