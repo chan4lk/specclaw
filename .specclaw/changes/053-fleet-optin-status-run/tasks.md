@@ -17,7 +17,7 @@
 
 ### Wave 2: commands
 
-- [ ] `T3` — `specclaw-fleet optin` (AC-3)
+- [x] `T3` — `specclaw-fleet optin` (AC-3)
   - Files: plugins/specclaw-fleet/lib/optin.sh, plugins/specclaw-fleet/bin/specclaw-fleet, plugins/specclaw-fleet/tests/cases/ac23_optin.sh
   - Kind: impl
   - Depends: T1, T2
