@@ -1,9 +1,12 @@
 {
   "change": "050-fleet-coordinated-features",
-  "phase": "proposal",
+  "phase": "tasks",
   "branch": "",
   "size": "architectural",
   "phases": {
-    "proposal": {"status":"approved","at":"2026-11-07T08:32:00Z"}
+    "proposal": {"status":"approved","at":"2026-11-07T08:32:00Z"},
+    "spec": {"status":"done","at":"2026-11-08T04:18:51Z"},
+    "design": {"status":"done","at":"2026-11-08T04:19:20Z"},
+    "tasks": {"status":"done","at":"2026-11-08T04:19:20Z"}
   }
 }
