@@ -43,7 +43,7 @@ with open(claude_path, encoding="utf-8") as handle:
 assert marketplace["name"] == "chan4lk"
 root = os.path.dirname(os.path.dirname(os.path.dirname(marketplace_path)))
 names = [p["name"] for p in marketplace["plugins"]]
-assert names == ["specclaw", "specclaw-bf", "specclaw-sync", "specclaw-extras", "specclaw-review"], names
+assert names == ["specclaw", "specclaw-bf", "specclaw-sync", "specclaw-extras", "specclaw-review", "specclaw-fleet"], names
 versions = set()
 for entry in marketplace["plugins"]:
     pdir = os.path.join(root, "plugins", entry["name"])

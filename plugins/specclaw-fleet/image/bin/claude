@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+token_file="${FLEET_CLAUDE_TOKEN_FILE:-$HOME/.fleet/claude-token}"
+if [[ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" && -r "$token_file" ]]; then
+  CLAUDE_CODE_OAUTH_TOKEN="$(cat "$token_file")"
+  export CLAUDE_CODE_OAUTH_TOKEN
+fi
+exec "${FLEET_REAL_CLAUDE:-/usr/local/bin/claude}" "$@"

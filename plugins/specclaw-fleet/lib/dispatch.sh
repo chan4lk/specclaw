@@ -1,0 +1,77 @@
+# shellcheck shell=bash disable=SC2034
+parse_dispatch_args() {
+  F_CHANGE="" F_AGENT="" F_REF="" F_VAULT="" F_DRY_RUN=0 F_FORCE=0
+  while (($#)); do
+    case "$1" in
+      --agent) need_value "$1" "${2:-}"; F_AGENT="$2"; shift 2 ;;
+      --ref) need_value "$1" "${2:-}"; F_REF="$2"; shift 2 ;;
+      --vault) need_value "$1" "${2:-}"; F_VAULT="$2"; shift 2 ;;
+      --dry-run) F_DRY_RUN=1; shift ;;
+      --force) F_FORCE=1; shift ;;
+      -*) die "Unknown flag: $1" ;;
+      *) F_CHANGE="$1"; shift ;;
+    esac
+  done
+  [[ -n "$F_CHANGE" ]] || die "Usage: specclaw-fleet dispatch <change> [--agent claude|codex] [--ref <branch>] [--vault <name>] [--dry-run] [--force]"
+  F_AGENT="${F_AGENT:-${FLEET_DEFAULT_AGENT:-claude}}"
+  [[ "$F_AGENT" == claude || "$F_AGENT" == codex ]] || die "Unknown agent '$F_AGENT' (expected claude or codex)"
+  F_REF="${F_REF:-${FLEET_REF:-main}}"
+  F_VAULT="${F_VAULT:-${FLEET_VAULT:-}}"
+  [[ -n "$F_VAULT" ]] || die "No Key Vault: pass --vault or set FLEET_VAULT"
+  F_NS="${FLEET_NAMESPACE:-specclaw-fleet}"
+  F_IMAGE="${FLEET_IMAGE:-specclaw-fleet:latest}"
+  [[ "$F_IMAGE" =~ ^[A-Za-z0-9][A-Za-z0-9._/:@-]*$ ]] || die "FLEET_IMAGE is not a valid image reference"
+  [[ "$F_NS" =~ ^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$ ]] || die "FLEET_NAMESPACE is not a valid namespace name"
+  [[ "$F_REF" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ && "$F_REF" != *..* ]] || die "the ref '$F_REF' is not a valid branch name"
+  local minutes="${FLEET_DEADLINE_MINUTES:-120}"
+  [[ "$minutes" =~ ^[1-9][0-9]{0,3}$ ]] && (( 10#$minutes <= 1440 )) \
+    || die "FLEET_DEADLINE_MINUTES must be a whole number from 1 to 1440"
+  F_DEADLINE=$(( 10#$minutes * 60 ))
+}
+
+check_gates() {
+  proposal_approved "$F_CHANGE" || die "$F_CHANGE: proposal is not approved"
+  [[ -n "$(work_item_id "$F_CHANGE")" ]] || die "$F_CHANGE: no Azure Boards work item (run specclaw-azdo-issue create)"
+  local wi assignee tags
+  wi="$(azdo_issue show "$SPECCLAW_DIR" "$F_CHANGE")" || die "$F_CHANGE: could not read the work item"
+  assignee="$(jq -r '.fields["System.AssignedTo"].uniqueName // empty' <<<"$wi")"
+  tags="$(jq -r '.fields["System.Tags"] // empty' <<<"$wi")"
+  already_handled "$tags"
+  if ! has_auto_tag "$tags"; then
+    echo "$F_CHANGE: not opted in (no fleet:auto tag); skipped, nothing written" >&2
+    exit 3
+  fi
+  [[ -n "$assignee" ]] || refuse "$F_CHANGE" "work item has no assignee"
+  consented "$assignee" "$tags" \
+    || refuse "$F_CHANGE" "fleet:auto was not added by the assignee $assignee"
+  F_HASH="$(upn_hash "$assignee")"
+  F_SECRET="$(secret_name "$F_AGENT" "$F_HASH")"
+  local rc=0
+  F_CREDENTIAL="$(fetch_credential "$F_VAULT" "$F_SECRET")" || rc=$?
+  case "$rc" in
+    0) ;;
+    1) refuse "$F_CHANGE" "assignee has no registered $F_AGENT credential (run specclaw-fleet login --agent $F_AGENT)" ;;
+    *) refuse "$F_CHANGE" "could not read Key Vault $F_VAULT (dispatcher access or network), not an assignee problem" ;;
+  esac
+}
+
+fleet_dispatch() {
+  parse_dispatch_args "$@"
+  check_gates
+  F_JOB="$(job_name "$F_CHANGE" "$F_AGENT" "$F_HASH")"
+  F_SECRET_OBJ="$F_JOB-$(rand_suffix)"
+  F_WI="$(work_item_id "$F_CHANGE")"
+  F_LABEL="$(label_value "$F_CHANGE")"
+  F_REPO="$(git -C "$SPECCLAW_DIR/.." remote get-url origin | sed -E 's#://[^@/]+@#://#')"
+  F_COMMIT="$(git -C "$SPECCLAW_DIR/.." rev-parse HEAD)" || die "Could not resolve the dispatched commit"
+  [[ -r "$SPECCLAW_DIR/config.yaml" ]] || die "Cannot read $SPECCLAW_DIR/config.yaml"
+  F_AZDO_CONFIG="$(awk '/^azdo:[[:space:]]*(#.*)?$/ { on = 1; print; next } on && /^[^[:space:]#]/ { exit } on { print }' \
+    "$SPECCLAW_DIR/config.yaml")" || die "Cannot read $SPECCLAW_DIR/config.yaml"
+  if (( F_DRY_RUN )); then
+    render_job
+    echo ---
+    render_secret REDACTED "<job-uid>"
+    return 0
+  fi
+  launch_job
+}

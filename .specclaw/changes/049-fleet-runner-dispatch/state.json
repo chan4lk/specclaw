@@ -1,0 +1,14 @@
+{
+  "change": "049-fleet-runner-dispatch",
+  "phase": "verify",
+  "branch": "",
+  "size": "architectural",
+  "phases": {
+    "proposal": {"status":"approved","at":"2026-11-07T08:31:59Z"},
+    "spec": {"status":"done","at":"2026-11-07T08:35:12Z"},
+    "design": {"status":"done","at":"2026-11-07T08:35:12Z"},
+    "tasks": {"status":"done","at":"2026-11-07T08:35:12Z"},
+    "build": {"status":"done","at":"2026-11-07T08:49:07Z","tasks":{"done":7,"total":7,"failed":0}},
+    "verify": {"status":"failed","at":"2026-11-08T01:17:29Z","verdict":"FAIL"}
+  }
+}

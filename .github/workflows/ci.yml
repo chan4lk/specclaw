@@ -55,6 +55,14 @@ jobs:
         run: bash plugins/specclaw/tests/run-headless-pr-tests.sh
       - name: Run specclaw-review tests
         run: bash plugins/specclaw-review/tests/run-review-tests.sh
+      - name: Run azdo-issue fields tests
+        run: bash plugins/specclaw-sync/tests/run-azdo-issue-fields-tests.sh
+      - name: Run azdo-issue history and tag tests
+        run: bash plugins/specclaw-sync/tests/run-azdo-issue-history-tests.sh
+      - name: Run azdo-issue claim tests
+        run: bash plugins/specclaw-sync/tests/run-azdo-issue-claim-tests.sh
+      - name: Run specclaw-fleet tests
+        run: bash plugins/specclaw-fleet/tests/run-fleet-tests.sh
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
