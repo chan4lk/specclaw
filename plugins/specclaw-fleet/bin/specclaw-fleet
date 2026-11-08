@@ -14,5 +14,7 @@ case "${1:-}" in
   onboard) shift; fleet_onboard "$@" ;;
   login) shift; fleet_login "$@" ;;
   dispatch) shift; fleet_dispatch "$@" ;;
-  *) die "Usage: specclaw-fleet onboard <upn> --vault <v> | login --agent claude|codex --vault <v> | dispatch <change> [--agent claude|codex] [--ref <b>] [--vault <v>] [--dry-run] [--force]" ;;
+  doctor) shift; fleet_doctor "$@" ;;
+  trigger) shift; fleet_trigger "$@" ;;
+  *) die "Usage: specclaw-fleet onboard <upn> --vault <v> | login --agent claude|codex --vault <v> | doctor | trigger <change> [--retry] [--direct] [--create] | dispatch <change> [--agent claude|codex] [--ref <b>] [--vault <v>] [--dry-run] [--force]" ;;
 esac

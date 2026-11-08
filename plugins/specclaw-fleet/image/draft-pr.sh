@@ -29,3 +29,13 @@ ensure_pr() {
     | azdo_api -X POST "$api?api-version=7.1" --data-binary @- | jq -r '.pullRequestId // empty')" || return 0
   [[ -n "$id" ]] && echo "${FLEET_REPO_URL}/pullrequest/$id true"
 }
+
+deliver() {
+  trap '' TERM
+  local branch pr draft
+  branch="$(push_change_branch)"
+  read -r pr draft < <(ensure_pr "$branch")
+  show_agent_log
+  record "state=$([[ -n "$pr" ]] && echo pr_open || echo failed)" "exit=$1" "branch=$branch" "pr=${pr:-none}" "draft=${draft:-false}"
+  finish "$2"
+}

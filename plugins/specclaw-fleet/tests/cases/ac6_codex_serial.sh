@@ -51,6 +51,13 @@ claude_unbounded() { (( claude_rc == 0 )) && ! grep -q "get job fleet-codex" <<<
 check "AC6 codex refused while active; replaced once finished (succeeded, failed, Failed condition)" serialized
 check "AC6 a newer run created between read and delete is never deleted (UID precondition)" newer_run_survives
 check "AC6 one assignee, two changes, concurrent codex: exactly one wins (from empty and from a finished Job)" single_winner
+junk_refused=1
+for raw in "" "not json" "[1]" '"x"' '{"status":{"succeeded":1}}'; do
+  reset_env; JOB_RAW="$raw" dispatch --agent codex && junk_refused=0
+  reset_env; JOB_RAW="$raw" "$FLEET" trigger "$CHANGE" > /dev/null 2>&1 || true
+done
+junk_closed() { (( junk_refused == 1 )); }
+check "AC6 empty, unparsable, non-object or uid-less Job JSON never reads as a free slot" junk_closed
 fail_closed() { (( read_errors_refused == 1 )); }
 delete_fail_closed() { (( delete_errors_surface == 1 )); }
 check "AC6 a delete error other than a UID conflict surfaces the real error" delete_fail_closed

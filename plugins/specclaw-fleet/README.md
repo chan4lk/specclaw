@@ -37,73 +37,40 @@ Assigning a work item to someone must not spend their plan without their say. Di
 
 ## Setup
 
-1. **Cluster.** `kubectl apply -f k8s/`. This creates:
-   - the namespace;
-   - the dispatcher ServiceAccount and Role (Jobs: create/get/list/delete; Secrets: create only). It cannot read Secrets through the API. It can still create a Job that mounts one, so treat the dispatcher identity, meaning the pipeline and its service connection, as trusted;
-   - the Squid egress proxy;
-   - the NetworkPolicies.
+Run **`/specclaw-fleet:setup`**. It works until `specclaw-fleet doctor` is clean, asks before every outward-facing action, and hands every credential step to you in a real terminal.
 
-   `specclaw-fleet` enforces Pod Security `restricted`, which fleet Jobs meet. Squid needs `SETUID`/`SETGID` to drop to its proxy user, so it runs in its own `specclaw-fleet-egress` namespace under `baseline`. That namespace holds no fleet Secrets. Pin `ubuntu/squid` by digest before production use.
-2. **Secrets in the namespace.**
-   - `fleet-azdo` holds `AZDO_TOKEN`, `AZDO_ORG` and `AZDO_PROJECT`. Use a PAT scoped to Code (read & write), Work Items (read & write) and Pull Request Threads.
-   - `fleet-vault-writer` holds `AZURE_TENANT_ID`, `AZURE_CLIENT_ID` and `AZURE_CLIENT_SECRET`, for a service principal. Do not grant it a vault-wide role. `onboard --writer <its object id>` grants it each user's `codex-auth-<h>` secret individually.
-3. **Image.**
-   ```bash
-   docker build -f plugins/specclaw-fleet/image/Dockerfile \
-     --build-arg CLAUDE_CODE_VERSION=<x.y.z> --build-arg CODEX_VERSION=<x.y.z> -t <registry>/specclaw-fleet:<tag> .
-   ```
-   Set the pipeline's `image` parameter (`FLEET_IMAGE`) to that tag. On the first build, check that the `claude plugin install` and `codex plugin marketplace add` steps succeed; their syntax has not been tested against a live image yet.
-4. **Onboard each user** (admin):
-   ```bash
-   specclaw-fleet onboard alice@contoso.com --vault <name> --writer <writer-sp-object-id>
-   ```
-   Then **each user** runs, themselves:
-   ```bash
-   specclaw-fleet login --agent claude --vault <name>
-   specclaw-fleet login --agent codex  --vault <name>
-   ```
-5. **Boards (optional but recommended).** Add custom fields and states to your process, then map them in `.specclaw/config.yaml`. Without a mapping, every update still lands as a work-item comment.
-   ```yaml
-   azdo:
-     fleet_fields:
-       agent: Custom.FleetAgent
-       job: Custom.FleetJob
-       cluster: Custom.FleetCluster
-       branch: Custom.FleetBranch
-       exit: Custom.FleetExit
-       attempt: Custom.FleetAttempt
-       requested_by: Custom.FleetRequestedBy
-       dispatched_commit: Custom.FleetDispatchedCommit
-       built_commit: Custom.FleetBuiltCommit
-     fleet_states:
-       dispatched: Dispatched
-       running: Running
-       pr_open: PR Open
-       failed: Failed
-   ```
-   Fleet settings are **not** read from `config.yaml`. They are flags or environment variables, which the pipeline sets from YAML `variables`. Changing them takes a reviewed PR, not a queue-time override. Dispatch validates the image, namespace and ref against strict patterns before rendering anything:
+`specclaw-fleet doctor` is read-only. It prints one `ok`/`missing`/`wrong`/`skip` line per item, then exits 0 only when nothing needs attention. It covers:
+- the kube context, namespaces, RBAC, proxy and NetworkPolicy;
+- both cluster secrets (by key names only);
+- the Key Vault and the GHCR image;
+- the AzDO pipeline and its service connections.
 
-   | Variable | Flag | Default |
-   |---|---|---|
-   | `FLEET_VAULT` | `--vault` | (required) |
-   | `FLEET_VAULT_WRITER` | `onboard --writer` | none: onboarding warns |
-   | `FLEET_DEFAULT_AGENT` | `--agent` | `claude` |
-   | `FLEET_REF` | `--ref` | `main` |
-   | `FLEET_IMAGE` |  | `specclaw-fleet:latest` |
-   | `FLEET_NAMESPACE` |  | `specclaw-fleet` |
-   | `FLEET_DEADLINE_MINUTES` |  | `120` (1 to 1440) |
+**Modes**
+- **Hosted (default):** a Microsoft-hosted agent (`pipelines/dispatch-hosted.yml`) fetches specclaw at a pinned ref and dispatches to a remote cluster over its API, using a least-privilege, short-lived dispatcher token.
+- **Local:** a self-hosted agent (`pipelines/dispatch.yml`) installed as a service.
 
-   Only the `azdo:` block of `config.yaml` is passed to the pod, so `specclaw-azdo-issue` can apply the mapping above even when the clone fails. A missing or unreadable `config.yaml` stops dispatch.
-6. **Pipeline.** Use `pipelines/dispatch.yml`. It runs on `main` whenever a change's `state.json` changes. `batch: true` means runs never overlap. Each run does not diff commits. It scans every change that is approved but not started (`phase: proposal`) and dispatches it. Dispatch is idempotent:
-   - Before creating anything, dispatch **claims** the work item by adding `fleet:dispatched` in one PATCH guarded by `test /rev`. Two dispatchers of the same change, from a pipeline and a manual run, can never both win. If Job creation then fails, the claim is released.
-   - On a refusal (consent, credential, vault error) it tags the work item `fleet:refused` (exit 4).
-   - A change carrying either tag is skipped (exit 3).
-   - A busy codex slot is transient. It exits 5, leaves the change untagged and raises a pipeline warning. The pipeline only runs when a `state.json` changes, so re-run it, or dispatch manually, once the assignee's codex job has finished.
-   - To retry a handled change, remove the tag, or run `specclaw-fleet dispatch <change> --force`.
+**Image:** a public GHCR image built for amd64 and arm64 by `.github/workflows/fleet-image.yml`.
+- It contains **no Claude Code binary**.
+- Each pod downloads `FLEET_CLAUDE_VERSION` from `downloads.claude.ai`, checks the manifest's GPG signature against Anthropic's pinned key (`31DD…CACE`), then the SHA256 and size.
+- It records the download time as `claude_fetch_s`.
+- `DISABLE_UPDATES=1` keeps it on that version.
 
-   A refusal raises a pipeline warning. Only real errors, such as an unreadable `state.json` or a cluster failure, fail the run. The pipeline agent needs `az`, `kubectl`, `jq`, and `specclaw-fleet` plus `specclaw-azdo-issue` on `PATH`.
+**Dispatch settings** (environment variables):
+- `FLEET_CLAUDE_VERSION` (required for claude jobs);
+- `FLEET_IMAGE_PULL_SECRET` (private registries only);
+- `FLEET_NODE_LABEL=key=value`, which pins Jobs to a labelled, tainted node.
 
-   **Which commit is built.** Dispatch records the commit it ran on. The pod checks that this commit is an ancestor of the ref it clones, and that the proposal is still approved at the ref's tip. Only then does it build on that tip. The work item records both commits and the change branch.
+## Running a change
+
+Run **`/specclaw-fleet:run`**, or call the command directly:
+
+```bash
+FLEET_VAULT=<vault> specclaw-fleet trigger <change> [--create] [--retry] [--direct]
+```
+
+`trigger` reads approval from the **pushed** ref (`FLEET_REMOTE`/`FLEET_REF`, default `origin/main`). It refuses an unapproved proposal, a work item with no assignee, missing `fleet:auto` consent from the assignee, or a missing credential. Refusals have no side effects. `--create` is the one deliberate exception: it creates the missing work item and stops (exit 3), so the item can be assigned and consented.
+
+Once the gates pass, `trigger` queues the pipeline with this change and agent as runtime parameters, or dispatches directly with `--direct`. `--retry` clears `fleet:dispatched` and `fleet:refused` first.
 
 ## Egress hosts
 

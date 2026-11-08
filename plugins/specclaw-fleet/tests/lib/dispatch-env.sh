@@ -1,5 +1,5 @@
 # shellcheck shell=bash disable=SC2034
-export FLEET_AZDO_ISSUE="$TMP/stub/specclaw-azdo-issue" FLEET_VAULT=v SPECCLAW_DIR="$TMP/repo/.specclaw" APPLIED="$TMP/applied" CLAIMS="$TMP/claims" CHANGE="049-x"
+export FLEET_AZDO_ISSUE="$TMP/stub/specclaw-azdo-issue" FLEET_CLAUDE_VERSION=2.1.319 FLEET_VAULT=v SPECCLAW_DIR="$TMP/repo/.specclaw" APPLIED="$TMP/applied" CLAIMS="$TMP/claims" CHANGE="049-x" KCTX="$TMP/kctx"
 export WI_JSON='{"fields":{"System.AssignedTo":{"uniqueName":"Alice@Contoso.com"},"System.Tags":"specclaw; fleet:auto"}}'
 export WI_UPDATES='{"value":[{"revisedBy":{"uniqueName":"alice@contoso.com"},"fields":{"System.Tags":{"oldValue":"specclaw","newValue":"specclaw; Fleet:Auto"}}}]}'
 CANARY="sk-ant-oat01-DISPATCH-CANARY"
@@ -26,11 +26,14 @@ case "$1" in
   updates) [[ "$WI_UPDATES" == FAIL ]] && exit 1; echo "$WI_UPDATES" ;;
   claim) [[ -n "${CLAIM_FAIL:-}" ]] && { echo "ERROR: ADO read failed" >&2; exit 1; }
     mkdir "$CLAIMS/wi-$3" 2>/dev/null || exit 3 ;;
+  create) printf "**Azure Boards Work Item:** [#77](https://x)\n" >> "$2/changes/$3/status.md" ;;
   untag) [[ -n "${UNTAG_FAIL:-}" ]] && exit 1; [[ "$4" == fleet:dispatched ]] && rm -rf "$CLAIMS/wi-$3" ;;
 esac
 exit 0'
   stub kubectl '
-claim="$CLAIMS/claim-$5"
+if [[ "$1" == --context ]]; then echo "$2" >> "$KCTX"; shift 2; else echo none >> "$KCTX"; fi
+name=""; prev=""; for arg in "$@"; do [[ "$prev" == job ]] && name="$arg"; prev="$arg"; done
+claim="$CLAIMS/claim-$name"
 case "$*" in
   *" create -f -")
     doc="$(cat)"; name="$(grep -m1 "^  name: " <<<"$doc" | sed "s/^  name: //")"
@@ -46,6 +49,7 @@ case "$*" in
       || { echo "Error from server (Conflict): Precondition failed: UID in precondition" >&2; exit 1; }
     rm -rf "$claim" ;;
   *" get job "*" -o json") [[ -n "${GET_ERR:-}" ]] && { echo "$GET_ERR" >&2; exit 1; }
+    [[ -n "${JOB_RAW+x}" ]] && { printf "%s" "$JOB_RAW"; exit 0; }
     [[ -d "$claim" ]] || { echo "Error from server (NotFound): jobs $5" >&2; exit 1; }
     jq -n --arg u "$(cat "$claim/uid")" --argjson s "$(cat "$claim/status")" "{metadata: {uid: \$u}, status: \$s}" ;;
   *" delete job "*) rm -rf "$claim" ;;
@@ -72,3 +76,9 @@ add_change() {
 }
 
 marked_failed() { grep -q "specclaw-azdo-issue fields .*state=failed" "$CALLS" && grep -q "specclaw-azdo-issue tag .* fleet:refused" "$CALLS"; }
+
+https_local_remote() {
+  local real; real="$(command -v git)"
+  stub git '[[ "$*" == *"remote get-url local" ]] && { echo https://dev.azure.com/o/p/_git/pushed-r; exit 0; }
+exec '"$real"' "$@"'
+}

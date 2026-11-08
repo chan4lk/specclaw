@@ -12,6 +12,7 @@ record_run() {
 }
 
 refuse() {
+  if (( ${F_CHECK_ONLY:-0} )); then echo "ERROR: $1: $2" >&2; exit 4; fi
   record_run "$1" state=failed "exit=refused: $2"
   azdo_issue tag "$SPECCLAW_DIR" "$1" fleet:refused >/dev/null || warn "could not tag the work item fleet:refused"
   echo "ERROR: $1: $2 (remove the fleet:refused tag to retry)" >&2

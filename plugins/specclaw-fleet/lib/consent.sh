@@ -1,4 +1,4 @@
-# shellcheck shell=bash
+# shellcheck shell=bash disable=SC2034
 has_auto_tag() {
   local tag
   local -a tags=()
@@ -18,8 +18,12 @@ auto_tagged_by() {
     | last | .revisedBy.uniqueName // empty'
 }
 
-consented() {
-  local assignee="$1" tagger
-  tagger="$(auto_tagged_by)" || refuse "$F_CHANGE" "could not read the work item history to confirm who added fleet:auto"
-  [[ -n "$tagger" && "$(lower "$tagger")" == "$(lower "$assignee")" ]]
+gate_owner() {
+  local wi="$1" tags tagger
+  G_ASSIGNEE="$(jq -r '.fields["System.AssignedTo"].uniqueName // empty' <<<"$wi")"
+  tags="$(jq -r '.fields["System.Tags"] // empty' <<<"$wi")"
+  has_auto_tag "$tags" || return 10
+  [[ -n "$G_ASSIGNEE" ]] || return 11
+  tagger="$(auto_tagged_by)" || return 13
+  [[ -n "$tagger" && "$(lower "$tagger")" == "$(lower "$G_ASSIGNEE")" ]] || return 12
 }

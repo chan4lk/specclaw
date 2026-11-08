@@ -1,11 +1,22 @@
+parameters:
+  - name: change
+    displayName: Only this change (empty = every approved, not-started change)
+    type: string
+    default: " "
+  - name: agent
+    displayName: Agent for this run (empty = fleetDefaultAgent)
+    type: string
+    default: " "
+
 variables:
   fleetKubeConnection: specclaw-fleet-k3s
   fleetAzureConnection: specclaw-fleet-azure
   fleetVault: specclaw-fleet-kv
-  fleetImage: specclaw-fleet:latest
+  fleetImage: ghcr.io/chan4lk/specclaw-fleet:0.8.9
   fleetNamespace: specclaw-fleet
   fleetDeadlineMinutes: "120"
   fleetDefaultAgent: claude
+  fleetClaudeVersion: "2.1.319"
 
 trigger:
   batch: true
@@ -37,14 +48,22 @@ steps:
         set -uo pipefail
         export AZDO_ORG="$(basename "${SYSTEM_COLLECTIONURI%/}")"
         failed=0
+        trim() { local v="$1"; v="${v#"${v%%[![:space:]]*}"}"; printf '%s' "${v%"${v##*[![:space:]]}"}"; }
+        only="$(trim "${FLEET_ONLY_CHANGE:-}")"; agent="$(trim "${FLEET_RUN_AGENT:-}")"
+        case "${FLEET_REF:-}" in
+          refs/heads/?*) export FLEET_REF="${FLEET_REF#refs/heads/}" ;;
+          *) echo "##vso[task.logissue type=error]not a branch run: ${FLEET_REF:-unset}"; exit 1 ;;
+        esac
         for f in .specclaw/changes/*/state.json; do
           [[ -f "$f" ]] || continue
-          if ! pending="$(jq -r '.phase == "proposal" and .phases.proposal.status == "approved"' "$f")"; then
+          if ! pending="$(jq -r --arg only "$only" '.phases.proposal.status == "approved" and ($only != "" or .phase == "proposal")' "$f")"; then
             echo "##vso[task.logissue type=error]could not read $f"; failed=1; continue
           fi
           [[ "$pending" == true ]] || continue
+          change="$(basename "$(dirname "$f")")"
+          [[ -z "$only" || "$change" == "$only" ]] || continue
           rc=0
-          specclaw-fleet dispatch "$(basename "$(dirname "$f")")" || rc=$?
+          specclaw-fleet dispatch "$change" ${agent:+--agent "$agent"} || rc=$?
           case "$rc" in
             0|3) ;;
             5) echo "##vso[task.logissue type=warning]$f: assignee's codex slot is busy; re-run this pipeline or dispatch manually once it finishes" ;;
@@ -63,4 +82,7 @@ steps:
       FLEET_NAMESPACE: $(fleetNamespace)
       FLEET_DEADLINE_MINUTES: $(fleetDeadlineMinutes)
       FLEET_DEFAULT_AGENT: $(fleetDefaultAgent)
-      FLEET_REF: $(Build.SourceBranchName)
+      FLEET_CLAUDE_VERSION: $(fleetClaudeVersion)
+      FLEET_REF: $(Build.SourceBranch)
+      FLEET_ONLY_CHANGE: ${{ parameters.change }}
+      FLEET_RUN_AGENT: ${{ parameters.agent }}

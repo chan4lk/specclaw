@@ -14,9 +14,13 @@ rand_suffix() {
   od -An -N4 -tx1 /dev/urandom | tr -d ' \n' | cut -c1-5
 }
 
+codex_job_name() {
+  printf 'fleet-codex-%s' "${1:-$F_HASH}"
+}
+
 job_name() {
   if [[ "$2" == codex ]]; then
-    printf 'fleet-codex-%s' "$3"
+    codex_job_name "$3"
     return 0
   fi
   local stem

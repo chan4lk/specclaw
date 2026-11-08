@@ -23,6 +23,7 @@ spec:
       restartPolicy: Never
       automountServiceAccountToken: false
       securityContext: {runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
+$(render_pod_extras)
       initContainers:
         - name: agent
           image: $F_IMAGE
@@ -36,6 +37,7 @@ spec:
             - {name: FLEET_REPO_URL, value: $(yaml_str "$F_REPO")}
             - {name: FLEET_WORK_ITEM, value: "$F_WI"}
             - {name: FLEET_AGENT_TIMEOUT, value: "$F_DEADLINE"}
+            - {name: FLEET_CLAUDE_VERSION, value: $(yaml_str "$F_CLAUDE_VERSION")}
             - {name: FLEET_COMMIT, value: "$F_COMMIT"}
             - {name: FLEET_AZDO_CONFIG, value: $(yaml_str "$F_AZDO_CONFIG")}
             - {name: TMPDIR, value: /tmp}
