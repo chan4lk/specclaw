@@ -16,15 +16,15 @@ trap 'rm -rf "$TMP"' EXIT
 # AC-6: core skills and references carry no brownfield text.
 check "AC-6 core has no bf/brownfield/rebuild mentions" '! grep -rqiE "bf-|brownfield|rebuild" "$PLUGIN_DIR/skills" "$PLUGIN_DIR/references"'
 
-# AC-7: five plugins, each with both manifests, one shared version everywhere.
-check "AC-7 five plugins share one version" 'python3 - "$REPO" <<"PY"
+# AC-7: every plugin, each with both manifests, one shared version everywhere.
+check "AC-7 every plugin has both manifests and one shared version" 'python3 - "$REPO" <<"PY"
 import glob, json, sys
 r = sys.argv[1]
 names = [p["name"] for p in json.load(open(r + "/.claude-plugin/marketplace.json"))["plugins"]]
-assert names == ["specclaw", "specclaw-bf", "specclaw-sync", "specclaw-extras", "specclaw-review"], names
+assert names == ["specclaw", "specclaw-bf", "specclaw-sync", "specclaw-extras", "specclaw-review", "specclaw-fleet"], names
 vs = {json.load(open(f))["version"] for n in names for f in glob.glob(f"{r}/plugins/{n}/.c*-plugin/plugin.json")}
 vs |= {p["version"] for p in json.load(open(r + "/.claude-plugin/marketplace.json"))["plugins"]}
-assert len(glob.glob(r + "/plugins/*/.c*-plugin/plugin.json")) == 10 and len(vs) == 1, vs
+assert len(glob.glob(r + "/plugins/*/.c*-plugin/plugin.json")) == 2 * len(names) and len(vs) == 1, vs
 PY'
 
 # AC-8: github.sync on, specclaw-sync absent → install notice, and the lean flow still validates.
