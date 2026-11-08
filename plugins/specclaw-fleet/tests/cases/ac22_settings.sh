@@ -31,6 +31,21 @@ for p in /Users/someone/very/long/path/to/a/pipeline-for-the-bistec-dev-uat-clus
          pipelines/azure-devops/fleet/specclaw-fleet-dispatch-hosted-bistec-dev-uat.yml; do
   cfg 'fleet:' '  vault: kv1' "  pipeline_file: $p"; row "vault=[kv1]"
 done
+cfg 'fleet:' '  deadline_minutes: x[$(touch /tmp/fleet-pwned)]'; out="$(load)"; hostile_rc=$?
+cfg 'fleet:' '  deadline_minutes: 90abc'; out2="$(load)"; hostile2_rc=$?
+hostile_refused() { (( hostile_rc != 0 && hostile2_rc != 0 )) && [[ "$out" == *"fleet.deadline_minutes"*"whole number"* && "$out2" == *"whole number"* && ! -e /tmp/fleet-pwned ]]; }
+printf 'fleet:\n  vault: trusted-kv\n  image: ghcr.io/o/x:1\n' > "$TMP/trusted.yaml"
+cfg 'fleet:' '  vault: trusted-kv' '  deadline_minutes: 30'; same="$(load FLEET_TRUSTED_CONFIG="$TMP/trusted.yaml")"
+cfg 'fleet:' '  vault: evil-kv'; evil="$(load FLEET_TRUSTED_CONFIG="$TMP/trusted.yaml")"; evil_rc=$?
+cfg 'fleet:' '  image: ghcr.io/evil/x:1'; evil_img="$(load FLEET_TRUSTED_CONFIG="$TMP/trusted.yaml")"; evil_img_rc=$?
+cfg 'fleet:' '  deadline_minutes: 30'; inherit="$(load FLEET_TRUSTED_CONFIG="$TMP/trusted.yaml")"
+trusted_only() {
+  [[ "$same" == *"vault=[trusted-kv]"*"image=[ghcr.io/o/x:1]"*"dl=[30]"* ]] && (( evil_rc != 0 && evil_img_rc != 0 )) \
+    && [[ "$evil" == *"fleet.vault on this branch differs from the trusted branch"* && "$evil_img" == *"fleet.image on this branch differs"* ]] \
+    && [[ "$inherit" == *"vault=[trusted-kv]"*"image=[ghcr.io/o/x:1]"* ]]
+}
+check "R053 a non-numeric fleet.deadline_minutes (incl. an arithmetic-injection payload) is refused at load and never evaluated" hostile_refused
+check "R053 with a trusted config, security settings come only from it: a branch value that differs fails closed; a branch without them inherits" trusted_only
 secret_rows=1 T="~"
 for v in "sk-ant-oat01-abcdef" "eyJhbGciOiJIUzI1NiJ9.e30.x" "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQR" \
          "ab/cdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN+OPQRS/tuvw==" "/home/u/abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQR" "$T/abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRx" \
@@ -49,6 +64,7 @@ check "R053 AC-1 a flag beats config" flag_wins
 export TMP AGENT_TEMPDIRECTORY="$TMP" SYSTEM_COLLECTIONURI=https://dev.azure.com/o/
 for t in dispatch.yml dispatch-hosted.yml; do
   stub specclaw-fleet 'echo "ctx=[${FLEET_KUBE_CONTEXT-unset}]" >> "$TMP/ctx"'
+  stub git 'case "$1" in fetch) exit 0 ;; show) printf "fleet:\n  vault: trusted-kv\n" ;; esac'
   sed -n '/inlineScript: |/,/^    env:/p' "$FLEET_ROOT/pipelines/$t" | sed '1d;$d;s/^        //' > "$TMP/step.sh"
   mkdir -p "$TMP/p/.specclaw/changes/049-x"; echo '{"phase":"proposal","phases":{"proposal":{"status":"approved"}}}' > "$TMP/p/.specclaw/changes/049-x/state.json"
   (cd "$TMP/p" && FLEET_REF=refs/heads/main FLEET_KUBE_CONTEXT=bistec-dev-uat bash "$TMP/step.sh") >/dev/null 2>&1

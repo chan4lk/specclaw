@@ -6,7 +6,7 @@ R="$FLEET_ROOT/skills/run/SKILL.md"; S="$FLEET_ROOT/skills/setup/SKILL.md"; CI="
 run_skill() {
   grep -q '^description: Use when.*one or more approved specclaw changes' "$R" \
     && grep -q 'specclaw-fleet optin <change>... --dry-run' "$R" && grep -q 'Never assign an item to someone else' "$R" \
-    && grep -q 'parallel' "$R" && grep -q -- '--sequential' "$R" && grep -q 'status <change>... --watch 30 --since' "$R" \
+    && grep -q 'parallel' "$R" && grep -q -- '--sequential' "$R" && grep -q 'status <change>... --watch 30 --since <that time> --run <change>=<run>' "$R" \
     && ! grep -q 'FLEET_VAULT=<vault>' "$R"
 }
 setup_skill() { grep -q 'under `fleet:`' "$S" && grep -q 'Never write a secret in `fleet:`' "$S" && grep -q 'write `FLEET_KUBE_CONTEXT` and `KUBECONFIG`.*to the gitignored `.specclaw/.env`' "$S"; }

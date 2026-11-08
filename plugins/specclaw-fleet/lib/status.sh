@@ -1,11 +1,14 @@
 # shellcheck shell=bash disable=SC2034
 parse_status_args() {
-  S_JSON=0 S_WATCH=0 S_INTERVAL=20 S_SINCE="" S_CHANGES=() S_TIMEOUT=$(( ${FLEET_DEADLINE_MINUTES:-120} + 20 ))
+  local dl="${FLEET_DEADLINE_MINUTES:-120}"
+  [[ "$dl" =~ ^[1-9][0-9]{0,4}$ ]] || dl=120
+  S_JSON=0 S_WATCH=0 S_INTERVAL=20 S_SINCE="" S_CHANGES=() S_TIMEOUT=$(( 10#$dl + 20 )) S_RUNMAP=""
   while (($#)); do
     case "$1" in
       --json) S_JSON=1 ;;
       --watch) S_WATCH=1; [[ "${2:-}" =~ ^[0-9]+$ ]] && { S_INTERVAL="$2"; shift; } ;;
       --since) need_value "$1" "${2:-}"; S_SINCE="$2"; shift ;;
+      --run) need_value "$1" "${2:-}"; [[ "$2" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*=[0-9]+$ ]] || die "--run takes <change>=<pipeline run id>"; S_RUNMAP+=" $2"; shift ;;
       --timeout) need_value "$1" "${2:-}"; [[ "$2" =~ ^[1-9][0-9]{0,4}$ ]] || die "--timeout takes whole minutes"; S_TIMEOUT="$2"; shift ;;
       -*) die "Unknown flag: $1" ;;
       *) S_CHANGES+=("$1") ;;
@@ -49,9 +52,10 @@ status_row() {
        record: (if $recok == 0 then {state: "?"} elif $rec then $rec
          elif $consent == "unknown" then {state: "?"} elif $consent == "none" then {state: "not-opted-in"} elif $consent == "other" then {state: "not-opted-in (fleet:auto not added by the assignee)"}
          else {state: "waiting"} end), cluster: $job}
-    | ([$runs[] | select(.status == "completed" and (.change == "" or .change == $c))] | last) as $run
-    | if .record.state == "waiting" and $run and ((.cluster.created // "") < $since)
-      then .record = {state: "did-not-run", exit: "pipeline \($run.id) \($run.result)"} else . end
+    | ([$runs[] | select(.change == $c)] | last) as $run
+    | if .record.state == "waiting" and $run and $run.status == "completed" and .cluster.job != "?" and ((.cluster.created // "") < $since)
+      then .record = {state: "did-not-run", exit: "pipeline \($run.id) \($run.result)"}
+      elif .record.state == "waiting" and $run then .record.exit = "pipeline \($run.id) \($run.status)" else . end
     | .terminal = ((.record.state | IN("pr_open", "failed", "refused", "did-not-run")) or (.tags | index("refused")) or ($consent | IN("none", "other"))
         or (.cluster.phase == "failed" and (.cluster.created // "") >= $since))'
 }

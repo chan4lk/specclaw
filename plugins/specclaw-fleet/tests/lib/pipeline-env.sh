@@ -1,7 +1,8 @@
 # shellcheck shell=bash disable=SC2034
 export TMP AGENT_TEMPDIRECTORY="$TMP" SYSTEM_COLLECTIONURI=https://dev.azure.com/o/ FLEET_REF=refs/heads/main
 APPROVED='{"phase":"proposal","phases":{"proposal":{"status":"approved"}}}'
-stub specclaw-fleet 'echo "ref=${FLEET_REF:-}" >> "$TMP/refs"; exit "${DISPATCH_RC:-0}"'
+stub specclaw-fleet 'echo "ref=${FLEET_REF:-}" >> "$TMP/refs"; echo "trusted=${FLEET_TRUSTED_CONFIG:-unset}" >> "$TMP/trusted"; exit "${DISPATCH_RC:-0}"'
+stub git 'case "$1" in fetch) exit "${TRUSTED_FETCH_RC:-0}" ;; show) printf "fleet:\n  vault: trusted-kv\n" ;; esac'
 sed -n '/inlineScript: |/,/^    env:/p' "$FLEET_ROOT/pipelines/${PIPELINE_FILE:-dispatch.yml}" | sed '1d;$d;s/^        //' > "$TMP/step.sh"
 
 run_with_state() {

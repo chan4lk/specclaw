@@ -68,7 +68,8 @@ record state=running "built_commit=$(git -C "$REPO" rev-parse HEAD)" "claude_fet
 cd "$REPO" || finish 2
 prepare_workspace || { record state=failed exit=resume-failed; finish 2; }
 workspace_ready=1
-agent_budget=$(( ${FLEET_AGENT_TIMEOUT:-7200} - SECONDS ))
+[[ "${FLEET_AGENT_TIMEOUT:-7200}" =~ ^[0-9]{1,6}$ ]] || FLEET_AGENT_TIMEOUT=7200
+agent_budget=$(( 10#${FLEET_AGENT_TIMEOUT:-7200} - SECONDS ))
 (( agent_budget > 0 )) || { record state=failed exit=deadline-before-agent; finish 143; }
 rc=0; run_agent || rc=$?
 deliver "$rc" "$rc"

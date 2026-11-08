@@ -34,8 +34,8 @@ check "AC6 image workflow: amd64+arm64 to GHCR, packages: write only, SHA-pinned
 check "AC9 hosted template runs on ubuntu-latest and fetches specclaw at a verified full commit SHA onto PATH" hosted_ok
 check "AC9 hosted and self-hosted templates run the identical dispatch script, which uses the logged-in kubeconfig" same_script
 no_settings() {
-  [[ "$(yq_py "$H" | jq -r '.variables | keys | sort | join(",")')" == fleetAzureConnection,fleetKubeConnection,fleetSpecclawRef ]] || return 1
-  [[ "$(yq_py "$S" | jq -r '.variables | keys | sort | join(",")')" == fleetAzureConnection,fleetKubeConnection ]] || return 1
+  [[ "$(yq_py "$H" | jq -r '.variables | keys | sort | join(",")')" == fleetAzureConnection,fleetKubeConnection,fleetSpecclawRef,fleetTrustedBranch ]] || return 1
+  [[ "$(yq_py "$S" | jq -r '.variables | keys | sort | join(",")')" == fleetAzureConnection,fleetKubeConnection,fleetTrustedBranch ]] || return 1
   local t; for t in "$H" "$S"; do
     ! grep -Eq 'FLEET_(VAULT|IMAGE|NAMESPACE|DEADLINE_MINUTES|DEFAULT_AGENT|CLAUDE_VERSION):' "$t" || return 1
   done

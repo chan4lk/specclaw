@@ -69,6 +69,7 @@ fleet:
 
 - **Which cluster your machine talks to is local, not shared:** set `FLEET_KUBE_CONTEXT` and `KUBECONFIG` in the gitignored `.specclaw/.env`. A relative `KUBECONFIG` resolves against the repo root. They are never read from `fleet:`, and the pipeline always uses the kubeconfig its Kubernetes task logged in.
 - **Other keys:** `namespace`, `default_agent`, `deadline_minutes`, `remote`, `ref`, `image_pull_secret` (private registries only), and `node_label` (`key=value`, which pins Jobs to a labelled, tainted node).
+- **Security settings** (`vault`, `image`, `namespace`, `node_label`, `image_pull_secret`, `claude_version`) are read in pipeline runs only from the trusted branch (`fleetTrustedBranch`, default `main`). A run on a branch whose values differ stops before dispatch.
 - **Connection names** live only in the pipeline YAML (AzDO needs them at compile time). `doctor` reads them from `pipeline_file`.
 - **Precedence:** a flag, then an env variable (`FLEET_<KEY>`), then config, then the default.
 - **Secrets never go here.** The PAT stays in the gitignored `.specclaw/.env`, and a secret-looking value is refused.
@@ -83,7 +84,7 @@ specclaw-fleet trigger 002-catalog [--create] [--retry] [--direct]
 specclaw-fleet status --watch                    # one line per change: item, tags, last record, Job
 ```
 
-`optin` uses the identity behind `AZDO_TOKEN`. It refuses an item assigned to someone else, and `--dry-run` shows the plan without writing. `status` is read-only. A change shows `not-opted-in` until `fleet:auto` is added by its assignee, and `did-not-run` when its pipeline run finished without dispatching it. `--watch` ends when every change has ended, or after `--timeout` minutes (exit 2).
+`optin` uses the identity behind `AZDO_TOKEN`. It refuses an item assigned to someone else, and `--dry-run` shows the plan without writing. `status` is read-only. A change shows `not-opted-in` until `fleet:auto` is added by its assignee, and `did-not-run` when the run `trigger` queued for it (`--run <change>=<id>`) finished without dispatching it. `--watch` ends when every change has ended, or after `--timeout` minutes (exit 2).
 
 `trigger` reads approval from the **pushed** ref (`FLEET_REMOTE`/`FLEET_REF`, default `origin/main`). It refuses an unapproved proposal, a work item with no assignee, missing `fleet:auto` consent from the assignee, or a missing credential. Refusals have no side effects. `--create` is the one deliberate exception: it creates the missing work item and stops (exit 3), so the item can be assigned and consented.
 

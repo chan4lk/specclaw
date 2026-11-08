@@ -21,16 +21,20 @@ status_print() {
 }
 
 status_runs() {
-  local id out
-  [[ -n "$S_SINCE" ]] && id="$(azdo_pipeline_id "${FLEET_PIPELINE:-specclaw-fleet}" 2>/dev/null)" && [[ -n "$id" ]] || { echo '[]'; return; }
-  out="$(azdo_rest "build/builds?definitions=$id&minTime=$S_SINCE&api-version=7.1")" || { echo '[]'; return; }
-  jq -c '[.value[]? | {id, status, result: (.result // "-"), change: ((.templateParameters.change // "") | gsub("^\\s+|\\s+$"; ""))}]' <<<"$out" 2>/dev/null || echo '[]'
+  local pair out rc
+  for pair in $S_RUNMAP; do
+    rc=0; out="$(azdo_rest "build/builds/${pair#*=}?api-version=7.1")" || rc=$?
+    jq -nc --arg c "${pair%%=*}" --arg id "${pair#*=}" --arg why "$( (( rc == 3 )) && echo "unknown: AZDO_TOKEN lacks Build Read" || echo unknown)" \
+      --argjson b "$( (( rc == 0 )) && jq -c 'if type == "object" then . else {} end' <<<"$out" 2>/dev/null || echo '{}')" \
+      '{change: $c, id: $id, status: ($b.status // $why), result: ($b.result // "-")}'
+  done | jq -sc '.'
 }
 
 fleet_status() {
   parse_status_args "$@"
   load_azdo_env
-  local rows head c end=$(( SECONDS + ${FLEET_WATCH_TIMEOUT_S:-$(( S_TIMEOUT * 60 ))} ))
+  local rows head c end=$(( SECONDS + S_TIMEOUT * 60 ))
+  [[ "${FLEET_WATCH_TIMEOUT_S:-}" =~ ^[0-9]{1,6}$ ]] && end=$(( SECONDS + 10#$FLEET_WATCH_TIMEOUT_S ))
   while :; do
     head="$(status_pipeline)"; rows=""; S_RUNS="$(status_runs)"
     for c in "${S_CHANGES[@]}"; do rows+="$(status_row "$c")"$'\n'; done
