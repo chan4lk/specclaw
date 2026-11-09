@@ -17,6 +17,16 @@ check "R050 AC-5 specclaw-azdo-pr targets SPECCLAW_PR_TARGET over git.base_branc
 ENTRY_REF=feature/catalog AGENT_RC=5 run_entry; child="$(cat "$TMP/prtarget")"; child_pr="$(jq -r .targetRefName "$TMP/pr-body.json" 2>/dev/null)"
 ENTRY_REF=feature/catalog ENTRY_PR_TARGET=main run_entry; integ="$(cat "$TMP/prtarget")"
 run_entry; plain="$(cat "$TMP/prtarget")"
-pod_target() { [[ "$child" == feature/catalog && "$child_pr" == refs/heads/feature/catalog && "$integ" == main && "$plain" == unset ]]; }
-check "R050 AC-5 a pod dispatched from feature/<m> opens its PR (real or draft) into feature/<m>; FLEET_PR_TARGET overrides; an ordinary run leaves git.base_branch in charge" pod_target
+pod_target() { [[ "$child" == feature/catalog && "$child_pr" == refs/heads/feature/catalog && "$integ" == main && "$plain" == main ]]; }
+check "R050 AC-5 a pod dispatched from feature/<m> opens its PR (real or draft) into feature/<m>; FLEET_PR_TARGET overrides; an ordinary run resolves git.base_branch, else the dispatched ref" pod_target
+prow=1
+prow_check() { local got; got="$(cat "$TMP/prtarget")"; [[ "$got" == "$1" ]] || { prow=0; echo "  [$2] got $got want $1"; }; }
+ENTRY_PR_TARGET=release BASE_BRANCH=develop run_entry; prow_check release "override over config"
+BASE_BRANCH=develop run_entry; prow_check develop "base_branch"
+run_entry; prow_check main "no config"
+CONFIG_RAW='git:\n  branch_prefix: specclaw/\n# a column-0 comment\n  base_branch: trunk   # note\nother:\n  base_branch: nope\n' run_entry; prow_check trunk "past a column-0 comment"
+CONFIG_RAW="git:\\n  base_branch: 'staging'\\n" run_entry; prow_check staging "single-quoted"
+CONFIG_RAW='other:\n  base_branch: nope\n' run_entry; prow_check main "base_branch outside git:"
+precedence() { (( prow == 1 )); }
+check "R051 the pod resolves one PR target: FLEET_PR_TARGET, then a feature ref, then git.base_branch (quoted, commented, past a column-0 comment), then the dispatched ref" precedence
 finish

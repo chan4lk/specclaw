@@ -1,0 +1,72 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 3,
+  "minor": 0
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw-fleet/image/draft-pr.sh",
+  "plugins/specclaw-fleet/image/integrate.sh",
+  "plugins/specclaw-fleet/tests/cases/ac22_settings.sh",
+  "plugins/specclaw-fleet/tests/cases/ac31_integrate_pod.sh",
+  "plugins/specclaw-fleet/tests/lib/entry-env.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw-fleet/image/integrate.sh",
+   "fp": "3ef2629d176a",
+   "in_delta": true,
+   "line": 10,
+   "message": "The stale-marker fix is placed before the base-ref merge and is a single `rm -f` whose failure is ignored. `merge_base_ref` deletes `integration-result` and then merges `origin/$FLEET_MERGE_REF`, so a committed `integration-result=pass` on the merge ref is brought back after the delete. The fix covers only a marker already on the checked-out branch, not a marker carried in by the merge. Delete the marker after the merge, immediately before `run_agent`, and make a failed `rm` fatal (`|| return 1`) instead of silent. Add a variant row where the stale `pass` arrives via ENTRY_MERGE.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "FLEET_MODE=integrate, FLEET_MERGE_REF=feature/cat, and feature/cat contains `.specclaw/features/049-x/integration-result` = `pass`. The marker is removed, then the merge restores it. The agent writes nothing, the entrypoint reads `pass`, and the PR is opened non-draft as 'integration verified'.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/image/draft-pr.sh",
+   "fp": "e02ad9070914",
+   "in_delta": true,
+   "line": 20,
+   "message": "The fix adds a second hand-written sed parser for `git.base_branch` in `pod_pr_target` instead of reusing the resolution that specclaw-azdo-pr uses. The two copies can disagree. Parser: the range end `^[^[:space:]]` also matches a column-0 comment inside the `git:` block, so a `base_branch` after such a comment is missed. Fallback: when the key is missing or the config is unreadable, the pod silently falls back to `$FLEET_REF`, a permissive default (B6), rather than whatever azdo-pr's default is. Call the shared resolver, or compute the target once in the entrypoint and export it for both consumers.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B4",
+   "scenario": "`.specclaw/config.yaml` has `git:`, then a column-0 `# note`, then `  base_branch: develop`. The sed returns nothing, so the pod targets `refs/heads/$FLEET_REF` (for example the feature ref or main), while specclaw-azdo-pr targets develop.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/tests/cases/ac31_integrate_pod.sh",
+   "fp": "8974a525eeb1",
+   "in_delta": true,
+   "line": 26,
+   "message": "The PR-target fix has a single variant row (base_branch=develop with no SPECCLAW_PR_TARGET). The precedence of an exported SPECCLAW_PR_TARGET over config, the no-config fallback, and the unquoted, quoted and comment-bearing forms of the key are not exercised. A regression in the sed range or the precedence would stay green. Add table rows: SPECCLAW_PR_TARGET set together with BASE_BRANCH, no config at all, and a comment line inside the git block.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Someone changes `pod_pr_target` to read config first, or breaks the sed on a column-0 comment. With only the develop row, the suite still passes while a feature/* run that exports SPECCLAW_PR_TARGET=main targets develop.",
+   "severity": "major"
+  }
+ ],
+ "head": "62b74d7fd99aae798b5a71830f4c8f77d3223136",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 24384,
+ "round": 3,
+ "since": "c45b880cce61d93b30cd47cb6d6f60cf8e0e0188",
+ "status": "open",
+ "system_chars": 9001,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794219975,
+ "ts_start": 1794219933
+}

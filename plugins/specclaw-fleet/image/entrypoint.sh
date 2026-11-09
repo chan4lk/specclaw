@@ -2,7 +2,6 @@
 # shellcheck disable=SC2034
 set -uo pipefail
 unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN OPENAI_API_KEY CODEX_API_KEY
-[[ -n "${FLEET_PR_TARGET:-}" || "${FLEET_REF:-}" == feature/* ]] && export SPECCLAW_PR_TARGET="${FLEET_PR_TARGET:-$FLEET_REF}"
 
 STATUS="${FLEET_STATUS_DIR:-/fleet/status}"
 WORK="${FLEET_WORK:-/fleet/work}"
@@ -61,6 +60,7 @@ if [[ -n "${FLEET_COMMIT:-}" ]] && ! git -C "$REPO" merge-base --is-ancestor "$F
   finish 2
 fi
 STATE="$REPO/.specclaw/$(item_kind)/$FLEET_CHANGE/state.json"
+resolve_pr_target
 [[ "$(jq -r '.phases.proposal.status // empty' "$STATE" 2>/dev/null)" == approved ]] \
   || { record state=failed exit=not-approved-at-ref; finish 2; }
 fetch_rc=0; [[ "$FLEET_AGENT" != claude ]] || fetch_claude || fetch_rc=$?
