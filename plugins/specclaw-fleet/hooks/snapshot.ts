@@ -20,7 +20,11 @@ async function show($: EngineInterface, view: View) {
 }
 
 export async function refreshQuietly($: EngineInterface) {
-  await readReport($).then(view => show($, view), () => show($, UNREADABLE).catch(() => undefined))
+  try {
+    await show($, await readReport($))
+  } catch {
+    await show($, UNREADABLE).catch(() => undefined)
+  }
 }
 
 export async function notify($: EngineInterface, text: string) {

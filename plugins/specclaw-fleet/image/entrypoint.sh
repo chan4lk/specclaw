@@ -73,6 +73,7 @@ workspace_ready=1
 [[ "${FLEET_AGENT_TIMEOUT:-7200}" =~ ^[0-9]{1,6}$ ]] || { record state=failed exit=bad-agent-timeout; finish 2; }
 agent_budget=$(( 10#${FLEET_AGENT_TIMEOUT:-7200} - SECONDS ))
 (( agent_budget > 0 )) || { record state=failed exit=deadline-before-agent; finish 143; }
-rc=0; AGENT_STARTED="$(stamp)" AGENT_T0=$SECONDS AGENT_HEAD="$(git -C "$REPO" rev-parse HEAD)"; run_agent || rc=$?
+AGENT_STARTED="$(stamp)" AGENT_T0=$SECONDS AGENT_HEAD="$(git -C "$REPO" rev-parse HEAD)" AGENT_ROUNDS0="$(round_count)"
+rc=0; run_agent || rc=$?
 [[ "${FLEET_MODE:-}" == integrate && "$rc" == 0 ]] && integration_passed && FLEET_PR_DRAFT=false
 deliver "$rc" "$rc"

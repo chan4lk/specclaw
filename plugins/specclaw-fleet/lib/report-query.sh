@@ -10,7 +10,10 @@ REPORT_ROW='def t: if . == null or . == "" or (tostring | startswith("0001")) th
   def n: if . == null or . == "" then null else (tonumber? // null) end;
   def secs(a; b): if a and b then (b | fromdateiso8601) - (a | fromdateiso8601) else null end;
   ($r.agent_started // $r.running_at | t) as $s0 | ($r.agent_ended // $r.ended_at | t) as $s1
-  | {change: $c, work_item: (if $id == "" then null else $id end), wave: ($w | n), state: $r.state, exit: $r.exit,
+  | (($r.state | IN("dispatched", "running")) and ($j.phase | IN("failed", "complete", "-"))) as $over
+  | {change: $c, work_item: (if $id == "" then null else $id end), wave: ($w | n),
+     state: (if $over then (if $j.phase == "failed" then "failed" else "stalled" end) else $r.state end),
+     exit: (if $over then "job \($j.phase | if . == "-" then "gone" else . end) with no outcome recorded" else $r.exit end),
      pipeline_run: $r.pipeline_run, dispatched: ($r.dispatched_at | t),
      queued: ($b.queueTime | t), started: ($b.startTime | t), finished: ($b.finishTime | t),
      job: (if ($j.job // "?") == "?" then $r.job else $j.job end), phase: (if $j._unread then null else $j.phase end), agent_started: $s0, agent_ended: $s1,

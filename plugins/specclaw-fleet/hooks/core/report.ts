@@ -26,7 +26,7 @@ export const parseReport = (text: string | undefined): View => {
   } catch {
     return { kind: 'unreadable' }
   }
-  if (!isObject(doc) || doc.version !== 1 || typeof doc.generated_at !== 'string' || !Array.isArray(doc.rows) || !isObject(doc.totals)) return { kind: 'unreadable' }
+  if (!isObject(doc) || doc.version !== 1 || typeof doc.generated_at !== 'string' || Number.isNaN(Date.parse(doc.generated_at)) || !Array.isArray(doc.rows) || !isObject(doc.totals)) return { kind: 'unreadable' }
   const rows = doc.rows.filter(isObject).filter(r => typeof r.change === 'string').map(row)
   const totals = Object.fromEntries(TOTALS.map(key => [key, num((doc.totals as Record<string, unknown>)[key])]))
   for (const key of ['jobs', 'agent_s', 'hosted_s', 'review_rounds', 'commits', 'running', 'prs_open']) totals[key] ??= 0

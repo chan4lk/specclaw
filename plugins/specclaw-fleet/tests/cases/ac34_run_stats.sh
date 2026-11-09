@@ -26,11 +26,15 @@ FAKE_PR=1 AGENT_JSON='{"type":"result","total_cost_usd":"1\\nstate=failed","num_
 row "injected newlines and strings" "$TIMES review_rounds=0" "cost_usd turns model pr=evil state=failed"
 FAKE_PR=1 AGENT_JSON='{"type":"result","total_cost_usd":0.1,"num_turns":2,"modelUsage":{"bad model; x":{"costUSD":1}}}' run_entry
 row "model outside the allowed characters" "$TIMES cost_usd=0.1 turns=2" "model"
+FAKE_PR=1 PRE_ROUNDS=4 ROUNDS=2 run_entry
+row "rounds from earlier runs are not counted" "$TIMES review_rounds=2" ""
+FAKE_PR=1 PRE_ROUNDS=3 run_entry
+row "earlier rounds only" "$TIMES review_rounds=0" ""
 ENTRY_AGENT=codex FAKE_PR=1 run_entry
 row "codex" "$TIMES" "cost_usd turns model"
 CLONE_FAIL=1 run_entry
 pre_agent_clean() { ! grep -q "agent_started=" "$CALLS"; }
 stats_ok() { (( rows == 1 )); }
-check "R054 AC-1 final pod record carries agent times, review rounds and agent commits; cost, turns and model only from a readable result object (claude json, text, mixed lines, truncated, injected newlines, bad model, codex); only allow-listed key=value lines reach the record" stats_ok
+check "R054 AC-1 final pod record carries agent times, review rounds and agent commits; cost, turns and model only from a readable result object (claude json, text, mixed lines, truncated, injected newlines, bad model, earlier rounds, codex); review rounds count only this run's new round files; only allow-listed key=value lines reach the record" stats_ok
 check "R054 AC-1 a run that fails before the agent records no agent stats" pre_agent_clean
 finish

@@ -8,7 +8,8 @@ stub curl 'f="$TMP/api/$(grep -oE "(pullrequests|builds)/[0-9]+" <<<"$*" | tr / 
 [[ "$(cat "$f")" == FAIL500 ]] && { printf "\n500"; exit 0; }; cat "$f"; printf "\n200"'
 stub kubectl '[[ -n "${KUBE_FAIL:-}" ]] && exit 1
 case "${KUBE_JUNK:-}:$*" in empty:*) exit 0 ;; html:*) echo "<html>"; exit 0 ;; items:*"get jobs"*) echo "{\"items\":\"x\"}"; exit 0 ;; itemjunk:*"get jobs"*) echo "{\"items\":[1]}"; exit 0 ;; esac
-case "$*" in *"get jobs"*) echo "{\"items\":[{\"metadata\":{\"name\":\"fleet-003-b\",\"creationTimestamp\":\"2026-11-09T12:05:00Z\"},\"status\":{\"active\":1}}]}" ;; *"get pods"*) printf Running ;; esac'
+st="{\"active\":1}"; case "${KUBE_PHASE:-}" in failed) st="{\"failed\":1}" ;; complete) st="{\"succeeded\":1}" ;; gone) [[ "$*" == *"get jobs"* ]] && { echo "{\"items\":[]}"; exit 0; } ;; esac
+case "$*" in *"get jobs"*) echo "{\"items\":[{\"metadata\":{\"name\":\"fleet-003-b\",\"creationTimestamp\":\"2026-11-09T12:05:00Z\"},\"status\":$st}]}" ;; *"get pods"*) printf Running ;; esac'
 mk() { local d="$SPECCLAW_DIR/changes/$1"; mkdir -p "$d"; echo '{"phases":{"proposal":{"status":"approved"}}}' > "$d/state.json"
   printf '**Feature:** cat\n**Depends on:** %s\n' "$2" > "$d/proposal.md"; printf '**Azure Boards Work Item:** [#%s](https://x)\n' "$3" > "$d/status.md"; }
 api() { mkdir -p "$TMP/api"; printf '%s' "$2" > "$TMP/api/$1"; }
@@ -55,6 +56,9 @@ for junk in fail empty html items itemjunk; do
 done
 reset; echo '{"records":[{"at":"2026-11-09T12:20:00Z","state":"pr_open","agent_started":5},{"at":"2026-11-09T12:05:00Z","state":"dispatched"}]}' > "$WI/003-b"
 want "a record shape that breaks the row (no cluster read): a ? row" "$BASE and .rows[1].state == \"?\" and .rows[1].note == \"row could not be built\""
+for ph in failed:failed complete:stalled gone:stalled; do
+  reset; KUBE_PHASE=${ph%%:*} want "Job ${ph%%:*} while records say running: ${ph#*:}, not live" "$BASE and (.rows[1] | .state == \"${ph#*:}\" and (.exit | test(\"no outcome\"))) and .totals.running == 0"
+done
 reset; want "--since drops older runs" '[.rows[].change] == ["003-b"]' --since 2026-11-09T12:00:00Z
 reset; want "--feature attaches waves" '.scope == "feature:cat" and ([.rows[] | "\(.change)=\(.wave)"] == ["002-a=1", "003-b=2"])' --feature cat
 reset; want "named change without records still gets a row" '[.rows[] | "\(.change)=\(.state)"] == ["004-c=null", "002-a=pr_open"]' 004-c 002-a
@@ -68,7 +72,7 @@ html_ok() {
     && [[ -z "$(grep -oE "https?://[^\"' <]+" "$html" | grep -v '^https://x/pullrequest/11$')" ]] && grep -q '"rows":\[' "$html"
 }
 save_ok() { jq -e '.version == 1 and (.rows | length) == 2' "$SPECCLAW_DIR/fleet/report.json" >/dev/null && [[ "$(cat "$SPECCLAW_DIR/fleet/.gitignore")" == "*" ]]; }
-check "R054 AC-2 report --json: newest run per change, PR/build/cluster gap fill, totals; a failed, empty or garbled PR, build or cluster answer keeps the row and marks it unread (exit 0); unreadable records give a ? row and a warning, never a dropped row; --since, --feature, named scopes; bad --since refused" json_ok
+check "R054 AC-2 report --json: newest run per change, PR/build/cluster gap fill, totals; a failed, empty or garbled PR, build or cluster answer keeps the row and marks it unread (exit 0); a failed, finished or vanished Job ends a live row; unreadable records give a ? row and a warning, never a dropped row; --since, --feature, named scopes; bad --since refused" json_ok
 check "R054 AC-3 report table lists rows and totals with the cost labelled an API-equivalent estimate" table_ok
 check "R054 AC-3 report --html is self-contained (no URL but the PR link, every < escaped, data embedded)" html_ok
 check "R054 AC-3 report --save writes the v1 snapshot and a folder-local .gitignore" save_ok

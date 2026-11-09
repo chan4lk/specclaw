@@ -28,6 +28,7 @@ stub git '[[ "$1" == -C && "$3" == merge-base ]] && { [[ -z "${NOT_ANCESTOR:-}" 
 [[ "$1" == clone ]] || exit 0
 [[ -n "${CLONE_FAIL:-}" ]] && exit 128
 dest="${*: -1}"; kind=changes; [[ "${FLEET_MODE:-}" == integrate ]] && kind=features; mkdir -p "$dest/.specclaw/changes/049-x" "$dest/.specclaw/$kind/049-x"
+[[ -n "${PRE_ROUNDS:-}" ]] && { mkdir -p "$dest/.specclaw/changes/049-x/review"; for ((i = 1; i <= PRE_ROUNDS; i++)); do echo "{}" > "$dest/.specclaw/changes/049-x/review/round-p$i.json"; done; }
 [[ -n "${CONFIG_PREFIX:-}" ]] && printf "git:\n  branch_prefix: \"%s\"   # p\n" "$CONFIG_PREFIX" > "$dest/.specclaw/config.yaml"
 [[ -n "${BASE_BRANCH:-}" ]] && printf "git:\n  base_branch: \"%s\"   # b\n" "$BASE_BRANCH" > "$dest/.specclaw/config.yaml"
 [[ -n "${CONFIG_RAW:-}" ]] && printf "%b" "$CONFIG_RAW" > "$dest/.specclaw/config.yaml"
@@ -44,7 +45,7 @@ stub claude 'echo "${SPECCLAW_PR_TARGET-unset}" > "$TMP/prtarget"
 [[ -n "${AGENT_RESULT:-}" ]] && printf "%s\n" "$AGENT_RESULT" > ".specclaw/features/049-x/integration-result"
 env | grep -E "^(ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|OPENAI_API_KEY|CODEX_API_KEY)=" >> "$TMP/leaked"
 [[ "$CLAUDE_CODE_OAUTH_TOKEN" == oat-token ]] || echo "bad token" >> "$TMP/leaked"
-[[ -n "${ROUNDS:-}" ]] && { mkdir -p .specclaw/changes/049-x/review; for ((i = 1; i <= ROUNDS; i++)); do echo "{}" > ".specclaw/changes/049-x/review/round-$i.json"; done; }
+[[ -n "${ROUNDS:-}" ]] && { mkdir -p .specclaw/changes/049-x/review; for ((i = 1; i <= ROUNDS; i++)); do echo "{}" > ".specclaw/changes/049-x/review/round-a$i.json"; done; }
 [[ -n "${AGENT_JSON:-}" ]] && printf "%b\n" "$AGENT_JSON"
 echo "agent says hi; leaked sk-ant-oat01-SECRETTOKENVALUE and pat abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGH"
 sleep "${AGENT_SLEEP:-0}"
