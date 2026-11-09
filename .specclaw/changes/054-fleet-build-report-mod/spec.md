@@ -26,7 +26,7 @@
     - **PR** (`git/pullrequests/<id>`): `creationDate`, `closedDate`, `status`.
     - **Pipeline run** (`build/builds/<pipeline_run>`): `queueTime`, `startTime`, `finishTime`.
     - **Cluster** (`status_job`): the live Job phase.
-    - A failed read leaves that field empty and never fails the report.
+    - A failed, empty or garbled read leaves that field empty, adds `note: "unread: pr, build, cluster"` for the sources it could not read, and never fails the report. Unreadable records give a `?` row with a note and a warning; a row is never dropped.
   - **Totals:**
     - `wall_s`: from the earliest queue or dispatch to the latest agent end, PR record or now while running;
     - `jobs`;

@@ -13,9 +13,11 @@ REPORT_ROW='def t: if . == null or . == "" or (tostring | startswith("0001")) th
   | {change: $c, work_item: (if $id == "" then null else $id end), wave: ($w | n), state: $r.state, exit: $r.exit,
      pipeline_run: $r.pipeline_run, dispatched: ($r.dispatched_at | t),
      queued: ($b.queueTime | t), started: ($b.startTime | t), finished: ($b.finishTime | t),
-     job: ($j.job // $r.job), phase: $j.phase, agent_started: $s0, agent_ended: $s1,
+     job: (if ($j.job // "?") == "?" then $r.job else $j.job end), phase: (if $j._unread then null else $j.phase end), agent_started: $s0, agent_ended: $s1,
      agent_s: (($r.agent_s | n) // secs($s0; $s1)), claude_fetch_s: ($r.claude_fetch_s | n),
      review_rounds: ($r.review_rounds | n), agent_commits: ($r.agent_commits | n),
      cost_usd: ($r.cost_usd | n), turns: ($r.turns | n), model: $r.model,
      pr: (if ($r.pr // "none") == "none" then null else $r.pr end),
-     pr_status: $p.status, pr_opened: ($p.creationDate | t), pr_closed: ($p.closedDate | t)}'
+     pr_status: $p.status, pr_opened: ($p.creationDate | t), pr_closed: ($p.closedDate | t),
+     note: ([if $p._unread then "pr" else empty end, if $b._unread then "build" else empty end,
+       if $j._unread or $j.phase == "?" then "cluster" else empty end] | if length > 0 then "unread: " + join(", ") else null end)}'

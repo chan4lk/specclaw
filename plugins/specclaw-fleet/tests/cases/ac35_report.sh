@@ -32,9 +32,14 @@ A='(.rows[0] | .state == "pr_open" and .pipeline_run == "100" and .queued == "20
 B='(.rows[1] | .state == "running" and .phase == "active" and .agent_started == "2026-11-09T12:10:00Z" and .queued == null and .agent_s == null)'
 TOT='(.totals | .jobs == 2 and .agent_s == 1800 and .hosted_s == 120 and .review_rounds == 3 and .commits == 7 and .claude_fetch_s == 7 and .cost_usd == 2.5 and .running == 1 and .prs_open == 0 and (.wall_s | type) == "number")'
 reset; want "default scope, newest run only, gap fill" "$BASE and $A and $B and $TOT"
-reset; api pullrequests-11 FAIL500; want "PR read fails" "$BASE and .rows[0].pr_status == null and .rows[0].pr_opened == null and .rows[0].agent_s == 1800"
-reset; api pullrequests-11 '[1]'; api builds-100 '<html>'; want "PR and build answers junk" "$BASE and .rows[0].pr_status == null and .rows[0].queued == null and .totals.hosted_s == 0"
-reset; KUBE_FAIL=1 want "cluster unreachable" "$BASE and .rows[1].phase == \"?\""
+for body in EMPTY '<html>' '[]' '"s"' FAIL500; do
+  for src in pullrequests-11 builds-100; do
+    reset; if [[ "$body" == EMPTY ]]; then api "$src" ''; else api "$src" "$body"; fi
+    case "$src" in pullrequests-*) why=pr f='.pr_status == null and .pr_opened == null' ;; *) why=build f='.queued == null' ;; esac
+    want "$src answers [$body]: row kept, marked unread" "$BASE and (.rows[0] | .state == \"pr_open\" and .agent_s == 1800 and .note == \"unread: $why\" and $f)"
+  done
+done
+reset; api pullrequests-11 '{"status":"active"} trailing'; want "an object then garbage: the object is read" "$BASE and .rows[0].pr_status == \"active\" and .rows[0].note == null and .totals.prs_open == 1"
 reset; echo '{"records":[{"at":"2026-11-08T20:00:00Z","state":"pr_open"},{"at":"2026-11-08T19:00:00Z","state":"dispatched"}]}' > "$WI/004-c"; want "latest build drops runs dispatched >12h before the newest" "$BASE"
 for bad in fail junk noarray; do
   reset; case "$bad" in fail) touch "$WI/003-b.fail" ;; junk) echo "<html>" > "$WI/003-b" ;; noarray) echo '{"records":"x"}' > "$WI/003-b" ;; esac
@@ -43,11 +48,13 @@ for bad in fail junk noarray; do
 done
 reset; echo '{"records":[{"at":5,"state":"dispatched"}]}' > "$WI/003-b"
 want "records whose run cannot be merged: a ? row" '[.rows[] | "\(.change)=\(.state)=\(.note)"] == ["003-b=?=records unparsable"]' --since 2026-11-09T12:00:00Z
-reset; echo '{"records":[{"at":"2026-11-09T12:05:00Z","state":"dispatched","agent_started":5}]}' > "$WI/003-b"
-KUBE_FAIL=1 want "a record shape that breaks the row (cluster answer valid): a ? row" "$BASE and .rows[1].state == \"?\" and .rows[1].note == \"row could not be built\""
-for junk in empty html items; do
-  reset; KUBE_JUNK=$junk want "cluster answer $junk: the live row keeps its state" "$BASE and .rows[1].state == \"running\" and .rows[1].note == null and .totals.running == 1"
+for junk in fail empty html items; do
+  reset; if [[ $junk == fail ]]; then export KUBE_FAIL=1; else export KUBE_JUNK=$junk; fi
+  want "cluster answer $junk: live row keeps its state, marked unread" "$BASE and (.rows[1] | .state == \"running\" and .note == \"unread: build, cluster\") and .totals.running == 1"
+  unset KUBE_FAIL KUBE_JUNK
 done
+reset; echo '{"records":[{"at":"2026-11-09T12:20:00Z","state":"pr_open","agent_started":5},{"at":"2026-11-09T12:05:00Z","state":"dispatched"}]}' > "$WI/003-b"
+want "a record shape that breaks the row (no cluster read): a ? row" "$BASE and .rows[1].state == \"?\" and .rows[1].note == \"row could not be built\""
 reset; want "--since drops older runs" '[.rows[].change] == ["003-b"]' --since 2026-11-09T12:00:00Z
 reset; want "--feature attaches waves" '.scope == "feature:cat" and ([.rows[] | "\(.change)=\(.wave)"] == ["002-a=1", "003-b=2"])' --feature cat
 reset; want "named change without records still gets a row" '[.rows[] | "\(.change)=\(.state)"] == ["004-c=null", "002-a=pr_open"]' 004-c 002-a
@@ -61,7 +68,7 @@ html_ok() {
     && [[ -z "$(grep -oE "https?://[^\"' <]+" "$html" | grep -v '^https://x/pullrequest/11$')" ]] && grep -q '"rows":\[' "$html"
 }
 save_ok() { jq -e '.version == 1 and (.rows | length) == 2' "$SPECCLAW_DIR/fleet/report.json" >/dev/null && [[ "$(cat "$SPECCLAW_DIR/fleet/.gitignore")" == "*" ]]; }
-check "R054 AC-2 report --json: newest run per change, PR/build/cluster gap fill, totals; failed or junk reads blank fields with exit 0; unreadable records give a ? row and a warning, never a dropped row; --since, --feature, named scopes; bad --since refused" json_ok
+check "R054 AC-2 report --json: newest run per change, PR/build/cluster gap fill, totals; a failed, empty or garbled PR, build or cluster answer keeps the row and marks it unread (exit 0); unreadable records give a ? row and a warning, never a dropped row; --since, --feature, named scopes; bad --since refused" json_ok
 check "R054 AC-3 report table lists rows and totals with the cost labelled an API-equivalent estimate" table_ok
 check "R054 AC-3 report --html is self-contained (no URL but the PR link, every < escaped, data embedded)" html_ok
 check "R054 AC-3 report --save writes the v1 snapshot and a folder-local .gitignore" save_ok

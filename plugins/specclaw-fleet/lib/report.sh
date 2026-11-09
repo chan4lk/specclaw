@@ -26,12 +26,16 @@ report_scope() {
   return 0
 }
 
-obj() { jq -ce 'objects' <<<"${1:-}" 2>/dev/null || echo '{}'; }
+first_obj() {
+  local out
+  out="$(jq -cn 'first(inputs | objects)' <<<"${1:-}" 2>/dev/null | head -n1)"
+  if [[ -n "$out" ]]; then printf '%s\n' "$out"; else echo '{"_unread":true}'; fi
+}
 
 api_obj() {
   local out
-  out="$(azdo_rest "$1" 2>/dev/null)" || { echo '{}'; return 0; }
-  obj "$out"
+  out="$(azdo_rest "$1" 2>/dev/null)" || { echo '{"_unread":true}'; return 0; }
+  first_obj "$out"
 }
 
 report_row() {
@@ -48,7 +52,7 @@ report_row() {
   [[ -z "$pr" ]] || p="$(api_obj "git/pullrequests/$pr?api-version=7.1")"
   bid="$(jq -r '.pipeline_run // "" | select(test("^[0-9]+$"))' <<<"$run")"
   [[ -z "$bid" ]] || b="$(api_obj "build/builds/$bid?api-version=7.1")"
-  jq -e '.state | IN("dispatched", "running")' <<<"$run" >/dev/null && j="$(obj "$(status_job "$c")")"
+  jq -e '.state | IN("dispatched", "running")' <<<"$run" >/dev/null && j="$(first_obj "$(status_job "$c")")"
   jq -nc --arg c "$c" --arg id "$id" --arg w "$w" --argjson r "$run" --argjson p "$p" --argjson b "$b" --argjson j "$j" "$REPORT_ROW" \
     || unknown_row "$c" "$id" "row could not be built"
 }
