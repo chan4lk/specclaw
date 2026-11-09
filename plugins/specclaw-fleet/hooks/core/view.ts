@@ -24,7 +24,7 @@ export const bandText = (view: View, now: number) => {
   if (view.kind === 'none') return undefined
   if (view.kind === 'unreadable') return 'fleet · report unreadable'
   const { rows, totals } = view.report
-  return `fleet · ${totals.running} running · ${totals.prs_open} PRs open${unknown(view.report)}${lastRun(rows)}${stale(view.report, now)}`
+  return `fleet · ${totals.running} running · ${ge(view.report, 'prs_open')}${totals.prs_open} PRs open${unknown(view.report)}${lastRun(rows)}${stale(view.report, now)}`
 }
 
 export const statusText = (view: View, now: number) =>
@@ -66,8 +66,8 @@ export const paneLines = (view: View, now: number, columns = 100) => {
     pad(x.review_rounds === null ? '-' : String(x.review_rounds), 6), x.pr ? `#${x.pr.split('/').pop()} ${x.pr_status ?? '?'}` : '-'].join(' '))
   return [
     `fleet build · ${r.scope} · snapshot ${age(Math.max(0, (now - ms(r.generated_at)) / 1000))}`,
-    `wall ${dur(t.wall_s)} · ${t.jobs} jobs · agent ${ge(r, 'agent_s')}${dur(t.agent_s)} · hosted ${dur(t.hosted_s)} · ${ge(r, 'review_rounds')}${t.review_rounds} rounds · ${ge(r, 'agent_commits')}${t.commits} commits`,
-    `${t.running} running · ${t.prs_open} PRs open${unknown(r)} · cost ${cost(r)} (API-equivalent estimate)`,
+    `wall ${dur(t.wall_s)} · ${t.jobs} jobs · agent ${ge(r, 'agent_s')}${dur(t.agent_s)} · hosted ${ge(r, 'hosted_s')}${dur(t.hosted_s)} · ${ge(r, 'review_rounds')}${t.review_rounds} rounds · ${ge(r, 'agent_commits')}${t.commits} commits`,
+    `${t.running} running · ${ge(r, 'prs_open')}${t.prs_open} PRs open${unknown(r)} · cost ${cost(r)} (API-equivalent estimate)`,
     '',
     ...rows.map((x, i) => `${pad(x.change, name)} ${bars[i]}`),
     `${' '.repeat(name)} ░ pipeline  █ agent  ▒ PR open`,

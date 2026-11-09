@@ -7,7 +7,7 @@ const PANE = { plugin: 'specclaw-fleet', component: 'Pane', requestId: 'specclaw
 const BAND = { plugin: 'specclaw-fleet', component: 'AbovePrompt', surface: 'terminal',
   props: { hasSurvey: false, isWorking: false, maxRows: 4, bodyColumns: 90, scroll: { offset: 0, bodyRows: 4 }, view: {} } } as const
 
-const engine = (on: Parameters<Parameters<typeof test>[1]>[1], files: Record<string, string>, statuses: (string | undefined)[], runs = { n: 0 }) => {
+const engine = (on: Parameters<Parameters<typeof test>[1]>[1], files: Record<string, string>, statuses: (string | undefined)[], runs: { n: number; throws?: boolean } = { n: 0 }) => {
   on('session.cwd', () => ({ value: '/x' }))
   on('clock.now', () => ({ value: NOW }))
   on('fs.exists', (_, e) => ({ value: e.path in files }))
@@ -15,7 +15,11 @@ const engine = (on: Parameters<Parameters<typeof test>[1]>[1], files: Record<str
   on('ui.status', (_, e) => (statuses.push(e.text), { value: undefined }))
   on('ui.toast', () => ({ value: undefined }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
-  on('tool.call', () => (runs.n += 1, { result: { ok: true } }))
+  on('tool.call', () => {
+    runs.n += 1
+    if (runs.throws) throw new Error('tool throws')
+    return { result: { ok: true } }
+  })
   on('ui.render', ($, e) => {
     const { Text } = $.ui.resolve(e)
     return <Text>engine</Text>
@@ -62,4 +66,11 @@ test('R054 AC-5 a refresh that fails after a fleet command never reruns it or th
   on('state.set', () => { throw new Error('state.set throws') })
   const ran = await $.tool.call({ tool: 'Bash', command: 'specclaw-fleet report --save' })
   expect([runs.n, ran]).toEqual([1, { result: { ok: true } }])
+})
+
+test('R054 AC-5 a Bash call that throws runs once; the catch replays, never reruns', async ($, on) => {
+  const runs = { n: 0, throws: true }
+  engine(on, { [SNAPSHOT]: doc([LIVE], { running: 1 }) }, [], runs)
+  await $.tool.call({ tool: 'Bash', command: 'specclaw-fleet trigger 003-detail' }).catch(() => undefined)
+  expect(runs.n).toBe(1)
 })
