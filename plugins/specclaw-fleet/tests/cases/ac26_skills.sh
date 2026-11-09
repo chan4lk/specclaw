@@ -14,4 +14,11 @@ registered() { grep -q 'run-fleet-tests.sh' "$CI" && grep -q 'run-azdo-issue-opt
 check "R053 AC-5 run skill: dry-run opt-in of the caller only, parallel trigger with --sequential, watch since trigger, no env prefix" run_skill
 check "R053 AC-5 setup skill records confirmed values in fleet: and never a secret" setup_skill
 check "R053 AC-5 the fleet and optin suites run in CI" registered
+P="$FLEET_ROOT/skills/report/SKILL.md"
+report_docs() {
+  grep -q '^description: Use when.*fleet build' "$P" && grep -q 'specclaw-fleet report \[<scope>\] --save' "$P" && grep -q '/fleet-pane' "$P" \
+    && grep -q 'API-equivalent estimate' "$P" && grep -q '^## Build report and pane' "$FLEET_ROOT/README.md" && grep -q 'run-mod-tests.sh' "$CI" \
+    && grep -q 'plugins/specclaw-fleet/tests/run-mod-tests.sh' "$CI"
+}
+check "R054 AC-6 report skill, README section, and the fleet mod suite in CI" report_docs
 finish

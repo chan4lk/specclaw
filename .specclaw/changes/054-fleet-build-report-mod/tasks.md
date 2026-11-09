@@ -29,7 +29,7 @@
 
 ### Wave 3: docs
 
-- [ ] `T5` — `/specclaw-fleet:report` skill and README section (AC-6)
+- [x] `T5` — `/specclaw-fleet:report` skill and README section (AC-6)
   - Files: plugins/specclaw-fleet/skills/report/SKILL.md, plugins/specclaw-fleet/README.md, plugins/specclaw-fleet/tests/cases/ac26_skills.sh
   - Kind: docs
   - Depends: T2, T4
