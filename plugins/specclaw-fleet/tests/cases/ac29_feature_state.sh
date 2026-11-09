@@ -44,6 +44,18 @@ one() { local got; got="$(states)"; got="${got%% *}"; [[ "$got" == "002-a=$1" ]]
 for body in '[]' '{"x":1}' 'FAIL500' ''; do
   reset; mk 002-a none "fleet:auto"; rec 002-a pr_open https://x/pullrequest/21; printf '%s' "$body" > "$TMP/pr-21.json"; one '?' "pr body [$body]"
 done
+for st in dispatched running; do
+  for body in '[]' '{"x":1}' 'FAIL500' ''; do
+    reset; mk 002-a none "fleet:auto"
+    printf '{"records":[{"at":"2","state":"%s"},{"at":"1","state":"pr_open","pr":"https://x/pullrequest/24"}]}' "$st" > "$WI/002-a/records"
+    printf '%s' "$body" > "$TMP/pr-24.json"; one '?' "newer $st, unreadable pr [$body]"
+  done
+  reset; mk 002-a none "fleet:auto"; printf '{"records":[{"at":"2","state":"%s"}]}' "$st" > "$WI/002-a/records"
+  echo '{"branch":"specclaw/002-a"}' > "$SPECCLAW_DIR/changes/002-a/state.json"
+  git -C "$TMP/repo" -c user.name=t -c user.email=t@t commit -q --allow-empty -m a
+  git -C "$TMP/repo" update-ref refs/remotes/origin/specclaw/002-a HEAD; git -C "$TMP/repo" update-ref refs/remotes/origin/feature/cat HEAD
+  one merged "newer $st but merged by hand (ancestry)"
+done
 for r in recfail junk noarray; do
   reset; mk 002-a none "fleet:auto"
   case "$r" in recfail) touch "$WI/002-a/recfail" ;; junk) echo "<html>" > "$WI/002-a/records" ;; noarray) echo '{"records":"x"}' > "$WI/002-a/records" ;; esac
