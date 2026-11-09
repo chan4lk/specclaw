@@ -1,7 +1,7 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** specclaw
-**Last Updated:** 2026-11-09 16:12 UTC
+**Last Updated:** 2026-11-09 16:27 UTC
 
 _4 unnumbered changes · run `/specclaw-extras:renumber` to order them_
 
@@ -21,11 +21,12 @@ _4 unnumbered changes · run `/specclaw-extras:renumber` to order them_
 - 🔍 **051-fleet-azdo-agents** ▫ — verify FAIL | 1/1 tasks (100%) | 0 failed | 55s
 - 🔍 **052-fleet-setup-and-run-skills** ▣ — verify FAIL | 6/6 tasks (100%) | 0 failed | PR #112 merged | 1h5m
 - 🔍 **053-fleet-optin-status-run** ▫ — verify FAIL | 6/6 tasks (100%) | 0 failed
-- 📝 **054-fleet-build-report-mod** ▣ — tasks done | 0/5 tasks (0%) | 0 failed | 54s
+- 🔨 **054-fleet-build-report-mod** ▣ — build in-progress | 5/5 tasks (100%) | 0 failed | 54s
 
 ## Pending Proposals
 
-_None._
+
+- 📋 **055-fleet-trusted-config-sigpipe** — proposal ready, awaiting planning
 
 ## Recently Completed
 
