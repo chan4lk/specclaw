@@ -4,13 +4,13 @@ set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/harness.sh"
 export TMP SPECCLAW_DIR="$TMP/repo/.specclaw" FLEET_AZDO_ISSUE="$TMP/stub/specclaw-azdo-issue" AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t
 stub specclaw-azdo-issue 'case "$1" in
-  show) [[ "$3" == 009-u ]] && { echo "<html>"; exit 0; } ;;&
+  show) [[ "$3" == 009-u ]] && { case "${UNREAD:-html}" in html) echo "<html>" ;; fail) exit 1 ;; array) echo "[]" ;; esac; exit 0; } ;;&
   show) [[ "$3" == 006-f ]] && echo "{\"fields\":{\"System.Tags\":\"fleet:auto; fleet:conflict-retried\"}}" || echo "{\"fields\":{\"System.Tags\":\"fleet:auto\"}}" ;;
   create) printf "**Azure Boards Work Item:** [#300](https://x)\n" >> "$2/features/$3/status.md" ;;
 esac; exit 0'
 advance() {
   printf '%s' "$1" > "$TMP/states.json"; : > "$TMP/dispatch.log"; : > "$CALLS"
-  env FLEET_TRUSTED_BRANCH="${2:-}" DISPATCH_RC="${3:-0}" bash -c '
+  env FLEET_TRUSTED_BRANCH="${2:-}" DISPATCH_RC="${3:-0}" UNREAD="${UNREAD:-html}" bash -c '
     FLEET_ROOT="$1"; SPECCLAW_DIR="$2"; FLEET_TMPDIR="$(mktemp -d)"; for l in "$1"/lib/*.sh; do source "$l"; done
     feature_states() { cat "$TMP/states.json"; }
     fleet_dispatch() { echo "dispatch $* ref=$FLEET_REF merge=${FLEET_MERGE_REF:-} mode=${FLEET_MODE:-} target=${FLEET_PR_TARGET:-}" >> "$TMP/dispatch.log"; return "${DISPATCH_RC:-0}"; }
@@ -38,9 +38,13 @@ check "R050 AC-4 when every member is merged, advance dispatches the feature ite
 advance "$(S 003-b=ready)" "" 1; err_rc=$?
 errors_fail() { (( err_rc != 0 )) && grep -q '"errors":1' "$TMP/out"; }
 check "R050 AC-4 a dispatch error makes advance fail and counts it" errors_fail
-advance "$(S 009-u=conflict)"; unread_rc=$?; unread_log="$(cat "$TMP/dispatch.log")"; unread_calls="$(cat "$CALLS")"
-unread_no_retry() { (( unread_rc != 0 )) && [[ -z "$unread_log" ]] && ! grep -q "azdo-issue tag" <<<"$unread_calls"; }
-check "R050 an unreadable work item in conflict is an error: no retry tag, no dispatch" unread_no_retry
+unread_ok=1
+for u in html fail array; do
+  UNREAD=$u advance "$(S 009-u=conflict)"; rc=$?
+  (( rc != 0 )) && [[ ! -s "$TMP/dispatch.log" ]] && ! grep -q "azdo-issue tag" "$CALLS" || { unread_ok=0; echo "  unread $u: rc=$rc"; }
+done
+unread_no_retry() { (( unread_ok == 1 )); }
+check "R050 an unreadable work item in conflict (html, non-zero exit, non-object JSON) is an error: no retry tag, no dispatch" unread_no_retry
 rm -rf "$TMP/repo"; mkdir -p "$SPECCLAW_DIR/changes/002-a" "$SPECCLAW_DIR/changes/003-b"
 printf '**Feature:** cat\n' > "$SPECCLAW_DIR/changes/002-a/proposal.md"; printf '**Feature:** cat\n**Depends on:** 002-a\n' > "$SPECCLAW_DIR/changes/003-b/proposal.md"
 (cd "$TMP/repo" && "$FLEET" feature init cat) > "$TMP/out" 2>&1; init_rc=$?
