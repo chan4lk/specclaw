@@ -17,7 +17,7 @@
 
 ### Wave 2: coordination
 
-- [ ] `T3` — Member state from records, tags and the PR API, with the ancestor fallback (AC-3)
+- [x] `T3` — Member state from records, tags and the PR API, with the ancestor fallback (AC-3)
   - Files: plugins/specclaw-fleet/lib/feature-state.sh, plugins/specclaw-fleet/tests/cases/ac29_feature_state.sh
   - Kind: impl
   - Depends: T1

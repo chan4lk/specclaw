@@ -1,19 +1,12 @@
 # shellcheck shell=bash
 feature_plan() {
-  local module="$1" json=0 wave c deps
-  [[ "${2:-}" == --json ]] && json=1
-  local waves; waves="$(feature_waves "$module")" || exit 1
-  if (( json )); then
-    while IFS=$'\t' read -r wave c; do
-      jq -nc --arg c "$c" --argjson w "$wave" --arg d "$(change_deps "$c" | paste -sd, -)" '{change: $c, wave: $w, depends_on: ($d | split(",") | map(select(. != "")))}'
-    done <<<"$waves" | jq -sc --arg m "$module" '{feature: $m, members: .}'
-    return 0
-  fi
+  local module="$1" states
+  load_azdo_env
+  states="$(feature_states "$module")" || exit 1
+  if [[ "${2:-}" == --json ]]; then jq -c --arg m "$module" '{feature: $m, members: .}' <<<"$states"; return 0; fi
   echo "feature $module"
-  while IFS=$'\t' read -r wave c; do
-    deps="$(change_deps "$c" | paste -sd, -)"
-    printf '  wave %s  %-36s %s\n' "$wave" "$c" "${deps:+depends on $deps}"
-  done <<<"$waves"
+  jq -r '.[] | "  wave \(.wave)  \(.change)\t\(.state)\t\(if (.depends_on | length) > 0 then "depends on " + (.depends_on | join(",")) else "" end)"' <<<"$states" \
+    | awk -F'\t' '{ printf "%-46s %-14s %s\n", $1, $2, $3 }'
 }
 
 fleet_feature() {
