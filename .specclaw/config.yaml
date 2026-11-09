@@ -91,3 +91,6 @@ plugin:
     - "plugins/specclaw-extras/.codex-plugin/plugin.json"
     - "plugins/specclaw-review/.claude-plugin/plugin.json"
     - "plugins/specclaw-review/.codex-plugin/plugin.json"
+
+review:
+  timeout_seconds: 1800   # whole-change Opus final passes on large fleet diffs exceed 900 s

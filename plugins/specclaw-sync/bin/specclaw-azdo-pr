@@ -569,6 +569,14 @@ save_pr_url() {
   return 0
 }
 
+# A per-run SPECCLAW_PR_TARGET (set by specclaw-fleet for feature branches) wins over git.base_branch.
+pr_target_branch() {
+  local t="${SPECCLAW_PR_TARGET:-}"
+  [[ -n "$t" ]] || t="$(yaml_val "$CONFIG_FILE" "git.base_branch" 2>/dev/null || true)"
+  [[ -n "$t" ]] || t="$(get_default_branch)"
+  printf '%s' "${t:-main}"
+}
+
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 main() {
@@ -577,9 +585,7 @@ main() {
   # The PR is opened from the change branch, never from the base (change 043).
   # git.base_branch, when set, saves the API round trip.
   local source_branch target_branch branch_prefix
-  target_branch="$(yaml_val "$CONFIG_FILE" "git.base_branch" 2>/dev/null || true)"
-  [[ -n "$target_branch" ]] || target_branch="$(get_default_branch)"
-  [[ -n "$target_branch" ]] || target_branch="main"
+  target_branch="$(pr_target_branch)"
   branch_prefix="$(yaml_val "$CONFIG_FILE" "git.branch_prefix" 2>/dev/null || true)"
   pr_require_change_branch "${branch_prefix:-specclaw/}${CHANGE_NAME}" "$target_branch"
   source_branch="$(git rev-parse --abbrev-ref HEAD)"

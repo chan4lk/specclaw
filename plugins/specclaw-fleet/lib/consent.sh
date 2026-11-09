@@ -11,11 +11,12 @@ has_auto_tag() {
 }
 
 auto_tagged_by() {
-  azdo_issue updates "$SPECCLAW_DIR" "$F_CHANGE" | jq -r '
+  azdo_issue updates "$SPECCLAW_DIR" "$F_CHANGE" | jq -er '
     def auto: ascii_downcase | split(";") | map(gsub("^\\s+|\\s+$"; "")) | index("fleet:auto") != null;
-    [.value[] | .fields["System.Tags"]? as $t | select($t != null)
+    if (.value | type) != "array" then error("no history") else . end
+    | [.value[] | .fields["System.Tags"]? as $t | select($t != null)
       | select(($t.newValue // "" | auto) and (($t.oldValue // "" | auto) | not))]
-    | last | .revisedBy.uniqueName // empty'
+    | last | .revisedBy.uniqueName // ""' 2>/dev/null
 }
 
 gate_owner() {

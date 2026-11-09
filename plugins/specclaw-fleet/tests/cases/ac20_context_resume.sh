@@ -33,7 +33,7 @@ partial="$(export SPECCLAW_DIR="$TMP/sc" AZDO_ORG=envorg; unset AZDO_PROJECT AZD
 per_key() { [[ "$partial" == "envorg fileproj filetok" ]]; }
 check "R10 .env fills only the keys the environment leaves unset" per_key
 
-stub curl 'echo "$*" >> "$TMP/curl.log"; case "$*" in *manifests*) printf 200 ;; *) echo "{\"token\":\"t\"}" ;; esac'
+stub curl 'echo "$*" >> "$TMP/curl.log"; case "$*" in *manifests*) printf 200 ;; *) echo "{\"token\":\"t\"}"; printf 200 ;; esac'
 export TMP
 (unset FLEET_IMAGE; source "$FLEET_ROOT/lib/common.sh"; source "$FLEET_ROOT/lib/doctor-azure.sh"; check_image) > "$TMP/img" 2>&1
 version="$(jq -r .version "$FLEET_ROOT/.claude-plugin/plugin.json")"

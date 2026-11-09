@@ -1,0 +1,44 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 0
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw-fleet/lib/feature-state.sh",
+  "plugins/specclaw-fleet/tests/cases/ac29_feature_state.sh",
+  "plugins/specclaw-fleet/tests/cases/ac30_feature_advance.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw-fleet/tests/cases/ac29_feature_state.sh",
+   "fp": "59a5108543c0",
+   "in_delta": true,
+   "line": 43,
+   "message": "The unreadable-PR table only uses a `pr_open` newest record. The previous finding asked for the `dispatched` record variant too, and it is still missing. The PR read has to come before the running check, because that order is the fix. No test pins it. The hand-merge-by-ancestry path with a newer dispatched/running record is also untested, although that is the other path the previous finding said the running check must not hide. Add the table rows: newest `dispatched`/`running` record with an older PR record whose body is `[]`, `{\"x\":1}`, a 500 or empty (expect `?`), and a newer `dispatched` record with `origin/<branch>` an ancestor of `origin/feature/<m>` (expect `merged`).",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Move the running check back above the PR read, or above the ancestry check. Records are [dispatched (newer), pr_open PR 21], and PR 21 returns FAIL500. The member reports `running` instead of `?`. A member whose branch was hand-merged, with a newer dispatched record, also reports `running` instead of `merged`. Every row in the new loops still passes.",
+   "severity": "major"
+  }
+ ],
+ "head": "9d987f2a682618e64669495828cc7c59d8b4da30",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 21318,
+ "round": 3,
+ "since": "4dae74094d07dc2eb76e98694de91b5908967557",
+ "status": "open",
+ "system_chars": 8956,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794208411,
+ "ts_start": 1794208385
+}

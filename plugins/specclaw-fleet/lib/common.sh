@@ -44,17 +44,30 @@ https_repo_url() {
   printf '%s' "$u"
 }
 
-load_azdo_env() {
-  local line key value
+load_dotenv() {
+  local line key value empty_unset=0
+  [[ "${1:-}" == --empty-is-unset ]] && { empty_unset=1; shift; }
+  local keys="$*"
   [[ -f "$SPECCLAW_DIR/.env" ]] || return 0
   while IFS= read -r line || [[ -n "$line" ]]; do
     line="${line%$'\r'}"
-    [[ "$line" =~ ^(export[[:space:]]+)?(AZDO_ORG|AZDO_PROJECT|AZDO_TOKEN)=(.*)$ ]] || continue
+    [[ "$line" =~ ^(export[[:space:]]+)?([A-Z_]+)=(.*)$ && " $keys " == *" ${BASH_REMATCH[2]} "* ]] || continue
     key="${BASH_REMATCH[2]}" value="${BASH_REMATCH[3]}"
-    [[ -z "${!key:-}" ]] || continue
+    if (( empty_unset )); then [[ -z "${!key:-}" ]] || continue; else [[ -z "${!key+x}" ]] || continue; fi
     if [[ "$value" =~ ^\"([^\"]*)\"$ || "$value" =~ ^\'([^\']*)\'$ ]]; then value="${BASH_REMATCH[1]}"
     else value="${value%%[[:space:]]#*}"; fi
     [[ "$value" =~ ^[^[:space:]\"\']*$ ]] || { warn "ignored unparsable $key line in $SPECCLAW_DIR/.env"; continue; }
     export "$key=$value"
   done < "$SPECCLAW_DIR/.env"
+}
+
+load_azdo_env() { load_dotenv --empty-is-unset AZDO_ORG AZDO_PROJECT AZDO_TOKEN; }
+
+load_local_env() {
+  local had="${KUBECONFIG+x}" root
+  load_dotenv FLEET_KUBE_CONTEXT KUBECONFIG
+  [[ -z "$had" && "${KUBECONFIG:-}" == *:* ]] && warn "KUBECONFIG in $SPECCLAW_DIR/.env is a list; its entries are used as written, relative to the current directory"
+  [[ -n "$had" || -z "${KUBECONFIG:-}" || "$KUBECONFIG" == /* || "$KUBECONFIG" == *:* ]] && return 0
+  root="$(cd "$SPECCLAW_DIR/.." 2>/dev/null && pwd)" || die "cannot resolve KUBECONFIG from $SPECCLAW_DIR/.env: no repo root"
+  export KUBECONFIG="$root/${KUBECONFIG#./}"
 }

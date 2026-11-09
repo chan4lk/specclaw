@@ -46,9 +46,10 @@ Extend `specclaw-fleet` (049):
 
 ## Open Questions
 
-- Should dependencies come from Boards `Predecessor` links, or from a `depends_on:` list in each change's `proposal.md`? A `depends_on:` list keeps them in git, but the two can drift apart.
-- Integration verify: run it in a fleet job (Claude or Codex) on the feature branch, or in an AzDO build on a self-hosted agent (051)?
-- Should a `Failed` child block the whole feature, or let the remaining waves continue?
+Resolved by the operator on 2026-11-08:
+- **Dependencies** live in git. Each child declares `**Feature:** <module>` and `**Depends on:** <change>, …` in `proposal.md`, or in `change.md` for a lean change. Boards links are written for visibility only and are never read back.
+- **Integration verify** runs as a fleet job on the cluster: the same pod and agent model, run on `feature/<module>`, ending in the PR `feature/<module> → main`.
+- **A failed child** blocks only its own dependents. Every other wave keeps going, and the feature PR waits until a human fixes or drops that child.
 
 ## Dependency Bypass
 

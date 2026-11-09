@@ -1,0 +1,48 @@
+# shellcheck shell=bash disable=SC2034
+status_pipeline() {
+  local name="${FLEET_PIPELINE:-specclaw-fleet}" id run
+  local rc=0; id="$(azdo_pipeline_id "$name" 2>/dev/null)" || rc=$?
+  (( rc == 3 )) && { jq -nc --arg n "$name" '{pipeline: $n, run: "?", status: "unknown (AZDO_TOKEN lacks Build Read)"}'; return; }
+  (( rc == 0 )) || { jq -nc --arg n "$name" '{pipeline: $n, run: "?", status: "unknown (AzDO unreadable)"}'; return; }
+  [[ -n "$id" ]] || { jq -nc --arg n "$name" '{pipeline: $n, run: "-", status: "missing (no pipeline with this name)"}'; return; }
+  run="$(azdo_rest "pipelines/$id/runs?\$top=1&api-version=7.1" | jq -c '.value[0] // {}' 2>/dev/null)" || run='{}'
+  jq -nc --arg n "$name" --argjson r "${run:-{\}}" '{pipeline: $n, run: ($r.id // "?"), status: ($r.state // "?"), result: ($r.result // "-")}'
+}
+
+status_print() {
+  jq -r '"pipeline \(.pipeline): run \(.run) \(.status // "") \(.result // "")"' <<<"$1"
+  jq -r '[.change, (if .work_item then "#" + .work_item else "-" end), (.state // "-"), (.assignee // "-"),
+      (if .tags then (.tags | join(",") | if . == "" then "-" else . end) else "-" end),
+      (.note // ((.record.state) + (if (.record.exit // "") != "" then " exit=" + .record.exit else "" end)
+        + (if (.record.pr // "") | IN("", "none") | not then " pr=" + .record.pr else "" end) + (if .record.draft == "true" then " (draft)" else "" end))),
+      (if .cluster then "\(.cluster.job) \(.cluster.phase)/\(.cluster.pod)" else "-" end)] | @tsv' <<<"$2" \
+    | awk -F'\t' 'BEGIN { printf "%-34s %-6s %-8s %-28s %-18s %-40s %s\n", "CHANGE", "ITEM", "STATE", "ASSIGNEE", "FLEET TAGS", "LAST RECORD", "CLUSTER" }
+      { printf "%-34s %-6s %-8s %-28s %-18s %-40s %s\n", $1, $2, $3, $4, $5, $6, $7 }'
+}
+
+status_runs() {
+  local pair out rc
+  for pair in $S_RUNMAP; do
+    rc=0; out="$(azdo_rest "build/builds/${pair#*=}?api-version=7.1")" || rc=$?
+    jq -nc --arg c "${pair%%=*}" --arg id "${pair#*=}" --arg why "$( (( rc == 3 )) && echo "unknown: AZDO_TOKEN lacks Build Read" || echo unknown)" \
+      --argjson b "$( (( rc == 0 )) && jq -c 'if type == "object" then . else {} end' <<<"$out" 2>/dev/null || echo '{}')" \
+      '{change: $c, id: $id, status: ($b.status // $why), result: ($b.result // "-"), queued: (($b.queueTime // "") | sub("\\.[0-9]+"; ""))}'
+  done | jq -sc '.'
+}
+
+fleet_status() {
+  parse_status_args "$@"
+  load_azdo_env
+  local rows head c end
+  if [[ "$S_TIMEOUT" == *s ]]; then end=$(( SECONDS + 10#${S_TIMEOUT%s} )); else end=$(( SECONDS + 10#$S_TIMEOUT * 60 )); fi
+  while :; do
+    head="$(status_pipeline)"; rows=""; S_RUNS="$(status_runs)"
+    for c in "${S_CHANGES[@]}"; do rows+="$(status_row "$c")"$'\n'; done
+    if (( S_JSON )); then jq -c --argjson h "$head" -s '{pipeline: $h, changes: .}' <<<"$rows"
+    else (( S_WATCH )) && echo "--- $(date -u +%H:%M:%SZ)"; status_print "$head" "$rows"; fi
+    (( S_WATCH )) || return 0
+    jq -e -s 'all(.terminal)' <<<"$rows" >/dev/null && return 0
+    (( SECONDS < end )) || { echo "status: watch timed out after $S_TIMEOUT$([[ $S_TIMEOUT == *s ]] || echo " min"); still running: $(jq -r -s '[.[] | select(.terminal | not) | .change] | join(" ")' <<<"$rows")" >&2; return 2; }
+    sleep "$S_INTERVAL"
+  done
+}

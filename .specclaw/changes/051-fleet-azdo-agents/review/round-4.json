@@ -1,0 +1,88 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 2,
+  "minor": 2
+ },
+ "escalated": [
+  "8586fb40945f"
+ ],
+ "files": [
+  "plugins/specclaw-fleet/image/draft-pr.sh",
+  "plugins/specclaw-fleet/image/entrypoint.sh",
+  "plugins/specclaw-fleet/image/integrate.sh",
+  "plugins/specclaw-fleet/tests/cases/ac28_pr_target.sh",
+  "plugins/specclaw-fleet/tests/cases/ac31_integrate_pod.sh",
+  "plugins/specclaw-fleet/tests/lib/entry-env.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw-fleet/image/draft-pr.sh",
+   "fp": "6d0079ae0cb8",
+   "in_delta": true,
+   "line": 21,
+   "message": "The new awk parser keeps trailing whitespace and carriage returns in the value. The old sed excluded them with `[^\"#[:space:]]+`. `sub(/[[:space:]]+#.*$/)` only strips whitespace when a comment follows. The quote-stripping `gsub(/^[\"']|[\"']$/)` only works when the closing quote is the last character. The result is exported as SPECCLAW_PR_TARGET, so it overrides specclaw-azdo-pr's own parsing. Trim trailing whitespace and `\\r` after removing the comment, then strip the quotes. Add test rows for these forms.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "config.yaml has `  base_branch: develop  ` (trailing spaces), `  base_branch: \"develop\"  ` or CRLF line endings. v becomes `develop  `, `develop\"  ` or `develop\\r`. The PR is created with targetRefName `refs/heads/develop\\r`, or azdo-pr gets a broken target. The old sed returned `develop`.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/tests/cases/ac31_integrate_pod.sh",
+   "fp": "8586fb40945f",
+   "in_delta": true,
+   "line": 22,
+   "message": "The `|| return 1` that makes a failed `rm` fatal, and the check that the marker is really gone, have no test. The conflict path is not covered for a marker brought in by the merge either: the stub's MERGE_CONFLICT branch exits before MERGE_BRINGS_PASS writes anything. Only one new merge-carried-pass row was added. Add a row where the marker cannot be removed (for example, the path is a non-empty directory or the features dir is read-only) and assert the pod does not open a ready PR. Add a row where the merge conflicts and the marker is present.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Delete `&& [[ ! -e ... ]]` or let the `rm` fail silently. Every test in ac31 stays green. A pass marker that cannot be removed then un-drafts a PR whose integration run did not pass.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/image/integrate.sh",
+   "fp": "dbeacb8008bb",
+   "in_delta": true,
+   "line": 5,
+   "message": "The integrate prompt now names the PR target as `${FLEET_PR_TARGET:-main}`. This is a second copy of the target rule. The real target comes from resolve_pr_target (FLEET_PR_TARGET, then a feature ref, then git.base_branch, then FLEET_REF) and runs after the prompt is built. The old prompt used SPECCLAW_PR_TARGET and matched. Build the prompt text after resolve_pr_target, from $SPECCLAW_PR_TARGET.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B4",
+   "scenario": "FLEET_MODE=integrate, FLEET_REF=feature/049-x, FLEET_PR_TARGET unset. The agent is told the PR opens to main, but the pod opens it into feature/049-x.",
+   "severity": "minor"
+  },
+  {
+   "file": "plugins/specclaw-fleet/tests/cases/ac28_pr_target.sh",
+   "fp": "742271cb3456",
+   "in_delta": true,
+   "line": 24,
+   "message": "The precedence table does not cover the stated order. There is no row where a feature/* FLEET_REF is set together with git.base_branch, and none where a non-main FLEET_REF is used with no config. The only no-config row uses the default ref main, so it cannot tell the FLEET_REF fallback from a hard-coded main. Add those rows, plus trailing-whitespace and CRLF values.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Swap the feature-ref and config steps in resolve_pr_target, or replace `$FLEET_REF` with `main` in the fallback. All rows still pass.",
+   "severity": "minor"
+  }
+ ],
+ "head": "506f2c450ae609ab3746ed0e788a78b7f434d17a",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 26100,
+ "round": 4,
+ "since": "62b74d7fd99aae798b5a71830f4c8f77d3223136",
+ "status": "escalate",
+ "system_chars": 8953,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794220380,
+ "ts_start": 1794220331
+}

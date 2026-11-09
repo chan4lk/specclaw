@@ -22,7 +22,7 @@ show_agent_log() {
 
 push_change_branch() {
   local branch
-  branch="$(jq -r '.branch // empty' "$STATE" 2>/dev/null)"
+  branch="$(change_branch)"
   [[ -n "$branch" && "$(git -C "$REPO" rev-parse --abbrev-ref HEAD 2>/dev/null)" == "$branch" ]] || return 0
   git -C "$REPO" push -q -u origin HEAD >&2 || { echo "WARNING: could not push $branch" >&2; return 0; }
   printf '%s' "$branch"

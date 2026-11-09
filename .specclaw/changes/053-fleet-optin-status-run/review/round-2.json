@@ -1,0 +1,86 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 2,
+  "minor": 1
+ },
+ "escalated": [],
+ "files": [
+  ".claude-plugin/marketplace.json",
+  "plugins/specclaw-bf/.claude-plugin/plugin.json",
+  "plugins/specclaw-bf/.codex-plugin/plugin.json",
+  "plugins/specclaw-extras/.claude-plugin/plugin.json",
+  "plugins/specclaw-extras/.codex-plugin/plugin.json",
+  "plugins/specclaw-fleet/.claude-plugin/plugin.json",
+  "plugins/specclaw-fleet/.codex-plugin/plugin.json",
+  "plugins/specclaw-fleet/README.md",
+  "plugins/specclaw-fleet/lib/doctor-azure.sh",
+  "plugins/specclaw-fleet/lib/settings.sh",
+  "plugins/specclaw-fleet/skills/setup/SKILL.md",
+  "plugins/specclaw-fleet/tests/cases/ac22_settings.sh",
+  "plugins/specclaw-fleet/tests/cases/ac25_hosted_fixes.sh",
+  "plugins/specclaw-review/.claude-plugin/plugin.json",
+  "plugins/specclaw-review/.codex-plugin/plugin.json",
+  "plugins/specclaw-sync/.claude-plugin/plugin.json",
+  "plugins/specclaw-sync/.codex-plugin/plugin.json",
+  "plugins/specclaw/.claude-plugin/plugin.json",
+  "plugins/specclaw/.codex-plugin/plugin.json"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw-fleet/lib/settings.sh",
+   "fp": "fe2571872a4d",
+   "in_delta": true,
+   "line": 12,
+   "message": "The secret guard was loosened to fix long kubeconfig paths. Any value containing `/` now returns 'not a secret' before the 52+ character token check runs. The old regex counted `/` as a token character. Base64 secrets such as storage keys and many API keys contain `/`, so they now pass into config unrefused. Exempting a character class from the length check fixes the path case but misses the whole class of slash-bearing secrets. Scope the exemption to path-shaped values (for example `^/` or `^~` or `^\\.{0,2}/`, with whitespace-free path segments). Alternatively, measure the longest `[A-Za-z0-9+/_-]` run after stripping known path prefixes.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "`fleet:\\n  vault: Ab3dEf...(30 chars)/Gh1jKl...(30 chars)+Mn0pQr` (a 60+ character base64 secret with a `/`) \u2192 `looks_secret` returns 1 at the `*/*` test \u2192 the value is loaded and exported with no refusal. Before this change it was refused.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/tests/cases/ac25_hosted_fixes.sh",
+   "fp": "2cee75e1d3cd",
+   "in_delta": true,
+   "line": 21,
+   "message": "The B3 fix touches two functions and several malformed-answer shapes: non-JSON, JSON without `.value`, `.value` not an array, and an empty body. The new test drives only one body, `<html>sign in</html>`. The type-guard branches that were added (`.value | type == \"array\"` and the `else error(\"no list\")`) are never exercised. Make it table-driven over at least: HTML, empty body, `{\"message\":\"x\"}`, `{\"value\":null}` and `{\"value\":\"x\"}`, and assert skip and rc=2 for each function.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Remove the `else error(\"no list\")` branch and the `type == \"array\"` check on `{\"message\":\"unauthorized\"}`. `check_connections` then reports `ok service-connections: ready` (or 'missing' when `.value` is null). The HTML-only test stays green only because jq fails to parse HTML.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/lib/doctor-azure.sh",
+   "fp": "ba52966b6cfd",
+   "in_delta": true,
+   "line": 46,
+   "message": "`pipeline_var` returns an empty string whenever the pipeline file is missing, unreadable, or the key does not match the two-space-indent regex. `check_connections` then silently falls back to the default names. 'Could not read the pipeline YAML' becomes 'check the defaults', so doctor can print `ok` for connections the real pipeline does not use. Emit a skip or warning when `pipeline_file` is set or expected but cannot be read or has no matching key.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B3",
+   "scenario": "`fleet.pipeline_file` points at a wrong path, or the YAML declares the variable with different indentation. `pipeline_var` is empty, doctor checks `specclaw-fleet-k3s` and `specclaw-fleet-azure`, and prints `ok service-connections: ready` while the real pipeline needs `specclaw-fleet-hetzner`.",
+   "severity": "minor"
+  }
+ ],
+ "head": "6078b6caaddf9290bc3ecd97a01ab1b9eb26f4fe",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 32072,
+ "round": 2,
+ "since": "a2f8686",
+ "status": "open",
+ "system_chars": 8956,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794111082,
+ "ts_start": 1794111050
+}

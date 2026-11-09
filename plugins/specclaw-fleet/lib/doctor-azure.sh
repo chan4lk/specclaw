@@ -9,12 +9,16 @@ check_vault() {
 }
 
 check_image() {
-  local image repo tag token code
+  local image repo tag token code out
   image="$(default_image)"
   [[ "$image" == ghcr.io/*:* ]] || { echo "skip image: only ghcr.io images are checked (${image:-unset})"; return 2; }
   repo="${image#ghcr.io/}"; tag="${repo##*:}"; repo="${repo%:*}"
-  token="$(curl -fsS -m 15 "https://ghcr.io/token?scope=repository:$repo:pull" | jq -r '.token // empty')"
-  [[ -n "$token" ]] || { echo "skip image: could not get an anonymous ghcr.io token (network?)"; return 2; }
+  out="$(curl -sS -m 15 -w '\n%{http_code}' "https://ghcr.io/token?scope=repository:$repo:pull" 2>/dev/null)"
+  case "${out##*$'\n'}" in
+    401|403) echo "missing image: $image: package missing or private (ghcr.io refused an anonymous token)"; return 1 ;;
+    200) token="$(jq -r '.token // empty' <<<"${out%$'\n'*}" 2>/dev/null)" ;;
+  esac
+  [[ -n "${token:-}" ]] || { echo "skip image: could not get an anonymous ghcr.io token (network?)"; return 2; }
   code="$(curl -sS -m 15 -o /dev/null -w '%{http_code}' -I -H "Authorization: Bearer $token" \
     -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json" \
     "https://ghcr.io/v2/$repo/manifests/$tag")"
@@ -30,22 +34,35 @@ azdo_args() {
 }
 
 check_pipeline() {
-  local -a a; mapfile -t a < <(azdo_args)
-  local id
-  id="$(az pipelines list --name "${FLEET_PIPELINE:-specclaw-fleet}" "${a[@]}" --query "[0].id" -o tsv 2>/dev/null)" \
-    || { echo "skip pipeline: could not list pipelines (az devops login? network?)"; return 2; }
-  [[ -n "$id" ]] && { echo "ok pipeline: ${FLEET_PIPELINE:-specclaw-fleet}"; return 0; }
-  echo "missing pipeline: ${FLEET_PIPELINE:-specclaw-fleet} in ${AZDO_ORG:-?}/${AZDO_PROJECT:-?}"; return 1
+  local name="${FLEET_PIPELINE:-specclaw-fleet}" id rc=0
+  id="$(azdo_pipeline_id "$name" 2>/dev/null)" || rc=$?
+  (( rc == 3 )) && { echo "skip pipeline: AZDO_TOKEN lacks the Build (Read) scope; add it to the PAT"; return 2; }
+  (( rc == 0 )) || { echo "skip pipeline: could not list pipelines with AZDO_TOKEN (set in .specclaw/.env?)"; return 2; }
+  [[ -n "$id" ]] && { echo "ok pipeline: $name"; return 0; }
+  echo "missing pipeline: $name in ${AZDO_ORG:-?}/${AZDO_PROJECT:-?}"; return 1
+}
+
+pipeline_file_path() {
+  local f="${FLEET_PIPELINE_FILE:-azure-pipelines/specclaw-fleet.yml}"
+  [[ "$f" == /* ]] && printf '%s' "$f" || printf '%s/../%s' "$SPECCLAW_DIR" "$f"
+}
+
+pipeline_var() {
+  local f; f="$(pipeline_file_path)"
+  sed -nE -e "s/^  $1:[[:space:]]*\"([^\"]*)\".*/\1/p;t" -e "s/^  $1:[[:space:]]*'([^']*)'.*/\1/p;t" \
+    -e "s/^  $1:[[:space:]]*([^#]*[^#[:space:]]).*/\1/p" "$f" 2>/dev/null | head -n1
 }
 
 check_connections() {
-  local -a a; mapfile -t a < <(azdo_args)
-  local ready name missing=""
-  ready="$(az devops service-endpoint list "${a[@]}" --query "[?isReady].name" -o tsv 2>/dev/null)" \
-    || { echo "skip service-connections: could not list them (az devops login? network?)"; return 2; }
-  for name in "${FLEET_KUBE_CONNECTION:-specclaw-fleet-k3s}" "${FLEET_AZURE_CONNECTION:-specclaw-fleet-azure}"; do
-    grep -qxF "$name" <<<"$ready" || missing+=" $name"
-  done
+  local k z out missing
+  k="${FLEET_KUBE_CONNECTION:-$(pipeline_var fleetKubeConnection)}"; z="${FLEET_AZURE_CONNECTION:-$(pipeline_var fleetAzureConnection)}"
+  [[ -n "$k" && -n "$z" ]] || { echo "skip service-connections: fleetKubeConnection and fleetAzureConnection not both found as two-space "name: value" variables in $(pipeline_file_path) (list-form variables are not read)"; return 2; }
+  local rc=0
+  out="$(azdo_rest "serviceendpoint/endpoints?endpointNames=$(jq -rn --arg a "$k" --arg b "$z" '"\($a|@uri),\($b|@uri)"')&api-version=7.1")" || rc=$?
+  (( rc == 3 )) && { echo "skip service-connections: AZDO_TOKEN lacks the Service Connections (Read) scope; add it to the PAT"; return 2; }
+  (( rc == 0 )) || { echo "skip service-connections: could not list them with AZDO_TOKEN (set in .specclaw/.env?)"; return 2; }
+  missing="$(jq -er --arg k "$k" --arg z "$z" '.value | if type == "array" then [$k, $z] - ([.[] | select(.isReady) | .name | ascii_downcase] as $r | [$k, $z] | map(select(ascii_downcase as $x | $r | index($x)))) | join(" ") else error("no list") end' <<<"$out" 2>/dev/null)" \
+    || { echo "skip service-connections: AzDO answered with something that is not an endpoint list"; return 2; }
   [[ -z "$missing" ]] && { echo "ok service-connections: ready"; return 0; }
-  echo "missing service-connections:$missing"; return 1
+  echo "missing service-connections: $missing"; return 1
 }

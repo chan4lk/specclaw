@@ -55,22 +55,52 @@ Run **`/specclaw-fleet:setup`**. It works until `specclaw-fleet doctor` is clean
 - It records the download time as `claude_fetch_s`.
 - `DISABLE_UPDATES=1` keeps it on that version.
 
-**Dispatch settings** (environment variables):
-- `FLEET_CLAUDE_VERSION` (required for claude jobs);
-- `FLEET_IMAGE_PULL_SECRET` (private registries only);
-- `FLEET_NODE_LABEL=key=value`, which pins Jobs to a labelled, tainted node.
+**Settings** live in the `fleet:` block of `.specclaw/config.yaml`, so no command needs an env prefix:
+
+```yaml
+fleet:
+  vault: kv-scfleet-965892
+  cluster_name: bistec-dev-uat      # what the run record calls the cluster
+  image: ghcr.io/chan4lk/specclaw-fleet:0.9.0
+  claude_version: "2.1.319"         # required for claude jobs
+  pipeline: specclaw-fleet
+  pipeline_file: azure-pipelines/specclaw-fleet.yml   # doctor reads the connection names from it
+```
+
+- **Which cluster your machine talks to is local, not shared:** set `FLEET_KUBE_CONTEXT` and `KUBECONFIG` in the gitignored `.specclaw/.env`. A relative `KUBECONFIG` resolves against the repo root. They are never read from `fleet:`, and the pipeline always uses the kubeconfig its Kubernetes task logged in.
+- **Other keys:** `namespace`, `default_agent`, `deadline_minutes`, `remote`, `ref`, `image_pull_secret` (private registries only), and `node_label` (`key=value`, which pins Jobs to a labelled, tainted node).
+- **Security settings** (`vault`, `image`, `namespace`, `node_label`, `image_pull_secret`, `claude_version`, `deadline_minutes`, `cluster_name`) are read in pipeline runs only from the trusted branch (`fleetTrustedBranch`, default `main`). A run on a branch whose values differ stops before dispatch. The pipeline YAML itself is branch-controlled, so this check is defence in depth: **the real guard is an AzDO Branch control check on both service connections**, allowing only `refs/heads/main` (plus protected `refs/heads/feature/*` if you use coordinated features).
+- **Connection names** live only in the pipeline YAML (AzDO needs them at compile time). `doctor` reads them from `pipeline_file`.
+- **Precedence:** a flag, then an env variable (`FLEET_<KEY>`), then config, then the default.
+- **Secrets never go here.** The PAT stays in the gitignored `.specclaw/.env`, and a secret-looking value is refused.
 
 ## Running a change
 
-Run **`/specclaw-fleet:run`**, or call the command directly:
+Run **`/specclaw-fleet:run <change>...`**. It opts the changes in, triggers them in parallel, and watches each one until it has a PR or a recorded failure. The commands it uses:
 
 ```bash
-FLEET_VAULT=<vault> specclaw-fleet trigger <change> [--create] [--retry] [--direct]
+specclaw-fleet optin 002-catalog 003-detail      # assign to you + fleet:auto, as you (never anyone else)
+specclaw-fleet trigger 002-catalog [--create] [--retry] [--direct]
+specclaw-fleet status --watch                    # one line per change: item, tags, last record, Job
 ```
+
+`optin` uses the identity behind `AZDO_TOKEN`. It refuses an item assigned to someone else, and `--dry-run` shows the plan without writing. `status` is read-only. A change shows `not-opted-in` until `fleet:auto` is added by its assignee, and `did-not-run` when the run `trigger` queued for it (`--run <change>=<id>`) finished without dispatching it. `--watch` ends when every change has ended, or after `--timeout` minutes (exit 2).
 
 `trigger` reads approval from the **pushed** ref (`FLEET_REMOTE`/`FLEET_REF`, default `origin/main`). It refuses an unapproved proposal, a work item with no assignee, missing `fleet:auto` consent from the assignee, or a missing credential. Refusals have no side effects. `--create` is the one deliberate exception: it creates the missing work item and stops (exit 3), so the item can be assigned and consented.
 
 Once the gates pass, `trigger` queues the pipeline with this change and agent as runtime parameters, or dispatches directly with `--direct`. `--retry` clears `fleet:dispatched` and `fleet:refused` first.
+
+## Coordinated features
+
+Run **`/specclaw-fleet:feature`** to deliver related changes together. Children declare `**Feature:** <module>` and `**Depends on:** <changes>` in their proposal (or lean `change.md`). `feature plan` shows waves and states; `feature init` writes `.specclaw/features/<module>/` with its own work item; `feature start` creates `feature/<module>` and queues the pipeline, which then runs `feature advance` on every merge into that branch that changes a `.specclaw/changes/*/state.json` (every child PR does; after any other merge, run `feature start <module>` again to re-queue it): ready children dispatch on `feature/<module>` (their PRs target it), a failed child blocks only its dependents, a conflicting child is retried once with the feature branch merged in, and once every child is merged one integration run opens `specclaw/integrate-<module> → <trusted branch>`.
+
+## Hosted minutes
+
+Fleet runs on Microsoft-hosted agents by default. A private project gets **1 free hosted parallel job and 1,800 minutes a month**; user licences (Basic access) do not add parallel jobs.
+
+The hosted job only dispatches: the Claude or Codex work runs in pods on your cluster and uses no hosted minutes. A dispatch run takes about 45 seconds (a sparse checkout of `.specclaw/`, a blob-less fetch of the two fleet plugins, kubectl login, dispatch), and every run stops at `timeoutInMinutes: 10`. So the free grant covers well over a thousand dispatch or `feature advance` runs a month.
+
+Check usage under **Organization settings → Parallel jobs**. If runs start queueing or minutes run out, buy a hosted parallel job, or enable a self-hosted overflow agent (deferred in change 051; the org has one free self-hosted job).
 
 ## Egress hosts
 

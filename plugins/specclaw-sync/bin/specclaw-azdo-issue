@@ -13,6 +13,16 @@
 #   specclaw-azdo-issue claim    <specclaw_dir> <change> <tag> [blocking-tag...]
 #   specclaw-azdo-issue untag    <specclaw_dir> <change> <tag>
 #   specclaw-azdo-issue fields   <specclaw_dir> <change> key=value...
+#   specclaw-azdo-issue whoami   <specclaw_dir> <change>
+#   specclaw-azdo-issue optin    <specclaw_dir> <change> <tag> <upn>
+#   specclaw-azdo-issue records  <specclaw_dir> <change>
+#
+# `optin` assigns the item to <upn> when it is unassigned and adds <tag> as the
+# caller, in one rev-guarded PATCH. An existing <tag> is removed first and then
+# re-added, so the revision history always shows the caller adding it. It exits 4
+# when the item is assigned to someone else.
+# `whoami` prints the identity behind AZDO_TOKEN; `records` prints the fleet
+# run-update comments, newest first, as JSON.
 #
 # `fields` writes only keys mapped under azdo.fleet_fields.<key> (and `state`
 # through azdo.fleet_states.<value>), then always posts one comment listing
@@ -53,6 +63,7 @@ CHANGE_NAME="$3"
 CONFIG_FILE="$SPECCLAW_DIR/config.yaml"
 AUTH_FILE="$SPECCLAW_DIR/.env"
 CHANGE_DIR="$SPECCLAW_DIR/changes/$CHANGE_NAME"
+[[ -d "$CHANGE_DIR" || ! -d "$SPECCLAW_DIR/features/$CHANGE_NAME" ]] || CHANGE_DIR="$SPECCLAW_DIR/features/$CHANGE_NAME"
 STATUS_FILE="$CHANGE_DIR/status.md"
 
 [[ -d "$CHANGE_DIR" ]] || { echo "ERROR: Change not found: $CHANGE_DIR" >&2; exit 1; }
@@ -340,7 +351,18 @@ mode, tag, strict, blocking = sys.argv[1], sys.argv[2], sys.argv[3] == "strict",
 item = json.load(sys.stdin)
 tags = [t.strip() for t in item.get("fields", {}).get("System.Tags", "").split(";") if t.strip()]
 held = {t.lower() for t in tags}
-if mode == "add":
+assign = None
+if mode == "optin":
+    upn = blocking[0]
+    who = (item.get("fields", {}).get("System.AssignedTo") or {}).get("uniqueName", "")
+    if who and who.lower() != upn.lower():
+        print(who, file=sys.stderr)
+        sys.exit(4)
+    if tag.lower() in held:
+        sys.exit(5)
+    assign = None if who else upn
+    tags.append(tag)
+elif mode == "add":
     if any(b.lower() in held for b in blocking) or (strict and tag.lower() in held):
         sys.exit(3)
     if tag.lower() in held:
@@ -351,8 +373,11 @@ else:
         sys.exit(10)
     tags = [t for t in tags if t.lower() != tag.lower()]
 print(item["rev"])
-print(json.dumps([{"op": "test", "path": "/rev", "value": item["rev"]},
-                  {"op": "replace", "path": "/fields/System.Tags", "value": "; ".join(tags)}]))
+ops = [{"op": "test", "path": "/rev", "value": item["rev"]},
+       {"op": "replace", "path": "/fields/System.Tags", "value": "; ".join(tags)}]
+if assign:
+    ops.append({"op": "add", "path": "/fields/System.AssignedTo", "value": assign})
+print(json.dumps(ops))
 '
 
 ado_patch_status() {
@@ -370,7 +395,7 @@ tag_update() {
     item="$(ado_get "wit/workitems/${wi_id}?api-version=7.1")" || die "ADO read failed for Work Item #${wi_id}"
     rc=0
     out="$(python3 -c "$PY_TAGS" "$mode" "$tag" "$strict" "$@" <<<"$item")" || rc=$?
-    case "$rc" in 0) ;; 3) return 3 ;; 10) return 0 ;; *) die "Could not read tags of Work Item #${wi_id}" ;; esac
+    case "$rc" in 0) ;; 3|4|5) return "$rc" ;; 10) return 0 ;; *) die "Could not read tags of Work Item #${wi_id}" ;; esac
     rev="${out%%$'\n'*}"
     code="$(ado_patch_status "wit/workitems/${wi_id}?api-version=7.1" "${out#*$'\n'}")"
     case "$code" in
@@ -415,6 +440,65 @@ cmd_tag() {
   tag_update "$wi_id" add "$tag" lax
   echo "Tagged Work Item #${wi_id}: ${tag}"
 }
+
+cmd_whoami() {
+  require_creds
+  # shellcheck disable=SC2016  # "$value" is a JSON key read by Python, not a shell expansion
+  printf 'Authorization: Basic %s\n' "$(auth_header)" | curl -sf --max-time 30 -H @- "https://dev.azure.com/$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$AZDO_ORG")/_apis/connectionData" \
+    | python3 -c 'import json,sys; u=json.load(sys.stdin)["authenticatedUser"]; p=u.get("properties",{}).get("Account",{}).get("$value",""); print(json.dumps({"upn":p,"name":u.get("providerDisplayName",""),"id":u.get("id","")}))' \
+    || die "Could not read the identity behind AZDO_TOKEN"
+}
+
+cmd_optin() {
+  require_creds
+  local tag="${4:-}" upn="${5:-}" wi_id rc=0
+  [[ -n "$tag" && -n "$upn" ]] || die "Usage: specclaw-azdo-issue optin <specclaw_dir> <change> <tag> <upn>"
+  local me
+  me="$(cmd_whoami | python3 -c 'import json,sys; print(json.load(sys.stdin)["upn"])')" || die "Could not read the identity behind AZDO_TOKEN"
+  [[ "$(printf '%s' "$me" | tr '[:upper:]' '[:lower:]')" == "$(printf '%s' "$upn" | tr '[:upper:]' '[:lower:]')" ]] \
+    || die "optin assigns only to the AZDO_TOKEN identity ($me), not $upn"
+  wi_id="$(existing_wi_id)"
+  [[ -n "$wi_id" ]] || die "No Work Item for this change — run specclaw-azdo-issue create first"
+  tag_update "$wi_id" optin "$tag" lax "$upn" || rc=$?
+  if (( rc == 5 )); then
+    tag_update "$wi_id" remove "$tag" lax
+    rc=0; ( tag_update "$wi_id" optin "$tag" lax "$upn" ) || rc=$?
+    (( rc == 0 || rc == 4 )) || { ( tag_update "$wi_id" add "$tag" lax ) || warn "could not restore ${tag} on Work Item #${wi_id}"; }
+  fi
+  (( rc == 4 )) && { echo "Work Item #${wi_id} is assigned to someone else; only they can opt in" >&2; exit 4; }
+  (( rc == 0 )) || die "Could not opt in Work Item #${wi_id}"
+  echo "Opted in Work Item #${wi_id}: assigned to ${upn}, ${tag}"
+}
+
+cmd_records() {
+  require_creds
+  local wi_id
+  wi_id="$(existing_wi_id)"
+  [[ -n "$wi_id" ]] || die "No Work Item for this change — run specclaw-azdo-issue create first"
+  ado_get "wit/workItems/${wi_id}/comments?\$top=200&order=desc&api-version=7.1-preview.4" | python3 -c "$PY_RECORDS" "$wi_id" \
+    || die "ADO read failed for Work Item #${wi_id} comments"
+}
+
+PY_RECORDS='
+import html, json, re, sys
+out = []
+doc = json.load(sys.stdin)
+if not isinstance(doc, dict) or not isinstance(doc.get("comments"), list):
+    sys.exit("comments answer is not a list")
+for c in doc["comments"]:
+    text = html.unescape(re.sub(r"<br\s*/?>|</(p|div|li)>", "\n", c.get("text", "")))
+    text = re.sub(r"<[^>]+>", "", text)
+    if "specclaw-fleet run update:" not in text:
+        continue
+    rec = {"at": c.get("createdDate", "")}
+    for line in text.splitlines():
+        m = re.match(r"\s*-\s*([a-z_]+):\s*(.*?)\s*$", line)
+        if m:
+            rec[m.group(1)] = m.group(2)
+    out.append(rec)
+out.sort(key=lambda r: r["at"], reverse=True)
+print(json.dumps({"work_item": sys.argv[1], "records": out}))
+'
 
 cmd_link_pr() {
   require_creds
@@ -534,5 +618,8 @@ case "$SUBCMD" in
   claim)   cmd_claim   "$@" ;;
   untag)   cmd_untag   "$@" ;;
   fields)  cmd_fields  "$@" ;;
+  whoami)  cmd_whoami  "$@" ;;
+  optin)   cmd_optin   "$@" ;;
+  records) cmd_records "$@" ;;
   *) die "Unknown subcommand: $SUBCMD. Run with --help for usage." ;;
 esac

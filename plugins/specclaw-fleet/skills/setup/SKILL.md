@@ -6,10 +6,7 @@ description: Use when someone wants to set up, repair or check specclaw-fleet in
 
 The goal is a clean `specclaw-fleet doctor`. Run it first, then fix every line that isn't `ok`, in the order printed, and run it again after each fix. Re-running the skill skips work that's already done.
 
-```bash
-FLEET_KUBE_CONTEXT=<ctx> FLEET_VAULT=<vault> FLEET_IMAGE=ghcr.io/<owner>/specclaw-fleet:<tag> \
-AZDO_ORG=<org> AZDO_PROJECT=<project> specclaw-fleet doctor
-```
+**Record every confirmed value in `.specclaw/config.yaml` as you go**, under `fleet:`. That covers `vault`, `cluster_name`, `image`, `claude_version`, `pipeline` and `pipeline_file`. The connection names go in the pipeline YAML only. After that, `specclaw-fleet doctor`, `trigger`, `optin` and `status` need no env prefix. Which cluster this machine uses is local: write `FLEET_KUBE_CONTEXT` and `KUBECONFIG` (the isolated kubeconfig) to the gitignored `.specclaw/.env`, never to `fleet:`. Never write a secret in `fleet:`: the PAT goes in the gitignored `.specclaw/.env`, and credentials go in Key Vault. Commit the config change, asking before you push.
 
 ## Rules
 
@@ -33,8 +30,8 @@ AZDO_ORG=<org> AZDO_PROJECT=<project> specclaw-fleet doctor
 | `image` | In the specclaw repo, push a `fleet-v<tag>` tag or run the `fleet-image` workflow. On first push, set the GHCR package to **public** (Package settings → Change visibility); ask first. The image contains no Claude binary. Each pod fetches `FLEET_CLAUDE_VERSION` and verifies it against Anthropic's signed manifest. |
 | `vault` | `az keyvault create --enable-rbac-authorization true`, then grant yourself `Key Vault Administrator` on it. Create the **writer** service principal with no role and the **dispatch** service principal with `Key Vault Secrets User` on the vault plus `Reader` on the resource group. Then run `specclaw-fleet onboard <upn> --vault <v> --writer <writer-object-id>` for each person. Each person then runs `specclaw-fleet login --agent claude` in a real terminal. |
 | `secret:fleet-vault-writer` | Create it from the writer service principal's file: tenant, client id and secret. |
-| `secret:fleet-azdo` | Have the operator paste a PAT (Code read/write, Work Items read/write) at a hidden prompt in a real terminal. The prompt writes the secret, plus `.specclaw/.env` in the repo, which must be gitignored first. |
-| `service-connections` | **Kubernetes:** scheme `Kubernetes`, `authorizationType: Kubeconfig`. Use a kubeconfig with a `kubectl create token fleet-dispatcher --duration=…` token, never an admin kubeconfig, and rotate it before it expires. **ARM:** the dispatch service principal. Enable both for pipelines. |
+| `secret:fleet-azdo` | Have the operator paste a PAT (Code read/write, Work Items read/write, Build read, Service Connections read; `doctor` and `status` need the last two) at a hidden prompt in a real terminal. The prompt writes the secret, plus `.specclaw/.env` in the repo, which must be gitignored first. |
+| `service-connections` | **Kubernetes:** scheme `Kubernetes`, `authorizationType: Kubeconfig`. Use a kubeconfig with a `kubectl create token fleet-dispatcher --duration=…` token, never an admin kubeconfig, and rotate it before it expires. **ARM:** the dispatch service principal. Enable both for pipelines, and add a **Branch control** check to both, allowing only `refs/heads/main` (plus branch-policy-protected `refs/heads/feature/*` for coordinated features): this, not the YAML, is what stops another branch's pipeline from using them. |
 | `pipeline` | Copy `pipelines/dispatch-hosted.yml` (or `dispatch.yml` for local mode) into the repo and set its variables. `fleetSpecclawRef` must be a **full 40-character commit SHA** of specclaw: the pipeline refuses tag names and verifies the fetched commit. Push after asking, then `az pipelines create --skip-first-run`. A root-level `pool:` cannot use a template expression. |
 
 ## Repo config

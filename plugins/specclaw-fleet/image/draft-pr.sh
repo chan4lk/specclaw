@@ -7,11 +7,21 @@ azdo_api() {
 }
 
 pr_description() {
-  local dir="$REPO/.specclaw/changes/$FLEET_CHANGE"
-  { echo "Opened as a **draft** by specclaw-fleet: verify did not pass, so a human decides what happens next."
+  local dir; dir="$REPO/.specclaw/$(item_kind)/$FLEET_CHANGE"
+  { if [[ "${FLEET_PR_DRAFT:-true}" == true ]]; then echo "Opened as a **draft** by specclaw-fleet: verify did not pass, so a human decides what happens next."
+    else echo "Opened by specclaw-fleet: integration of feature $FLEET_CHANGE passed its checks."; fi
     echo; echo "Work item: #${FLEET_WORK_ITEM:-?}"; echo
     sed -n '/^## Verify/,$p' "$dir/change.md" "$dir/verify-report.md" 2>/dev/null | head -c 2000
     echo; echo "### Open follow-ups"; head -c 1200 "$dir/follow-ups.md" 2>/dev/null; } | head -c 3800
+}
+
+resolve_pr_target() {
+  local t="${FLEET_PR_TARGET:-}"
+  [[ -z "$t" && "${FLEET_REF:-}" == feature/* ]] && t="$FLEET_REF"
+  [[ -n "$t" ]] || t="$(awk '/^git:/ { on = 1; next } on && /^[A-Za-z_]/ { exit }
+    on && /^[[:space:]]+base_branch:/ { v = $0; sub(/^[[:space:]]+base_branch:[[:space:]]*/, "", v); sub(/[[:space:]]+#.*$/, "", v)
+      gsub(/[[:space:]\r]+$/, "", v); gsub(/^["\x27]|["\x27]$/, "", v); print v; exit }' "$REPO/.specclaw/config.yaml" 2>/dev/null)"
+  export SPECCLAW_PR_TARGET="${t:-$FLEET_REF}"
 }
 
 ensure_pr() {
@@ -20,14 +30,21 @@ ensure_pr() {
   [[ -n "$url" ]] && { echo "$url false"; return 0; }
   [[ -n "$branch" ]] || return 0
   api="https://dev.azure.com/$AZDO_ORG/$AZDO_PROJECT/_apis/git/repositories/${FLEET_REPO_URL##*/}/pullrequests"
-  id="$(azdo_api "$api?searchCriteria.sourceRefName=refs/heads/$branch&searchCriteria.status=active&api-version=7.1" \
-    | jq -r '.value[0].pullRequestId // empty')" || return 0
-  [[ -n "$id" ]] || id="$(jq -n --arg s "refs/heads/$branch" --arg t "refs/heads/$FLEET_REF" --arg c "$FLEET_CHANGE" \
-      --arg d "$(pr_description)" --arg w "${FLEET_WORK_ITEM:-}" \
-      '{sourceRefName: $s, targetRefName: $t, title: ("[draft] " + $c + ": verify did not pass"), description: $d,
-        isDraft: true, workItemRefs: (if $w == "" then [] else [{id: $w}] end)}' \
+  local found isdraft
+  found="$(azdo_api "$api?searchCriteria.sourceRefName=refs/heads/$branch&searchCriteria.status=active&api-version=7.1")" || return 0
+  jq -e '.value | type == "array"' <<<"$found" >/dev/null 2>&1 || return 0
+  id="$(jq -r '.value[0].pullRequestId // empty' <<<"$found")"; isdraft="$(jq -r '.value[0].isDraft // false' <<<"$found")"
+  if [[ -n "$id" && "$isdraft" == true && "${FLEET_PR_DRAFT:-true}" == false ]]; then
+    azdo_api -X PATCH "$api/$id?api-version=7.1" --data-binary '{"isDraft": false}' >/dev/null && isdraft=false
+  fi
+  [[ -n "$id" ]] && { echo "${FLEET_REPO_URL}/pullrequest/$id $isdraft"; return 0; }
+  [[ -n "$id" ]] || id="$(jq -n --arg s "refs/heads/$branch" --arg t "refs/heads/$SPECCLAW_PR_TARGET" --arg c "$FLEET_CHANGE" \
+      --arg d "$(pr_description)" --arg w "${FLEET_WORK_ITEM:-}" --arg dr "${FLEET_PR_DRAFT:-true}" \
+      '{sourceRefName: $s, targetRefName: $t, description: $d, isDraft: ($dr == "true"),
+        title: (if $dr == "true" then "[draft] " + $c + ": verify did not pass" else $c + ": integration verified" end),
+        workItemRefs: (if $w == "" then [] else [{id: $w}] end)}' \
     | azdo_api -X POST "$api?api-version=7.1" --data-binary @- | jq -r '.pullRequestId // empty')" || return 0
-  [[ -n "$id" ]] && echo "${FLEET_REPO_URL}/pullrequest/$id true"
+  [[ -n "$id" ]] && echo "${FLEET_REPO_URL}/pullrequest/$id ${FLEET_PR_DRAFT:-true}"
 }
 
 deliver() {

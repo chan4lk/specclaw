@@ -1,0 +1,90 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 4,
+  "minor": 0
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw-fleet/bin/specclaw-fleet",
+  "plugins/specclaw-fleet/image/draft-pr.sh",
+  "plugins/specclaw-fleet/image/entrypoint.sh",
+  "plugins/specclaw-fleet/image/integrate.sh",
+  "plugins/specclaw-fleet/lib/common.sh",
+  "plugins/specclaw-fleet/lib/feature-run.sh",
+  "plugins/specclaw-fleet/tests/cases/ac22_settings.sh",
+  "plugins/specclaw-fleet/tests/cases/ac28_pr_target.sh",
+  "plugins/specclaw-fleet/tests/cases/ac31_integrate_pod.sh",
+  "plugins/specclaw-fleet/tests/lib/entry-env.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw-fleet/image/entrypoint.sh",
+   "fp": "2ffb0f5f978e",
+   "in_delta": true,
+   "line": 77,
+   "message": "The pass marker is read from a path that can already hold a committed value. Nothing removes or resets `.specclaw/features/$FLEET_CHANGE/integration-result` before `run_agent`. A leftover `pass` from an earlier integration, carried in by the feature branch, is read as this run's result. 'The agent did not write a result' then reads as 'verified', which is the defect the fix was meant to close. Delete the marker (and `git rm` it if tracked) before the agent starts, or compare it against a per-run nonce. Add a test where a stale `pass` exists and the agent writes nothing.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B3",
+   "scenario": "A prior integration run committed `integration-result` = pass, and it ended up on feature/<m> or main. After a new member merge, the integrate pod runs, the agent exits 0 without touching the file, and `integration_passed` sees the old `pass`. The pod sets FLEET_PR_DRAFT=false and opens or publishes a ready-for-review 'integration verified' PR into the trusted branch.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/tests/cases/ac22_settings.sh",
+   "fp": "8313be37282c",
+   "in_delta": true,
+   "line": 24,
+   "message": "The test for the KUBECONFIG/.env fix cannot fail without the fix. The second command in `pl` is `bash -c 'echo kc=[${KUBECONFIG-unset}]'`, a fresh shell that never runs the fleet binary. It always prints `unset` whether or not `load_local_env` is skipped. The first command only keeps `doctor | head -1`, which is unlikely to contain the committed `evil` value. Run a real fleet command under TF_BUILD and capture the KUBECONFIG and context the binary itself ends up with, for example a debug or dry-run subcommand that prints them. Cover both variables and also FLEET_TRUSTED_CONFIG.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Remove the `TF_BUILD` guard in bin/specclaw-fleet. `.specclaw/.env` is then loaded and KUBECONFIG points to evil-kubeconfig. The test still passes: the bash -c subshell prints `unset`, and doctor's first line has no `evil`.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/tests/cases/ac31_integrate_pod.sh",
+   "fp": "80b420f5529c",
+   "in_delta": true,
+   "line": 21,
+   "message": "The unreadable-PR-search fix has a single-variant test (`SEARCH_JUNK`, an HTML body). B2 requires the named case plus at least two others. Add variants for an empty body, a JSON object without `.value` (for example an error `{\"message\":...}`), `{\"value\":null}` and a non-array `.value`. Each must produce no PR POST.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "A regression that only checks for HTML, or an `id` check that accepts `{\"message\":\"TF401019\"}`, still passes the single test while a JSON error body creates a duplicate PR.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/image/draft-pr.sh",
+   "fp": "d61737c395eb",
+   "in_delta": true,
+   "line": 32,
+   "message": "The PR target is now decided in two places that can disagree. The entrypoint exports SPECCLAW_PR_TARGET only for feature/* refs or an explicit FLEET_PR_TARGET, so ordinary agent PRs follow git.base_branch. The pod's fallback in `ensure_pr` uses `${SPECCLAW_PR_TARGET:-$FLEET_REF}` and ignores git.base_branch. Make the fallback use the same resolution as specclaw-azdo-pr, or leave the target unset and skip the fallback.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B4",
+   "scenario": "git.base_branch=develop and FLEET_REF=main with no FLEET_PR_TARGET. When the agent opens a PR itself, it targets develop. When the agent fails and the pod creates the fallback draft, it targets main. The same change gets different targets depending on who opened the PR.",
+   "severity": "major"
+  }
+ ],
+ "head": "c45b880cce61d93b30cd47cb6d6f60cf8e0e0188",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 27546,
+ "round": 2,
+ "since": "57c1c5f",
+ "status": "open",
+ "system_chars": 8916,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794219631,
+ "ts_start": 1794219594
+}

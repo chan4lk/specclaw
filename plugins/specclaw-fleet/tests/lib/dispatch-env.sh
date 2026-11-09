@@ -32,6 +32,7 @@ esac
 exit 0'
   stub kubectl '
 if [[ "$1" == --context ]]; then echo "$2" >> "$KCTX"; shift 2; else echo none >> "$KCTX"; fi
+echo "${KUBECONFIG-unset}" >> "$KCTX.cfg"
 name=""; prev=""; for arg in "$@"; do [[ "$prev" == job ]] && name="$arg"; prev="$arg"; done
 claim="$CLAIMS/claim-$name"
 case "$*" in

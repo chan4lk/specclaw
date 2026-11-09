@@ -61,6 +61,8 @@ jobs:
         run: bash plugins/specclaw-sync/tests/run-azdo-issue-history-tests.sh
       - name: Run azdo-issue claim tests
         run: bash plugins/specclaw-sync/tests/run-azdo-issue-claim-tests.sh
+      - name: Run azdo-issue optin/whoami/records tests
+        run: bash plugins/specclaw-sync/tests/run-azdo-issue-optin-tests.sh
       - name: Ensure PyYAML for fleet tests
         run: python3 -c 'import yaml' || pip3 install --break-system-packages pyyaml
       - name: Run specclaw-fleet tests

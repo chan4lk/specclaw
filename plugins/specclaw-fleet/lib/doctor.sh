@@ -1,6 +1,7 @@
 # shellcheck shell=bash disable=SC2034
 fleet_doctor() {
   D_NS="${FLEET_NAMESPACE:-specclaw-fleet}"
+  load_azdo_env
   local failed=0 skipped=0 rc line
   local -a checks=(check_context check_namespaces check_rbac check_egress check_netpol
     "check_secret fleet-azdo AZDO_TOKEN AZDO_ORG AZDO_PROJECT"

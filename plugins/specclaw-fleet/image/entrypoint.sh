@@ -9,9 +9,9 @@ CRED="${FLEET_CRED:-/run/fleet/credential}"
 SEED="${FLEET_SEED:-/opt/fleet/home-seed}"
 REPO="$WORK/repo"
 CODEX_DIR="${FLEET_CODEX_HOME:-/fleet/codex}"
-PROMPT="Run the specclaw lifecycle headless for change $FLEET_CHANGE. Use the specclaw skills in order: plan (only if the change has no tasks yet), build, verify, then the specclaw-sync pr-azdo skill. When verify fails only because specclaw-review reports blocker or major findings, run the specclaw-review loop as its skill describes (fix by class, add variant tests, commit, re-review the delta, then the final pass) for at most ${FLEET_REVIEW_ROUNDS:-5} fix rounds in this run (rounds made by earlier runs do not count); stop if the review escalates (exit 4) or the rounds run out. Then re-run verify and, only on PASS, pr-azdo. Nobody is watching: never ask a question. If a phase fails, stop and report why."
+PROMPT="Run the specclaw lifecycle headless for change $FLEET_CHANGE. Use the specclaw skills in order: plan (only if the change has no tasks yet), build, verify, then the specclaw-sync pr-azdo skill. When verify fails only because specclaw-review reports blocker or major findings, run the specclaw-review loop as its skill describes (fix by class, add variant tests, commit, re-review the delta, then the final pass) for at most ${FLEET_REVIEW_ROUNDS:-5} fix rounds in this run (rounds made by earlier runs do not count); stop if the review escalates (exit 4) or the rounds run out. Then re-run verify and, only on PASS, pr-azdo. Nobody is watching: never ask a question. If a phase fails, stop and report why. Commit your work. After you exit, this pod pushes the change branch and opens a PR if none exists (a draft when verify did not pass), so committed work is never lost; do not report it as unpushed."
 agent_pid="" workspace_ready=0
-for lib in tracker egress-gate agent-auth workspace draft-pr claude-fetch; do
+for lib in tracker egress-gate agent-auth workspace draft-pr claude-fetch integrate; do
   # shellcheck source=/dev/null
   source "$(dirname "${BASH_SOURCE[0]}")/$lib.sh"
 done
@@ -59,7 +59,8 @@ if [[ -n "${FLEET_COMMIT:-}" ]] && ! git -C "$REPO" merge-base --is-ancestor "$F
   record state=failed exit=commit-not-on-ref "dispatched_commit=$FLEET_COMMIT"
   finish 2
 fi
-STATE="$REPO/.specclaw/changes/$FLEET_CHANGE/state.json"
+STATE="$REPO/.specclaw/$(item_kind)/$FLEET_CHANGE/state.json"
+resolve_pr_target
 [[ "$(jq -r '.phases.proposal.status // empty' "$STATE" 2>/dev/null)" == approved ]] \
   || { record state=failed exit=not-approved-at-ref; finish 2; }
 fetch_rc=0; [[ "$FLEET_AGENT" != claude ]] || fetch_claude || fetch_rc=$?
@@ -67,8 +68,11 @@ fetch_rc=0; [[ "$FLEET_AGENT" != claude ]] || fetch_claude || fetch_rc=$?
 record state=running "built_commit=$(git -C "$REPO" rev-parse HEAD)" "claude_fetch_s=${FLEET_CLAUDE_FETCH_S:-0}"
 cd "$REPO" || finish 2
 prepare_workspace || { record state=failed exit=resume-failed; finish 2; }
+merge_base_ref || { record state=failed exit=merge-ref-failed; finish 2; }
 workspace_ready=1
-agent_budget=$(( ${FLEET_AGENT_TIMEOUT:-7200} - SECONDS ))
+[[ "${FLEET_AGENT_TIMEOUT:-7200}" =~ ^[0-9]{1,6}$ ]] || { record state=failed exit=bad-agent-timeout; finish 2; }
+agent_budget=$(( 10#${FLEET_AGENT_TIMEOUT:-7200} - SECONDS ))
 (( agent_budget > 0 )) || { record state=failed exit=deadline-before-agent; finish 143; }
 rc=0; run_agent || rc=$?
+[[ "${FLEET_MODE:-}" == integrate && "$rc" == 0 ]] && integration_passed && FLEET_PR_DRAFT=false
 deliver "$rc" "$rc"

@@ -9,6 +9,8 @@ for lib in "$FLEET_ROOT"/lib/*.sh; do
   # shellcheck source=/dev/null
   source "$lib"
 done
+[[ -n "${FLEET_TRUSTED_CONFIG:-}${TF_BUILD:-}" ]] || load_local_env
+load_fleet_settings
 
 case "${1:-}" in
   onboard) shift; fleet_onboard "$@" ;;
@@ -16,5 +18,8 @@ case "${1:-}" in
   dispatch) shift; fleet_dispatch "$@" ;;
   doctor) shift; fleet_doctor "$@" ;;
   trigger) shift; fleet_trigger "$@" ;;
-  *) die "Usage: specclaw-fleet onboard <upn> --vault <v> | login --agent claude|codex --vault <v> | doctor | trigger <change> [--retry] [--direct] [--create] | dispatch <change> [--agent claude|codex] [--ref <b>] [--vault <v>] [--dry-run] [--force]" ;;
+  optin) shift; fleet_optin "$@" ;;
+  status) shift; fleet_status "$@" ;;
+  feature) shift; fleet_feature "$@" ;;
+  *) die "Usage: specclaw-fleet onboard <upn> --vault <v> | login --agent claude|codex --vault <v> | doctor | feature plan|init|start|advance <module> [--json] | optin <change>... [--dry-run] | status [<change>...] [--json] [--watch [N>=5]] [--since ISO] [--run <change>=<id>]... [--timeout <min>|<n>s] | trigger <change> [--retry] [--direct] [--create] | dispatch <change> [--agent claude|codex] [--ref <b>] [--vault <v>] [--dry-run] [--force]" ;;
 esac

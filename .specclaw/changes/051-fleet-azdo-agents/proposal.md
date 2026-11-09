@@ -1,4 +1,4 @@
-# Proposal: specclaw-fleet — self-hosted Azure Pipelines agents and minute-lean pipelines
+# Proposal: specclaw-fleet — minute-lean Microsoft-hosted pipelines
 
 **Created:** 2026-11-07
 **Status:** ✅ Approved
@@ -9,7 +9,17 @@ Microsoft-hosted agents in a private project come with 1,800 free minutes a mont
 
 The pipelines from 049 and 050 also spend agent time on work that needs no agent: REST calls, approvals and waits.
 
-## Proposed Solution
+## Scope decision (operator, 2026-11-09)
+
+Microsoft-hosted agents only for now. The org has 1 self-hosted parallel job plus the free hosted grant (1 parallel job, 1,800 minutes a month). Fleet already runs the heavy agent work in pods on the cluster, so the hosted job only dispatches. The self-hosted agent kit, KEDA, and the cache and mirror below are **deferred**: they are kept here for the record and not built in this change. KEDA is not installed on `bistec-dev-uat`.
+
+**Built now:** both pipeline templates spend as few hosted minutes as possible.
+- A single job with `timeoutInMinutes: 10`, so a hung run cannot burn the 60-minute default.
+- `checkout: self` with a sparse checkout of `.specclaw/` only, plus `fetchDepth: 1`.
+- The pinned specclaw fetch is blob-less (`--filter=blob:none`) and sparse (`plugins/specclaw-fleet`, `plugins/specclaw-sync`).
+- A "Hosted minutes" README section: the free grant, the cost of one run, how to read usage, and when a paid parallel job (or the deferred overflow agent) is worth it.
+
+## Original proposal (deferred parts)
 
 Add to `specclaw-fleet`:
 
@@ -42,7 +52,7 @@ Add to `specclaw-fleet`:
 
 ## Impact
 
-- **Size:** bounded. It is manifests and templates on top of 049 and 050, and adds no new interface.
+- **Size:** bounded. Pipeline templates and docs only; no new interface.
 - **Files affected:** ~8 (estimated)
 - **Complexity:** small
 - **Risk:** low. The main risk is that self-hosted agents build PR code inside the cluster; `--once` and the NetworkPolicy contain it.

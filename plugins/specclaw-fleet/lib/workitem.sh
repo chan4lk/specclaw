@@ -54,12 +54,12 @@ already_handled() {
 }
 
 work_item_id() {
-  grep -oE '^\*\*Azure Boards Work Item:\*\* \[#[0-9]+\]' "$SPECCLAW_DIR/changes/$1/status.md" 2>/dev/null \
+  grep -oE '^\*\*Azure Boards Work Item:\*\* \[#[0-9]+\]' "$(item_dir "$1")/status.md" 2>/dev/null \
     | grep -oE '[0-9]+' | head -1
 }
 
 proposal_approved() {
-  [[ "$(jq -r '.phases.proposal.status // empty' "$SPECCLAW_DIR/changes/$1/state.json" 2>/dev/null)" == approved ]]
+  [[ "$(jq -r '.phases.proposal.status // empty' "$(item_dir "$1")/state.json" 2>/dev/null)" == approved ]]
 }
 
 lower() {

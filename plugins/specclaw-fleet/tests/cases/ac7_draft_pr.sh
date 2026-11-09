@@ -9,7 +9,7 @@ fresh() { rm -f "$TMP/curl.log" "$TMP/pr-body.json"; }
 
 fresh; FAKE_PR=1 run_entry; agent_pr="$(cat "$CALLS")"; agent_posts="$(posts)"
 fresh; AGENT_RC=5 run_entry; draft="$(cat "$CALLS")"; body="$(cat "$TMP/pr-body.json" 2>/dev/null)"
-fresh; EXISTING_PR=55 AGENT_RC=5 run_entry; reused="$(cat "$CALLS")"; reused_posts="$(posts)"
+fresh; EXISTING_PR=55 EXISTING_DRAFT=true AGENT_RC=5 run_entry; reused="$(cat "$CALLS")"; reused_posts="$(posts)"
 fresh; PR_POST_FAIL=1 AGENT_RC=5 run_entry; rc=$?; failed="$(cat "$CALLS")"
 fresh; ON_BRANCH=main AGENT_RC=5 run_entry; base="$(cat "$CALLS")"; base_posts="$(posts)"
 
