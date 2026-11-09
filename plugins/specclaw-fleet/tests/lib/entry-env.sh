@@ -18,6 +18,7 @@ echo "{}"'
 stub git '[[ "$1" == -C && "$3" == merge-base ]] && { [[ -z "${NOT_ANCESTOR:-}" ]]; exit; }
 [[ "$1" == -C && "$3" == rev-parse && "$4" == --abbrev-ref ]] && { [[ -s "$TMP/onbranch" ]] && { cat "$TMP/onbranch"; exit 0; }; echo "${ON_BRANCH-specclaw/049-x}"; exit 0; }
 [[ "$1" == -C && "$3" == rev-parse ]] && { echo deadbeef; exit 0; }
+[[ "$1" == -C && "$3" == rev-list ]] && { echo "${REVLIST-3}"; exit 0; }
 [[ "$1" == -C && "$3" == ls-remote && -n "${LS_FAIL:-}" ]] && exit 128
 [[ "$1" == -C && "$3" == fetch && -n "${FETCH_FAIL:-}" ]] && exit 128
 [[ "$1" == -C && "$3" == merge ]] && { [[ -n "${MERGE_CONFLICT:-}${MERGE_BROKEN:-}" ]] && exit 1; [[ -n "${MERGE_BRINGS_PASS:-}" ]] && echo pass > "$2/.specclaw/features/049-x/integration-result"; exit 0; }
@@ -43,6 +44,8 @@ stub claude 'echo "${SPECCLAW_PR_TARGET-unset}" > "$TMP/prtarget"
 [[ -n "${AGENT_RESULT:-}" ]] && printf "%s\n" "$AGENT_RESULT" > ".specclaw/features/049-x/integration-result"
 env | grep -E "^(ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|OPENAI_API_KEY|CODEX_API_KEY)=" >> "$TMP/leaked"
 [[ "$CLAUDE_CODE_OAUTH_TOKEN" == oat-token ]] || echo "bad token" >> "$TMP/leaked"
+[[ -n "${ROUNDS:-}" ]] && { mkdir -p .specclaw/changes/049-x/review; for ((i = 1; i <= ROUNDS; i++)); do echo "{}" > ".specclaw/changes/049-x/review/round-$i.json"; done; }
+[[ -n "${AGENT_JSON:-}" ]] && printf "%b\n" "$AGENT_JSON"
 echo "agent says hi; leaked sk-ant-oat01-SECRETTOKENVALUE and pat abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGH"
 sleep "${AGENT_SLEEP:-0}"
 exit "${AGENT_RC:-0}"'

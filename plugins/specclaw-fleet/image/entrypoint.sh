@@ -11,7 +11,7 @@ REPO="$WORK/repo"
 CODEX_DIR="${FLEET_CODEX_HOME:-/fleet/codex}"
 PROMPT="Run the specclaw lifecycle headless for change $FLEET_CHANGE. Use the specclaw skills in order: plan (only if the change has no tasks yet), build, verify, then the specclaw-sync pr-azdo skill. When verify fails only because specclaw-review reports blocker or major findings, run the specclaw-review loop as its skill describes (fix by class, add variant tests, commit, re-review the delta, then the final pass) for at most ${FLEET_REVIEW_ROUNDS:-5} fix rounds in this run (rounds made by earlier runs do not count); stop if the review escalates (exit 4) or the rounds run out. Then re-run verify and, only on PASS, pr-azdo. Nobody is watching: never ask a question. If a phase fails, stop and report why. Commit your work. After you exit, this pod pushes the change branch and opens a PR if none exists (a draft when verify did not pass), so committed work is never lost; do not report it as unpushed."
 agent_pid="" workspace_ready=0
-for lib in tracker egress-gate agent-auth workspace draft-pr claude-fetch integrate; do
+for lib in tracker egress-gate agent-auth workspace draft-pr claude-fetch integrate run-stats; do
   # shellcheck source=/dev/null
   source "$(dirname "${BASH_SOURCE[0]}")/$lib.sh"
 done
@@ -73,6 +73,6 @@ workspace_ready=1
 [[ "${FLEET_AGENT_TIMEOUT:-7200}" =~ ^[0-9]{1,6}$ ]] || { record state=failed exit=bad-agent-timeout; finish 2; }
 agent_budget=$(( 10#${FLEET_AGENT_TIMEOUT:-7200} - SECONDS ))
 (( agent_budget > 0 )) || { record state=failed exit=deadline-before-agent; finish 143; }
-rc=0; run_agent || rc=$?
+rc=0; AGENT_STARTED="$(stamp)" AGENT_T0=$SECONDS AGENT_HEAD="$(git -C "$REPO" rev-parse HEAD)"; run_agent || rc=$?
 [[ "${FLEET_MODE:-}" == integrate && "$rc" == 0 ]] && integration_passed && FLEET_PR_DRAFT=false
 deliver "$rc" "$rc"

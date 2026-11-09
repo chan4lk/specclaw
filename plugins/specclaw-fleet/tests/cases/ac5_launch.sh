@@ -6,7 +6,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/../lib/harness.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/dispatch-env.sh"
 stub_cluster
 reset_env
-BUILD_REQUESTEDFOR="Alice A" dispatch
+BUILD_BUILDID=2443 BUILD_REQUESTEDFOR="Alice A" dispatch
 rc=$?
 job="$(grep -l "^kind: Job" "$APPLIED"/*.yaml)" secret="$(grep -l "^kind: Secret" "$APPLIED"/*.yaml)"
 
@@ -26,7 +26,7 @@ job_hardened() {
 }
 tagged_dispatched() { grep -q "specclaw-azdo-issue claim .* 049-x fleet:dispatched fleet:refused" "$CALLS" && [[ -d "$CLAIMS/wi-049-x" ]]; }
 work_item_and_output() {
-  grep -q "fields .*agent=claude .*cluster=k3s-a .*requested_by=Alice A dispatched_commit=[0-9a-f]\{40\} image=ghcr.io/chan4lk/specclaw-fleet:$(jq -r .version "$FLEET_ROOT/.claude-plugin/plugin.json") claude_version=2.1.319 settings_commit=local state=dispatched" "$CALLS" \
+  grep -q "fields .*agent=claude pipeline_run=2443 job=fleet-049-[0-9a-f]* cluster=k3s-a .*requested_by=Alice A dispatched_commit=[0-9a-f]\{40\} image=ghcr.io/chan4lk/specclaw-fleet:$(jq -r .version "$FLEET_ROOT/.claude-plugin/plugin.json") claude_version=2.1.319 settings_commit=local state=dispatched" "$CALLS" \
     && jq -e '.ok == true and .agent == "claude" and .work_item == "42"' "$TMP/out" >/dev/null
 }
 no_secret_leak() { ! grep -q "$CANARY" "$TMP/out" "$job" && ! grep -q "user:pat" "$job"; }
