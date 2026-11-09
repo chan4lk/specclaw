@@ -39,12 +39,14 @@ advance "$(S 003-b=ready)" "" 1; err_rc=$?
 errors_fail() { (( err_rc != 0 )) && grep -q '"errors":1' "$TMP/out"; }
 check "R050 AC-4 a dispatch error makes advance fail and counts it" errors_fail
 advance "$(S 003-b=stalled 002-a=merged)"; st_rc=$?; st_out="$(cat "$TMP/out")"
+advance "$(S 004-c="?" 002-a=merged)"; unk_rc=$?; unk_out="$(cat "$TMP/out")"
 advance "$(S 007-e=conflict)" "" 5; busy_log="$(cat "$TMP/dispatch.log")"; busy_calls="$(cat "$CALLS")"
 stalled_and_retry() {
   (( st_rc != 0 )) && grep -q "003-b: stalled" <<<"$st_out" || return 1
+  (( unk_rc != 0 )) && grep -q "004-c: state unknown" <<<"$unk_out" || return 1
   grep -q "dispatch 007-e --force" <<<"$busy_log" && ! grep -q "conflict-retried" <<<"$busy_calls"
 }
-check "R050 a stalled member is an error; the conflict retry is tagged only after the retry launched (a busy slot leaves it untagged)" stalled_and_retry
+check "R050 a stalled or unknown (?) member is an error; the conflict retry is tagged only after the retry launched (a busy slot leaves it untagged)" stalled_and_retry
 unread_ok=1
 for u in html fail array; do
   UNREAD=$u advance "$(S 009-u=conflict)"; rc=$?
@@ -70,10 +72,13 @@ start() { (cd "$TMP/repo" && FLEET_REMOTE=local FLEET_REF=main "$FLEET" feature 
 start cat; first_rc=$?; first="$(cat "$TMP/out")"; br1="$(git -C "$TMP/remote.git" rev-parse -q --verify refs/heads/feature/cat)"
 git -C "$TMP/repo" -c user.name=t -c user.email=t@t commit -q --allow-empty -m newer && git -C "$TMP/repo" push -q local HEAD:main
 start cat; br2="$(git -C "$TMP/remote.git" rev-parse -q --verify refs/heads/feature/cat)"
-start nofeature; missing_rc=$?
+start nofeature; missing_rc=$?; missing_out="$(cat "$TMP/out")"
+git -C "$TMP/remote.git" update-ref -d refs/heads/feature/cat
+stub git 'if [[ "$*" == *"ls-remote"* ]]; then exit 128; fi; exec '"$(command -v git)"' "$@"'
+start cat; lsfail_rc=$?; lsfail_out="$(cat "$TMP/out")"; br3="$(git -C "$TMP/remote.git" rev-parse -q --verify refs/heads/feature/cat)"
 start_ok() {
-  (( first_rc == 0 && missing_rc != 0 )) && [[ -n "$br1" && "$br1" == "$br2" ]] && jq -e '.run == "5150" and .branch == "feature/cat"' <<<"${first##*$'\n'}" >/dev/null \
-    && grep -q -- "--branch feature/cat" "$TMP/az.log" && grep -q "feature nofeature is not on local/main" "$TMP/out"
+  (( first_rc == 0 && missing_rc != 0 && lsfail_rc != 0 )) && [[ -z "$br3" ]] && grep -q "could not ask local whether feature/cat exists" <<<"$lsfail_out" && [[ -n "$br1" && "$br1" == "$br2" ]] && jq -e '.run == "5150" and .branch == "feature/cat"' <<<"${first##*$'\n'}" >/dev/null \
+    && grep -q -- "--branch feature/cat" "$TMP/az.log" && grep -q "feature nofeature is not on local/main" <<<"$missing_out"
 }
-check "R050 AC-6 feature start creates feature/<m> only when missing, then queues the pipeline on it; a feature not pushed is refused" start_ok
+check "R050 AC-6 feature start creates feature/<m> only when missing, then queues the pipeline on it; a feature not pushed is refused; a failed ls-remote stops without pushing" start_ok
 finish

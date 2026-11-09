@@ -18,14 +18,18 @@ source "$(dirname "${BASH_SOURCE[0]}")/../lib/entry-env.sh"
 ENTRY_MODE=integrate ENTRY_REF=feature/049-x ENTRY_PR_TARGET=main run_entry; ok_calls="$(cat "$CALLS")"; ok_pr="$(cat "$TMP/pr-body.json" 2>/dev/null)"
 ENTRY_MODE=integrate ENTRY_REF=feature/049-x ENTRY_PR_TARGET=main AGENT_RC=3 run_entry; bad_pr="$(cat "$TMP/pr-body.json" 2>/dev/null)"
 ENTRY_MODE=integrate NOT_APPROVED=1 run_entry; na_calls="$(cat "$CALLS")"
+rm -f "$TMP/pr-patch.log"; ENTRY_MODE=integrate ENTRY_REF=feature/049-x ENTRY_PR_TARGET=main EXISTING_PR=88 EXISTING_DRAFT=true run_entry; pub_calls="$(cat "$CALLS")"
+EXISTING_PR=89 EXISTING_DRAFT=true AGENT_RC=4 run_entry; keep_calls="$(cat "$CALLS")"
 integrate_pod() {
   grep -q "^claude -p Integrate feature 049-x" <<<"$ok_calls" && grep -q "checkout -q -b specclaw/integrate-049-x" <<<"$ok_calls" \
     && grep -q "push -q -u origin HEAD" <<<"$ok_calls" && grep -q "branch=specclaw/integrate-049-x" <<<"$ok_calls" \
     && jq -e '.isDraft == false and .targetRefName == "refs/heads/main" and .title == "049-x: integration verified"' <<<"$ok_pr" >/dev/null \
     && jq -e '.isDraft == true and (.title | startswith("[draft] "))' <<<"$bad_pr" >/dev/null \
-    && grep -q "exit=not-approved-at-ref" <<<"$na_calls" && ! grep -q "^claude -p" <<<"$na_calls"
+    && grep -q "exit=not-approved-at-ref" <<<"$na_calls" && ! grep -q "^claude -p" <<<"$na_calls" \
+    && grep -q "pullrequests/88" "$TMP/pr-patch.log" && grep -q "pr=.*pullrequest/88 draft=false" <<<"$pub_calls" \
+    && grep -q "pr=.*pullrequest/89 draft=true" <<<"$keep_calls"
 }
-check "R050 AC-5 integrate mode reads the feature's approval, works on specclaw/integrate-<m>, and opens a PR into the target (draft only when the agent fails)" integrate_pod
+check "R050 AC-5 integrate mode reads the feature's approval, works on specclaw/integrate-<m>, and opens a PR into the target (draft only when the agent fails); a passing run publishes an existing draft PR, and the record reports the PR's real draft state" integrate_pod
 REMOTE_BRANCH=specclaw/049-x ENTRY_MERGE=feature/cat run_entry; merged="$(cat "$CALLS")"
 REMOTE_BRANCH=specclaw/049-x ENTRY_MERGE=feature/cat MERGE_CONFLICT=1 run_entry; conflicted="$(cat "$CALLS")"
 REMOTE_BRANCH=specclaw/049-x ENTRY_MERGE=feature/cat FETCH_FAIL=1 run_entry; mfail="$(cat "$CALLS")"

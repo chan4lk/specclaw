@@ -8,7 +8,8 @@ stub curl 'printf "%s\n" "$*" >> "$TMP/curl.log"
 case "$*" in
   *releases.test/*) out=""; prev=""; for arg in "$@"; do [[ "$prev" == -o ]] && out="$arg"; prev="$arg"; done
     url="${*: -1}"; src="$TMP/releases/${url#https://releases.test/}"; [[ -f "$src" ]] || exit 22; cp "$src" "$out"; exit 0 ;;
-  *pullrequests*searchCriteria*) [[ -n "${EXISTING_PR:-}" ]] && echo "{\"value\":[{\"pullRequestId\":$EXISTING_PR}]}" || echo "{\"value\":[]}"; exit 0 ;;
+  *pullrequests*searchCriteria*) [[ -n "${EXISTING_PR:-}" ]] && echo "{\"value\":[{\"pullRequestId\":$EXISTING_PR,\"isDraft\":${EXISTING_DRAFT:-false}}]}" || echo "{\"value\":[]}"; exit 0 ;;
+  *"-X PATCH"*pullrequests/*) echo "PATCH $*" >> "$TMP/pr-patch.log"; echo "{}"; exit 0 ;;
   *pullrequests*) [[ -n "${PR_POST_FAIL:-}" ]] && exit 22; cat > "$TMP/pr-body.json"; echo "{\"pullRequestId\":77}"; exit 0 ;;
   *--noproxy*) [[ "${GATE:-}" == direct-open ]] && exit 0; exit 7 ;;
   *" -x "*) [[ "${GATE:-}" == proxy-down ]] && exit 7; exit 0 ;;
