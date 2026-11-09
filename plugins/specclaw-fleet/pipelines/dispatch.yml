@@ -16,7 +16,7 @@ variables:
 trigger:
   batch: true
   branches:
-    include: [main]
+    include: [main, "feature/*"]
   paths:
     include: [".specclaw/changes/*/state.json"]
 pr: none
@@ -57,6 +57,7 @@ steps:
           || { echo "##vso[task.logissue type=error]could not read .specclaw/config.yaml from $trusted"; exit 1; }
         export FLEET_TRUSTED_CONFIG="$AGENT_TEMPDIRECTORY/fleet-trusted-config.yaml"
         FLEET_TRUSTED_COMMIT="$(git rev-parse "origin/$trusted")" && [[ -n "$FLEET_TRUSTED_COMMIT" ]] || exit 1; export FLEET_TRUSTED_COMMIT
+        case "$FLEET_REF" in feature/?*) specclaw-fleet feature advance "${FLEET_REF#feature/}"; exit $? ;; esac
         for f in .specclaw/changes/*/state.json; do
           [[ -f "$f" ]] || continue
           if ! pending="$(jq -r --arg only "$only" '.phases.proposal.status == "approved" and ($only != "" or .phase == "proposal")' "$f")"; then

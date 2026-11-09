@@ -32,7 +32,7 @@
 
 ### Wave 3: delivery
 
-- [ ] `T6` — Pipelines trigger on `feature/*` and run advance; `/specclaw-fleet:feature` skill; README; CI (AC-6)
+- [x] `T6` — Pipelines trigger on `feature/*` and run advance; `/specclaw-fleet:feature` skill; README; CI (AC-6)
   - Files: plugins/specclaw-fleet/pipelines/dispatch.yml, plugins/specclaw-fleet/pipelines/dispatch-hosted.yml, plugins/specclaw-fleet/skills/feature/SKILL.md, plugins/specclaw-fleet/README.md, plugins/specclaw-fleet/tests/cases/ac32_feature_delivery.sh
   - Kind: config
   - Depends: T4, T5

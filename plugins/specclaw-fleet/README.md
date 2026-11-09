@@ -90,6 +90,10 @@ specclaw-fleet status --watch                    # one line per change: item, ta
 
 Once the gates pass, `trigger` queues the pipeline with this change and agent as runtime parameters, or dispatches directly with `--direct`. `--retry` clears `fleet:dispatched` and `fleet:refused` first.
 
+## Coordinated features
+
+Run **`/specclaw-fleet:feature`** to deliver related changes together. Children declare `**Feature:** <module>` and `**Depends on:** <changes>` in their proposal (or lean `change.md`). `feature plan` shows waves and states; `feature init` writes `.specclaw/features/<module>/` with its own work item; `feature start` creates `feature/<module>` and queues the pipeline, which then runs `feature advance` on every push to that branch: ready children dispatch on `feature/<module>` (their PRs target it), a failed child blocks only its dependents, a conflicting child is retried once with the feature branch merged in, and once every child is merged one integration run opens `specclaw/integrate-<module> → <trusted branch>`.
+
 ## Egress hosts
 
 The proxy allows CONNECT on port 443 to:
