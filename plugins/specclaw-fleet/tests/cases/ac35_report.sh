@@ -40,6 +40,10 @@ for bad in fail junk noarray; do
   want "records $bad: a ? row with a note, never dropped" "$BASE and (.rows[1] | .state == \"?\" and (.note | test(\"records\"))) and .totals.running == 0"
   grep -q "003-b: records .*; shown as ?" "$TMP/err" || { rows=0; echo "  [records $bad] no warning"; }
 done
+reset; echo '{"records":[{"at":5,"state":"dispatched"}]}' > "$WI/003-b"
+want "records whose run cannot be merged: a ? row" '[.rows[] | "\(.change)=\(.state)=\(.note)"] == ["003-b=?=records unparsable"]' --since 2026-11-09T12:00:00Z
+reset; echo '{"records":[{"at":"2026-11-09T12:05:00Z","state":"dispatched","agent_started":5}]}' > "$WI/003-b"
+want "a row that cannot be built: a ? row" "$BASE and .rows[1].state == \"?\" and .rows[1].note == \"row could not be built\""
 reset; want "--since drops older runs" '[.rows[].change] == ["003-b"]' --since 2026-11-09T12:00:00Z
 reset; want "--feature attaches waves" '.scope == "feature:cat" and ([.rows[] | "\(.change)=\(.wave)"] == ["002-a=1", "003-b=2"])' --feature cat
 reset; want "named change without records still gets a row" '[.rows[] | "\(.change)=\(.state)"] == ["004-c=null", "002-a=pr_open"]' 004-c 002-a

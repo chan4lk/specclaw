@@ -47,7 +47,8 @@ report_row() {
   bid="$(jq -r '.pipeline_run // "" | select(test("^[0-9]+$"))' <<<"$run")"
   [[ -z "$bid" ]] || b="$(api_obj "build/builds/$bid?api-version=7.1")"
   jq -e '.state | IN("dispatched", "running")' <<<"$run" >/dev/null && j="$(status_job "$c")"
-  jq -nc --arg c "$c" --arg id "$id" --arg w "$w" --argjson r "$run" --argjson p "$p" --argjson b "$b" --argjson j "${j:-\{\}}" "$REPORT_ROW" \
+  [[ -n "$j" ]] || j='{}'
+  jq -nc --arg c "$c" --arg id "$id" --arg w "$w" --argjson r "$run" --argjson p "$p" --argjson b "$b" --argjson j "$j" "$REPORT_ROW" \
     || unknown_row "$c" "$id" "row could not be built"
 }
 
