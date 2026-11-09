@@ -443,6 +443,7 @@ cmd_tag() {
 
 cmd_whoami() {
   require_creds
+  # shellcheck disable=SC2016  # "$value" is a JSON key read by Python, not a shell expansion
   printf 'Authorization: Basic %s\n' "$(auth_header)" | curl -sf --max-time 30 -H @- "https://dev.azure.com/$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$AZDO_ORG")/_apis/connectionData" \
     | python3 -c 'import json,sys; u=json.load(sys.stdin)["authenticatedUser"]; p=u.get("properties",{}).get("Account",{}).get("$value",""); print(json.dumps({"upn":p,"name":u.get("providerDisplayName",""),"id":u.get("id","")}))' \
     || die "Could not read the identity behind AZDO_TOKEN"
