@@ -11,7 +11,7 @@
 - [x] `T1` — Durable run fields: `pipeline_run` on dispatch, agent times/cost/turns/model/review rounds/commits on the final pod record (AC-1)
   - Files: plugins/specclaw-fleet/image/run-stats.sh, plugins/specclaw-fleet/image/entrypoint.sh, plugins/specclaw-fleet/image/draft-pr.sh, plugins/specclaw-fleet/lib/launch.sh, plugins/specclaw-fleet/tests/cases/ac34_run_stats.sh
   - Kind: impl
-- [ ] `T2` — `specclaw-fleet report` with `--json`, `--html`, `--save`, `--since`, `--feature` (AC-2, AC-3)
+- [x] `T2` — `specclaw-fleet report` with `--json`, `--html`, `--save`, `--since`, `--feature` (AC-2, AC-3)
   - Files: plugins/specclaw-fleet/lib/report.sh, plugins/specclaw-fleet/lib/report-render.sh, plugins/specclaw-fleet/lib/report.html, plugins/specclaw-fleet/bin/specclaw-fleet, plugins/specclaw-fleet/tests/cases/ac35_report.sh
   - Kind: impl
   - Depends: T1
