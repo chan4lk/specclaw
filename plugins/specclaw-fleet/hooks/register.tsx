@@ -32,7 +32,7 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    const text = bandText(await readView($))
+    const text = bandText(await readView($), await $.clock.now())
     if (text === undefined || e.props.hasSurvey) return next(e)
     const { Box, Text } = $.ui.resolve(e)
     const below = await next(e)

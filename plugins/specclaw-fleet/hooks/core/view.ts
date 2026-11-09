@@ -11,21 +11,25 @@ export const dur = (s: number | null) => {
 }
 
 const hhmm = (t: number) => new Date(t).toISOString().slice(11, 16)
-
 const lastRun = (rows: Row[]) => {
   const times = rows.flatMap(r => [ms(r.dispatched), ms(r.agent_started)]).filter(Number.isFinite)
   return times.length ? ` · last run ${hhmm(Math.max(...times))} UTC` : ''
 }
 
-export const bandText = (view: View) => {
+const stale = (r: Report, now: number) => {
+  const s = (now - ms(r.generated_at)) / 1000
+  return s >= 3600 ? ` · snapshot ${age(s)}` : ''
+}
+
+export const bandText = (view: View, now: number) => {
   if (view.kind === 'none') return undefined
   if (view.kind === 'unreadable') return 'fleet · report unreadable'
   const { rows, totals } = view.report
-  return `fleet · ${running(rows)} running · ${totals.prs_open} PRs open${lastRun(rows)}`
+  return `fleet · ${running(rows)} running · ${totals.prs_open} PRs open${lastRun(rows)}${stale(view.report, now)}`
 }
 
-export const statusText = (view: View) =>
-  view.kind === 'none' ? undefined : view.kind === 'unreadable' ? 'fleet: report unreadable' : `fleet: ${running(view.report.rows)} running`
+export const statusText = (view: View, now: number) =>
+  view.kind === 'none' ? undefined : view.kind === 'unreadable' ? 'fleet: report unreadable' : `fleet: ${running(view.report.rows)} running${stale(view.report, now)}`
 
 const spans = (r: Row, now: number): [number, number, string][] => [
   [ms(r.queued ?? r.dispatched), ms(r.finished), '░'],

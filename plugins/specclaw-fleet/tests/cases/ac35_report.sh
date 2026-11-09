@@ -3,7 +3,7 @@ set -uo pipefail
 # shellcheck source=../lib/harness.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/harness.sh"
 export SPECCLAW_DIR="$TMP/repo/.specclaw" FLEET_AZDO_ISSUE="$TMP/stub/specclaw-azdo-issue" AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t WI="$TMP/wi" TMP
-stub specclaw-azdo-issue '[[ "$1" == records ]] || exit 0; cat "$WI/$3" 2>/dev/null || echo "{\"records\":[]}"'
+stub specclaw-azdo-issue '[[ "$1" == records ]] || exit 0; [[ -f "$WI/$3.fail" ]] && exit 1; cat "$WI/$3" 2>/dev/null || echo "{\"records\":[]}"'
 stub curl 'f="$TMP/api/$(grep -oE "(pullrequests|builds)/[0-9]+" <<<"$*" | tr / -)"; [[ -f "$f" ]] || { printf "\n404"; exit 0; }
 [[ "$(cat "$f")" == FAIL500 ]] && { printf "\n500"; exit 0; }; cat "$f"; printf "\n200"'
 stub kubectl '[[ -n "${KUBE_FAIL:-}" ]] && exit 1
@@ -14,7 +14,7 @@ api() { mkdir -p "$TMP/api"; printf '%s' "$2" > "$TMP/api/$1"; }
 reset() {
   rm -rf "$TMP/repo" "$TMP/api" "$WI"; mkdir -p "$WI"; mk 002-a none 11; mk 003-b 002-a 12; mk 004-c none 13
   cat > "$WI/002-a" <<'J'
-{"records":[{"at":"2026-11-09T12:00:00.123Z","state":"pr_open","pr":"https://x/pullrequest/11","agent_started":"2026-11-09T11:10:00Z","agent_ended":"2026-11-09T11:40:00Z","agent_s":"1800","cost_usd":"2.5","turns":"40","model":"</script><b>x","review_rounds":"3","agent_commits":"7"},
+{"records":[{"at":"2026-11-09T12:00:00.123Z","state":"pr_open","pr":"https://x/pullrequest/11","agent_started":"2026-11-09T11:10:00Z","agent_ended":"2026-11-09T11:40:00Z","agent_s":"1800","cost_usd":"2.5","turns":"40","model":"</script><!--<script><b>x","review_rounds":"3","agent_commits":"7"},
 {"at":"2026-11-09T11:09:00Z","state":"running","claude_fetch_s":"5"},{"at":"2026-11-09T11:05:00Z","state":"dispatched","pipeline_run":"100","job":"fleet-002-a"},
 {"at":"2026-11-08T10:00:00Z","state":"failed","exit":"1","review_rounds":"99"},{"at":"2026-11-08T09:00:00Z","state":"dispatched","pipeline_run":"90"}]}
 J
@@ -35,6 +35,11 @@ reset; api pullrequests-11 FAIL500; want "PR read fails" "$BASE and .rows[0].pr_
 reset; api pullrequests-11 '[1]'; api builds-100 '<html>'; want "PR and build answers junk" "$BASE and .rows[0].pr_status == null and .rows[0].queued == null and .totals.hosted_s == 0"
 reset; KUBE_FAIL=1 want "cluster unreachable" "$BASE and .rows[1].phase == \"?\""
 reset; echo '{"records":[{"at":"2026-11-08T20:00:00Z","state":"pr_open"},{"at":"2026-11-08T19:00:00Z","state":"dispatched"}]}' > "$WI/004-c"; want "latest build drops runs dispatched >12h before the newest" "$BASE"
+for bad in fail junk noarray; do
+  reset; case "$bad" in fail) touch "$WI/003-b.fail" ;; junk) echo "<html>" > "$WI/003-b" ;; noarray) echo '{"records":"x"}' > "$WI/003-b" ;; esac
+  want "records $bad: a ? row with a note, never dropped" "$BASE and (.rows[1] | .state == \"?\" and (.note | test(\"records\"))) and .totals.running == 0"
+  grep -q "003-b: records .*; shown as ?" "$TMP/err" || { rows=0; echo "  [records $bad] no warning"; }
+done
 reset; want "--since drops older runs" '[.rows[].change] == ["003-b"]' --since 2026-11-09T12:00:00Z
 reset; want "--feature attaches waves" '.scope == "feature:cat" and ([.rows[] | "\(.change)=\(.wave)"] == ["002-a=1", "003-b=2"])' --feature cat
 reset; want "named change without records still gets a row" '[.rows[] | "\(.change)=\(.state)"] == ["004-c=null", "002-a=pr_open"]' 004-c 002-a
@@ -42,13 +47,14 @@ reset; ( run --since yesterday >/dev/null ) && { rows=0; echo "  bad --since acc
 json_ok() { (( rows == 1 )); }
 reset; table="$(run)"; html="$TMP/r.html"; run --html "$html" --save >/dev/null
 table_ok() { grep -q "^CHANGE " <<<"$table" && grep -q "^002-a .*pr_open .*30m .*#11 completed" <<<"$table" && grep -q "API-equivalent estimate" <<<"$table" && grep -q "1 running · 0 PRs open · cost \$2.5" <<<"$table"; }
+data_safe() { local d; d="$(sed -n 's#^<script id="data" type="application/json">\(.*\)</script>$#\1#p' "$html")"; [[ "$d" == *'\u003c/script>\u003c!--'* && "$d" != *'<'* ]]; }
 html_ok() {
-  [[ -s "$html" ]] && ! grep -q "__FLEET_REPORT__" "$html" && ! grep -q "</script><b>" "$html" \
+  [[ -s "$html" ]] && ! grep -q "__FLEET_REPORT__" "$html" && data_safe \
     && [[ -z "$(grep -oE "https?://[^\"' <]+" "$html" | grep -v '^https://x/pullrequest/11$')" ]] && grep -q '"rows":\[' "$html"
 }
 save_ok() { jq -e '.version == 1 and (.rows | length) == 2' "$SPECCLAW_DIR/fleet/report.json" >/dev/null && [[ "$(cat "$SPECCLAW_DIR/fleet/.gitignore")" == "*" ]]; }
-check "R054 AC-2 report --json: newest run per change, PR/build/cluster gap fill, totals; failed or junk reads blank fields with exit 0; --since, --feature, named scopes; bad --since refused" json_ok
+check "R054 AC-2 report --json: newest run per change, PR/build/cluster gap fill, totals; failed or junk reads blank fields with exit 0; unreadable records give a ? row and a warning, never a dropped row; --since, --feature, named scopes; bad --since refused" json_ok
 check "R054 AC-3 report table lists rows and totals with the cost labelled an API-equivalent estimate" table_ok
-check "R054 AC-3 report --html is self-contained (no URL but the PR link, </ escaped, data embedded)" html_ok
+check "R054 AC-3 report --html is self-contained (no URL but the PR link, every < escaped, data embedded)" html_ok
 check "R054 AC-3 report --save writes the v1 snapshot and a folder-local .gitignore" save_ok
 finish

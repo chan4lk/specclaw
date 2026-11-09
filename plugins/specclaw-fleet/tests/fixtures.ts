@@ -1,7 +1,7 @@
 const base = {
   wave: null, state: 'pr_open', exit: '0', queued: null, dispatched: null, finished: null, phase: null,
   agent_started: null, agent_ended: null, agent_s: null, review_rounds: null, agent_commits: null,
-  cost_usd: null, pr: null, pr_status: null, pr_opened: null, pr_closed: null,
+  cost_usd: null, pr: null, pr_status: null, pr_opened: null, pr_closed: null, note: null,
 }
 
 export const DONE = {

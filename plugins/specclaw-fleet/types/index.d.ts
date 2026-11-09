@@ -17,6 +17,7 @@ export type FleetRow = {
   pr_status: string | null
   pr_opened: string | null
   pr_closed: string | null
+  note: string | null
 }
 
 export type FleetTotals = {

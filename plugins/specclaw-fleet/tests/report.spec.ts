@@ -16,9 +16,15 @@ const CASES: [string, string | undefined, string | undefined, string | undefined
 for (const [name, text, band, status, head] of CASES) {
   test(`R054 AC-4 band, status and pane header: ${name}`, () => {
     const view = parseReport(text)
-    expect([bandText(view), statusText(view), paneLines(view, NOW)[0]]).toEqual([band, status, head])
+    expect([bandText(view, NOW), statusText(view, NOW), paneLines(view, NOW)[0]]).toEqual([band, status, head])
   })
 }
+
+test('R054 AC-4 a snapshot older than an hour says so on the band and status line', () => {
+  const view = parseReport(doc([LIVE]))
+  const later = NOW + 3 * 3600 * 1000
+  expect([bandText(view, later), statusText(view, later)]).toEqual(['fleet · 1 running · 0 PRs open · last run 11:53 UTC · snapshot 3h old', 'fleet: 1 running · snapshot 3h old'])
+})
 
 test('R054 AC-4 junk fields are dropped, not trusted', () => {
   const view = parseReport(doc([{ ...DONE, agent_s: '1800', pr: 7 }, { nochange: true }, 'x']))

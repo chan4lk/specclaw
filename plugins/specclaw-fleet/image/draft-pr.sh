@@ -51,7 +51,7 @@ deliver() {
   trap '' TERM
   local branch pr draft line
   local -a stats=()
-  while IFS= read -r line; do stats+=("$line"); done < <(agent_stats)
+  while IFS= read -r line; do stats+=("$line"); done < <(safe_stats)
   branch="$(push_change_branch)"
   read -r pr draft < <(ensure_pr "$branch")
   show_agent_log

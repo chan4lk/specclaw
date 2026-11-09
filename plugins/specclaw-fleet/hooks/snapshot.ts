@@ -16,7 +16,7 @@ async function readReport($: EngineInterface): Promise<View> {
 
 async function show($: EngineInterface, view: View) {
   await update($, report, () => view)
-  await Promise.resolve().then(() => $.ui.status(statusText(view))).catch(() => undefined)
+  await Promise.resolve().then(async () => $.ui.status(statusText(view, await $.clock.now()))).catch(() => undefined)
 }
 
 export async function refreshQuietly($: EngineInterface) {

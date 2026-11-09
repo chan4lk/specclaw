@@ -47,7 +47,7 @@ for (const r of sorted) {
     bar.style.left = pct(a) + '%'; bar.style.width = Math.max(0, pct(b || a) - pct(a)) + '%'; track.appendChild(bar) })
   tl.appendChild(lane)
 }
-const cols = ['change', 'wave', 'state', 'exit', 'pipeline_run', 'agent', 'review_rounds', 'agent_commits', 'turns', 'cost', 'pr']
+const cols = ['change', 'wave', 'state', 'exit', 'pipeline_run', 'agent', 'review_rounds', 'agent_commits', 'turns', 'cost', 'pr', 'note']
 const head = el('tr'); cols.forEach(c => head.appendChild(el('th', null, c.replace('_', ' ')))); document.getElementById('t').appendChild(head)
 for (const r of sorted) {
   const tr = el('tr')

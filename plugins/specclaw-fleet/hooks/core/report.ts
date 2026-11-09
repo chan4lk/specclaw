@@ -3,7 +3,7 @@ import type { FleetRow as Row, FleetTotals as Totals, FleetView as View } from '
 export type { Row, Totals, View }
 export type Report = Extract<View, { kind: 'report' }>['report']
 
-const TEXT = ['state', 'exit', 'queued', 'dispatched', 'finished', 'phase', 'agent_started', 'agent_ended', 'pr', 'pr_status', 'pr_opened', 'pr_closed'] as const
+const TEXT = ['state', 'exit', 'queued', 'dispatched', 'finished', 'phase', 'agent_started', 'agent_ended', 'pr', 'pr_status', 'pr_opened', 'pr_closed', 'note'] as const
 const NUM = ['wave', 'agent_s', 'review_rounds', 'agent_commits', 'cost_usd'] as const
 const TOTALS = ['wall_s', 'jobs', 'agent_s', 'hosted_s', 'review_rounds', 'commits', 'cost_usd', 'running', 'prs_open'] as const
 

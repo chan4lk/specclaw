@@ -3,9 +3,17 @@ stamp() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
 agent_cost() {
   jq -Rrn '[inputs | fromjson? | objects | select(.type == "result")] | last // empty
-    | (["cost_usd", .total_cost_usd], ["turns", .num_turns],
-       ["model", (.modelUsage // {} | to_entries | max_by(.value.costUSD // 0) | .key?)])
-    | select(.[1] != null) | "\(.[0])=\(.[1])"' "$STATUS/agent.log" 2>/dev/null
+    | (["cost_usd", (.total_cost_usd | numbers)], ["turns", (.num_turns | numbers)],
+       ["model", (.modelUsage | objects | to_entries | max_by(.value.costUSD | numbers // 0) | .key | strings | select(test("^[A-Za-z0-9._:-]{1,80}$")))])
+    | select(length == 2) | "\(.[0])=\(.[1])"' "$STATUS/agent.log" 2>/dev/null
+}
+
+STAT_LINE='^(agent_started|agent_ended|agent_s|cost_usd|turns|model|review_rounds|agent_commits)=[A-Za-z0-9._:+-]{1,80}$'
+
+safe_stats() {
+  local line
+  while IFS= read -r line; do [[ "$line" =~ $STAT_LINE ]] && printf '%s\n' "$line"; done < <(agent_stats)
+  return 0
 }
 
 agent_stats() {

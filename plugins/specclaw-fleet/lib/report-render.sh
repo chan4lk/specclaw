@@ -26,7 +26,7 @@ report_scope_name() {
 report_html() {
   local tpl json
   tpl="$(cat "$FLEET_ROOT/lib/report.html")"
-  json="$(jq -c . <<<"$1" | sed 's#</#<\\/#g')"
+  json="$(jq -c . <<<"$1" | sed 's#<#\\u003c#g')"
   printf '%s%s%s\n' "${tpl%%__FLEET_REPORT__*}" "$json" "${tpl#*__FLEET_REPORT__}" > "$R_HTML"
 }
 
@@ -41,7 +41,7 @@ report_emit() {
   local doc
   doc="$(jq -c --arg g "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg s "$(report_scope_name)" \
     '{version: 1, generated_at: $g, scope: $s, rows: .} | if $s == "latest" then ([.rows[].dispatched | select(.) | fromdateiso8601] | max) as $top
-      | .rows |= map(select($top == null or ((.dispatched // "") | if . == "" then false else fromdateiso8601 >= $top - 43200 end))) else . end' <<<"$1" | jq -c "$REPORT_TOTALS")"
+      | .rows |= map(select(.state == "?" or $top == null or ((.dispatched // "") | if . == "" then false else fromdateiso8601 >= $top - 43200 end))) else . end' <<<"$1" | jq -c "$REPORT_TOTALS")"
   (( R_SAVE )) && report_save "$doc"
   [[ -z "$R_HTML" ]] || report_html "$doc"
   if (( R_JSON )); then printf '%s\n' "$doc"; return 0; fi
