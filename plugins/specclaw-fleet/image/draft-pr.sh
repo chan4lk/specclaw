@@ -15,6 +15,12 @@ pr_description() {
     echo; echo "### Open follow-ups"; head -c 1200 "$dir/follow-ups.md" 2>/dev/null; } | head -c 3800
 }
 
+pod_pr_target() {
+  local t="${SPECCLAW_PR_TARGET:-}"
+  [[ -n "$t" ]] || t="$(sed -nE '/^git:/,/^[^[:space:]]/ s/^[[:space:]]+base_branch:[[:space:]]*"?([^"#[:space:]]+)"?.*/\1/p' "$REPO/.specclaw/config.yaml" 2>/dev/null | head -n1)"
+  printf '%s' "${t:-$FLEET_REF}"
+}
+
 ensure_pr() {
   local branch="$1" url api id
   url="$(jq -r '.phases.pr.url // empty' "$STATE" 2>/dev/null)"
@@ -29,7 +35,7 @@ ensure_pr() {
     azdo_api -X PATCH "$api/$id?api-version=7.1" --data-binary '{"isDraft": false}' >/dev/null && isdraft=false
   fi
   [[ -n "$id" ]] && { echo "${FLEET_REPO_URL}/pullrequest/$id $isdraft"; return 0; }
-  [[ -n "$id" ]] || id="$(jq -n --arg s "refs/heads/$branch" --arg t "refs/heads/${SPECCLAW_PR_TARGET:-$FLEET_REF}" --arg c "$FLEET_CHANGE" \
+  [[ -n "$id" ]] || id="$(jq -n --arg s "refs/heads/$branch" --arg t "refs/heads/$(pod_pr_target)" --arg c "$FLEET_CHANGE" \
       --arg d "$(pr_description)" --arg w "${FLEET_WORK_ITEM:-}" --arg dr "${FLEET_PR_DRAFT:-true}" \
       '{sourceRefName: $s, targetRefName: $t, description: $d, isDraft: ($dr == "true"),
         title: (if $dr == "true" then "[draft] " + $c + ": verify did not pass" else $c + ": integration verified" end),

@@ -8,7 +8,7 @@ stub curl 'printf "%s\n" "$*" >> "$TMP/curl.log"
 case "$*" in
   *releases.test/*) out=""; prev=""; for arg in "$@"; do [[ "$prev" == -o ]] && out="$arg"; prev="$arg"; done
     url="${*: -1}"; src="$TMP/releases/${url#https://releases.test/}"; [[ -f "$src" ]] || exit 22; cp "$src" "$out"; exit 0 ;;
-  *pullrequests*searchCriteria*) [[ -n "${SEARCH_JUNK:-}" ]] && { echo "<html>sign in</html>"; exit 0; }; [[ -n "${EXISTING_PR:-}" ]] && echo "{\"value\":[{\"pullRequestId\":$EXISTING_PR,\"isDraft\":${EXISTING_DRAFT:-false}}]}" || echo "{\"value\":[]}"; exit 0 ;;
+  *pullrequests*searchCriteria*) [[ -n "${SEARCH_JUNK+x}" ]] && { printf "%s" "$SEARCH_JUNK"; exit 0; }; [[ -n "${EXISTING_PR:-}" ]] && echo "{\"value\":[{\"pullRequestId\":$EXISTING_PR,\"isDraft\":${EXISTING_DRAFT:-false}}]}" || echo "{\"value\":[]}"; exit 0 ;;
   *"-X PATCH"*pullrequests/*) echo "PATCH $*" >> "$TMP/pr-patch.log"; echo "{}"; exit 0 ;;
   *pullrequests*) [[ -n "${PR_POST_FAIL:-}" ]] && exit 22; cat > "$TMP/pr-body.json"; echo "{\"pullRequestId\":77}"; exit 0 ;;
   *--noproxy*) [[ "${GATE:-}" == direct-open ]] && exit 0; exit 7 ;;
@@ -28,6 +28,7 @@ stub git '[[ "$1" == -C && "$3" == merge-base ]] && { [[ -z "${NOT_ANCESTOR:-}" 
 [[ -n "${CLONE_FAIL:-}" ]] && exit 128
 dest="${*: -1}"; kind=changes; [[ "${FLEET_MODE:-}" == integrate ]] && kind=features; mkdir -p "$dest/.specclaw/changes/049-x" "$dest/.specclaw/$kind/049-x"
 [[ -n "${CONFIG_PREFIX:-}" ]] && printf "git:\n  branch_prefix: \"%s\"   # p\n" "$CONFIG_PREFIX" > "$dest/.specclaw/config.yaml"
+[[ -n "${BASE_BRANCH:-}" ]] && printf "git:\n  base_branch: \"%s\"   # b\n" "$BASE_BRANCH" > "$dest/.specclaw/config.yaml"
 status=approved; [[ -n "${NOT_APPROVED:-}" ]] && status=draft
 pr=""; [[ -n "${FAKE_PR:-}" ]] && pr=",\"pr\":{\"url\":\"https://pr/1\"}"
 content="{\"branch\":\"specclaw/049-x\",\"phases\":{\"proposal\":{\"status\":\"$status\"}$pr}}"
@@ -38,6 +39,7 @@ content="{\"branch\":\"specclaw/049-x\",\"phases\":{\"proposal\":{\"status\":\"$
 [[ -n "${INTEGRATION_RESULT:-}" ]] && printf "%s\n" "$INTEGRATION_RESULT" > "$dest/.specclaw/features/049-x/integration-result"
 exit 0'
 stub claude 'echo "${SPECCLAW_PR_TARGET-unset}" > "$TMP/prtarget"
+[[ -n "${AGENT_RESULT:-}" ]] && printf "%s\n" "$AGENT_RESULT" > ".specclaw/features/049-x/integration-result"
 env | grep -E "^(ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|OPENAI_API_KEY|CODEX_API_KEY)=" >> "$TMP/leaked"
 [[ "$CLAUDE_CODE_OAUTH_TOKEN" == oat-token ]] || echo "bad token" >> "$TMP/leaked"
 echo "agent says hi; leaked sk-ant-oat01-SECRETTOKENVALUE and pat abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGH"

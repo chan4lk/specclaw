@@ -7,6 +7,7 @@ fi
 
 merge_base_ref() {
   local b; b="$(change_branch)"
+  [[ "${FLEET_MODE:-}" == integrate ]] && rm -f "$REPO/.specclaw/features/$FLEET_CHANGE/integration-result"
   if [[ "${FLEET_MODE:-}" == integrate && "$(git -C "$REPO" rev-parse --abbrev-ref HEAD)" != "$b" ]]; then git -C "$REPO" checkout -q -b "$b" || return 1; fi
   [[ -n "${FLEET_MERGE_REF:-}" ]] || return 0
   git -C "$REPO" fetch -q origin "refs/heads/$FLEET_MERGE_REF:refs/remotes/origin/$FLEET_MERGE_REF" || return 1

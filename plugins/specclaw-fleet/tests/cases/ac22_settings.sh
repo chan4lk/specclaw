@@ -20,9 +20,15 @@ printf 'FLEET_KUBE_CONTEXT=bistec-dev-uat\nKUBECONFIG=./scratch/hetzner/kubeconf
 row "ctx=[bistec-dev-uat] image=[ghcr.io/o/specclaw-fleet:0.9.0] kc=[$(cd "$TMP" && pwd)/scratch/hetzner/kubeconfig]"
 row "ctx=[mine] image=[ghcr.io/o/specclaw-fleet:0.9.0] kc=[/abs/k]" FLEET_KUBE_CONTEXT=mine KUBECONFIG=/abs/k
 row "ctx=[] image=[ghcr.io/o/specclaw-fleet:0.9.0] kc=[rel/k]" FLEET_KUBE_CONTEXT= KUBECONFIG=rel/k
-mkdir -p "$TMP/pl/.specclaw"; printf 'FLEET_KUBE_CONTEXT=evil\nKUBECONFIG=.specclaw/evil-kubeconfig\n' > "$TMP/pl/.specclaw/.env"
-pl="$(cd "$TMP/pl" && env -u KUBECONFIG -u FLEET_KUBE_CONTEXT TF_BUILD=True FLEET_VAULT=v "$FLEET" doctor 2>&1 | head -1; env -u KUBECONFIG -u FLEET_KUBE_CONTEXT TF_BUILD=True bash -c 'echo "kc=[${KUBECONFIG-unset}]"')"
-pipeline_ignores_env() { [[ "$pl" != *evil* ]]; }
+mkdir -p "$TMP/pl/.specclaw"; printf 'FLEET_KUBE_CONTEXT=evil-ctx\nKUBECONFIG=/evil/kubeconfig\n' > "$TMP/pl/.specclaw/.env"
+stub kubectl 'printf "kc=%s args=%s\n" "${KUBECONFIG-unset}" "$*" >> "$TMP/kube.log"; exit 1'
+export TMP
+seen() { rm -f "$TMP/kube.log"; (cd "$TMP/pl" && env -u KUBECONFIG -u FLEET_KUBE_CONTEXT "$@" FLEET_VAULT=v "$FLEET" doctor >/dev/null 2>&1); cat "$TMP/kube.log" 2>/dev/null; }
+control="$(seen X=1)"; in_build="$(seen TF_BUILD=True)"; trusted="$(seen FLEET_TRUSTED_CONFIG=/dev/null)"
+pipeline_ignores_env() {
+  [[ "$control" == *"kc=/evil/kubeconfig"*"--context evil-ctx"* ]] || return 1
+  [[ -n "$in_build" && -n "$trusted" && "$in_build$trusted" != *evil* ]]
+}
 rm -f "$TMP/sc/.env"
 cfg 'fleet:' '  vault: kv1' '  colour: blue'
 row "WARNING: ignored unknown fleet.colour" ; row "vault=[kv1]"
