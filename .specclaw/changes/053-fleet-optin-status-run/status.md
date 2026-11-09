@@ -13,7 +13,7 @@
 | Design | ⏳ Pending |  |
 | Tasks | ✅ Done |  |
 | Build | ✅ Done | 6/6 tasks |
-| Verify | ⏳ Pending |  |
+| Verify | ❌ Failed | FAIL |
 
 ## Task Progress
 
