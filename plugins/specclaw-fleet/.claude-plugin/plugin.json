@@ -15,5 +15,7 @@
     "k3s",
     "azure-devops",
     "codex"
-  ]
+  ],
+  "types": "./types/index.d.ts",
+  "hooks": "./hooks/mod.json"
 }

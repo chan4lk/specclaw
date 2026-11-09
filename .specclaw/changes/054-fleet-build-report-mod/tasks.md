@@ -22,8 +22,8 @@
   - Files: plugins/specclaw-fleet/hooks/core/report.ts, plugins/specclaw-fleet/hooks/core/view.ts, plugins/specclaw-fleet/tests/report.spec.ts
   - Kind: impl
   - Depends: T2
-- [ ] `T4` — Mod wiring: `/fleet-pane`, band, status line, refresh after fleet Bash calls; manifest, types, mod test runner, CI (AC-5)
-  - Files: plugins/specclaw-fleet/hooks/mod.json, plugins/specclaw-fleet/hooks/register.tsx, plugins/specclaw-fleet/hooks/snapshot.ts, plugins/specclaw-fleet/types/index.d.ts, plugins/specclaw-fleet/.claude-plugin/plugin.json, plugins/specclaw-fleet/tests/fixtures.ts, plugins/specclaw-fleet/tests/pane.test.ts, plugins/specclaw-fleet/tests/run-mod-tests.sh, .github/workflows/ci.yml
+- [x] `T4` — Mod wiring: `/fleet-pane`, band, status line, refresh after fleet Bash calls; manifest, types, mod test runner, CI (AC-5)
+  - Files: plugins/specclaw-fleet/hooks/mod.json, plugins/specclaw-fleet/hooks/register.tsx, plugins/specclaw-fleet/hooks/snapshot.ts, plugins/specclaw-fleet/types/index.d.ts, plugins/specclaw-fleet/.claude-plugin/plugin.json, plugins/specclaw-fleet/tests/fixtures.ts, plugins/specclaw-fleet/tests/pane.test.tsx, plugins/specclaw-fleet/tests/run-mod-tests.sh, .github/workflows/ci.yml
   - Kind: impl
   - Depends: T3
 
