@@ -27,6 +27,10 @@ run_entry; prow_check main "no config"
 CONFIG_RAW='git:\n  branch_prefix: specclaw/\n# a column-0 comment\n  base_branch: trunk   # note\nother:\n  base_branch: nope\n' run_entry; prow_check trunk "past a column-0 comment"
 CONFIG_RAW="git:\\n  base_branch: 'staging'\\n" run_entry; prow_check staging "single-quoted"
 CONFIG_RAW='other:\n  base_branch: nope\n' run_entry; prow_check main "base_branch outside git:"
+CONFIG_RAW='git:\r\n  base_branch: crlf\r\n' run_entry; prow_check crlf "CRLF"
+CONFIG_RAW='git:\n  base_branch: "spaced"   \n' run_entry; prow_check spaced "trailing whitespace after quote"
+ENTRY_REF=feature/x BASE_BRANCH=develop run_entry; prow_check feature/x "feature ref over base_branch"
+ENTRY_REF=release run_entry; prow_check release "non-main dispatched ref, no config"
 precedence() { (( prow == 1 )); }
 check "R051 the pod resolves one PR target: FLEET_PR_TARGET, then a feature ref, then git.base_branch (quoted, commented, past a column-0 comment), then the dispatched ref" precedence
 finish

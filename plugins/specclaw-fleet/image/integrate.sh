@@ -2,7 +2,7 @@
 item_kind() { [[ "${FLEET_MODE:-}" == integrate ]] && echo features || echo changes; }
 
 if [[ "${FLEET_MODE:-}" == integrate ]]; then
-  PROMPT="Integrate feature $FLEET_CHANGE. This branch holds every member change of the feature, each already merged. Run the project's tests and the specclaw verify of each member change listed in .specclaw/features/$FLEET_CHANGE/proposal.md. Fix integration breakage with small commits; never rewrite or revert a member's work. Nobody is watching: never ask a question. Commit your fixes. Only when the project's tests and every member's verify pass, write the single word pass to .specclaw/features/$FLEET_CHANGE/integration-result and commit it; otherwise write fail. After you exit, this pod pushes the branch and opens the PR to ${FLEET_PR_TARGET:-main}: ready for review only when that file says pass, a draft otherwise."
+  PROMPT="Integrate feature $FLEET_CHANGE. This branch holds every member change of the feature, each already merged. Run the project's tests and the specclaw verify of each member change listed in .specclaw/features/$FLEET_CHANGE/proposal.md. Fix integration breakage with small commits; never rewrite or revert a member's work. Nobody is watching: never ask a question. Commit your fixes. Only when the project's tests and every member's verify pass, write the single word pass to .specclaw/features/$FLEET_CHANGE/integration-result and commit it; otherwise write fail. After you exit, this pod pushes the branch and opens the PR: ready for review only when that file says pass, a draft otherwise."
 fi
 
 merge_base_ref() {

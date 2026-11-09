@@ -20,7 +20,7 @@ resolve_pr_target() {
   [[ -z "$t" && "${FLEET_REF:-}" == feature/* ]] && t="$FLEET_REF"
   [[ -n "$t" ]] || t="$(awk '/^git:/ { on = 1; next } on && /^[A-Za-z_]/ { exit }
     on && /^[[:space:]]+base_branch:/ { v = $0; sub(/^[[:space:]]+base_branch:[[:space:]]*/, "", v); sub(/[[:space:]]+#.*$/, "", v)
-      gsub(/^["\x27]|["\x27]$/, "", v); print v; exit }' "$REPO/.specclaw/config.yaml" 2>/dev/null)"
+      gsub(/[[:space:]\r]+$/, "", v); gsub(/^["\x27]|["\x27]$/, "", v); print v; exit }' "$REPO/.specclaw/config.yaml" 2>/dev/null)"
   export SPECCLAW_PR_TARGET="${t:-$FLEET_REF}"
 }
 
