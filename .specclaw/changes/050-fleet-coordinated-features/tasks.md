@@ -25,7 +25,7 @@
   - Files: plugins/specclaw-fleet/lib/feature.sh, plugins/specclaw-fleet/lib/feature-run.sh, plugins/specclaw-fleet/tests/cases/ac30_feature_advance.sh
   - Kind: impl
   - Depends: T1, T3
-- [ ] `T5` — Pod: `FLEET_MERGE_REF` merge, `FLEET_MODE=integrate`, manifest env (AC-5)
+- [x] `T5` — Pod: `FLEET_MERGE_REF` merge, `FLEET_MODE=integrate`, manifest env (AC-5)
   - Files: plugins/specclaw-fleet/image/integrate.sh, plugins/specclaw-fleet/image/workspace.sh, plugins/specclaw-fleet/image/entrypoint.sh, plugins/specclaw-fleet/lib/manifest.sh, plugins/specclaw-fleet/tests/cases/ac31_integrate_pod.sh, plugins/specclaw-fleet/tests/lib/entry-env.sh
   - Kind: impl
   - Depends: T2

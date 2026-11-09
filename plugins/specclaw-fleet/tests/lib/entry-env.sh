@@ -15,20 +15,24 @@ case "$*" in
 esac
 echo "{}"'
 stub git '[[ "$1" == -C && "$3" == merge-base ]] && { [[ -z "${NOT_ANCESTOR:-}" ]]; exit; }
-[[ "$1" == -C && "$3" == rev-parse && "$4" == --abbrev-ref ]] && { echo "${ON_BRANCH-specclaw/049-x}"; exit 0; }
+[[ "$1" == -C && "$3" == rev-parse && "$4" == --abbrev-ref ]] && { [[ -s "$TMP/onbranch" ]] && { cat "$TMP/onbranch"; exit 0; }; echo "${ON_BRANCH-specclaw/049-x}"; exit 0; }
 [[ "$1" == -C && "$3" == rev-parse ]] && { echo deadbeef; exit 0; }
 [[ "$1" == -C && "$3" == ls-remote && -n "${LS_FAIL:-}" ]] && exit 128
 [[ "$1" == -C && "$3" == fetch && -n "${FETCH_FAIL:-}" ]] && exit 128
+[[ "$1" == -C && "$3" == merge ]] && { [[ -n "${MERGE_CONFLICT:-}" ]] && exit 1; exit 0; }
+[[ "$1" == -C && "$3" == checkout && "$5" == -b ]] && { echo "$6" > "$TMP/onbranch"; exit 0; }
 [[ "$1" == -C && "$3" == ls-remote ]] && { [[ -n "${REMOTE_BRANCH:-}" ]] && printf "abc\trefs/heads/%s\n" "$REMOTE_BRANCH"; exit 0; }
 [[ "$1" == clone ]] || exit 0
 [[ -n "${CLONE_FAIL:-}" ]] && exit 128
-dest="${*: -1}"; mkdir -p "$dest/.specclaw/changes/049-x"
+dest="${*: -1}"; kind=changes; [[ "${FLEET_MODE:-}" == integrate ]] && kind=features; mkdir -p "$dest/.specclaw/changes/049-x" "$dest/.specclaw/$kind/049-x"
 [[ -n "${CONFIG_PREFIX:-}" ]] && printf "git:\n  branch_prefix: \"%s\"   # p\n" "$CONFIG_PREFIX" > "$dest/.specclaw/config.yaml"
 status=approved; [[ -n "${NOT_APPROVED:-}" ]] && status=draft
 pr=""; [[ -n "${FAKE_PR:-}" ]] && pr=",\"pr\":{\"url\":\"https://pr/1\"}"
 content="{\"branch\":\"specclaw/049-x\",\"phases\":{\"proposal\":{\"status\":\"$status\"}$pr}}"
+[[ "$kind" == features ]] && content="{\"kind\":\"feature\",\"phases\":{\"proposal\":{\"status\":\"$status\"}}}"
 [[ -n "${STATE_OVERRIDE+x}" ]] && content="$STATE_OVERRIDE"
-[[ "$content" == MISSING ]] || printf "%s" "$content" > "$dest/.specclaw/changes/049-x/state.json"
+[[ "$content" == MISSING ]] || printf "%s" "$content" > "$dest/.specclaw/$kind/049-x/state.json"
+[[ "$kind" == features ]] && rm -f "$dest/.specclaw/changes/049-x/state.json"
 exit 0'
 stub claude 'echo "${SPECCLAW_PR_TARGET-unset}" > "$TMP/prtarget"
 env | grep -E "^(ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|OPENAI_API_KEY|CODEX_API_KEY)=" >> "$TMP/leaked"
@@ -40,12 +44,12 @@ stub codex 'sleep "${AGENT_SLEEP:-0}"; exit "${AGENT_RC:-0}"'
 export TMP REAL_AZDO=""
 
 run_entry() {
-  rm -rf "${TMP:?}/status" "${TMP:?}/work" "${TMP:?}/home"
+  rm -rf "${TMP:?}/status" "${TMP:?}/work" "${TMP:?}/home" "${TMP:?}/onbranch"
   mkdir -p "$TMP/status" "$TMP/work" "$TMP/home" "$TMP/seed"
   : > "$CALLS"
   printf 'oat-token' > "$TMP/cred"
   env FLEET_STATUS_DIR="$TMP/status" FLEET_WORK="$TMP/work" FLEET_CRED="$TMP/cred" FLEET_SEED="$TMP/seed" \
-    HTTPS_PROXY=http://proxy:3128 FLEET_GATE_TRIES=2 FLEET_GATE_SLEEP=0 AZDO_ORG=o AZDO_PROJECT=p FLEET_WORK_ITEM=42 FLEET_COMMIT=abc123 FLEET_CODEX_HOME="$TMP/codex" FLEET_AZDO_CONFIG=$'azdo:\n  fleet_states:\n    failed: Failed' HOME="$TMP/home" FLEET_AGENT="${ENTRY_AGENT:-claude}" FLEET_CHANGE=049-x FLEET_REF="${ENTRY_REF:-main}" FLEET_PR_TARGET="${ENTRY_PR_TARGET:-}" AZDO_TOKEN=pat-secret \
+    HTTPS_PROXY=http://proxy:3128 FLEET_GATE_TRIES=2 FLEET_GATE_SLEEP=0 AZDO_ORG=o AZDO_PROJECT=p FLEET_WORK_ITEM=42 FLEET_COMMIT=abc123 FLEET_CODEX_HOME="$TMP/codex" FLEET_AZDO_CONFIG=$'azdo:\n  fleet_states:\n    failed: Failed' HOME="$TMP/home" FLEET_AGENT="${ENTRY_AGENT:-claude}" FLEET_CHANGE=049-x FLEET_REF="${ENTRY_REF:-main}" FLEET_PR_TARGET="${ENTRY_PR_TARGET:-}" FLEET_MODE="${ENTRY_MODE:-}" FLEET_MERGE_REF="${ENTRY_MERGE:-}" AZDO_TOKEN=pat-secret \
     FLEET_REPO_URL=https://dev.azure.com/o/p/_git/r ANTHROPIC_API_KEY=k ANTHROPIC_AUTH_TOKEN=k OPENAI_API_KEY=k CODEX_API_KEY=k \
     bash "$ENTRY" > "$TMP/out" 2>&1
 }

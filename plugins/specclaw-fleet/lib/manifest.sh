@@ -40,6 +40,7 @@ $(render_pod_extras)
             - {name: FLEET_CLAUDE_VERSION, value: $(yaml_str "$F_CLAUDE_VERSION")}
             - {name: FLEET_COMMIT, value: "$F_COMMIT"}
             - {name: FLEET_AZDO_CONFIG, value: $(yaml_str "$F_AZDO_CONFIG")}
+$(render_run_env)
             - {name: TMPDIR, value: /tmp}
             - {name: HTTPS_PROXY, value: "http://fleet-egress.specclaw-fleet-egress:3128"}
             - {name: HTTP_PROXY, value: "http://fleet-egress.specclaw-fleet-egress:3128"}

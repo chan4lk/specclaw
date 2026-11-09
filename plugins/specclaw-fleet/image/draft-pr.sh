@@ -7,8 +7,9 @@ azdo_api() {
 }
 
 pr_description() {
-  local dir="$REPO/.specclaw/changes/$FLEET_CHANGE"
-  { echo "Opened as a **draft** by specclaw-fleet: verify did not pass, so a human decides what happens next."
+  local dir; dir="$REPO/.specclaw/$(item_kind)/$FLEET_CHANGE"
+  { if [[ "${FLEET_PR_DRAFT:-true}" == true ]]; then echo "Opened as a **draft** by specclaw-fleet: verify did not pass, so a human decides what happens next."
+    else echo "Opened by specclaw-fleet: integration of feature $FLEET_CHANGE passed its checks."; fi
     echo; echo "Work item: #${FLEET_WORK_ITEM:-?}"; echo
     sed -n '/^## Verify/,$p' "$dir/change.md" "$dir/verify-report.md" 2>/dev/null | head -c 2000
     echo; echo "### Open follow-ups"; head -c 1200 "$dir/follow-ups.md" 2>/dev/null; } | head -c 3800
@@ -23,11 +24,12 @@ ensure_pr() {
   id="$(azdo_api "$api?searchCriteria.sourceRefName=refs/heads/$branch&searchCriteria.status=active&api-version=7.1" \
     | jq -r '.value[0].pullRequestId // empty')" || return 0
   [[ -n "$id" ]] || id="$(jq -n --arg s "refs/heads/$branch" --arg t "refs/heads/$SPECCLAW_PR_TARGET" --arg c "$FLEET_CHANGE" \
-      --arg d "$(pr_description)" --arg w "${FLEET_WORK_ITEM:-}" \
-      '{sourceRefName: $s, targetRefName: $t, title: ("[draft] " + $c + ": verify did not pass"), description: $d,
-        isDraft: true, workItemRefs: (if $w == "" then [] else [{id: $w}] end)}' \
+      --arg d "$(pr_description)" --arg w "${FLEET_WORK_ITEM:-}" --arg dr "${FLEET_PR_DRAFT:-true}" \
+      '{sourceRefName: $s, targetRefName: $t, description: $d, isDraft: ($dr == "true"),
+        title: (if $dr == "true" then "[draft] " + $c + ": verify did not pass" else $c + ": integration verified" end),
+        workItemRefs: (if $w == "" then [] else [{id: $w}] end)}' \
     | azdo_api -X POST "$api?api-version=7.1" --data-binary @- | jq -r '.pullRequestId // empty')" || return 0
-  [[ -n "$id" ]] && echo "${FLEET_REPO_URL}/pullrequest/$id true"
+  [[ -n "$id" ]] && echo "${FLEET_REPO_URL}/pullrequest/$id ${FLEET_PR_DRAFT:-true}"
 }
 
 deliver() {
