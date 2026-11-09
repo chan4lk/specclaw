@@ -7,6 +7,7 @@ stub specclaw-azdo-issue '[[ "$1" == records ]] || exit 0; [[ -f "$WI/$3.fail" ]
 stub curl 'f="$TMP/api/$(grep -oE "(pullrequests|builds)/[0-9]+" <<<"$*" | tr / -)"; [[ -f "$f" ]] || { printf "\n404"; exit 0; }
 [[ "$(cat "$f")" == FAIL500 ]] && { printf "\n500"; exit 0; }; cat "$f"; printf "\n200"'
 stub kubectl '[[ -n "${KUBE_FAIL:-}" ]] && exit 1
+case "${KUBE_JUNK:-}:$*" in empty:*) exit 0 ;; html:*) echo "<html>"; exit 0 ;; items:*"get jobs"*) echo "{\"items\":\"x\"}"; exit 0 ;; esac
 case "$*" in *"get jobs"*) echo "{\"items\":[{\"metadata\":{\"name\":\"fleet-003-b\",\"creationTimestamp\":\"2026-11-09T12:05:00Z\"},\"status\":{\"active\":1}}]}" ;; *"get pods"*) printf Running ;; esac'
 mk() { local d="$SPECCLAW_DIR/changes/$1"; mkdir -p "$d"; echo '{"phases":{"proposal":{"status":"approved"}}}' > "$d/state.json"
   printf '**Feature:** cat\n**Depends on:** %s\n' "$2" > "$d/proposal.md"; printf '**Azure Boards Work Item:** [#%s](https://x)\n' "$3" > "$d/status.md"; }
@@ -43,7 +44,10 @@ done
 reset; echo '{"records":[{"at":5,"state":"dispatched"}]}' > "$WI/003-b"
 want "records whose run cannot be merged: a ? row" '[.rows[] | "\(.change)=\(.state)=\(.note)"] == ["003-b=?=records unparsable"]' --since 2026-11-09T12:00:00Z
 reset; echo '{"records":[{"at":"2026-11-09T12:05:00Z","state":"dispatched","agent_started":5}]}' > "$WI/003-b"
-want "a row that cannot be built: a ? row" "$BASE and .rows[1].state == \"?\" and .rows[1].note == \"row could not be built\""
+KUBE_FAIL=1 want "a record shape that breaks the row (cluster answer valid): a ? row" "$BASE and .rows[1].state == \"?\" and .rows[1].note == \"row could not be built\""
+for junk in empty html items; do
+  reset; KUBE_JUNK=$junk want "cluster answer $junk: the live row keeps its state" "$BASE and .rows[1].state == \"running\" and .rows[1].note == null and .totals.running == 1"
+done
 reset; want "--since drops older runs" '[.rows[].change] == ["003-b"]' --since 2026-11-09T12:00:00Z
 reset; want "--feature attaches waves" '.scope == "feature:cat" and ([.rows[] | "\(.change)=\(.wave)"] == ["002-a=1", "003-b=2"])' --feature cat
 reset; want "named change without records still gets a row" '[.rows[] | "\(.change)=\(.state)"] == ["004-c=null", "002-a=pr_open"]' 004-c 002-a
