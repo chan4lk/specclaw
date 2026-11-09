@@ -1,0 +1,11 @@
+{
+  "change": "055-fleet-trusted-config-sigpipe",
+  "phase": "build",
+  "branch": "",
+  "phases": {
+    "proposal": {"status":"approved","at":"2026-11-09T17:19:13Z"},
+    "spec": {"status":"done","at":"2026-11-09T17:26:00Z"},
+    "tasks": {"status":"done","at":"2026-11-09T17:26:00Z"},
+    "build": {"status":"done","at":"2026-11-09T17:26:00Z"}
+  }
+}

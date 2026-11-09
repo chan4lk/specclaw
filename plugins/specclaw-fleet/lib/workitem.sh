@@ -55,7 +55,7 @@ already_handled() {
 
 work_item_id() {
   grep -oE '^\*\*Azure Boards Work Item:\*\* \[#[0-9]+\]' "$(item_dir "$1")/status.md" 2>/dev/null \
-    | grep -oE '[0-9]+' | head -1
+    | grep -oE '[0-9]+' | awk 'NR == 1'
 }
 
 proposal_approved() {

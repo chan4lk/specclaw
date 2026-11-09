@@ -5,7 +5,7 @@ feature_doc() {
 }
 
 doc_field() {
-  sed -nE "s/^\*\*$2:\*\*[[:space:]]*(.*)$/\1/p" "$1" 2>/dev/null | head -n1 | sed -E 's/[[:space:]]+$//'
+  sed -nE "s/^\*\*$2:\*\*[[:space:]]*(.*)$/\1/p" "$1" 2>/dev/null | awk 'NR == 1' | sed -E 's/[[:space:]]+$//'
 }
 
 feature_members() {

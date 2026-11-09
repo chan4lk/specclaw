@@ -28,7 +28,7 @@ report_scope() {
 
 first_obj() {
   local out
-  out="$(jq -cn 'first(inputs | objects)' <<<"${1:-}" 2>/dev/null | head -n1)"
+  out="$(jq -cn 'first(inputs | objects)' <<<"${1:-}" 2>/dev/null | awk 'NR == 1')"
   if [[ -n "$out" ]]; then printf '%s\n' "$out"; else echo '{"_unread":true}'; fi
 }
 
