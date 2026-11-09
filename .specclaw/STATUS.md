@@ -1,7 +1,7 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** specclaw
-**Last Updated:** 2026-11-09 14:40 UTC
+**Last Updated:** 2026-11-09 16:08 UTC
 
 _4 unnumbered changes · run `/specclaw-extras:renumber` to order them_
 
@@ -25,7 +25,7 @@ _4 unnumbered changes · run `/specclaw-extras:renumber` to order them_
 ## Pending Proposals
 
 
-- 📋 **054-fleet-build-report-mod** — proposal ready, awaiting planning
+- 📋 **054-fleet-build-report-mod** ▣ — proposal ready, awaiting planning
 
 ## Recently Completed
 

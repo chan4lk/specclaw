@@ -8,7 +8,7 @@
 
 | Phase | Status | Notes |
 |-------|--------|-------|
-| Proposal | 🟡 Draft |  |
+| Proposal | ✅ Approved |  |
 | Spec | ⏳ Pending |  |
 | Design | ⏳ Pending |  |
 | Tasks | ⏳ Pending |  |
