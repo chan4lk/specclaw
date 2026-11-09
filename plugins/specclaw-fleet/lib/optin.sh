@@ -44,7 +44,9 @@ fleet_optin() {
   (( ${#changes[@]} )) || die "Usage: specclaw-fleet optin <change>... [--dry-run]"
   load_azdo_env
   local me c rc worst=0 errored=0
-  me="$(azdo_issue whoami "$SPECCLAW_DIR" "${changes[0]}" 2>/dev/null | jq -r '.upn // empty')"
+  local probe=""; for c in "${changes[@]}"; do [[ -d "$(item_dir "$c")" ]] && { probe="$c"; break; }; done
+  [[ -n "$probe" ]] || die "none of these is a change or feature in $SPECCLAW_DIR: ${changes[*]}"
+  me="$(azdo_issue whoami "$SPECCLAW_DIR" "$probe" 2>/dev/null | jq -r '.upn // empty')"
   [[ -n "$me" ]] || die "could not read the identity behind AZDO_TOKEN (check .specclaw/.env)"
   for c in "${changes[@]}"; do
     rc=0; optin_one "$c" "$me" || rc=$?

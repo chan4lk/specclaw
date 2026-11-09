@@ -19,7 +19,8 @@ stub git '[[ "$1" == -C && "$3" == merge-base ]] && { [[ -z "${NOT_ANCESTOR:-}" 
 [[ "$1" == -C && "$3" == rev-parse ]] && { echo deadbeef; exit 0; }
 [[ "$1" == -C && "$3" == ls-remote && -n "${LS_FAIL:-}" ]] && exit 128
 [[ "$1" == -C && "$3" == fetch && -n "${FETCH_FAIL:-}" ]] && exit 128
-[[ "$1" == -C && "$3" == merge ]] && { [[ -n "${MERGE_CONFLICT:-}" ]] && exit 1; exit 0; }
+[[ "$1" == -C && "$3" == merge ]] && { [[ -n "${MERGE_CONFLICT:-}${MERGE_BROKEN:-}" ]] && exit 1; exit 0; }
+[[ "$1" == -C && "$3" == diff ]] && { [[ -n "${MERGE_CONFLICT:-}" ]] && echo src/a.ts; exit 0; }
 [[ "$1" == -C && "$3" == checkout && "$5" == -b ]] && { echo "$6" > "$TMP/onbranch"; exit 0; }
 [[ "$1" == -C && "$3" == ls-remote ]] && { [[ -n "${REMOTE_BRANCH:-}" ]] && printf "abc\trefs/heads/%s\n" "$REMOTE_BRANCH"; exit 0; }
 [[ "$1" == clone ]] || exit 0

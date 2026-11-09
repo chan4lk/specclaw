@@ -92,7 +92,7 @@ Once the gates pass, `trigger` queues the pipeline with this change and agent as
 
 ## Coordinated features
 
-Run **`/specclaw-fleet:feature`** to deliver related changes together. Children declare `**Feature:** <module>` and `**Depends on:** <changes>` in their proposal (or lean `change.md`). `feature plan` shows waves and states; `feature init` writes `.specclaw/features/<module>/` with its own work item; `feature start` creates `feature/<module>` and queues the pipeline, which then runs `feature advance` on every push to that branch: ready children dispatch on `feature/<module>` (their PRs target it), a failed child blocks only its dependents, a conflicting child is retried once with the feature branch merged in, and once every child is merged one integration run opens `specclaw/integrate-<module> → <trusted branch>`.
+Run **`/specclaw-fleet:feature`** to deliver related changes together. Children declare `**Feature:** <module>` and `**Depends on:** <changes>` in their proposal (or lean `change.md`). `feature plan` shows waves and states; `feature init` writes `.specclaw/features/<module>/` with its own work item; `feature start` creates `feature/<module>` and queues the pipeline, which then runs `feature advance` on every merge into that branch that changes a `.specclaw/changes/*/state.json` (every child PR does; after any other merge, run `feature start <module>` again to re-queue it): ready children dispatch on `feature/<module>` (their PRs target it), a failed child blocks only its dependents, a conflicting child is retried once with the feature branch merged in, and once every child is merged one integration run opens `specclaw/integrate-<module> → <trusted branch>`.
 
 ## Egress hosts
 

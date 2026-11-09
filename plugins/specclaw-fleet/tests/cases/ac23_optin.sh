@@ -25,6 +25,7 @@ reset; optin 004-c 005-d; err_rc=$?
 reset; optin 005-d; nowi_rc=$?; nowi_out="$(cat "$TMP/out")"
 reset; optin 002-a 004-c --dry-run; dry_rc=$?; dry_out="$(cat "$TMP/out")"; dry_calls="$(optins)"
 reset; NO_WHOAMI=1 optin 002-a; who_rc=$?; who_calls="$(optins)"
+reset; optin 999-typo 002-a; typo_rc=$?; typo_out="$(cat "$TMP/out")"
 self_only() {
   (( ok_rc == 0 && ok_calls == 2 )) && grep -q "002-a: opted in (#209, assigned to alice@contoso.com" <<<"$ok_out" \
     && (( mixed_rc == 4 )) && [[ "$bob" == bob@contoso.com ]] && grep -q "004-c: refused" <<<"$mixed_out" && grep -q "002-a: opted in" <<<"$mixed_out"
@@ -34,7 +35,7 @@ dry_writes_nothing() {
     && grep -q "004-c: refused: assigned to bob@contoso.com" <<<"$dry_out"
 }
 no_wi() { (( err_rc == 1 && nowi_rc == 1 )) && grep -q "no work item; run: specclaw-fleet trigger 005-d --create" <<<"$nowi_out"; }
-no_identity() { (( who_rc == 1 && who_calls == 0 )); }
+no_identity() { (( who_rc == 1 && who_calls == 0 && typo_rc == 1 )) && grep -q "002-a: opted in" <<<"$typo_out" && grep -q "999-typo: no such change" <<<"$typo_out"; }
 consent_rows=1
 crow() {
   reset; printf 'specclaw; fleet:auto' > "$WI/002-a/tags"; printf '%s' "$2" > "$WI/002-a/who"; printf '%s' "$3" > "$WI/002-a/tagger"
@@ -54,5 +55,5 @@ check "R053 optin re-adds a fleet:auto the assignee did not add (as the caller);
 check "R053 AC-3 optin assigns to the AZDO_TOKEN identity and tags; someone else's item is refused (exit 4) while the rest proceed" self_only
 check "R053 AC-3 --dry-run shows the plan, names the other assignee, and writes nothing" dry_writes_nothing
 check "R053 AC-3 a change with no work item exits 1 naming --create, and an error is not hidden behind another change's refusal" no_wi
-check "R053 AC-3 an unreadable caller identity stops before any write" no_identity
+check "R053 AC-3 an unreadable caller identity stops before any write; a typo in the first name does not block the valid ones" no_identity
 finish

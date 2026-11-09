@@ -29,10 +29,12 @@ check "R050 AC-5 integrate mode reads the feature's approval, works on specclaw/
 REMOTE_BRANCH=specclaw/049-x ENTRY_MERGE=feature/cat run_entry; merged="$(cat "$CALLS")"
 REMOTE_BRANCH=specclaw/049-x ENTRY_MERGE=feature/cat MERGE_CONFLICT=1 run_entry; conflicted="$(cat "$CALLS")"
 REMOTE_BRANCH=specclaw/049-x ENTRY_MERGE=feature/cat FETCH_FAIL=1 run_entry; mfail="$(cat "$CALLS")"
+REMOTE_BRANCH=specclaw/049-x ENTRY_MERGE=feature/cat MERGE_BROKEN=1 run_entry; broken="$(cat "$CALLS")"
 merge_ref() {
   grep -q "merge -q --no-edit origin/feature/cat" <<<"$merged" && grep -q "^claude -p Run the specclaw lifecycle" <<<"$merged" \
     && grep -q "^claude -p The change branch has unresolved merge conflicts with feature/cat" <<<"$conflicted" \
-    && grep -q "exit=resume-failed\|exit=merge-ref-failed" <<<"$mfail" && ! grep -q "^claude -p" <<<"$mfail"
+    && grep -q "exit=resume-failed\|exit=merge-ref-failed" <<<"$mfail" && ! grep -q "^claude -p" <<<"$mfail" \
+    && grep -q "exit=merge-ref-failed" <<<"$broken" && ! grep -q "^claude -p" <<<"$broken"
 }
-check "R050 AC-5 FLEET_MERGE_REF merges the feature branch into the resumed change branch first; conflicts are handed to the agent; a failed fetch stops the run" merge_ref
+check "R050 AC-5 FLEET_MERGE_REF merges the feature branch into the resumed change branch first; real conflicts (unmerged paths) go to the agent; a failed fetch or a merge that fails without conflicts stops the run" merge_ref
 finish

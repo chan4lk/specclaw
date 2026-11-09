@@ -11,6 +11,7 @@ feature_plan() {
 
 feature_init() {
   local m="$1" d="$SPECCLAW_DIR/features/$1" waves
+  [[ ! -d "$SPECCLAW_DIR/changes/$m" ]] || die "feature module '$m' collides with change $m; choose another module name"
   waves="$(feature_waves "$m")" || exit 1
   load_azdo_env
   if [[ ! -f "$d/state.json" ]]; then

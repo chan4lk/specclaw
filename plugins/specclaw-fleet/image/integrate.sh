@@ -11,5 +11,6 @@ merge_base_ref() {
   [[ -n "${FLEET_MERGE_REF:-}" ]] || return 0
   git -C "$REPO" fetch -q origin "refs/heads/$FLEET_MERGE_REF:refs/remotes/origin/$FLEET_MERGE_REF" || return 1
   git -C "$REPO" merge -q --no-edit "origin/$FLEET_MERGE_REF" >&2 && return 0
+  [[ -n "$(git -C "$REPO" diff --name-only --diff-filter=U)" ]] || return 1
   PROMPT="The change branch has unresolved merge conflicts with $FLEET_MERGE_REF (git status shows them). Resolve them first, keeping both sides' intent, and commit the merge. Then: $PROMPT"
 }

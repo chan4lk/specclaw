@@ -38,6 +38,13 @@ check "R050 AC-4 when every member is merged, advance dispatches the feature ite
 advance "$(S 003-b=ready)" "" 1; err_rc=$?
 errors_fail() { (( err_rc != 0 )) && grep -q '"errors":1' "$TMP/out"; }
 check "R050 AC-4 a dispatch error makes advance fail and counts it" errors_fail
+advance "$(S 003-b=stalled 002-a=merged)"; st_rc=$?; st_out="$(cat "$TMP/out")"
+advance "$(S 007-e=conflict)" "" 5; busy_log="$(cat "$TMP/dispatch.log")"; busy_calls="$(cat "$CALLS")"
+stalled_and_retry() {
+  (( st_rc != 0 )) && grep -q "003-b: stalled" <<<"$st_out" || return 1
+  grep -q "dispatch 007-e --force" <<<"$busy_log" && ! grep -q "conflict-retried" <<<"$busy_calls"
+}
+check "R050 a stalled member is an error; the conflict retry is tagged only after the retry launched (a busy slot leaves it untagged)" stalled_and_retry
 unread_ok=1
 for u in html fail array; do
   UNREAD=$u advance "$(S 009-u=conflict)"; rc=$?
@@ -49,11 +56,13 @@ rm -rf "$TMP/repo"; mkdir -p "$SPECCLAW_DIR/changes/002-a" "$SPECCLAW_DIR/change
 printf '**Feature:** cat\n' > "$SPECCLAW_DIR/changes/002-a/proposal.md"; printf '**Feature:** cat\n**Depends on:** 002-a\n' > "$SPECCLAW_DIR/changes/003-b/proposal.md"
 (cd "$TMP/repo" && "$FLEET" feature init cat) > "$TMP/out" 2>&1; init_rc=$?
 (cd "$TMP/repo" && "$FLEET" feature init nobody) > "$TMP/out2" 2>&1; empty_rc=$?
+mkdir -p "$SPECCLAW_DIR/changes/clash"; printf '**Feature:** clash\n' > "$SPECCLAW_DIR/changes/clash/proposal.md"
+(cd "$TMP/repo" && "$FLEET" feature init clash) > "$TMP/out3" 2>&1; clash_rc=$?; rm -rf "$SPECCLAW_DIR/changes/clash"
 init_ok() {
-  (( init_rc == 0 && empty_rc != 0 )) && jq -e '.kind == "feature" and .phases.proposal.status == "approved"' "$SPECCLAW_DIR/features/cat/state.json" >/dev/null \
+  (( init_rc == 0 && empty_rc != 0 && clash_rc != 0 )) && grep -q "collides with change clash" "$TMP/out3" && jq -e '.kind == "feature" and .phases.proposal.status == "approved"' "$SPECCLAW_DIR/features/cat/state.json" >/dev/null \
     && grep -q "wave 2: 003-b" "$SPECCLAW_DIR/features/cat/proposal.md" && grep -q "#300" "$SPECCLAW_DIR/features/cat/status.md" && grep -q "has no members" "$TMP/out2"
 }
-check "R050 AC-2 feature init writes an approved feature record with its waves and a work item; an empty feature is refused" init_ok
+check "R050 AC-2 feature init writes an approved feature record with its waves and a work item; an empty feature or a module named like a change is refused" init_ok
 git -C "$TMP/repo" init -q && git init -q --bare "$TMP/remote.git" && git -C "$TMP/repo" remote add local "$TMP/remote.git"
 git -C "$TMP/repo" add -A && git -C "$TMP/repo" -c user.name=t -c user.email=t@t commit -q -m f && git -C "$TMP/repo" push -q local HEAD:main
 stub az 'case "$*" in "pipelines run"*) echo "$*" >> "$TMP/az.log"; echo 5150 ;; esac'
