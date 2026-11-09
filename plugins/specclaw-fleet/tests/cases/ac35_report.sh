@@ -7,7 +7,7 @@ stub specclaw-azdo-issue '[[ "$1" == records ]] || exit 0; [[ -f "$WI/$3.fail" ]
 stub curl 'f="$TMP/api/$(grep -oE "(pullrequests|builds)/[0-9]+" <<<"$*" | tr / -)"; [[ -f "$f" ]] || { printf "\n404"; exit 0; }
 [[ "$(cat "$f")" == FAIL500 ]] && { printf "\n500"; exit 0; }; cat "$f"; printf "\n200"'
 stub kubectl '[[ -n "${KUBE_FAIL:-}" ]] && exit 1
-case "${KUBE_JUNK:-}:$*" in empty:*) exit 0 ;; html:*) echo "<html>"; exit 0 ;; items:*"get jobs"*) echo "{\"items\":\"x\"}"; exit 0 ;; esac
+case "${KUBE_JUNK:-}:$*" in empty:*) exit 0 ;; html:*) echo "<html>"; exit 0 ;; items:*"get jobs"*) echo "{\"items\":\"x\"}"; exit 0 ;; itemjunk:*"get jobs"*) echo "{\"items\":[1]}"; exit 0 ;; esac
 case "$*" in *"get jobs"*) echo "{\"items\":[{\"metadata\":{\"name\":\"fleet-003-b\",\"creationTimestamp\":\"2026-11-09T12:05:00Z\"},\"status\":{\"active\":1}}]}" ;; *"get pods"*) printf Running ;; esac'
 mk() { local d="$SPECCLAW_DIR/changes/$1"; mkdir -p "$d"; echo '{"phases":{"proposal":{"status":"approved"}}}' > "$d/state.json"
   printf '**Feature:** cat\n**Depends on:** %s\n' "$2" > "$d/proposal.md"; printf '**Azure Boards Work Item:** [#%s](https://x)\n' "$3" > "$d/status.md"; }
@@ -35,8 +35,8 @@ reset; want "default scope, newest run only, gap fill" "$BASE and $A and $B and 
 for body in EMPTY '<html>' '[]' '"s"' FAIL500; do
   for src in pullrequests-11 builds-100; do
     reset; if [[ "$body" == EMPTY ]]; then api "$src" ''; else api "$src" "$body"; fi
-    case "$src" in pullrequests-*) why=pr f='.pr_status == null and .pr_opened == null' ;; *) why=build f='.queued == null' ;; esac
-    want "$src answers [$body]: row kept, marked unread" "$BASE and (.rows[0] | .state == \"pr_open\" and .agent_s == 1800 and .note == \"unread: $why\" and $f)"
+    case "$src" in pullrequests-*) why=pr f='.pr_status == null and .pr_opened == null' t='.prs_open == 0 and .hosted_s == 120' ;; *) why=build f='.queued == null' t='.hosted_s == 0' ;; esac
+    want "$src answers [$body]: row kept, marked unread" "$BASE and (.rows[0] | .state == \"pr_open\" and .agent_s == 1800 and .note == \"unread: $why\" and $f) and (.totals | .jobs == 2 and .agent_s == 1800 and $t)"
   done
 done
 reset; api pullrequests-11 '{"status":"active"} trailing'; want "an object then garbage: the object is read" "$BASE and .rows[0].pr_status == \"active\" and .rows[0].note == null and .totals.prs_open == 1"
@@ -48,7 +48,7 @@ for bad in fail junk noarray; do
 done
 reset; echo '{"records":[{"at":5,"state":"dispatched"}]}' > "$WI/003-b"
 want "records whose run cannot be merged: a ? row" '[.rows[] | "\(.change)=\(.state)=\(.note)"] == ["003-b=?=records unparsable"]' --since 2026-11-09T12:00:00Z
-for junk in fail empty html items; do
+for junk in fail empty html items itemjunk; do
   reset; if [[ $junk == fail ]]; then export KUBE_FAIL=1; else export KUBE_JUNK=$junk; fi
   want "cluster answer $junk: live row keeps its state, marked unread" "$BASE and (.rows[1] | .state == \"running\" and .note == \"unread: build, cluster\") and .totals.running == 1"
   unset KUBE_FAIL KUBE_JUNK

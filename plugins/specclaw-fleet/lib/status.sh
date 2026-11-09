@@ -27,7 +27,7 @@ status_job() {
   local jobs name pod
   jobs="$(kc -n "${FLEET_NAMESPACE:-specclaw-fleet}" --request-timeout=10s get jobs -l "specclaw.fleet/change=$(label_value "$1")" -o json 2>/dev/null)" \
     || { echo '{"job":"?","phase":"?","pod":"?"}'; return; }
-  jq -e '.items | type == "array"' <<<"$jobs" >/dev/null 2>&1 || { echo '{"job":"?","phase":"?","pod":"?"}'; return; }
+  jq -e '.items | type == "array" and all(type == "object")' <<<"$jobs" >/dev/null 2>&1 || { echo '{"job":"?","phase":"?","pod":"?"}'; return; }
   name="$(jq -r '[.items[]] | sort_by(.metadata.creationTimestamp) | last | .metadata.name // empty' <<<"$jobs")"
   [[ -n "$name" ]] || { echo '{"job":"-","phase":"-","pod":"-"}'; return; }
   pod="$(kc -n "${FLEET_NAMESPACE:-specclaw-fleet}" --request-timeout=10s get pods -l "job-name=$name" --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1:].status.phase}' 2>/dev/null)" || pod="?"
