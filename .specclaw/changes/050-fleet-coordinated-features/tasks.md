@@ -21,7 +21,7 @@
   - Files: plugins/specclaw-fleet/lib/feature-state.sh, plugins/specclaw-fleet/tests/cases/ac29_feature_state.sh
   - Kind: impl
   - Depends: T1
-- [ ] `T4` — `feature init`, `start` and `advance` (ready dispatch, failed blocks only its dependents, one conflict retry, integration once) (AC-2, AC-4)
+- [x] `T4` — `feature init`, `start` and `advance` (ready dispatch, failed blocks only its dependents, one conflict retry, integration once) (AC-2, AC-4)
   - Files: plugins/specclaw-fleet/lib/feature.sh, plugins/specclaw-fleet/lib/feature-run.sh, plugins/specclaw-fleet/tests/cases/ac30_feature_advance.sh
   - Kind: impl
   - Depends: T1, T3
