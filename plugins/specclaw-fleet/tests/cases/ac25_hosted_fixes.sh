@@ -6,15 +6,16 @@ source "$(dirname "${BASH_SOURCE[0]}")/../lib/harness.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/dispatch-env.sh"
 stub_cluster
 stub az 'echo "ERROR: Please run az login" >&2; exit 1'
-stub curl 'echo "$*" >> "$TMP/curl.log"; case "$*" in
+stub curl 'echo "$*" >> "$TMP/curl.log"; [[ "$*" == *"-H @-"* ]] && cat >> "$TMP/curl.stdin"; case "$*" in
   *"build/definitions?name=specclaw-fleet"*) echo "{\"value\":[{\"id\":44,\"name\":\"specclaw-fleet\"}]}"; printf "\n%s" "${HTTP_CODE:-200}" ;;
   *serviceendpoint*) echo "{\"value\":[{\"name\":\"specclaw-fleet-k3s\",\"isReady\":true},{\"name\":\"specclaw-fleet-azure\",\"isReady\":true}]}"; printf "\n%s" "${HTTP_CODE:-200}" ;;
   *ghcr.io/token*) echo "{}"; printf %s "$TOKEN_CODE" ;;
 esac'
 export TMP
 azdo_checks="$(AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t FLEET_KUBE_CONNECTION=specclaw-fleet-k3s FLEET_AZURE_CONNECTION=specclaw-fleet-azure bash -c 'source "$1/lib/common.sh"; source "$1/lib/azdo-rest.sh"; source "$1/lib/doctor-azure.sh"; check_pipeline; check_connections' _ "$FLEET_ROOT" 2>&1)"
-pat_rest() { grep -q "^ok pipeline" <<<"$azdo_checks" && grep -q "^ok service-connections" <<<"$azdo_checks" && grep -q "Authorization: Basic" "$TMP/curl.log" && ! grep -Eq "^az (devops|pipelines)" "$CALLS"; }
-check "R053 AC-6 doctor checks the pipeline and connections with AZDO_TOKEN over REST, even with no az login" pat_rest
+pat_rest() { grep -q "^ok pipeline" <<<"$azdo_checks" && grep -q "^ok service-connections" <<<"$azdo_checks" && grep -q "Authorization: Basic" "$TMP/curl.stdin" \
+  && ! grep -q "Authorization" "$TMP/curl.log" && ! grep -Eq "^az (devops|pipelines)" "$CALLS"; }
+check "R053 AC-6 doctor checks the pipeline and connections with AZDO_TOKEN over REST, even with no az login; the auth header never appears in curl's arguments" pat_rest
 mkdir -p "$TMP/pf/.specclaw" "$TMP/pf/azure-pipelines"; printf 'variables:\n  fleetKubeConnection: specclaw-fleet-hetzner\n  fleetAzureConnection: specclaw-fleet-azure\n' > "$TMP/pf/azure-pipelines/specclaw-fleet.yml"
 from_file="$(AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t SPECCLAW_DIR="$TMP/pf/.specclaw" bash -c 'source "$1/lib/common.sh"; source "$1/lib/azdo-rest.sh"; source "$1/lib/doctor-azure.sh"; check_connections' _ "$FLEET_ROOT" 2>&1)"
 junk_rows=1
@@ -54,6 +55,10 @@ for row in "FLEET_CLUSTER_NAME=bistec-dev-uat FLEET_KUBE_CONTEXT=fleet|bistec-de
 done
 cluster_order() { (( cl == 1 )); }
 check "R053 AC-6 the run record's cluster= is FLEET_CLUSTER_NAME, then FLEET_KUBE_CONTEXT, then the current context" cluster_order
+reset_env; FLEET_TRUSTED_COMMIT=0123abc dispatch; trusted_rec="$(grep -o 'settings_commit=[^ ]*' "$CALLS")"
+reset_env; dispatch; local_rec="$(grep -o 'settings_commit=[^ ]*' "$CALLS")"
+settings_recorded() { [[ "$trusted_rec" == settings_commit=0123abc && "$local_rec" == settings_commit=local ]]; }
+check "R053 the run record pins the trusted-branch commit its security settings came from" settings_recorded
 prompt_delivery() { grep -m1 '^PROMPT=' "$FLEET_ROOT/image/entrypoint.sh" | grep -q "this pod pushes the change branch and opens a PR if none exists.*do not report it as unpushed"; }
 check "R053 AC-6 the agent prompt states that the pod delivers committed work" prompt_delivery
 export AZDO_ORG=o AZDO_PROJECT=p FLEET_REMOTE=local

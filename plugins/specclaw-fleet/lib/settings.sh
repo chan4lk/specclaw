@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 FLEET_SETTING_KEYS="vault cluster_name namespace image claude_version default_agent deadline_minutes pipeline pipeline_file remote ref image_pull_secret node_label"
-FLEET_SECURE_KEYS="vault image namespace node_label image_pull_secret claude_version"
+FLEET_SECURE_KEYS="vault image namespace node_label image_pull_secret claude_version deadline_minutes cluster_name"
 FLEET_NUMERIC_KEYS="deadline_minutes"
 
 setting_var() {

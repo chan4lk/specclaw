@@ -35,7 +35,7 @@ filters() { ! grep -q "^specclaw-fleet" <<<"$only_calls" && grep -qxF "specclaw-
 check "FR10 change and agent parameters narrow the run; blank parameters mean every change, default agent" filters
 rm -f "$TMP/trusted"; run_with_state 049-x "$APPROVED"; trusted_seen="$(cat "$TMP/trusted" 2>/dev/null)"
 TRUSTED_FETCH_RC=1 run_with_state 049-x "$APPROVED"; untrusted_rc=$?; untrusted_calls="$(cat "$CALLS")"
-fail_closed() { [[ "$trusted_seen" == "trusted=$TMP/fleet-trusted-config.yaml" ]] && (( untrusted_rc == 1 )) \
+fail_closed() { [[ "$trusted_seen" == "trusted=$TMP/fleet-trusted-config.yaml commit=0123abc" ]] && (( untrusted_rc == 1 )) \
   && ! grep -q "^specclaw-fleet" <<<"$untrusted_calls" && grep -q "could not read .specclaw/config.yaml from main" "$TMP/out"; }
 check "R053 the pipeline hands dispatch the trusted branch config, and stops before dispatch when it cannot read it" fail_closed
 finish

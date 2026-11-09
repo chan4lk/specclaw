@@ -61,6 +61,9 @@ COMMENTS='{"comments":[{"createdDate":"2026-11-08T02:50:00Z","text":"specclaw-fl
   TAGS="" WHO="" azdo records
 records_ok() { jq -e '.work_item == "42" and (.records | length == 2) and .records[0].state == "pr_open" and .records[0].draft == "true" and .records[1].claude_fetch_s == "20"' "$TMP/out" >/dev/null; }
 check "records parses fleet run updates (html or br), newest first, ignoring other comments" records_ok
+COMMENTS='{"value":[]}' TAGS="" WHO="" azdo records; nolist_rc=$?
+records_strict() { (( nolist_rc != 0 )); }
+check "records fails on an answer with no comments list, never reports it as no records" records_strict
 echo
 (( fails == 0 )) && echo "All azdo-issue optin tests passed." || echo "$fails failure(s)."
 exit $(( fails > 0 ))
