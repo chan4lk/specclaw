@@ -28,9 +28,10 @@ const dur = s => s == null ? '–' : s >= 3600 ? `${Math.floor(s / 3600)}h ${Mat
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e }
 const now = ms(d.generated_at)
 document.getElementById('meta').textContent = `${d.scope} · generated ${d.generated_at} · cost is an API-equivalent estimate`
-const tiles = [['Wall clock', dur(T.wall_s)], ['Jobs', T.jobs], ['Agent time', dur(T.agent_s)], ['Hosted pipeline', dur(T.hosted_s)],
-  ['Review rounds', T.review_rounds], ['Commits', T.commits], ['Running', T.running], ['PRs open', T.prs_open],
-  ['Cost (estimate)', T.cost_usd == null ? '–' : '$' + T.cost_usd.toFixed(2)]]
+const ge = k => (T.partial || []).includes(k) ? '≥' : ''
+const tiles = [['Wall clock', dur(T.wall_s)], ['Jobs', T.jobs], ['Agent time', ge('agent_s') + dur(T.agent_s)], ['Hosted pipeline', dur(T.hosted_s)],
+  ['Review rounds', ge('review_rounds') + T.review_rounds], ['Commits', ge('agent_commits') + T.commits], ['Running', T.running], ['PRs open', T.prs_open],
+  ['Cost (estimate)', T.cost_usd == null ? '–' : ge('cost_usd') + '$' + T.cost_usd.toFixed(2)]]
 for (const [k, v] of tiles) { const t = el('div', 'mute', k); t.appendChild(el('b', null, v ?? '–')); document.getElementById('totals').appendChild(t) }
 const spans = r => [[ms(r.queued || r.dispatched), ms(r.finished)], [ms(r.agent_started), ms(r.agent_ended) || (['dispatched', 'running'].includes(r.state) ? now : null)],
   [ms(r.pr_opened), ms(r.pr_closed) || (r.pr_status === 'active' ? now : null)]]

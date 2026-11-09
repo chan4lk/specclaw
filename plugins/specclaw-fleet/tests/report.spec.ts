@@ -8,10 +8,11 @@ const CASES: [string, string | undefined, string | undefined, string | undefined
   ['not JSON', '{nope', 'fleet · report unreadable', 'fleet: report unreadable', 'fleet · report unreadable'],
   ['wrong version', JSON.stringify({ version: 2, generated_at: 'x', rows: [], totals: {} }), 'fleet · report unreadable', 'fleet: report unreadable', 'fleet · report unreadable'],
   ['generated_at not a date', JSON.stringify({ version: 1, generated_at: 'soon', rows: [], totals: {} }), 'fleet · report unreadable', 'fleet: report unreadable', 'fleet · report unreadable'],
+  ['totals missing a count', JSON.stringify({ version: 1, generated_at: '2026-11-09T11:58:00Z', rows: [], totals: { jobs: 1 } }), 'fleet · report unreadable', 'fleet: report unreadable', 'fleet · report unreadable'],
   ['rows not a list', JSON.stringify({ version: 1, generated_at: 'x', rows: {}, totals: {} }), 'fleet · report unreadable', 'fleet: report unreadable', 'fleet · report unreadable'],
-  ['one running row', doc([LIVE]), 'fleet · 1 running · 0 PRs open · last run 11:53 UTC', 'fleet: 1 running', 'fleet build · latest · snapshot 2m old'],
-  ['mixed rows', doc([OPEN, DONE, LIVE], { prs_open: 1 }), 'fleet · 1 running · 1 PRs open · last run 11:53 UTC', 'fleet: 1 running', 'fleet build · latest · snapshot 2m old'],
-  ['unknown rows', doc([LIVE], { unknown: 2 }), 'fleet · 1 running · 0 PRs open · 2 unknown · last run 11:53 UTC', 'fleet: 1 running · 2 unknown', 'fleet build · latest · snapshot 2m old'],
+  ['one running row', doc([LIVE], { running: 1 }), 'fleet · 1 running · 0 PRs open · last run 11:53 UTC', 'fleet: 1 running', 'fleet build · latest · snapshot 2m old'],
+  ['mixed rows', doc([OPEN, DONE, LIVE], { prs_open: 1, running: 1 }), 'fleet · 1 running · 1 PRs open · last run 11:53 UTC', 'fleet: 1 running', 'fleet build · latest · snapshot 2m old'],
+  ['unknown rows', doc([LIVE], { unknown: 2, running: 1 }), 'fleet · 1 running · 0 PRs open · 2 unknown · last run 11:53 UTC', 'fleet: 1 running · 2 unknown', 'fleet build · latest · snapshot 2m old'],
   ['empty build', doc([]), 'fleet · 0 running · 0 PRs open', 'fleet: 0 running', 'fleet build · latest · snapshot 2m old'],
 ]
 
@@ -23,7 +24,7 @@ for (const [name, text, band, status, head] of CASES) {
 }
 
 test('R054 AC-4 a snapshot older than an hour says so on the band and status line', () => {
-  const view = parseReport(doc([LIVE]))
+  const view = parseReport(doc([LIVE], { running: 1 }))
   const later = NOW + 3 * 3600 * 1000
   expect([bandText(view, later), statusText(view, later)]).toEqual(['fleet · 1 running · 0 PRs open · last run 11:53 UTC · snapshot 3h old', 'fleet: 1 running · snapshot 3h old'])
 })
@@ -39,9 +40,9 @@ test('R054 AC-4 timeline scales every row to one window and marks pipeline, agen
 })
 
 test('R054 AC-4 pane lists the timeline, the lifecycle table in wave order, totals and the refresh command', () => {
-  const view = parseReport(doc([LIVE, DONE], { prs_open: 0 }))
+  const view = parseReport(doc([LIVE, DONE], { prs_open: 0, running: 1, partial: ['cost_usd'] }))
   const lines = paneLines(view, NOW, 40)
-  expect(lines.slice(1, 3)).toEqual(['wall 1h 0m · 2 jobs · agent 30m · hosted 2m · 3 rounds · 7 commits', '1 running · 0 PRs open · cost $2.50 (API-equivalent estimate)'])
+  expect(lines.slice(1, 3)).toEqual(['wall 1h 0m · 2 jobs · agent 30m · hosted 2m · 3 rounds · 7 commits', '1 running · 0 PRs open · cost ≥$2.50 (API-equivalent estimate)'])
   const rows = lines.filter(l => /^00\d-/.test(l)).map(l => l.split(/\s+/).slice(0, 3).join(' '))
   expect(rows.map(l => l.replace(/[░█▒·]{10,}/, 'BAR'))).toEqual(['002-catalog BAR', '003-detail BAR', '002-catalog 1 pr_open', '003-detail 2 running'])
   expect(lines.at(-1)).toBe('Refresh: specclaw-fleet report --save')

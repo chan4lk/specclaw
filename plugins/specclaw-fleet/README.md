@@ -120,7 +120,7 @@ The report only reads: records first, then AzDO PRs and pipeline runs, then the 
 - **A band above the prompt:** `fleet · 2 running · 4 PRs open · last run 13:51 UTC`.
 - **A status line:** `fleet: 2 running`.
 
-It refreshes after any `specclaw-fleet trigger`, `status` or `report` Bash call. It never runs commands or calls the network itself. `/specclaw-fleet:report` runs the report and points you at the pane.
+It re-reads the snapshot after any `specclaw-fleet trigger`, `status` or `report` Bash call; only `report --save` writes a new one. It never runs commands or calls the network itself. `/specclaw-fleet:report` runs the report and points you at the pane.
 
 ## Hosted minutes
 

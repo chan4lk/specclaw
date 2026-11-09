@@ -31,6 +31,7 @@ export type FleetTotals = {
   running: number
   prs_open: number
   unknown: number
+  partial: string[]
 }
 
 export type FleetView =

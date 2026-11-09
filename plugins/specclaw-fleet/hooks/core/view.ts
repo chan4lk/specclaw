@@ -2,7 +2,6 @@ import type { Report, Row, View } from './report.ts'
 
 const ms = (iso: string | null) => (iso ? Date.parse(iso) : NaN)
 const LIVE = new Set(['dispatched', 'running'])
-export const running = (rows: Row[]) => rows.filter(r => LIVE.has(r.state ?? '')).length
 
 export const dur = (s: number | null) => {
   if (s === null) return '-'
@@ -25,11 +24,11 @@ export const bandText = (view: View, now: number) => {
   if (view.kind === 'none') return undefined
   if (view.kind === 'unreadable') return 'fleet · report unreadable'
   const { rows, totals } = view.report
-  return `fleet · ${running(rows)} running · ${totals.prs_open} PRs open${unknown(view.report)}${lastRun(rows)}${stale(view.report, now)}`
+  return `fleet · ${totals.running} running · ${totals.prs_open} PRs open${unknown(view.report)}${lastRun(rows)}${stale(view.report, now)}`
 }
 
 export const statusText = (view: View, now: number) =>
-  view.kind === 'none' ? undefined : view.kind === 'unreadable' ? 'fleet: report unreadable' : `fleet: ${running(view.report.rows)} running${unknown(view.report)}${stale(view.report, now)}`
+  view.kind === 'none' ? undefined : view.kind === 'unreadable' ? 'fleet: report unreadable' : `fleet: ${view.report.totals.running} running${unknown(view.report)}${stale(view.report, now)}`
 
 const spans = (r: Row, now: number): [number, number, string][] => [
   [ms(r.queued ?? r.dispatched), ms(r.finished), '░'],
@@ -54,7 +53,8 @@ export const timeline = (rows: Row[], now: number, width: number) => {
 
 const age = (s: number) => (s < 60 ? 'just now' : s < 3600 ? `${Math.floor(s / 60)}m old` : s < 86400 ? `${Math.floor(s / 3600)}h old` : `${Math.floor(s / 86400)}d old`)
 const pad = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + '…' : s.padEnd(n))
-const cost = (r: Report) => (r.totals.cost_usd === null ? '-' : `$${r.totals.cost_usd.toFixed(2)}`)
+const ge = (r: Report, k: string) => (r.totals.partial.includes(k) ? '≥' : '')
+const cost = (r: Report) => (r.totals.cost_usd === null ? '-' : `${ge(r, 'cost_usd')}$${r.totals.cost_usd.toFixed(2)}`)
 
 export const paneLines = (view: View, now: number, columns = 100) => {
   if (view.kind === 'none') return ['No fleet report yet.', 'Refresh: specclaw-fleet report --save']
@@ -66,8 +66,8 @@ export const paneLines = (view: View, now: number, columns = 100) => {
     pad(x.review_rounds === null ? '-' : String(x.review_rounds), 6), x.pr ? `#${x.pr.split('/').pop()} ${x.pr_status ?? '?'}` : '-'].join(' '))
   return [
     `fleet build · ${r.scope} · snapshot ${age(Math.max(0, (now - ms(r.generated_at)) / 1000))}`,
-    `wall ${dur(t.wall_s)} · ${t.jobs} jobs · agent ${dur(t.agent_s)} · hosted ${dur(t.hosted_s)} · ${t.review_rounds} rounds · ${t.commits} commits`,
-    `${running(r.rows)} running · ${t.prs_open} PRs open${unknown(r)} · cost ${cost(r)} (API-equivalent estimate)`,
+    `wall ${dur(t.wall_s)} · ${t.jobs} jobs · agent ${ge(r, 'agent_s')}${dur(t.agent_s)} · hosted ${dur(t.hosted_s)} · ${ge(r, 'review_rounds')}${t.review_rounds} rounds · ${ge(r, 'agent_commits')}${t.commits} commits`,
+    `${t.running} running · ${t.prs_open} PRs open${unknown(r)} · cost ${cost(r)} (API-equivalent estimate)`,
     '',
     ...rows.map((x, i) => `${pad(x.change, name)} ${bars[i]}`),
     `${' '.repeat(name)} ░ pipeline  █ agent  ▒ PR open`,

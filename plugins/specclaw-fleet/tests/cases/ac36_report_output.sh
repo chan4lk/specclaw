@@ -14,7 +14,7 @@ for w in dirfile mvdir html; do
 done
 writes_ok() { (( writes == 1 )); }
 reset; table="$(run)"; html="$TMP/r.html"; run --html "$html" --save >/dev/null
-table_ok() { grep -q "^CHANGE " <<<"$table" && grep -q "^002-a .*pr_open .*30m .*#11 completed" <<<"$table" && grep -q "API-equivalent estimate" <<<"$table" && grep -q "1 running · 0 PRs open · 1 unknown · cost \$2.50" <<<"$table"; }
+table_ok() { grep -q "^CHANGE " <<<"$table" && grep -q "^002-a .*pr_open .*30m .*#11 completed" <<<"$table" && grep -q "API-equivalent estimate" <<<"$table" && grep -q "1 running · 0 PRs open · 1 unknown · cost ≥\$2.50" <<<"$table"; }
 data_safe() { local d; d="$(sed -n 's#^<script id="data" type="application/json">\(.*\)</script>$#\1#p' "$html")"; [[ "$d" == *'\u003c/script>\u003c!--'* && "$d" != *'<'* ]]; }
 html_ok() {
   [[ -s "$html" ]] && ! grep -q "__FLEET_REPORT__" "$html" && data_safe \

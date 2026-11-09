@@ -24,7 +24,7 @@ const engine = (on: Parameters<Parameters<typeof test>[1]>[1], files: Record<str
 
 test('R054 AC-5 /fleet-pane opens and renders the seeded snapshot', async ($, on) => {
   const statuses: (string | undefined)[] = []
-  engine(on, { [SNAPSHOT]: doc([DONE, LIVE], { prs_open: 0 }) }, statuses)
+  engine(on, { [SNAPSHOT]: doc([DONE, LIVE], { prs_open: 0, running: 1 }) }, statuses)
   const ran = await $.command.run({ command: 'fleet-pane', args: '' })
   expect((ran as { text: string }).text).toBe('fleet pane opened. Refresh with: specclaw-fleet report --save')
   const ui = await $.ui.mount(PANE)
@@ -47,7 +47,7 @@ for (const [why, command, refreshes] of CALLS) {
     const files: Record<string, string> = {}
     const statuses: (string | undefined)[] = []
     engine(on, files, statuses)
-    files[SNAPSHOT] = doc([LIVE])
+    files[SNAPSHOT] = doc([LIVE], { running: 1 })
     await $.tool.call({ tool: 'Bash', command })
     const ui = await $.ui.mount(BAND)
     const band = await ui.find({ type: 'Text', text: /^fleet ·/ })
@@ -58,7 +58,7 @@ for (const [why, command, refreshes] of CALLS) {
 
 test('R054 AC-5 a refresh that fails after a fleet command never reruns it or throws', async ($, on) => {
   const runs = { n: 0 }
-  engine(on, { [SNAPSHOT]: doc([LIVE]) }, [], runs)
+  engine(on, { [SNAPSHOT]: doc([LIVE], { running: 1 }) }, [], runs)
   on('state.set', () => { throw new Error('state.set throws') })
   const ran = await $.tool.call({ tool: 'Bash', command: 'specclaw-fleet report --save' })
   expect([runs.n, ran]).toEqual([1, { result: { ok: true } }])

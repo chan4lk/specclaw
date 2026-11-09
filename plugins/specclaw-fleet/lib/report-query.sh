@@ -16,7 +16,7 @@ REPORT_ROW='def t: if . == null or . == "" or (tostring | startswith("0001")) th
      exit: (if $over then "job \($j.phase | if . == "-" then "gone" else . end) with no outcome recorded" else $r.exit end),
      pipeline_run: $r.pipeline_run, dispatched: ($r.dispatched_at | t),
      queued: ($b.queueTime | t), started: ($b.startTime | t), finished: ($b.finishTime | t),
-     job: (if ($j.job // "?") == "?" then $r.job else $j.job end), phase: (if $j._unread then null else $j.phase end), agent_started: $s0, agent_ended: $s1,
+     job: (if ($j.job // "?") | IN("?", "-") then $r.job else $j.job end), phase: (if $j._unread then null else $j.phase end), agent_started: $s0, agent_ended: $s1,
      agent_s: (($r.agent_s | n) // secs($s0; $s1)), claude_fetch_s: ($r.claude_fetch_s | n),
      review_rounds: ($r.review_rounds | n), agent_commits: ($r.agent_commits | n),
      cost_usd: ($r.cost_usd | n), turns: ($r.turns | n), model: $r.model,

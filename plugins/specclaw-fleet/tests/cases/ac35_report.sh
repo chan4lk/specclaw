@@ -40,10 +40,11 @@ for ph in failed:failed complete:stalled gone:stalled; do
 done
 reset; sed -i.b 's/"pipeline_run":"101"/"pipeline_run":"100"/' "$WI/003-b"; want "two rows from one pipeline run count its hosted time once" ".totals.hosted_s == 120 and .totals.unknown == 0"
 reset; touch "$WI/003-b.fail"; want "an unreadable row counts as unknown" ".totals.unknown == 1 and .totals.running == 0"
+reset; want "a run missing cost or commits makes those totals partial" '.totals.partial == ["agent_commits", "agent_s", "cost_usd", "review_rounds"]'
 reset; want "--since drops older runs" '[.rows[].change] == ["003-b"]' --since 2026-11-09T12:00:00Z
 reset; want "--feature attaches waves" '.scope == "feature:cat" and ([.rows[] | "\(.change)=\(.wave)"] == ["002-a=1", "003-b=2"])' --feature cat
 reset; want "named change without records still gets a row" '[.rows[] | "\(.change)=\(.state)"] == ["004-c=null", "002-a=pr_open"]' 004-c 002-a
 reset; ( run --since yesterday >/dev/null ) && { rows=0; echo "  bad --since accepted"; }
 json_ok() { (( rows == 1 )); }
-check "R054 AC-2 report --json: newest run per change, PR/build/cluster gap fill, totals; a failed, empty or garbled PR, build or cluster answer keeps the row and marks it unread (exit 0); a failed, finished or vanished Job ends a live row; unknown rows are counted; a shared pipeline run counts once; unreadable records give a ? row and a warning, never a dropped row; --since, --feature, named scopes; bad --since refused" json_ok
+check "R054 AC-2 report --json: newest run per change, PR/build/cluster gap fill, totals; a failed, empty or garbled PR, build or cluster answer keeps the row and marks it unread (exit 0); a failed, finished or vanished Job ends a live row; unknown rows are counted; totals missing a running row's value are marked partial; a shared pipeline run counts once; unreadable records give a ? row and a warning, never a dropped row; --since, --feature, named scopes; bad --since refused" json_ok
 finish
