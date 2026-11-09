@@ -16,20 +16,20 @@ const lastRun = (rows: Row[]) => {
   return times.length ? ` · last run ${hhmm(Math.max(...times))} UTC` : ''
 }
 
+const unknown = (r: Report) => (r.totals.unknown > 0 ? ` · ${r.totals.unknown} unknown` : '')
 const stale = (r: Report, now: number) => {
   const s = (now - ms(r.generated_at)) / 1000
   return s >= 3600 ? ` · snapshot ${age(s)}` : ''
 }
-
 export const bandText = (view: View, now: number) => {
   if (view.kind === 'none') return undefined
   if (view.kind === 'unreadable') return 'fleet · report unreadable'
   const { rows, totals } = view.report
-  return `fleet · ${running(rows)} running · ${totals.prs_open} PRs open${lastRun(rows)}${stale(view.report, now)}`
+  return `fleet · ${running(rows)} running · ${totals.prs_open} PRs open${unknown(view.report)}${lastRun(rows)}${stale(view.report, now)}`
 }
 
 export const statusText = (view: View, now: number) =>
-  view.kind === 'none' ? undefined : view.kind === 'unreadable' ? 'fleet: report unreadable' : `fleet: ${running(view.report.rows)} running${stale(view.report, now)}`
+  view.kind === 'none' ? undefined : view.kind === 'unreadable' ? 'fleet: report unreadable' : `fleet: ${running(view.report.rows)} running${unknown(view.report)}${stale(view.report, now)}`
 
 const spans = (r: Row, now: number): [number, number, string][] => [
   [ms(r.queued ?? r.dispatched), ms(r.finished), '░'],
@@ -67,7 +67,7 @@ export const paneLines = (view: View, now: number, columns = 100) => {
   return [
     `fleet build · ${r.scope} · snapshot ${age(Math.max(0, (now - ms(r.generated_at)) / 1000))}`,
     `wall ${dur(t.wall_s)} · ${t.jobs} jobs · agent ${dur(t.agent_s)} · hosted ${dur(t.hosted_s)} · ${t.review_rounds} rounds · ${t.commits} commits`,
-    `${running(r.rows)} running · ${t.prs_open} PRs open · cost ${cost(r)} (API-equivalent estimate)`,
+    `${running(r.rows)} running · ${t.prs_open} PRs open${unknown(r)} · cost ${cost(r)} (API-equivalent estimate)`,
     '',
     ...rows.map((x, i) => `${pad(x.change, name)} ${bars[i]}`),
     `${' '.repeat(name)} ░ pipeline  █ agent  ▒ PR open`,

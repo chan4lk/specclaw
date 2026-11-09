@@ -28,7 +28,7 @@ agent_stats() {
   [[ -f "$STATUS/agent.log" ]] && agent_cost
   n=$(( $(round_count) - ${AGENT_ROUNDS0:-0} ))
   echo "review_rounds=$(( n > 0 ? n : 0 ))"
-  n="$(git -C "$REPO" rev-list --count "$AGENT_HEAD..HEAD" 2>/dev/null)"
+  n=""; [[ -n "${AGENT_HEAD:-}" ]] && n="$(git -C "$REPO" rev-list --count "$AGENT_HEAD..HEAD" 2>/dev/null)"
   [[ "$n" =~ ^[0-9]+$ ]] && echo "agent_commits=$n"
   return 0
 }

@@ -32,7 +32,7 @@ const tiles = [['Wall clock', dur(T.wall_s)], ['Jobs', T.jobs], ['Agent time', d
   ['Review rounds', T.review_rounds], ['Commits', T.commits], ['Running', T.running], ['PRs open', T.prs_open],
   ['Cost (estimate)', T.cost_usd == null ? '–' : '$' + T.cost_usd.toFixed(2)]]
 for (const [k, v] of tiles) { const t = el('div', 'mute', k); t.appendChild(el('b', null, v ?? '–')); document.getElementById('totals').appendChild(t) }
-const spans = r => [[ms(r.queued || r.dispatched), ms(r.finished)], [ms(r.agent_started), ms(r.agent_ended) || (r.state === 'running' ? now : null)],
+const spans = r => [[ms(r.queued || r.dispatched), ms(r.finished)], [ms(r.agent_started), ms(r.agent_ended) || (['dispatched', 'running'].includes(r.state) ? now : null)],
   [ms(r.pr_opened), ms(r.pr_closed) || (r.pr_status === 'active' ? now : null)]]
 const all = rows.flatMap(spans).flat().filter(Boolean), t0 = Math.min(...all), t1 = Math.max(...all, t0 + 1)
 const pct = x => (100 * (x - t0) / (t1 - t0)).toFixed(2)

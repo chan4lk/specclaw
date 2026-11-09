@@ -30,6 +30,7 @@ export type FleetTotals = {
   cost_usd: number | null
   running: number
   prs_open: number
+  unknown: number
 }
 
 export type FleetView =

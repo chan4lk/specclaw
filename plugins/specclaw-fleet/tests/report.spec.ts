@@ -11,6 +11,7 @@ const CASES: [string, string | undefined, string | undefined, string | undefined
   ['rows not a list', JSON.stringify({ version: 1, generated_at: 'x', rows: {}, totals: {} }), 'fleet · report unreadable', 'fleet: report unreadable', 'fleet · report unreadable'],
   ['one running row', doc([LIVE]), 'fleet · 1 running · 0 PRs open · last run 11:53 UTC', 'fleet: 1 running', 'fleet build · latest · snapshot 2m old'],
   ['mixed rows', doc([OPEN, DONE, LIVE], { prs_open: 1 }), 'fleet · 1 running · 1 PRs open · last run 11:53 UTC', 'fleet: 1 running', 'fleet build · latest · snapshot 2m old'],
+  ['unknown rows', doc([LIVE], { unknown: 2 }), 'fleet · 1 running · 0 PRs open · 2 unknown · last run 11:53 UTC', 'fleet: 1 running · 2 unknown', 'fleet build · latest · snapshot 2m old'],
   ['empty build', doc([]), 'fleet · 0 running · 0 PRs open', 'fleet: 0 running', 'fleet build · latest · snapshot 2m old'],
 ]
 

@@ -23,5 +23,5 @@ export const NOW = Date.parse('2026-11-09T12:00:00Z')
 export const doc = (rows: object[], totals: object = {}) =>
   JSON.stringify({
     version: 1, generated_at: '2026-11-09T11:58:00Z', scope: 'latest', rows,
-    totals: { wall_s: 3600, jobs: rows.length, agent_s: 1800, hosted_s: 120, review_rounds: 3, commits: 7, cost_usd: 2.5, running: 0, prs_open: 0, ...totals },
+    totals: { wall_s: 3600, jobs: rows.length, agent_s: 1800, hosted_s: 120, review_rounds: 3, commits: 7, cost_usd: 2.5, running: 0, prs_open: 0, unknown: 0, ...totals },
   })
