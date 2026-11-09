@@ -8,7 +8,7 @@
 
 ### Wave 1: data
 
-- [ ] `T1` — Durable run fields: `pipeline_run` on dispatch, agent times/cost/turns/model/review rounds/commits on the final pod record (AC-1)
+- [x] `T1` — Durable run fields: `pipeline_run` on dispatch, agent times/cost/turns/model/review rounds/commits on the final pod record (AC-1)
   - Files: plugins/specclaw-fleet/image/run-stats.sh, plugins/specclaw-fleet/image/entrypoint.sh, plugins/specclaw-fleet/image/draft-pr.sh, plugins/specclaw-fleet/lib/launch.sh, plugins/specclaw-fleet/tests/cases/ac34_run_stats.sh
   - Kind: impl
 - [ ] `T2` — `specclaw-fleet report` with `--json`, `--html`, `--save`, `--since`, `--feature` (AC-2, AC-3)
