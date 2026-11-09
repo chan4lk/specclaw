@@ -38,7 +38,7 @@ fleet_config_pairs() {
 
 load_fleet_settings() {
   local cfg="$SPECCLAW_DIR/config.yaml" key value var trusted
-  [[ -r "$cfg" ]] || return 0
+  if [[ ! -r "$cfg" ]]; then [[ -z "${FLEET_TRUSTED_CONFIG:-}" ]] || trusted_only_settings; return 0; fi
   while IFS=$'\t' read -r key value; do
     case "$key" in kube_context|kubeconfig) warn "ignored fleet.$key in $cfg: which cluster this machine uses is local; set $([[ $key == kubeconfig ]] && echo KUBECONFIG || echo FLEET_KUBE_CONTEXT) in $SPECCLAW_DIR/.env"; continue ;; esac
     [[ " $FLEET_SETTING_KEYS " == *" $key "* ]] || { warn "ignored unknown fleet.$key in $cfg"; continue; }

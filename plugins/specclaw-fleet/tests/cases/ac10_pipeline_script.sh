@@ -34,8 +34,13 @@ filters() { ! grep -q "^specclaw-fleet" <<<"$only_calls" && grep -qxF "specclaw-
   && grep -qxF "specclaw-fleet dispatch 049-x" <<<"$blank_calls"; }
 check "FR10 change and agent parameters narrow the run; blank parameters mean every change, default agent" filters
 rm -f "$TMP/trusted"; run_with_state 049-x "$APPROVED"; trusted_seen="$(cat "$TMP/trusted" 2>/dev/null)"
-TRUSTED_FETCH_RC=1 run_with_state 049-x "$APPROVED"; untrusted_rc=$?; untrusted_calls="$(cat "$CALLS")"
-fail_closed() { [[ "$trusted_seen" == "trusted=$TMP/fleet-trusted-config.yaml commit=0123abc" ]] && (( untrusted_rc == 1 )) \
-  && ! grep -q "^specclaw-fleet" <<<"$untrusted_calls" && grep -q "could not read .specclaw/config.yaml from main" "$TMP/out"; }
-check "R053 the pipeline hands dispatch the trusted branch config, and stops before dispatch when it cannot read it" fail_closed
+TRUSTED_FETCH_RC=1 run_with_state 049-x "$APPROVED"; untrusted_rc=$?; untrusted_calls="$(cat "$CALLS")"; untrusted_out="$(cat "$TMP/out")"
+closed_rows=1
+for v in TRUSTED_SHOW_FAIL TRUSTED_REV_EMPTY; do
+  export "$v=1"; run_with_state 049-x "$APPROVED"; rc=$?; unset "$v"
+  (( rc == 1 )) && ! grep -q "^specclaw-fleet" "$CALLS" || { closed_rows=0; echo "  $v: rc=$rc"; }
+done
+fail_closed() { [[ "$trusted_seen" == "trusted=$TMP/fleet-trusted-config.yaml commit=0123abc" ]] && (( untrusted_rc == 1 && closed_rows == 1 )) \
+  && ! grep -q "^specclaw-fleet" <<<"$untrusted_calls" && grep -q "could not read .specclaw/config.yaml from main" <<<"$untrusted_out"; }
+check "R053 the pipeline hands dispatch the trusted config and commit, and stops before dispatch when the fetch, the config read or the commit fails" fail_closed
 finish

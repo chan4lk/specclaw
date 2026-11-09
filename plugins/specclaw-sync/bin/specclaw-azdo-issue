@@ -442,7 +442,7 @@ cmd_tag() {
 
 cmd_whoami() {
   require_creds
-  curl -sf --max-time 30 "https://dev.azure.com/${AZDO_ORG}/_apis/connectionData" -H "Authorization: Basic $(auth_header)" \
+  printf 'Authorization: Basic %s\n' "$(auth_header)" | curl -sf --max-time 30 -H @- "https://dev.azure.com/${AZDO_ORG}/_apis/connectionData" \
     | python3 -c 'import json,sys; u=json.load(sys.stdin)["authenticatedUser"]; p=u.get("properties",{}).get("Account",{}).get("$value",""); print(json.dumps({"upn":p,"name":u.get("providerDisplayName",""),"id":u.get("id","")}))' \
     || die "Could not read the identity behind AZDO_TOKEN"
 }

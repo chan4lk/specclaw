@@ -24,9 +24,11 @@ for row in "REMOTE_BRANCH=other/049-x|no" "REMOTE_BRANCH=specclaw/049-x|specclaw
     || { match_rows=0; echo "  ${row%%|*}: want $want"; }
 done
 FLEET_AGENT_TIMEOUT=0 run_entry; budget_calls="$(cat "$CALLS")"
+FLEET_AGENT_TIMEOUT='1+1' run_entry; badto_calls="$(cat "$CALLS")"
 resume_stops() { (( resume_rows == 1 && match_rows == 1 )); }
 only_own_branch() { (( match_rows == 1 )); }
-budget_gone() { grep -q "exit=deadline-before-agent" <<<"$budget_calls" && ! grep -q "^claude -p" <<<"$budget_calls"; }
+budget_gone() { grep -q "exit=deadline-before-agent" <<<"$budget_calls" && ! grep -q "^claude -p" <<<"$budget_calls" \
+  && grep -q "state=failed exit=bad-agent-timeout" <<<"$badto_calls" && ! grep -q "^claude -p" <<<"$badto_calls"; }
 check "R12 only the change's own branch (state.json branch, else git.branch_prefix + change) is resumed" only_own_branch
 check "R12 the agent gets only the budget left after setup; none left means it never starts" budget_gone
 check "R10 a failed branch lookup, fetch or checkout stops the run (resume-failed); found or absent branches run" resume_stops

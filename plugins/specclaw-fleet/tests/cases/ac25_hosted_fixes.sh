@@ -13,6 +13,9 @@ stub curl 'echo "$*" >> "$TMP/curl.log"; [[ "$*" == *"-H @-"* ]] && cat >> "$TMP
 esac'
 export TMP
 azdo_checks="$(AZDO_ORG=o AZDO_PROJECT=p AZDO_TOKEN=t FLEET_KUBE_CONNECTION=specclaw-fleet-k3s FLEET_AZURE_CONNECTION=specclaw-fleet-azure bash -c 'source "$1/lib/common.sh"; source "$1/lib/azdo-rest.sh"; source "$1/lib/doctor-azure.sh"; check_pipeline; check_connections' _ "$FLEET_ROOT" 2>&1)"
+enc="$(AZDO_ORG=o AZDO_PROJECT="Product Portal" AZDO_TOKEN=t FLEET_KUBE_CONNECTION=k FLEET_AZURE_CONNECTION=z bash -c 'source "$1/lib/common.sh"; source "$1/lib/azdo-rest.sh"; azdo_rest "x?api-version=7.1" >/dev/null; tail -1 "$TMP/curl.log"' _ "$FLEET_ROOT")"
+project_encoded() { [[ "$enc" == *"dev.azure.com/o/Product%20Portal/_apis/x?api-version=7.1"* ]]; }
+check "R053 azdo_rest URL-encodes the project (names may contain spaces)" project_encoded
 pat_rest() { grep -q "^ok pipeline" <<<"$azdo_checks" && grep -q "^ok service-connections" <<<"$azdo_checks" && grep -q "Authorization: Basic" "$TMP/curl.stdin" \
   && ! grep -q "Authorization" "$TMP/curl.log" && ! grep -Eq "^az (devops|pipelines)" "$CALLS"; }
 check "R053 AC-6 doctor checks the pipeline and connections with AZDO_TOKEN over REST, even with no az login; the auth header never appears in curl's arguments" pat_rest

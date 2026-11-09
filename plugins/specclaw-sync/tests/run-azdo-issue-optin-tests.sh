@@ -12,7 +12,7 @@ cat > "$TMP/stub/curl" <<'EOF2'
 method=GET body="" wfmt="" url=""
 while (($#)); do case "$1" in -X) method="$2"; shift 2 ;; -d) body="$2"; shift 2 ;; -w) wfmt="$2"; shift 2 ;; -H|--max-time|-o) shift 2 ;; -*) shift ;; *) url="$1"; shift ;; esac; done
 case "$url" in
-  *connectionData*) echo '{"authenticatedUser":{"id":"u1","providerDisplayName":"Alice","properties":{"Account":{"$type":"System.String","$value":"alice@contoso.com"}}}}'; exit 0 ;;
+  *connectionData*) echo "$*" >> "$S/whoami-args"; echo '{"authenticatedUser":{"id":"u1","providerDisplayName":"Alice","properties":{"Account":{"$type":"System.String","$value":"alice@contoso.com"}}}}'; exit 0 ;;
   *comments*) cat "$S/comments"; exit 0 ;;
 esac
 rev="$(cat "$S/rev")"
@@ -55,8 +55,8 @@ TAGS="specclaw" WHO="" RACE="" azdo optin fleet:auto bob@contoso.com; other_rc=$
 not_for_others() { (( other_rc != 0 && other_patches == 0 )) && grep -q "only to the AZDO_TOKEN identity (alice@contoso.com), not bob@contoso.com" "$TMP/out"; }
 check "optin refuses to assign anyone but the AZDO_TOKEN identity" not_for_others
 TAGS="" WHO="" azdo whoami
-whoami_ok() { jq -e '.upn == "alice@contoso.com" and .name == "Alice"' "$TMP/out" >/dev/null; }
-check "whoami names the identity behind AZDO_TOKEN" whoami_ok
+whoami_ok() { jq -e '.upn == "alice@contoso.com" and .name == "Alice"' "$TMP/out" >/dev/null && ! grep -q "Authorization" "$S/whoami-args"; }
+check "whoami names the identity behind AZDO_TOKEN without putting the auth header on curl's argv" whoami_ok
 COMMENTS='{"comments":[{"createdDate":"2026-11-08T02:50:00Z","text":"specclaw-fleet run update:<br>- state: running<br>- claude_fetch_s: 20"},{"createdDate":"2026-11-08T03:00:00Z","text":"<div>specclaw-fleet run update:</div><div>- state: pr_open</div><div>- pr: https://x/pr/1</div><div>- draft: true</div>"},{"createdDate":"2026-11-08T03:01:00Z","text":"a human comment"}]}' \
   TAGS="" WHO="" azdo records
 records_ok() { jq -e '.work_item == "42" and (.records | length == 2) and .records[0].state == "pr_open" and .records[0].draft == "true" and .records[1].claude_fetch_s == "20"' "$TMP/out" >/dev/null; }
