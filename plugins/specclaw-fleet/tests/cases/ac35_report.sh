@@ -34,6 +34,7 @@ reset; want "default scope, newest run only, gap fill" "$BASE and $A and $B and 
 reset; api pullrequests-11 FAIL500; want "PR read fails" "$BASE and .rows[0].pr_status == null and .rows[0].pr_opened == null and .rows[0].agent_s == 1800"
 reset; api pullrequests-11 '[1]'; api builds-100 '<html>'; want "PR and build answers junk" "$BASE and .rows[0].pr_status == null and .rows[0].queued == null and .totals.hosted_s == 0"
 reset; KUBE_FAIL=1 want "cluster unreachable" "$BASE and .rows[1].phase == \"?\""
+reset; echo '{"records":[{"at":"2026-11-08T20:00:00Z","state":"pr_open"},{"at":"2026-11-08T19:00:00Z","state":"dispatched"}]}' > "$WI/004-c"; want "latest build drops runs dispatched >12h before the newest" "$BASE"
 reset; want "--since drops older runs" '[.rows[].change] == ["003-b"]' --since 2026-11-09T12:00:00Z
 reset; want "--feature attaches waves" '.scope == "feature:cat" and ([.rows[] | "\(.change)=\(.wave)"] == ["002-a=1", "003-b=2"])' --feature cat
 reset; want "named change without records still gets a row" '[.rows[] | "\(.change)=\(.state)"] == ["004-c=null", "002-a=pr_open"]' 004-c 002-a

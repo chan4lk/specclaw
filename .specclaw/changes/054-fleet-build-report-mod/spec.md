@@ -19,7 +19,7 @@
   - **Scope:**
     - named changes;
     - or the members of feature `<m>`, each with its wave from the feature graph;
-    - or, by default, every approved change that has at least one run record.
+    - or, by default, the **latest build**: approved changes with a run record whose dispatch is no more than 12h before the newest dispatch in scope.
   - **Run:** a change's run is its newest `state=dispatched` record and every record after it. Newer values win.
   - **`--since`** drops runs dispatched before that time.
   - **Gap fill, each best-effort:**
