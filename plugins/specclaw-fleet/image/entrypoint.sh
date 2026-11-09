@@ -2,6 +2,7 @@
 # shellcheck disable=SC2034
 set -uo pipefail
 unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN OPENAI_API_KEY CODEX_API_KEY
+export SPECCLAW_PR_TARGET="${FLEET_PR_TARGET:-${FLEET_REF:-}}"
 
 STATUS="${FLEET_STATUS_DIR:-/fleet/status}"
 WORK="${FLEET_WORK:-/fleet/work}"

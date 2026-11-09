@@ -22,7 +22,7 @@ ensure_pr() {
   api="https://dev.azure.com/$AZDO_ORG/$AZDO_PROJECT/_apis/git/repositories/${FLEET_REPO_URL##*/}/pullrequests"
   id="$(azdo_api "$api?searchCriteria.sourceRefName=refs/heads/$branch&searchCriteria.status=active&api-version=7.1" \
     | jq -r '.value[0].pullRequestId // empty')" || return 0
-  [[ -n "$id" ]] || id="$(jq -n --arg s "refs/heads/$branch" --arg t "refs/heads/$FLEET_REF" --arg c "$FLEET_CHANGE" \
+  [[ -n "$id" ]] || id="$(jq -n --arg s "refs/heads/$branch" --arg t "refs/heads/$SPECCLAW_PR_TARGET" --arg c "$FLEET_CHANGE" \
       --arg d "$(pr_description)" --arg w "${FLEET_WORK_ITEM:-}" \
       '{sourceRefName: $s, targetRefName: $t, title: ("[draft] " + $c + ": verify did not pass"), description: $d,
         isDraft: true, workItemRefs: (if $w == "" then [] else [{id: $w}] end)}' \
