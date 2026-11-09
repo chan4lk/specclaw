@@ -6,10 +6,10 @@ parse_status_args() {
   while (($#)); do
     case "$1" in
       --json) S_JSON=1 ;;
-      --watch) S_WATCH=1; [[ "${2:-}" =~ ^[0-9]+$ ]] && { S_INTERVAL="$2"; shift; } ;;
+      --watch) S_WATCH=1; [[ "${2:-}" =~ ^[0-9]+$ ]] && { (( 10#$2 >= 5 )) || die "--watch interval must be at least 5 seconds"; S_INTERVAL="$2"; shift; } ;;
       --since) need_value "$1" "${2:-}"; S_SINCE="$2"; shift ;;
       --run) need_value "$1" "${2:-}"; [[ "$2" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*=[0-9]+$ ]] || die "--run takes <change>=<pipeline run id>"; S_RUNMAP+=" $2"; shift ;;
-      --timeout) need_value "$1" "${2:-}"; [[ "$2" =~ ^[1-9][0-9]{0,4}$ ]] || die "--timeout takes whole minutes"; S_TIMEOUT="$2"; shift ;;
+      --timeout) need_value "$1" "${2:-}"; [[ "$2" =~ ^[1-9][0-9]{0,4}s?$ ]] || die "--timeout takes minutes, or seconds as <n>s"; S_TIMEOUT="$2"; shift ;;
       -*) die "Unknown flag: $1" ;;
       *) S_CHANGES+=("$1") ;;
     esac
@@ -45,17 +45,18 @@ status_row() {
     case "$rc" in 0) consent=assignee ;; 10) consent=none ;; 11|12) consent=other ;; esac; fi
   jq -nc --arg c "$c" --arg id "$id" --arg since "$S_SINCE" --arg consent "$consent" --argjson wiok "$wi_ok" --argjson recok "$recs_ok" --argjson wi "$wi" --argjson r "$recs" --argjson job "$(status_job "$c")" --argjson runs "${S_RUNS:-[]}" '
     ($wi.fields["System.Tags"] // "" | ascii_downcase | split(";") | map(gsub("^\\s+|\\s+$"; ""))) as $t
-    | ([$r.records[]? | select((.at | sub("\\.[0-9]+"; "")) >= $since)] | first) as $rec
+    | ([$runs[] | select(.change == $c)] | last) as $run
+    | (if ($run.queued // "") != "" then $run.queued else $since end) as $base
+    | ([$r.records[]? | select((.at | sub("\\.[0-9]+"; "")) >= $base)] | first) as $rec
     | {change: $c, work_item: $id, state: (if $wiok == 0 then "?" else $wi.fields["System.State"] end),
        assignee: (if $wiok == 0 then "?" else ($wi.fields["System.AssignedTo"].uniqueName // "-") end),
        tags: [("auto", "dispatched", "refused") | select(("fleet:" + .) as $x | $t | index($x))],
        record: (if $recok == 0 then {state: "?"} elif $rec then $rec
          elif $consent == "unknown" then {state: "?"} elif $consent == "none" then {state: "not-opted-in"} elif $consent == "other" then {state: "not-opted-in (fleet:auto not added by the assignee)"}
          else {state: "waiting"} end), cluster: $job}
-    | ([$runs[] | select(.change == $c)] | last) as $run
-    | if .record.state == "waiting" and $run and $run.status == "completed" and .cluster.job != "?" and ((.cluster.created // "") < $since)
+    | if .record.state == "waiting" and $run and $run.status == "completed" and ($run.queued // "") != "" and .cluster.job != "?" and ((.cluster.created // "") < $base)
       then .record = {state: "did-not-run", exit: "pipeline \($run.id) \($run.result)"}
       elif .record.state == "waiting" and $run then .record.exit = "pipeline \($run.id) \($run.status)" else . end
     | .terminal = ((.record.state | IN("pr_open", "failed", "refused", "did-not-run")) or (.tags | index("refused")) or ($consent | IN("none", "other"))
-        or (.cluster.phase == "failed" and (.cluster.created // "") >= $since))'
+        or (.cluster.phase == "failed" and (.cluster.created // "") >= $base))'
 }

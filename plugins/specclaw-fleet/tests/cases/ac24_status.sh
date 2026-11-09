@@ -56,10 +56,10 @@ check "R053 AC-4 unreadable AzDO or cluster shows ? and is never terminal" unkno
 reset; REC 2026-11-08T00:00:00.500Z dispatched '' '' '' > "$WI/004-c/records"; printf 'specclaw; fleet:auto' > "$WI/004-c/tags"
 st --json 004-c --since 2026-11-08T00:00:00Z; same_second="$(jq -r '.changes[0].record.state' "$TMP/out")"
 reset; REC 2026-11-09T00:00:00Z refused '' '' '' > "$WI/002-a/records"; printf 'specclaw; fleet:auto; fleet:refused' > "$WI/003-b/tags"
-st 002-a 003-b --watch 0 --since 2026-11-08T00:00:00Z; refused_rc=$?; refused_frames="$(grep -c '^--- ' "$TMP/out")"
+st 002-a 003-b --watch 5 --since 2026-11-08T00:00:00Z; refused_rc=$?; refused_frames="$(grep -c '^--- ' "$TMP/out")"
 reset; REC 2026-12-01T00:00:00Z running '' '' '' > "$WI/003-b/records.1"; REC 2026-12-01T00:00:00Z running '' '' '' > "$WI/003-b/records.2"
 REC 2026-12-01T00:05:00Z pr_open 0 https://x/pr/2 false > "$WI/003-b/records.3"
-st 002-a 003-b --watch 0 --since 2026-11-08T00:00:00Z; watch_rc=$?; w="$(cat "$TMP/out")"
+st 002-a 003-b --watch 5 --since 2026-11-08T00:00:00Z; watch_rc=$?; w="$(cat "$TMP/out")"
 watch_ends() { (( watch_rc == 0 )) && [[ $(grep -c '^--- ' <<<"$w") == 3 ]] && grep -q "003-b .*pr_open exit=0 pr=https://x/pr/2" <<<"$w" && grep -q "^CHANGE" <<<"$w"; }
 check "R053 AC-4 --watch re-renders until every listed change has a terminal record" watch_ends
 refused_ends() { (( refused_rc == 0 && refused_frames == 1 )) && [[ "$same_second" == dispatched ]]; }
@@ -82,18 +82,27 @@ drow() {
   st --json 003-b --since 2026-11-08T00:00:00Z $5; local got; got="$(jq -r '.changes[0] | "\(.record.state)|\(.terminal)|\(.record.exit // "")"' "$TMP/out")"
   [[ "$got" == "$3" ]] || { dnr_rows=0; echo "  build [$1] job [$2] down [$4] args [$5]: got $got want $3"; }
 }
-drow '{"id":9,"status":"completed","result":"succeeded"}' "" "did-not-run|true|pipeline 9 succeeded" "" "--run 003-b=9"
+drow '{"id":9,"status":"completed","result":"succeeded","queueTime":"2026-11-08T00:00:00.5Z"}' "" "did-not-run|true|pipeline 9 succeeded" "" "--run 003-b=9"
+drow '{"id":9,"status":"completed","result":"succeeded"}' "" "waiting|false|pipeline 9 completed" "" "--run 003-b=9"
 drow '{"id":9,"status":"inProgress"}' "" "waiting|false|pipeline 9 inProgress" "" "--run 003-b=9"
 drow '{"id":9,"status":"completed","result":"succeeded"}' "" "waiting|false|" "" ""
 drow '{"id":9,"status":"completed","result":"succeeded"}' "" "waiting|false|" "" "--run 004-c=9"
-drow '{"id":9,"status":"completed","result":"succeeded"}' "" "waiting|false|pipeline 9 completed" "down" "--run 003-b=9"
+drow '{"id":9,"status":"completed","result":"succeeded","queueTime":"2026-11-08T00:00:00Z"}' "" "waiting|false|pipeline 9 completed" "down" "--run 003-b=9"
 drow 'UNREADABLE' "" "waiting|false|pipeline 9 unknown" "" "--run 003-b=9"
-unset DEAD_JOB KUBE_DOWN; rm -f "$TMP/build9"
+unset DEAD_JOB KUBE_DOWN
+reset; builds '{"id":9,"status":"completed","result":"succeeded","queueTime":"2026-11-08T03:00:00Z"}'
+REC 2026-11-08T03:05:00Z pr_open 0 https://x/pr/3 false > "$WI/003-b/records"
+st --json 003-b --since 2027-01-01T00:00:00Z --run 003-b=9; ahead="$(jq -r '.changes[0].record.state' "$TMP/out")"
+REC 2026-11-07T23:00:00Z pr_open 0 https://x/pr/old false > "$WI/003-b/records"
+st --json 003-b --since 2026-01-01T00:00:00Z --run 003-b=9; behind="$(jq -r '.changes[0].record.state' "$TMP/out")"
+[[ "$ahead" == pr_open && "$behind" == did-not-run ]] || { dnr_rows=0; echo "  skew: ahead=$ahead behind=$behind"; }
+rm -f "$TMP/build9"
 did_not_run() { (( dnr_rows == 1 )); }
-check "R053 did-not-run only for the run trigger queued (--run change=id), once it completed, with the cluster readable and no Job since; unreadable runs say unknown; no run id means no inference" did_not_run
-reset; FLEET_WATCH_TIMEOUT_S=1 st 003-b --watch 0 --since 2026-11-08T00:00:00Z; to_rc=$?
-watch_times_out() { (( to_rc == 2 )) && grep -q "status: watch timed out after .* min; still running: 003-b" "$TMP/out"; }
-check "R053 --watch always returns: past --timeout it exits 2 naming the changes still running" watch_times_out
+check "R053 did-not-run only for the run trigger queued (--run change=id), once it completed, with the cluster readable and no Job since; times are judged against the run's own queueTime, so a local clock ahead or behind changes nothing; unreadable runs say unknown; no run id or no queueTime means no inference" did_not_run
+reset; st 003-b --watch 5 --timeout 1s --since 2026-11-08T00:00:00Z; to_rc=$?; to_out="$(cat "$TMP/out")"
+st 003-b --watch 0; zero_rc=$?
+watch_times_out() { (( to_rc == 2 && zero_rc == 1 )) && grep -q "watch interval must be at least 5 seconds" "$TMP/out" && grep -q "status: watch timed out after 1s; still running: 003-b" <<<"$to_out"; }
+check "R053 --watch always returns: past --timeout (minutes or <n>s) it exits 2 naming the changes still running; intervals under 5 s are refused" watch_times_out
 read_only() { ! grep -Eq "azdo-issue (optin|tag|untag|claim|fields|create|comment)|kubectl.* (create|apply|delete|patch)|-X (POST|PATCH|PUT|DELETE)" "$CALLS"; }
 check "R053 AC-4 status makes no write call" read_only
 finish
