@@ -3,7 +3,7 @@ optin_decide() {
   local wi rc=0
   F_CHANGE="$1"
   O_ACTION=error O_WHY="could not read the work item history"
-  wi="$(azdo_issue show "$SPECCLAW_DIR" "$1")" || { O_WHY="could not read the work item"; return; }
+  wi="$(azdo_issue show "$SPECCLAW_DIR" "$1")" && jq -e 'type == "object"' <<<"$wi" >/dev/null 2>&1 || { O_WHY="could not read the work item"; return; }
   O_WHO="$(jq -r '.fields["System.AssignedTo"].uniqueName // empty' <<<"$wi")"
   if [[ -n "$O_WHO" && "$(lower "$O_WHO")" != "$(lower "$2")" ]]; then O_ACTION=refuse; return; fi
   gate_owner "$wi" || rc=$?

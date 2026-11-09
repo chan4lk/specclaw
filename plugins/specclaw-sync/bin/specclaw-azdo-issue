@@ -442,7 +442,7 @@ cmd_tag() {
 
 cmd_whoami() {
   require_creds
-  printf 'Authorization: Basic %s\n' "$(auth_header)" | curl -sf --max-time 30 -H @- "https://dev.azure.com/${AZDO_ORG}/_apis/connectionData" \
+  printf 'Authorization: Basic %s\n' "$(auth_header)" | curl -sf --max-time 30 -H @- "https://dev.azure.com/$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$AZDO_ORG")/_apis/connectionData" \
     | python3 -c 'import json,sys; u=json.load(sys.stdin)["authenticatedUser"]; p=u.get("properties",{}).get("Account",{}).get("$value",""); print(json.dumps({"upn":p,"name":u.get("providerDisplayName",""),"id":u.get("id","")}))' \
     || die "Could not read the identity behind AZDO_TOKEN"
 }
@@ -461,7 +461,7 @@ cmd_optin() {
   if (( rc == 5 )); then
     tag_update "$wi_id" remove "$tag" lax
     rc=0; ( tag_update "$wi_id" optin "$tag" lax "$upn" ) || rc=$?
-    (( rc == 0 )) || { ( tag_update "$wi_id" add "$tag" lax ) || warn "could not restore ${tag} on Work Item #${wi_id}"; }
+    (( rc == 0 || rc == 4 )) || { ( tag_update "$wi_id" add "$tag" lax ) || warn "could not restore ${tag} on Work Item #${wi_id}"; }
   fi
   (( rc == 4 )) && { echo "Work Item #${wi_id} is assigned to someone else; only they can opt in" >&2; exit 4; }
   (( rc == 0 )) || die "Could not opt in Work Item #${wi_id}"

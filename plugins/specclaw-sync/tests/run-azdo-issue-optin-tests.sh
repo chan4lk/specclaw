@@ -26,7 +26,7 @@ if [[ -n "${RACE:-}" && ! -e "$S/raced" ]]; then touch "$S/raced"; echo $((rev +
 [[ "$(jq -r '.[0].value' <<<"$body")" == "$rev" ]] || reply 412
 jq -r '.[1].value' <<<"$body" | tr -d '\n' > "$S/tags"
 a="$(jq -r '[.[] | select(.path == "/fields/System.AssignedTo") | .value][0] // empty' <<<"$body")"; [[ -n "$a" ]] && printf '%s' "$a" > "$S/who"
-echo $((rev + 1)) > "$S/rev"; reply 200
+echo $((rev + 1)) > "$S/rev"; [[ -n "${REASSIGN:-}" ]] && printf bob@contoso.com > "$S/who"; reply 200
 EOF2
 chmod +x "$TMP/stub/curl"
 azdo() {
@@ -61,6 +61,9 @@ COMMENTS='{"comments":[{"createdDate":"2026-11-08T02:50:00Z","text":"specclaw-fl
   TAGS="" WHO="" azdo records
 records_ok() { jq -e '.work_item == "42" and (.records | length == 2) and .records[0].state == "pr_open" and .records[0].draft == "true" and .records[1].claude_fetch_s == "20"' "$TMP/out" >/dev/null; }
 check "records parses fleet run updates (html or br), newest first, ignoring other comments" records_ok
+TAGS="specclaw; fleet:auto" WHO="" RACE="" REASSIGN=1 azdo optin fleet:auto alice@contoso.com; re_rc=$?
+reassigned() { (( re_rc == 4 )) && [[ "$(cat "$S/tags")" == "specclaw" && "$(cat "$S/who")" == bob@contoso.com ]]; }
+check "an item reassigned between optin's remove and re-add stays untagged (no fleet:auto restored on someone else's item)" reassigned
 COMMENTS='{"value":[]}' TAGS="" WHO="" azdo records; nolist_rc=$?
 records_strict() { (( nolist_rc != 0 )); }
 check "records fails on an answer with no comments list, never reports it as no records" records_strict

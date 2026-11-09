@@ -42,8 +42,7 @@ load_fleet_settings() {
   while IFS=$'\t' read -r key value; do
     case "$key" in kube_context|kubeconfig) warn "ignored fleet.$key in $cfg: which cluster this machine uses is local; set $([[ $key == kubeconfig ]] && echo KUBECONFIG || echo FLEET_KUBE_CONTEXT) in $SPECCLAW_DIR/.env"; continue ;; esac
     [[ " $FLEET_SETTING_KEYS " == *" $key "* ]] || { warn "ignored unknown fleet.$key in $cfg"; continue; }
-    looks_secret "$value" && die "fleet.$key in $cfg looks like a secret; keep secrets in .specclaw/.env or Key Vault"
-    [[ " $FLEET_NUMERIC_KEYS " != *" $key "* || -z "$value" || "$value" =~ ^[1-9][0-9]{0,4}$ ]] || die "fleet.$key in $cfg must be a whole number"
+    validate_setting "$key" "$value" "$cfg"
     if [[ -n "${FLEET_TRUSTED_CONFIG:-}" && " $FLEET_SECURE_KEYS " == *" $key "* ]]; then
       trusted="$(fleet_config_pairs "$FLEET_TRUSTED_CONFIG" | awk -F'\t' -v k="$key" '$1 == k { print $2; exit }')"
       [[ "$value" == "$trusted" ]] || die "fleet.$key on this branch differs from the trusted branch; security settings come only from there"
@@ -55,10 +54,16 @@ load_fleet_settings() {
   return 0
 }
 
+validate_setting() {
+  looks_secret "$2" && die "fleet.$1 in $3 looks like a secret; keep secrets in .specclaw/.env or Key Vault"
+  [[ " $FLEET_NUMERIC_KEYS " != *" $1 "* || -z "$2" || "$2" =~ ^[1-9][0-9]{0,4}$ ]] || die "fleet.$1 in $3 must be a whole number"
+}
+
 trusted_only_settings() {
   local key value var
   while IFS=$'\t' read -r key value; do
     [[ " $FLEET_SECURE_KEYS " == *" $key "* ]] || continue
+    validate_setting "$key" "$value" "the trusted config"
     var="$(setting_var "$key")"
     [[ -z "${!var+x}" && -n "$value" ]] && { export "$var=$value"; FLEET_CONFIG_VARS+=" $var"; }
   done < <(fleet_config_pairs "$FLEET_TRUSTED_CONFIG")

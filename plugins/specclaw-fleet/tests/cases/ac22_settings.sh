@@ -40,8 +40,11 @@ cfg 'fleet:' '  vault: evil-kv'; evil="$(load FLEET_TRUSTED_CONFIG="$TMP/trusted
 cfg 'fleet:' '  image: ghcr.io/evil/x:1'; evil_img="$(load FLEET_TRUSTED_CONFIG="$TMP/trusted.yaml")"; evil_img_rc=$?
 cfg 'fleet:' '  deadline_minutes: 99999'; evil_dl="$(load FLEET_TRUSTED_CONFIG="$TMP/trusted.yaml")"; evil_dl_rc=$?
 cfg 'fleet:' '  pipeline: p'; inherit="$(load FLEET_TRUSTED_CONFIG="$TMP/trusted.yaml")"
+printf 'fleet:\n  deadline_minutes: 9x\n' > "$TMP/bad-trusted.yaml"; cfg 'fleet:' '  pipeline: p'; badt="$(load FLEET_TRUSTED_CONFIG="$TMP/bad-trusted.yaml")"; badt_rc=$?
+printf 'fleet:\n  vault: sk-ant-oat01-zzz\n' > "$TMP/bad-trusted.yaml"; sect="$(load FLEET_TRUSTED_CONFIG="$TMP/bad-trusted.yaml")"; sect_rc=$?
 mv "$TMP/sc/config.yaml" "$TMP/sc/config.away"; nocfg="$(load FLEET_TRUSTED_CONFIG="$TMP/trusted.yaml")"; mv "$TMP/sc/config.away" "$TMP/sc/config.yaml"
 trusted_only() {
+  (( badt_rc != 0 && sect_rc != 0 )) && [[ "$badt" == *"must be a whole number"* && "$sect" == *"looks like a secret"* && "$sect" != *"zzz"* ]] || return 1
   [[ "$nocfg" == *"vault=[trusted-kv]"*"image=[ghcr.io/o/x:1]"*"dl=[30]"* ]] || return 1; [[ "$same" == *"vault=[trusted-kv]"*"image=[ghcr.io/o/x:1]"*"dl=[30]"* ]] && (( evil_rc != 0 && evil_img_rc != 0 && evil_dl_rc != 0 )) \
     && [[ "$evil" == *"fleet.vault on this branch differs from the trusted branch"* && "$evil_img" == *"fleet.image on this branch differs"* ]] \
     && [[ "$inherit" == *"vault=[trusted-kv]"*"image=[ghcr.io/o/x:1]"*"dl=[30]"* && "$evil_dl" == *"fleet.deadline_minutes on this branch differs"* ]]
