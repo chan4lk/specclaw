@@ -67,6 +67,11 @@ check "an item reassigned between optin's remove and re-add stays untagged (no f
 COMMENTS='{"value":[]}' TAGS="" WHO="" azdo records; nolist_rc=$?
 records_strict() { (( nolist_rc != 0 )); }
 check "records fails on an answer with no comments list, never reports it as no records" records_strict
+mkdir -p "$TMP/sc/features/catalog"; printf '**Azure Boards Work Item:** [#300](https://x)\n' > "$TMP/sc/features/catalog/status.md"
+export S="$TMP/s"; printf '{"comments":[]}' > "$S/comments"
+PATH="$TMP/stub:$PATH" AZDO_TOKEN=t AZDO_ORG=o AZDO_PROJECT=p bash "$BIN" records "$TMP/sc" catalog > "$TMP/out" 2>&1
+feature_dir() { jq -e '.work_item == "300"' "$TMP/out" >/dev/null; }
+check "a feature directory (.specclaw/features/<name>) resolves like a change" feature_dir
 echo
 (( fails == 0 )) && echo "All azdo-issue optin tests passed." || echo "$fails failure(s)."
 exit $(( fails > 0 ))

@@ -63,6 +63,7 @@ CHANGE_NAME="$3"
 CONFIG_FILE="$SPECCLAW_DIR/config.yaml"
 AUTH_FILE="$SPECCLAW_DIR/.env"
 CHANGE_DIR="$SPECCLAW_DIR/changes/$CHANGE_NAME"
+[[ -d "$CHANGE_DIR" || ! -d "$SPECCLAW_DIR/features/$CHANGE_NAME" ]] || CHANGE_DIR="$SPECCLAW_DIR/features/$CHANGE_NAME"
 STATUS_FILE="$CHANGE_DIR/status.md"
 
 [[ -d "$CHANGE_DIR" ]] || { echo "ERROR: Change not found: $CHANGE_DIR" >&2; exit 1; }

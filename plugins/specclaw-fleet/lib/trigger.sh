@@ -22,12 +22,15 @@ trigger_pushed_tree() {
   [[ "$remote" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || die "FLEET_REMOTE '$remote' is not a valid remote name"
   [[ "$ref" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ && "$ref" != *..* ]] || die "the ref '$ref' is not a valid branch name"
   git -C "$root" fetch -q "$remote" "$ref" 2>/dev/null || die "could not fetch $remote/$ref"
-  git -C "$root" cat-file -e "FETCH_HEAD:$sc/changes/$T_CHANGE/state.json" 2>/dev/null || die "no change $T_CHANGE on $remote/$ref"
+  local kind=changes
+  git -C "$root" cat-file -e "FETCH_HEAD:$sc/changes/$T_CHANGE/state.json" 2>/dev/null \
+    || { git -C "$root" cat-file -e "FETCH_HEAD:$sc/features/$T_CHANGE/state.json" 2>/dev/null && kind=features; } \
+    || die "no change $T_CHANGE on $remote/$ref"
   tree="$FLEET_TMPDIR/pushed/$sc"
-  mkdir -p "$tree/changes/$T_CHANGE"
+  mkdir -p "$tree/$kind/$T_CHANGE"
   git -C "$root" show "FETCH_HEAD:$sc/config.yaml" > "$tree/config.yaml" 2>/dev/null || rm -f "$tree/config.yaml"
   for f in state.json status.md; do
-    git -C "$root" show "FETCH_HEAD:$sc/changes/$T_CHANGE/$f" > "$tree/changes/$T_CHANGE/$f" 2>/dev/null || rm -f "$tree/changes/$T_CHANGE/$f"
+    git -C "$root" show "FETCH_HEAD:$sc/$kind/$T_CHANGE/$f" > "$tree/$kind/$T_CHANGE/$f" 2>/dev/null || rm -f "$tree/$kind/$T_CHANGE/$f"
   done
   export FLEET_DISPATCH_COMMIT FLEET_REPO_URL
   FLEET_DISPATCH_COMMIT="$(git -C "$root" rev-parse FETCH_HEAD)"

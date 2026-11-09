@@ -12,7 +12,7 @@ optin_decide() {
 
 optin_one() {
   local rc=0
-  [[ -d "$SPECCLAW_DIR/changes/$1" ]] || { echo "$1: no such change in $SPECCLAW_DIR/changes" >&2; return 1; }
+  [[ -d "$(item_dir "$1")" ]] || { echo "$1: no such change or feature in $SPECCLAW_DIR" >&2; return 1; }
   [[ -n "$(work_item_id "$1")" ]] || { echo "$1: no work item; run: specclaw-fleet trigger $1 --create" >&2; return 1; }
   optin_decide "$1" "$2"
   case "$O_ACTION" in

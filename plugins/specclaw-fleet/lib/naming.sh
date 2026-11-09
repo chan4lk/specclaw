@@ -31,3 +31,8 @@ job_name() {
   fi
   printf 'fleet-%s-%s' "$stem" "$(rand_suffix)"
 }
+
+item_dir() {
+  if [[ ! -d "$SPECCLAW_DIR/changes/$1" && -d "$SPECCLAW_DIR/features/$1" ]]; then printf '%s/features/%s' "$SPECCLAW_DIR" "$1"
+  else printf '%s/changes/%s' "$SPECCLAW_DIR" "$1"; fi
+}

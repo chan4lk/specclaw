@@ -8,7 +8,7 @@
 
 ### Wave 1: model
 
-- [ ] `T1` — Feature graph: parse `Feature` and `Depends on` (proposal.md or change.md); waves; cycle and unknown-dependency errors; `item_dir` and the `features/` fallback in fleet and `specclaw-azdo-issue`; `feature plan` (AC-1)
+- [x] `T1` — Feature graph: parse `Feature` and `Depends on` (proposal.md or change.md); waves; cycle and unknown-dependency errors; `item_dir` and the `features/` fallback in fleet and `specclaw-azdo-issue`; `feature plan` (AC-1)
   - Files: plugins/specclaw-fleet/lib/feature-graph.sh, plugins/specclaw-fleet/lib/feature.sh, plugins/specclaw-fleet/lib/naming.sh, plugins/specclaw-fleet/lib/workitem.sh, plugins/specclaw-fleet/lib/trigger.sh, plugins/specclaw-fleet/lib/status.sh, plugins/specclaw-fleet/bin/specclaw-fleet, plugins/specclaw-sync/bin/specclaw-azdo-issue, plugins/specclaw-fleet/tests/cases/ac27_feature_graph.sh
   - Kind: impl
 - [ ] `T2` — `SPECCLAW_PR_TARGET` in `specclaw-azdo-pr`; the pod exports it; the draft PR uses it (AC-5)

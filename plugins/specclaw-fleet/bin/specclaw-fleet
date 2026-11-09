@@ -20,5 +20,6 @@ case "${1:-}" in
   trigger) shift; fleet_trigger "$@" ;;
   optin) shift; fleet_optin "$@" ;;
   status) shift; fleet_status "$@" ;;
-  *) die "Usage: specclaw-fleet onboard <upn> --vault <v> | login --agent claude|codex --vault <v> | doctor | optin <change>... [--dry-run] | status [<change>...] [--json] [--watch [N>=5]] [--since ISO] [--run <change>=<id>]... [--timeout <min>|<n>s] | trigger <change> [--retry] [--direct] [--create] | dispatch <change> [--agent claude|codex] [--ref <b>] [--vault <v>] [--dry-run] [--force]" ;;
+  feature) shift; fleet_feature "$@" ;;
+  *) die "Usage: specclaw-fleet onboard <upn> --vault <v> | login --agent claude|codex --vault <v> | doctor | feature plan <module> [--json] | optin <change>... [--dry-run] | status [<change>...] [--json] [--watch [N>=5]] [--since ISO] [--run <change>=<id>]... [--timeout <min>|<n>s] | trigger <change> [--retry] [--direct] [--create] | dispatch <change> [--agent claude|codex] [--ref <b>] [--vault <v>] [--dry-run] [--force]" ;;
 esac
