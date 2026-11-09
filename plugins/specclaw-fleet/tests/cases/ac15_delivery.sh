@@ -25,8 +25,8 @@ hosted_ok() {
     && grep -q 'task.prependpath\]$(Agent.TempDirectory)/specclaw/plugins/specclaw-sync/bin' "$H"
 }
 same_script() {
-  [[ "$(yq_py "$H" | jq -r '.steps[] | select(.task? == "AzureCLI@2") | .inputs.inlineScript')" \
-    == "$(yq_py "$S" | jq -r '.steps[] | select(.task? == "AzureCLI@2") | .inputs.inlineScript')" ]] \
+  [[ "$(yq_py "$H" | jq -r '.jobs[0].steps[] | select(.task? == "AzureCLI@2") | .inputs.inlineScript')" \
+    == "$(yq_py "$S" | jq -r '.jobs[0].steps[] | select(.task? == "AzureCLI@2") | .inputs.inlineScript')" ]] \
     && grep -q 'export FLEET_KUBE_CONTEXT=$' "$H"
 }
 

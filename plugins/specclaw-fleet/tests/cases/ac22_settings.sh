@@ -70,7 +70,7 @@ export TMP AGENT_TEMPDIRECTORY="$TMP" SYSTEM_COLLECTIONURI=https://dev.azure.com
 for t in dispatch.yml dispatch-hosted.yml; do
   stub specclaw-fleet 'echo "ctx=[${FLEET_KUBE_CONTEXT-unset}]" >> "$TMP/ctx"'
   stub git 'case "$1" in fetch) exit 0 ;; show) printf "fleet:\n  vault: trusted-kv\n" ;; rev-parse) echo 0123abc ;; esac'
-  sed -n '/inlineScript: |/,/^    env:/p' "$FLEET_ROOT/pipelines/$t" | sed '1d;$d;s/^        //' > "$TMP/step.sh"
+  python3 -c 'import sys,yaml; d=yaml.safe_load(open(sys.argv[1])); print([s for s in d["jobs"][0]["steps"] if s.get("task") == "AzureCLI@2"][0]["inputs"]["inlineScript"], end="")' "$FLEET_ROOT/pipelines/$t" > "$TMP/step.sh"
   mkdir -p "$TMP/p/.specclaw/changes/049-x"; echo '{"phase":"proposal","phases":{"proposal":{"status":"approved"}}}' > "$TMP/p/.specclaw/changes/049-x/state.json"
   (cd "$TMP/p" && FLEET_REF=refs/heads/main FLEET_KUBE_CONTEXT=bistec-dev-uat bash "$TMP/step.sh") >/dev/null 2>&1
 done

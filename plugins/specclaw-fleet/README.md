@@ -94,6 +94,14 @@ Once the gates pass, `trigger` queues the pipeline with this change and agent as
 
 Run **`/specclaw-fleet:feature`** to deliver related changes together. Children declare `**Feature:** <module>` and `**Depends on:** <changes>` in their proposal (or lean `change.md`). `feature plan` shows waves and states; `feature init` writes `.specclaw/features/<module>/` with its own work item; `feature start` creates `feature/<module>` and queues the pipeline, which then runs `feature advance` on every merge into that branch that changes a `.specclaw/changes/*/state.json` (every child PR does; after any other merge, run `feature start <module>` again to re-queue it): ready children dispatch on `feature/<module>` (their PRs target it), a failed child blocks only its dependents, a conflicting child is retried once with the feature branch merged in, and once every child is merged one integration run opens `specclaw/integrate-<module> → <trusted branch>`.
 
+## Hosted minutes
+
+Fleet runs on Microsoft-hosted agents by default. A private project gets **1 free hosted parallel job and 1,800 minutes a month**; user licences (Basic access) do not add parallel jobs.
+
+The hosted job only dispatches: the Claude or Codex work runs in pods on your cluster and uses no hosted minutes. A dispatch run takes about 45 seconds (a sparse checkout of `.specclaw/`, a blob-less fetch of the two fleet plugins, kubectl login, dispatch), and every run stops at `timeoutInMinutes: 10`. So the free grant covers well over a thousand dispatch or `feature advance` runs a month.
+
+Check usage under **Organization settings → Parallel jobs**. If runs start queueing or minutes run out, buy a hosted parallel job, or enable a self-hosted overflow agent (deferred in change 051; the org has one free self-hosted job).
+
 ## Egress hosts
 
 The proxy allows CONNECT on port 443 to:

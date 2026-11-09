@@ -3,7 +3,7 @@ export TMP AGENT_TEMPDIRECTORY="$TMP" SYSTEM_COLLECTIONURI=https://dev.azure.com
 APPROVED='{"phase":"proposal","phases":{"proposal":{"status":"approved"}}}'
 stub specclaw-fleet 'echo "ref=${FLEET_REF:-}" >> "$TMP/refs"; echo "trusted=${FLEET_TRUSTED_CONFIG:-unset} commit=${FLEET_TRUSTED_COMMIT:-unset}" >> "$TMP/trusted"; exit "${DISPATCH_RC:-0}"'
 stub git 'case "$1" in fetch) exit "${TRUSTED_FETCH_RC:-0}" ;; show) [[ -n "${TRUSTED_SHOW_FAIL:-}" ]] && exit 128; printf "fleet:\n  vault: trusted-kv\n" ;; rev-parse) [[ -n "${TRUSTED_REV_EMPTY:-}" ]] || echo 0123abc ;; esac'
-sed -n '/inlineScript: |/,/^    env:/p' "$FLEET_ROOT/pipelines/${PIPELINE_FILE:-dispatch.yml}" | sed '1d;$d;s/^        //' > "$TMP/step.sh"
+python3 -c 'import sys,yaml; d=yaml.safe_load(open(sys.argv[1])); print([s for s in d["jobs"][0]["steps"] if s.get("task") == "AzureCLI@2"][0]["inputs"]["inlineScript"], end="")' "$FLEET_ROOT/pipelines/${PIPELINE_FILE:-dispatch.yml}" > "$TMP/step.sh"
 
 run_with_state() {
   rm -rf "$TMP/r" && mkdir -p "$TMP/r/.specclaw/changes/$1"
