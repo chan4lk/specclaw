@@ -1,7 +1,7 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** specclaw
-**Last Updated:** 2026-11-09 07:03 UTC
+**Last Updated:** 2026-11-09 08:44 UTC
 
 _4 unnumbered changes · run `/specclaw-extras:renumber` to order them_
 
@@ -17,7 +17,7 @@ _4 unnumbered changes · run `/specclaw-extras:renumber` to order them_
 - 🔀 **047-specclaw-mod** ▣ — pr raised | 7/7 tasks (100%) | 0 failed | PR #105 merged | 16h58m
 - 🔀 **048-codex-safe-mod-hooks** ▫ — pr raised | 3/3 tasks (100%) | 0 failed | PR #106 merged | 16s
 - 🔍 **049-fleet-runner-dispatch** ▣ — verify FAIL | 7/7 tasks (100%) | 0 failed | PR #111 merged | 1h27m
-- 🔨 **050-fleet-coordinated-features** ▣ — build done | 6/6 tasks (100%) | 0 failed | 55s
+- 🔍 **050-fleet-coordinated-features** ▣ — verify FAIL | 6/6 tasks (100%) | 0 failed | 55s
 - 🔍 **052-fleet-setup-and-run-skills** ▣ — verify FAIL | 6/6 tasks (100%) | 0 failed | PR #112 merged | 1h5m
 - 🔍 **053-fleet-optin-status-run** ▫ — verify FAIL | 6/6 tasks (100%) | 0 failed
 
