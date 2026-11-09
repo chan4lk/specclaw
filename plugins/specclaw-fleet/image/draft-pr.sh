@@ -23,12 +23,13 @@ ensure_pr() {
   api="https://dev.azure.com/$AZDO_ORG/$AZDO_PROJECT/_apis/git/repositories/${FLEET_REPO_URL##*/}/pullrequests"
   local found isdraft
   found="$(azdo_api "$api?searchCriteria.sourceRefName=refs/heads/$branch&searchCriteria.status=active&api-version=7.1")" || return 0
+  jq -e '.value | type == "array"' <<<"$found" >/dev/null 2>&1 || return 0
   id="$(jq -r '.value[0].pullRequestId // empty' <<<"$found")"; isdraft="$(jq -r '.value[0].isDraft // false' <<<"$found")"
   if [[ -n "$id" && "$isdraft" == true && "${FLEET_PR_DRAFT:-true}" == false ]]; then
     azdo_api -X PATCH "$api/$id?api-version=7.1" --data-binary '{"isDraft": false}' >/dev/null && isdraft=false
   fi
   [[ -n "$id" ]] && { echo "${FLEET_REPO_URL}/pullrequest/$id $isdraft"; return 0; }
-  [[ -n "$id" ]] || id="$(jq -n --arg s "refs/heads/$branch" --arg t "refs/heads/$SPECCLAW_PR_TARGET" --arg c "$FLEET_CHANGE" \
+  [[ -n "$id" ]] || id="$(jq -n --arg s "refs/heads/$branch" --arg t "refs/heads/${SPECCLAW_PR_TARGET:-$FLEET_REF}" --arg c "$FLEET_CHANGE" \
       --arg d "$(pr_description)" --arg w "${FLEET_WORK_ITEM:-}" --arg dr "${FLEET_PR_DRAFT:-true}" \
       '{sourceRefName: $s, targetRefName: $t, description: $d, isDraft: ($dr == "true"),
         title: (if $dr == "true" then "[draft] " + $c + ": verify did not pass" else $c + ": integration verified" end),

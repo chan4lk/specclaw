@@ -71,4 +71,3 @@ load_local_env() {
   root="$(cd "$SPECCLAW_DIR/.." 2>/dev/null && pwd)" || die "cannot resolve KUBECONFIG from $SPECCLAW_DIR/.env: no repo root"
   export KUBECONFIG="$root/${KUBECONFIG#./}"
 }
-

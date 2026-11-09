@@ -17,6 +17,6 @@ check "R050 AC-5 specclaw-azdo-pr targets SPECCLAW_PR_TARGET over git.base_branc
 ENTRY_REF=feature/catalog AGENT_RC=5 run_entry; child="$(cat "$TMP/prtarget")"; child_pr="$(jq -r .targetRefName "$TMP/pr-body.json" 2>/dev/null)"
 ENTRY_REF=feature/catalog ENTRY_PR_TARGET=main run_entry; integ="$(cat "$TMP/prtarget")"
 run_entry; plain="$(cat "$TMP/prtarget")"
-pod_target() { [[ "$child" == feature/catalog && "$child_pr" == refs/heads/feature/catalog && "$integ" == main && "$plain" == main ]]; }
-check "R050 AC-5 a pod dispatched from feature/<m> opens its PR (real or draft) into feature/<m>; FLEET_PR_TARGET overrides" pod_target
+pod_target() { [[ "$child" == feature/catalog && "$child_pr" == refs/heads/feature/catalog && "$integ" == main && "$plain" == unset ]]; }
+check "R050 AC-5 a pod dispatched from feature/<m> opens its PR (real or draft) into feature/<m>; FLEET_PR_TARGET overrides; an ordinary run leaves git.base_branch in charge" pod_target
 finish

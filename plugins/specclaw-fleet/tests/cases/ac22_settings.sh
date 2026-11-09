@@ -20,6 +20,9 @@ printf 'FLEET_KUBE_CONTEXT=bistec-dev-uat\nKUBECONFIG=./scratch/hetzner/kubeconf
 row "ctx=[bistec-dev-uat] image=[ghcr.io/o/specclaw-fleet:0.9.0] kc=[$(cd "$TMP" && pwd)/scratch/hetzner/kubeconfig]"
 row "ctx=[mine] image=[ghcr.io/o/specclaw-fleet:0.9.0] kc=[/abs/k]" FLEET_KUBE_CONTEXT=mine KUBECONFIG=/abs/k
 row "ctx=[] image=[ghcr.io/o/specclaw-fleet:0.9.0] kc=[rel/k]" FLEET_KUBE_CONTEXT= KUBECONFIG=rel/k
+mkdir -p "$TMP/pl/.specclaw"; printf 'FLEET_KUBE_CONTEXT=evil\nKUBECONFIG=.specclaw/evil-kubeconfig\n' > "$TMP/pl/.specclaw/.env"
+pl="$(cd "$TMP/pl" && env -u KUBECONFIG -u FLEET_KUBE_CONTEXT TF_BUILD=True FLEET_VAULT=v "$FLEET" doctor 2>&1 | head -1; env -u KUBECONFIG -u FLEET_KUBE_CONTEXT TF_BUILD=True bash -c 'echo "kc=[${KUBECONFIG-unset}]"')"
+pipeline_ignores_env() { [[ "$pl" != *evil* ]]; }
 rm -f "$TMP/sc/.env"
 cfg 'fleet:' '  vault: kv1' '  colour: blue'
 row "WARNING: ignored unknown fleet.colour" ; row "vault=[kv1]"
@@ -62,6 +65,7 @@ precedence() { (( rows == 1 )); }
 secrets() { (( secret_rows == 1 )); }
 check "R053 AC-1 fleet: config fills unset env only; env (even empty) wins; quotes, comments, CRLF; only the fleet: block; unknown keys warn; the local cluster pointer comes only from env or .specclaw/.env (relative KUBECONFIG resolved at the repo root), never fleet:; long paths are not secrets" precedence
 check "R053 AC-1 a secret-looking fleet: value is refused without printing it" secrets
+check "R051 inside a pipeline run (TF_BUILD) a committed .specclaw/.env cannot point kubectl at another cluster or kubeconfig" pipeline_ignores_env
 mkdir -p "$TMP/repo/.specclaw"; printf 'fleet:\n  vault: cfg-kv\n' > "$TMP/repo/.specclaw/config.yaml"
 flag_out="$(cd "$TMP/repo" && "$FLEET" dispatch x --vault flag-kv --dry-run 2>&1)"
 flag_wins() { [[ "$flag_out" != *"No Key Vault"* ]] && ! grep -q "cfg-kv" <<<"$flag_out"; }

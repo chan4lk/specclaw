@@ -39,6 +39,7 @@ feature_advance() {
 
 feature_start() {
   local m="$1" remote="${FLEET_REMOTE:-origin}" ref="${FLEET_REF:-main}" root="$SPECCLAW_DIR/.." sc run
+  [[ "$m" =~ ^[a-z0-9][a-z0-9-]{0,40}$ ]] || die "feature module '$m' must match ^[a-z0-9][a-z0-9-]{0,40}$"
   sc="$(basename "$SPECCLAW_DIR")"
   load_azdo_env
   git -C "$root" fetch -q "$remote" "$ref" 2>/dev/null || die "could not fetch $remote/$ref"

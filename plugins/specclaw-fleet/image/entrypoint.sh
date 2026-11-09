@@ -2,7 +2,7 @@
 # shellcheck disable=SC2034
 set -uo pipefail
 unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN OPENAI_API_KEY CODEX_API_KEY
-export SPECCLAW_PR_TARGET="${FLEET_PR_TARGET:-${FLEET_REF:-}}"
+[[ -n "${FLEET_PR_TARGET:-}" || "${FLEET_REF:-}" == feature/* ]] && export SPECCLAW_PR_TARGET="${FLEET_PR_TARGET:-$FLEET_REF}"
 
 STATUS="${FLEET_STATUS_DIR:-/fleet/status}"
 WORK="${FLEET_WORK:-/fleet/work}"
@@ -74,5 +74,5 @@ workspace_ready=1
 agent_budget=$(( 10#${FLEET_AGENT_TIMEOUT:-7200} - SECONDS ))
 (( agent_budget > 0 )) || { record state=failed exit=deadline-before-agent; finish 143; }
 rc=0; run_agent || rc=$?
-[[ "${FLEET_MODE:-}" == integrate && "$rc" == 0 ]] && FLEET_PR_DRAFT=false
+[[ "${FLEET_MODE:-}" == integrate && "$rc" == 0 ]] && integration_passed && FLEET_PR_DRAFT=false
 deliver "$rc" "$rc"

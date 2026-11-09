@@ -9,7 +9,7 @@ for lib in "$FLEET_ROOT"/lib/*.sh; do
   # shellcheck source=/dev/null
   source "$lib"
 done
-load_local_env
+[[ -n "${FLEET_TRUSTED_CONFIG:-}${TF_BUILD:-}" ]] || load_local_env
 load_fleet_settings
 
 case "${1:-}" in
