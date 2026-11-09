@@ -6,7 +6,7 @@ feature_dispatch() {
 }
 
 feature_advance() {
-  local m="$1" states c s n
+  local m="$1" states c s n wi
   load_azdo_env
   states="$(feature_states "$m")" || exit 1
   F_ERRORS=0
@@ -14,7 +14,9 @@ feature_advance() {
     case "$s" in
       ready) FLEET_REF="feature/$m" feature_dispatch fleet_dispatch "$c" ;;
       conflict)
-        if azdo_issue show "$SPECCLAW_DIR" "$c" 2>/dev/null | jq -e '.fields["System.Tags"] // "" | ascii_downcase | contains("fleet:conflict-retried")' >/dev/null; then
+        wi="$(azdo_issue show "$SPECCLAW_DIR" "$c" 2>/dev/null)" && jq -e 'type == "object"' <<<"$wi" >/dev/null 2>&1 \
+          || { echo "$c: could not read the work item; conflict retry skipped" >&2; F_ERRORS=$((F_ERRORS + 1)); continue; }
+        if jq -e '.fields["System.Tags"] // "" | ascii_downcase | contains("fleet:conflict-retried")' <<<"$wi" >/dev/null; then
           record_run "$c" state=failed exit=merge-conflict "pr_target=feature/$m"
           azdo_issue tag "$SPECCLAW_DIR" "$c" fleet:refused >/dev/null || F_ERRORS=$((F_ERRORS + 1))
         else

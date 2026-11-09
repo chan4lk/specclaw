@@ -34,6 +34,10 @@ echo '{"branch":"specclaw/002-a"}' > "$SPECCLAW_DIR/changes/002-a/state.json"
 git -C "$TMP/repo" -c user.name=t -c user.email=t@t commit -q --allow-empty -m a
 git -C "$TMP/repo" update-ref refs/remotes/origin/specclaw/002-a HEAD; git -C "$TMP/repo" update-ref refs/remotes/origin/feature/cat HEAD
 row "002-a=merged 004-c=ready 003-b=ready"
+reset; mk 002-a none "fleet:auto; fleet:dispatched; fleet:conflict-retried"; mk 003-b 002-a "fleet:auto"; mk 004-c none "fleet:auto"
+printf '{"records":[{"at":"2026-11-09T00:00:00Z","state":"running"},{"at":"2026-11-08T00:00:00Z","state":"pr_open","pr":"https://x/pullrequest/12"}]}' > "$WI/002-a/records"
+pr 12 active conflicts cat; rec 004-c pr_open https://x/pullrequest/13
+row "002-a=running 004-c=? 003-b=waiting"
 states_ok() { (( rows == 1 )); }
-check "R050 AC-3 member state from PR status (completed into feature/<m> = merged, any merge type), conflicts, refusals, records, consent, deps; a merge by hand counts by ancestry; unreadable is ?" states_ok
+check "R050 AC-3 member state from PR status (completed into feature/<m> = merged, any merge type), conflicts, refusals, records, consent, deps; a merge by hand counts by ancestry; unreadable is ?; a retry in flight is running even though the old PR still conflicts; an unreadable PR is ?" states_ok
 finish

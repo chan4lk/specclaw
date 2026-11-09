@@ -4,9 +4,11 @@ member_base() {
   F_CHANGE="$c"
   wi="$(azdo_issue show "$SPECCLAW_DIR" "$c" 2>/dev/null)" && jq -e 'type == "object"' <<<"$wi" >/dev/null 2>&1 || { echo '?'; return; }
   recs="$(azdo_issue records "$SPECCLAW_DIR" "$c" 2>/dev/null)" || recs='{"records":[]}'
+  [[ "$(jq -r '.records[0].state // empty' <<<"$recs")" =~ ^(dispatched|running)$ ]] && { echo running; return; }
   pr="$(jq -r '[.records[]? | select((.pr // "") | test("/pullrequest/[0-9]+$"))][0].pr // empty' <<<"$recs")"
   if [[ -n "$pr" ]]; then
-    id="${pr##*/}"; out="$(azdo_rest "git/pullrequests/$id?api-version=7.1")" || out='{}'
+    id="${pr##*/}"; out="$(azdo_rest "git/pullrequests/$id?api-version=7.1")" && jq -e 'type == "object" and has("status")' <<<"$out" >/dev/null 2>&1 \
+      || { echo '?'; return; }
     case "$(jq -r --arg t "refs/heads/feature/$m" 'if .targetRefName != $t then "other"
       elif .status == "completed" then "merged" elif .status == "active" and .mergeStatus == "conflicts" then "conflict"
       elif .status == "active" then "pr_open" else "closed" end' <<<"$out" 2>/dev/null)" in
@@ -17,7 +19,6 @@ member_base() {
   if [[ -n "$branch" ]] && git -C "$SPECCLAW_DIR/.." merge-base --is-ancestor "origin/$branch" "origin/feature/$m" 2>/dev/null; then echo merged; return; fi
   if jq -e '.fields["System.Tags"] // "" | ascii_downcase | test("(^|;)\\s*fleet:refused\\s*(;|$)")' <<<"$wi" >/dev/null \
     || [[ "$(jq -r '.records[0].state // empty' <<<"$recs")" == failed ]]; then echo failed; return; fi
-  if [[ "$(jq -r '.records[0].state // empty' <<<"$recs")" =~ ^(dispatched|running)$ ]]; then echo running; return; fi
   gate_owner "$wi" || rc=$?
   case "$rc" in 0) consent=ok ;; 10|11|12) consent=no ;; *) consent=unknown ;; esac
   case "$consent" in ok) echo pending ;; no) echo not-opted-in ;; *) echo '?' ;; esac
