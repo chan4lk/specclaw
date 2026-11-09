@@ -18,7 +18,7 @@
 
 ### Wave 2: mod
 
-- [ ] `T3` — Mod core: snapshot parse/validate, timeline, pane, band, status (AC-4)
+- [x] `T3` — Mod core: snapshot parse/validate, timeline, pane, band, status (AC-4)
   - Files: plugins/specclaw-fleet/hooks/core/report.ts, plugins/specclaw-fleet/hooks/core/view.ts, plugins/specclaw-fleet/tests/report.spec.ts
   - Kind: impl
   - Depends: T2
