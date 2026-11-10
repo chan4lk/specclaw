@@ -38,12 +38,13 @@ jobs:
           ref="$(fleetSpecclawRef)"
           [[ "$ref" =~ ^[0-9a-f]{40}$ ]] || { echo "##vso[task.logissue type=error]fleetSpecclawRef must be a full commit SHA, got: $ref"; exit 1; }
           dir="$(Agent.TempDirectory)/specclaw"
-          git init -q "$dir" && git -C "$dir" sparse-checkout set plugins/specclaw-fleet plugins/specclaw-sync \
+          git init -q "$dir" && git -C "$dir" sparse-checkout set plugins/specclaw-fleet plugins/specclaw-sync plugins/specclaw/bin \
             && git -C "$dir" fetch -q --depth 1 --filter=blob:none https://github.com/chan4lk/specclaw.git "$ref" && git -C "$dir" checkout -q FETCH_HEAD
           [[ "$(git -C "$dir" rev-parse HEAD)" == "$ref" ]] || { echo "##vso[task.logissue type=error]fetched commit does not match $ref"; exit 1; }
           echo "specclaw-fleet code: chan4lk/specclaw@$ref"
           echo "##vso[task.prependpath]$(Agent.TempDirectory)/specclaw/plugins/specclaw-sync/bin"
           echo "##vso[task.prependpath]$(Agent.TempDirectory)/specclaw/plugins/specclaw-fleet/bin"
+          echo "##vso[task.prependpath]$(Agent.TempDirectory)/specclaw/plugins/specclaw/bin"
         displayName: Fetch specclaw-fleet at a pinned ref
       - task: Kubernetes@1
         displayName: kubectl login
@@ -102,3 +103,19 @@ jobs:
           FLEET_TRUSTED_BRANCH: $(fleetTrustedBranch)
           FLEET_ONLY_CHANGE: ${{ parameters.change }}
           FLEET_RUN_AGENT: ${{ parameters.agent }}
+      - script: |
+          set -uo pipefail
+          branch="${BUILD_SOURCEBRANCH#refs/heads/}"
+          case "$branch" in main|master|feature/?*|"$FLEET_TRUSTED_BRANCH") ;; *) exit 0 ;; esac
+          warn() { echo "##vso[task.logissue type=warning]STATUS.md not refreshed: $1"; exit 0; }
+          specclaw-update-status --integration .specclaw >/dev/null || warn "specclaw-update-status failed"
+          [[ -n "$(git status --porcelain -- .specclaw/STATUS.md)" ]] || exit 0
+          git add -- .specclaw/STATUS.md || warn "git add failed"
+          git -c user.name=specclaw-fleet -c user.email=specclaw-fleet@users.noreply.github.com \
+            commit -q -m "specclaw: refresh STATUS.md [skip ci]" -- .specclaw/STATUS.md || warn "commit failed"
+          git push -q origin "HEAD:refs/heads/$branch" || warn "push to $branch refused (branch policy, or it moved; the next run retries)"
+        displayName: Refresh STATUS.md on this branch
+        condition: succeededOrFailed()
+        env:
+          SPECCLAW_STATUS_NO_PR: "1"
+          FLEET_TRUSTED_BRANCH: $(fleetTrustedBranch)

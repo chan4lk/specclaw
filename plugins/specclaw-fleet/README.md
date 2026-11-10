@@ -46,7 +46,7 @@ Run **`/specclaw-fleet:setup`**. It works until `specclaw-fleet doctor` is clean
 - the AzDO pipeline and its service connections.
 
 **Modes**
-- **Hosted (default):** a Microsoft-hosted agent (`pipelines/dispatch-hosted.yml`) fetches specclaw at a pinned ref and dispatches to a remote cluster over its API, using a least-privilege, short-lived dispatcher token.
+- **Hosted (default):** a Microsoft-hosted agent (`pipelines/dispatch-hosted.yml`) fetches specclaw at a pinned ref and dispatches to a remote cluster over its API, using a least-privilege, short-lived dispatcher token. After each run on `main` or `feature/*` it also refreshes the committed `.specclaw/STATUS.md` (with `[skip ci]`). Change branches never write that file, so parallel members don't conflict on it; `/specclaw:status` on a change branch shows a local copy kept inside `.git`.
 - **Local:** a self-hosted agent (`pipelines/dispatch.yml`) installed as a service.
 
 **Image:** a public GHCR image built for amd64 and arm64 by `.github/workflows/fleet-image.yml`.
