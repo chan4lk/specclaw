@@ -15,8 +15,8 @@ for lib in tracker egress-gate agent-auth workspace draft-pr claude-fetch integr
   # shellcheck source=/dev/null
   source "$(dirname "${BASH_SOURCE[0]}")/$lib.sh"
 done
-
-export AZDO_REPO="${AZDO_REPO:-${FLEET_REPO_URL##*/}}"
+repo_name="${FLEET_REPO_URL%/}"; repo_name="${repo_name%.git}"; export AZDO_REPO="${AZDO_REPO:-${repo_name##*/}}"
+[[ -n "$AZDO_REPO" ]] || echo "WARN: AZDO_REPO is empty: FLEET_REPO_URL [${FLEET_REPO_URL:-}] names no repo, so pr-azdo will fail" >&2
 finish() { printf '%s\n' "$1" > "$STATUS/exit"; exit 0; }
 
 on_term() {
