@@ -1,0 +1,58 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 2
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw-fleet/lib/report-query.sh",
+  "plugins/specclaw-fleet/lib/report.sh",
+  "plugins/specclaw-fleet/lib/status.sh",
+  "plugins/specclaw-fleet/tests/cases/ac35_report.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw-fleet/tests/cases/ac35_report.sh",
+   "fp": "4a872ac91e57",
+   "in_delta": true,
+   "line": 38,
+   "message": "The previous finding asked that totals stay unchanged when the PR or build answer is junk. The old test asserted `.totals.hosted_s == 0`. The new p/b loop asserts only row fields and `note`, and no totals at all. Add a totals assertion to the loop. For the PR cases, `.totals.prs_open == 0` and `.totals.jobs == 2`. For the build cases, `.totals.hosted_s == 0`.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "The PR endpoint returns `[]`. If an unread PR were counted in `totals.prs_open`, or the row dropped out of `totals.jobs`, the loop would still pass because it only checks `rows[0]`.",
+   "severity": "minor"
+  },
+  {
+   "file": "plugins/specclaw-fleet/lib/status.sh",
+   "fp": "9d599ca96061",
+   "in_delta": true,
+   "line": 30,
+   "message": "The new guard checks only that `.items` is an array. If the elements are not objects, the next `jq` (`sort_by(.metadata.creationTimestamp)`) errors, `name` comes back empty, and `status_job` prints `{job:\"-\",phase:\"-\"}`. That reads 'could not parse the cluster answer' as 'no Job exists'. Make the guard `.items | type == \"array\" and all(type == \"object\")`, or fail to the `?` answer when the name extraction fails.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B3",
+   "scenario": "kubectl answers `{\"items\":[1]}`. The guard passes, the name `jq` errors silently, and the row gets phase `-` with no `unread: cluster` note, so it looks like a change with no Job.",
+   "severity": "minor"
+  }
+ ],
+ "head": "516c23b0c35b2894a99c7af6e0277cc677bea02d",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 20031,
+ "round": 5,
+ "since": "7bfa86f80057ca38091345f424725a552a652736",
+ "status": "clean",
+ "system_chars": 8914,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794242844,
+ "ts_start": 1794242808
+}
