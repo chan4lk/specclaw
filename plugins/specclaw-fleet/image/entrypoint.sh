@@ -16,6 +16,7 @@ for lib in tracker egress-gate agent-auth workspace draft-pr claude-fetch integr
   source "$(dirname "${BASH_SOURCE[0]}")/$lib.sh"
 done
 
+export AZDO_REPO="${AZDO_REPO:-${FLEET_REPO_URL##*/}}"
 finish() { printf '%s\n' "$1" > "$STATUS/exit"; exit 0; }
 
 on_term() {

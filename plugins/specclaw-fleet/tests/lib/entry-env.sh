@@ -42,6 +42,7 @@ content="{\"branch\":\"specclaw/049-x\",\"phases\":{\"proposal\":{\"status\":\"$
 [[ -n "${INTEGRATION_RESULT:-}" ]] && printf "%s\n" "$INTEGRATION_RESULT" > "$dest/.specclaw/features/049-x/integration-result"
 exit 0'
 stub claude 'echo "${SPECCLAW_PR_TARGET-unset}" > "$TMP/prtarget"
+echo "${AZDO_REPO-unset}" > "$TMP/azdorepo"
 [[ -n "${AGENT_RESULT:-}" ]] && printf "%s\n" "$AGENT_RESULT" > ".specclaw/features/049-x/integration-result"
 env | grep -E "^(ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|OPENAI_API_KEY|CODEX_API_KEY)=" >> "$TMP/leaked"
 [[ "$CLAUDE_CODE_OAUTH_TOKEN" == oat-token ]] || echo "bad token" >> "$TMP/leaked"
