@@ -21,12 +21,16 @@ AGENT_SLEEP=20 FLEET_AGENT_TIMEOUT=8 run_entry; late_rc=$?; late_status="$(cat "
 
 repo_ok=1
 while IFS='|' read -r preset url want; do
+  rm -f "$TMP/azdorepo"; url="${url:-https://dev.azure.com/o/p/_git/r}"; [[ "$url" == none ]] && url=""
   if [[ -z "$preset" ]]; then ENTRY_REPO_URL="$url" run_entry; else AZDO_REPO="$preset" ENTRY_REPO_URL="$url" run_entry; fi
-  [[ "$(cat "$TMP/azdorepo")" == "$want" ]] || { repo_ok=0; echo "  [AZDO_REPO $preset|$url] got $(cat "$TMP/azdorepo")"; }
+  if [[ "$want" == WARN ]]; then grep -q "WARN: AZDO_REPO is empty" "$TMP/out" || { repo_ok=0; echo "  [AZDO_REPO |$url] no warning"; }
+  else [[ "$(cat "$TMP/azdorepo" 2>/dev/null)" == "$want" ]] || { repo_ok=0; echo "  [AZDO_REPO $preset|$url] got $(cat "$TMP/azdorepo" 2>/dev/null)"; }; fi
 done <<'EOF'
 ||r
 preset||preset
 other||other
+|none|WARN
+|https://dev.azure.com/o/p/_git//|WARN
 |https://dev.azure.com/o/p/_git/r/|r
 |https://dev.azure.com/o/p/_git/r.git|r
 |https://dev.azure.com/o/p/_git/r.git/|r
@@ -52,7 +56,7 @@ commit_pinned() {
 approval_rechecked() { (( recheck_ok == 1 )); }
 deadline_leaves_room() { (( late_rc == 0 )) && [[ "$late_status" == 143 ]] && grep -q "exit=deadline branch=" <<<"$late_calls"; }
 
-check "R056 AC-1 the agent sees AZDO_REPO from the cloned repo URL (a trailing slash or .git is stripped); a preset AZDO_REPO wins" azdo_repo_set
+check "R056 AC-1 the agent sees AZDO_REPO from the cloned repo URL (a trailing slash or .git is stripped, an empty name warns); a preset AZDO_REPO wins" azdo_repo_set
 check "AC7 API-key variables unset before the agent runs" keys_unset
 check "AC7 clone URL and git args carry no token" no_token_in_url
 check "AC7 Running then PR Open when a PR is recorded" pr_open_flow

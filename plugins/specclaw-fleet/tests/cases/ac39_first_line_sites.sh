@@ -9,9 +9,9 @@ many '**Feature:** cat-%d' 30000 > "$S/changes/002-a/proposal.md"
 many '**Azure Boards Work Item:** [#%d](u)' 30000 > "$S/changes/002-a/status.md"
 { echo git:; many '  branch_prefix: "pre%d/"' 30000; } > "$TMP/repo/.specclaw/config.yaml"
 echo "{\"branch\":\"\"}" > "$TMP/state.json"
-objs="$(many '{"n":%d}' 30000)"
+many '{"n":%d}' 30000 > "$TMP/objs"
 site() {
-  SPECCLAW_DIR="$S" REPO="$TMP/repo" STATE="$TMP/state.json" FLEET_CHANGE=002-a FLEET_MODE=integrate OBJS="$objs" bash -c '
+  SPECCLAW_DIR="$S" REPO="$TMP/repo" STATE="$TMP/state.json" FLEET_CHANGE=002-a FLEET_MODE=integrate OBJS="$TMP/objs" bash -c '
     set -euo pipefail; call="$1"; shift; for l in "$@"; do source "$l"; done; eval "$call"' _ "$@" 2>/dev/null
 }
 L="$FLEET_ROOT/lib"; rows=1
@@ -23,7 +23,7 @@ done <<ROWS
 pipeline_var (doctor-azure)|pipeline_var fleetImage|img-1|$L/common.sh $L/doctor-azure.sh
 doc_field (feature-graph)|doc_field "\$SPECCLAW_DIR/changes/002-a/proposal.md" Feature|cat-1|$L/common.sh $L/feature-graph.sh
 work_item_id (workitem)|work_item_id 002-a|1|$L/common.sh $L/naming.sh $L/workitem.sh
-first_obj (report)|first_obj "\$OBJS"|{"n":1}|$L/common.sh $L/report.sh
+first_obj (report)|first_obj "\$(cat "\$OBJS")"|{"n":1}|$L/common.sh $L/report.sh
 change_branch (pod workspace)|change_branch|pre1/integrate-002-a|$FLEET_ROOT/image/workspace.sh
 ROWS
 first_line_ok() { (( rows == 1 )); }
