@@ -50,7 +50,7 @@ pipeline_file_path() {
 pipeline_var() {
   local f; f="$(pipeline_file_path)"
   sed -nE -e "s/^  $1:[[:space:]]*\"([^\"]*)\".*/\1/p;t" -e "s/^  $1:[[:space:]]*'([^']*)'.*/\1/p;t" \
-    -e "s/^  $1:[[:space:]]*([^#]*[^#[:space:]]).*/\1/p" "$f" 2>/dev/null | head -n1
+    -e "s/^  $1:[[:space:]]*([^#]*[^#[:space:]]).*/\1/p" "$f" 2>/dev/null | awk 'NR == 1'
 }
 
 check_connections() {

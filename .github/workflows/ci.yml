@@ -74,6 +74,8 @@ jobs:
         run: npm install -g @anthropic-ai/claude-code@2.1.316
       - name: Run specclaw mod tests
         run: bash plugins/specclaw/tests/run-mod-tests.sh
+      - name: Run specclaw-fleet mod tests
+        run: bash plugins/specclaw-fleet/tests/run-mod-tests.sh
       - name: Run azdo PR description tests
         run: bash plugins/specclaw-sync/tests/run-azdo-pr-description-tests.sh
       - name: Run loop-gate tests

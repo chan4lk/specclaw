@@ -44,7 +44,7 @@ load_fleet_settings() {
     [[ " $FLEET_SETTING_KEYS " == *" $key "* ]] || { warn "ignored unknown fleet.$key in $cfg"; continue; }
     validate_setting "$key" "$value" "$cfg"
     if [[ -n "${FLEET_TRUSTED_CONFIG:-}" && " $FLEET_SECURE_KEYS " == *" $key "* ]]; then
-      trusted="$(fleet_config_pairs "$FLEET_TRUSTED_CONFIG" | awk -F'\t' -v k="$key" '$1 == k { print $2; exit }')"
+      trusted="$(fleet_config_pairs "$FLEET_TRUSTED_CONFIG" | awk -F'\t' -v k="$key" '$1 == k && !f { v = $2; f = 1 } END { print v }')"
       [[ "$value" == "$trusted" ]] || die "fleet.$key on this branch differs from the trusted branch; security settings come only from there"
     fi
     var="$(setting_var "$key")"
@@ -67,6 +67,7 @@ trusted_only_settings() {
     var="$(setting_var "$key")"
     [[ -z "${!var+x}" && -n "$value" ]] && { export "$var=$value"; FLEET_CONFIG_VARS+=" $var"; }
   done < <(fleet_config_pairs "$FLEET_TRUSTED_CONFIG")
+  return 0
 }
 
 reload_fleet_settings() {

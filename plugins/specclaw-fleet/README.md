@@ -94,6 +94,34 @@ Once the gates pass, `trigger` queues the pipeline with this change and agent as
 
 Run **`/specclaw-fleet:feature`** to deliver related changes together. Children declare `**Feature:** <module>` and `**Depends on:** <changes>` in their proposal (or lean `change.md`). `feature plan` shows waves and states; `feature init` writes `.specclaw/features/<module>/` with its own work item; `feature start` creates `feature/<module>` and queues the pipeline, which then runs `feature advance` on every merge into that branch that changes a `.specclaw/changes/*/state.json` (every child PR does; after any other merge, run `feature start <module>` again to re-queue it): ready children dispatch on `feature/<module>` (their PRs target it), a failed child blocks only its dependents, a conflicting child is retried once with the feature branch merged in, and once every child is merged one integration run opens `specclaw/integrate-<module> → <trusted branch>`.
 
+## Build report and pane
+
+`specclaw-fleet report` shows how a build went. Every run record now carries:
+- `pipeline_run`;
+- the agent's start, end and seconds;
+- cost, turns and model, from Claude's JSON result;
+- review rounds;
+- the commits the agent made.
+
+So the report outlives pods and the 4,000-byte log tail.
+
+```bash
+specclaw-fleet report                       # latest build: table + totals
+specclaw-fleet report --feature catalog     # one feature, by wave
+specclaw-fleet report --save                # write .specclaw/fleet/report.json for the pane
+specclaw-fleet report --html build.html     # one self-contained page, no network
+specclaw-fleet report --json                # the snapshot document
+```
+
+The report only reads: records first, then AzDO PRs and pipeline runs, then the cluster for runs still going. A failed read blanks a field and never fails the report. Cost is an API-equivalent estimate.
+
+**The mod (Claude Code).** The plugin ships a mod that reads only the saved snapshot. It adds:
+- **`/fleet-pane`:** a pane beside the chat with the timeline (`░` pipeline, `█` agent, `▒` PR open), the lifecycle table and the totals.
+- **A band above the prompt:** `fleet · 2 running · 4 PRs open · last run 13:51 UTC`.
+- **A status line:** `fleet: 2 running`.
+
+It re-reads the snapshot after any `specclaw-fleet trigger`, `status` or `report` Bash call; only `report --save` writes a new one. It never runs commands or calls the network itself. `/specclaw-fleet:report` runs the report and points you at the pane.
+
 ## Hosted minutes
 
 Fleet runs on Microsoft-hosted agents by default. A private project gets **1 free hosted parallel job and 1,800 minutes a month**; user licences (Basic access) do not add parallel jobs.

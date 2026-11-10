@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fleet build report</title>
+<style>
+:root{--bg:#fbfbfa;--fg:#1c1c1a;--mute:#6b6b66;--line:#e4e3df;--pipe:#a3a29c;--agent:#3a6ed8;--pr:#2f9a5e;--fail:#c4473f}
+@media (prefers-color-scheme:dark){:root{--bg:#141413;--fg:#ecebe6;--mute:#9a9992;--line:#2b2b28;--pipe:#6d6c66}}
+*{box-sizing:border-box}body{background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,-apple-system,sans-serif;margin:0 auto;padding:24px 16px;max-width:1120px}
+h1{font-size:20px;margin:0 0 4px}.mute{color:var(--mute)}a{color:var(--agent)}
+.totals{display:flex;flex-wrap:wrap;gap:8px 24px;margin:16px 0 24px}.totals b{display:block;font-size:20px;font-variant-numeric:tabular-nums}
+.legend{display:flex;gap:16px;font-size:12px;margin-bottom:8px}.legend i{display:inline-block;width:12px;height:8px;margin-right:4px;border-radius:2px}
+.wave{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--mute);margin:12px 0 4px}
+.lane{display:grid;grid-template-columns:minmax(120px,240px) 1fr;gap:8px;align-items:center;margin:2px 0}
+.name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
+.track{position:relative;height:22px;border-bottom:1px solid var(--line)}
+.bar{position:absolute;height:6px;border-radius:3px;min-width:2px}.b0{top:2px;background:var(--pipe)}.b1{top:8px;background:var(--agent)}.b2{top:14px;background:var(--pr)}.fail{background:var(--fail)}
+.scroll{overflow-x:auto}table{border-collapse:collapse;width:100%;margin-top:24px;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}th{color:var(--mute);font-weight:500}
+</style></head><body>
+<h1>Fleet build</h1><div id="meta" class="mute"></div>
+<div id="totals" class="totals"></div>
+<div class="legend"><span><i style="background:var(--pipe)"></i>pipeline</span><span><i style="background:var(--agent)"></i>agent</span><span><i style="background:var(--pr)"></i>PR open</span></div>
+<div id="tl"></div><div class="scroll"><table id="t"></table></div>
+<script id="data" type="application/json">__FLEET_REPORT__</script>
+<script>
+const d = JSON.parse(document.getElementById('data').textContent), T = d.totals || {}, rows = d.rows || []
+const ms = s => s ? Date.parse(s) : null
+const dur = s => s == null ? '–' : s >= 3600 ? `${Math.floor(s / 3600)}h ${Math.floor(s % 3600 / 60)}m` : `${Math.floor(s / 60)}m`
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e }
+const now = ms(d.generated_at)
+document.getElementById('meta').textContent = `${d.scope} · generated ${d.generated_at} · cost is an API-equivalent estimate`
+const ge = k => (T.partial || []).includes(k) ? '≥' : ''
+const tiles = [['Wall clock', dur(T.wall_s)], ['Jobs', T.jobs], ['Agent time', ge('agent_s') + dur(T.agent_s)], ['Hosted pipeline', ge('hosted_s') + dur(T.hosted_s)],
+  ['Review rounds', ge('review_rounds') + T.review_rounds], ['Commits', ge('agent_commits') + T.commits], ['Running', T.running], ['PRs open', ge('prs_open') + T.prs_open],
+  ['Cost (estimate)', T.cost_usd == null ? '–' : ge('cost_usd') + '$' + T.cost_usd.toFixed(2)]]
+for (const [k, v] of tiles) { const t = el('div', 'mute', k); t.appendChild(el('b', null, v ?? '–')); document.getElementById('totals').appendChild(t) }
+const spans = r => [[ms(r.queued || r.dispatched), ms(r.finished)], [ms(r.agent_started), ms(r.agent_ended) || (['dispatched', 'running'].includes(r.state) ? now : null)],
+  [ms(r.pr_opened), ms(r.pr_closed) || (r.pr_status === 'active' ? now : null)]]
+const all = rows.flatMap(spans).flat().filter(Boolean), t0 = Math.min(...all), t1 = Math.max(...all, t0 + 1)
+const pct = x => (100 * (x - t0) / (t1 - t0)).toFixed(2)
+const sorted = [...rows].sort((a, b) => (a.wave ?? 0) - (b.wave ?? 0) || a.change.localeCompare(b.change))
+let wave
+const tl = document.getElementById('tl')
+for (const r of sorted) {
+  if (r.wave != null && r.wave !== wave) { wave = r.wave; tl.appendChild(el('div', 'wave', `Wave ${wave}`)) }
+  const lane = el('div', 'lane'), track = el('div', 'track')
+  lane.appendChild(el('div', 'name', r.change)); lane.appendChild(track)
+  spans(r).forEach(([a, b], i) => { if (!a) return; const bar = el('div', `bar b${i}${i === 1 && r.state === 'failed' ? ' fail' : ''}`)
+    bar.style.left = pct(a) + '%'; bar.style.width = Math.max(0, pct(b || a) - pct(a)) + '%'; track.appendChild(bar) })
+  tl.appendChild(lane)
+}
+const cols = ['change', 'wave', 'state', 'exit', 'pipeline_run', 'agent', 'review_rounds', 'agent_commits', 'turns', 'cost', 'pr', 'note']
+const head = el('tr'); cols.forEach(c => head.appendChild(el('th', null, c.replace('_', ' ')))); document.getElementById('t').appendChild(head)
+for (const r of sorted) {
+  const tr = el('tr')
+  for (const c of cols) {
+    const td = el('td')
+    if (c === 'pr' && r.pr && r.pr.startsWith('https://')) { const a = el('a', null, '#' + r.pr.split('/').pop() + ' ' + (r.pr_status || '')); a.href = r.pr; td.appendChild(a) }
+    else td.textContent = c === 'agent' ? dur(r.agent_s) : c === 'cost' ? (r.cost_usd == null ? '–' : '$' + r.cost_usd.toFixed(2)) : (r[c] ?? '–')
+    tr.appendChild(td)
+  }
+  document.getElementById('t').appendChild(tr)
+}
+</script></body></html>

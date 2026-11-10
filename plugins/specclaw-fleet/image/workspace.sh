@@ -3,7 +3,7 @@ change_branch() {
   local b prefix
   b="$(jq -r '.branch // empty' "$STATE" 2>/dev/null)"
   if [[ -z "$b" ]]; then
-    prefix="$(sed -nE 's/^[[:space:]]+branch_prefix:[[:space:]]*"?([^"#[:space:]]*)"?.*/\1/p' "$REPO/.specclaw/config.yaml" 2>/dev/null | head -n1)"
+    prefix="$(sed -nE 's/^[[:space:]]+branch_prefix:[[:space:]]*"?([^"#[:space:]]*)"?.*/\1/p' "$REPO/.specclaw/config.yaml" 2>/dev/null | awk 'NR == 1')"
     b="${prefix:-specclaw/}$([[ "${FLEET_MODE:-}" == integrate ]] && echo integrate-)$FLEET_CHANGE"
   fi
   printf '%s' "$b"

@@ -1,7 +1,7 @@
 # Proposal: specclaw-fleet build report and mod
 
 **Created:** 2026-11-09
-**Status:** 🟡 Draft
+**Status:** ✅ Approved
 
 ## Problem
 
@@ -66,6 +66,7 @@ The operator wants to see a fleet build visually whenever they need, the way `do
 
 ## Open Questions
 
-- Should the mod call `specclaw-fleet report` itself (if the mod API allows running a command), or only read the saved snapshot (the safer default, matching how the specclaw mod reads files)?
-- How many builds should the pane keep: just the latest, or a short history to compare?
-- Does cost belong in the report? With `setup-token` runs it is an API-equivalent figure, not a bill.
+Resolved 2026-11-09 (operator approved the defaults):
+- The mod reads only the saved snapshot (`.specclaw/fleet/report.json`); it never runs commands or calls the network.
+- The pane shows the latest build (or the feature asked for); history is a follow-up.
+- Cost is shown, labelled "API-equivalent estimate", because setup-token runs are not billed per token.
