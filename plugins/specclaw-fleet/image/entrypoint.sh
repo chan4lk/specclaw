@@ -15,10 +15,10 @@ for lib in tracker egress-gate agent-auth workspace draft-pr claude-fetch integr
   # shellcheck source=/dev/null
   source "$(dirname "${BASH_SOURCE[0]}")/$lib.sh"
 done
-repo_name="${FLEET_REPO_URL%/}"; repo_name="${repo_name%.git}"; export AZDO_REPO="${AZDO_REPO:-${repo_name##*/}}"
+repo_name="$FLEET_REPO_URL"; while [[ "$repo_name" == */ ]]; do repo_name="${repo_name%/}"; done; [[ "$repo_name" == *.[gG][iI][tT] ]] && repo_name="${repo_name%.*}"
+export AZDO_REPO="${AZDO_REPO:-${repo_name##*/}}"
 [[ -n "$AZDO_REPO" ]] || echo "WARN: AZDO_REPO is empty: FLEET_REPO_URL [${FLEET_REPO_URL:-}] names no repo, so pr-azdo will fail" >&2
 finish() { printf '%s\n' "$1" > "$STATUS/exit"; exit 0; }
-
 on_term() {
   [[ -n "$agent_pid" ]] && { kill "$agent_pid" 2>/dev/null; wait "$agent_pid" 2>/dev/null; }
   (( workspace_ready )) && deliver deadline 143

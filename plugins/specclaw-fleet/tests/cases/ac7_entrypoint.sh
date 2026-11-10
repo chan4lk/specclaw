@@ -30,7 +30,9 @@ done <<'EOF'
 preset||preset
 other||other
 |none|WARN
-|https://dev.azure.com/o/p/_git//|WARN
+|https://dev.azure.com/o/p/_git/r//|r
+|https://dev.azure.com/o/p/_git/r.git//|r
+|https://dev.azure.com/o/p/_git/R.GIT|R
 |https://dev.azure.com/o/p/_git/r/|r
 |https://dev.azure.com/o/p/_git/r.git|r
 |https://dev.azure.com/o/p/_git/r.git/|r
