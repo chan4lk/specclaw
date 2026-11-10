@@ -23,6 +23,8 @@ jobs:
         run: bash plugins/specclaw/tests/run-synth-agent-tests.sh
       - name: Run shellcheck-gate tests
         run: bash plugins/specclaw/tests/run-shellcheck-gate-tests.sh
+      - name: Run STATUS.md branch tests
+        run: bash plugins/specclaw/tests/run-status-branch-tests.sh
       - name: Run bf collector tests
         run: bash plugins/specclaw-bf/tests/run-bf-collect-tests.sh
       - name: Run replay-classification tests

@@ -250,7 +250,7 @@ All executable scripts live in `bin/`. Key ones:
 | `specclaw-run-long` | Run a long command detached: heartbeats to stderr, capped tail to stdout, full log + HEAD-stamped sidecar on disk; `--reuse` skips a re-run when HEAD matches and the tree is clean |
 | `specclaw-set-phase` | **The only phase writer** — see below |
 | `specclaw-reconcile` | Detect (and `--fix`) drift between `state.json` and observed reality |
-| `specclaw-update-status` | Regenerate `.specclaw/STATUS.md` dashboard (renders the recorded phase; resolves PR state on the recorded branch) |
+| `specclaw-update-status` | Regenerate the dashboard (renders the recorded phase; resolves PR state on the recorded branch). Writes the committed `.specclaw/STATUS.md` only on an integration branch or with `--integration`; on a change branch it writes inside `.git`, so parallel branches never conflict on it |
 | `specclaw-status-row` | Upsert one row of a change's `status.md` Progress table (awk — the table's pipes make `sed` unsafe) |
 | `specclaw-next-change-number` | Print the next change number (`001`), derived from disk on every call — see below |
 | `specclaw-renumber-changes` | Backfill ordinals onto unnumbered change folders (dry run unless `--apply`) |
@@ -380,6 +380,7 @@ Suites live in `tests/`, are bash + coreutils only (no jq in the suites themselv
 | `run-quality-tests.sh` | the code-quality collector: per-language coverage, `NOT-MEASURED` reason precedence, threshold bands, `QI-###` permanence, compare classification, gate exit codes, module joins, and rebuild-plan rendering checks |
 | `run-status-row-tests.sh` | `status-row` upserts, and the two sed defects it replaced |
 | `run-phase-state-tests.sh` | `set-phase` transitions and `reconcile` drift detection |
+| `run-status-branch-tests.sh` | where `update-status` writes: the committed STATUS.md on integration branches, `--integration` and outside git; inside `.git` on change branches and detached HEAD, with the tree untouched |
 | `run-loop-gate-tests.sh` | `loop gates` report readers — BLOCK counting and verdict extraction |
 | `run-change-numbering-tests.sh` | `next-change-number` derivation, `renumber-changes` plan/refusals/backfill |
 | `run-party-tests.sh` | party seat resolution and clamping, the fail-loud fallback, the panel cache, the verdict tally, the report grammar, and the `party_val` config-collision regression |

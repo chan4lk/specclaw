@@ -8,7 +8,7 @@ description: Use when the user wants every active change advanced to its next ph
 
 Run the lifecycle autonomously for the active queue.
 
-1. Read `.specclaw/STATUS.md` for the next actionable item across changes.
+1. Run `specclaw-update-status .specclaw` and read the file named in its `OK: Updated <path>` line for the next actionable item across changes.
 2. For each change, advance it to its next phase:
    - Proposal exists without plan → run `/specclaw:plan`.
    - Plan exists without implementation → run `/specclaw:build`.

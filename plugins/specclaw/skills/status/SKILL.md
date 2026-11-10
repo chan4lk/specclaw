@@ -7,6 +7,6 @@ description: Use when the user asks where changes stand or what is next.
 # specclaw status
 
 1. `specclaw-ensure-init .specclaw`, then `specclaw-update-status .specclaw`.
-2. Present `.specclaw/STATUS.md`: active changes with progress, pending proposals, recently archived. Show any hint line verbatim.
+2. Present the file named in its `OK: Updated <path>` line (`.specclaw/STATUS.md` on an integration branch, a file inside `.git` on a change branch): active changes with progress, pending proposals, recently archived. Show any hint line verbatim.
 3. For one change, run `specclaw-validate-change .specclaw <change> status`.
 4. If `specclaw-check-update .specclaw` prints a line, show it verbatim.
