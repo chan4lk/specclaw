@@ -5,7 +5,7 @@
 Show the project dashboard.
 
 1. Refresh: `specclaw-update-status .specclaw`
-2. Read `.specclaw/STATUS.md` and present:
+2. Read the file named in its `OK: Updated <path>` line and present it. On an integration branch (`main`, `master`, `git.base_branch`, `feature/*`) that is `.specclaw/STATUS.md`. On a change branch it is a file inside `.git`, because only integration branches write the committed copy. Present:
    - Active changes with progress %
    - Pending proposals
    - Recently archived changes
