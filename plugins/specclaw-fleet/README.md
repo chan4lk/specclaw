@@ -61,7 +61,7 @@ Run **`/specclaw-fleet:setup`**. It works until `specclaw-fleet doctor` is clean
 fleet:
   vault: kv-scfleet-965892
   cluster_name: bistec-dev-uat      # what the run record calls the cluster
-  image: ghcr.io/chan4lk/specclaw-fleet:0.9.0
+  image: ghcr.io/chan4lk/specclaw-fleet:0.9.2
   claude_version: "2.1.319"         # required for claude jobs
   pipeline: specclaw-fleet
   pipeline_file: azure-pipelines/specclaw-fleet.yml   # doctor reads the connection names from it

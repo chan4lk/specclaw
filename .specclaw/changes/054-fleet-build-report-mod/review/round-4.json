@@ -1,0 +1,71 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 2
+ },
+ "escalated": [
+  "5555d5a8ac4f"
+ ],
+ "files": [
+  "plugins/specclaw-fleet/lib/report.sh",
+  "plugins/specclaw-fleet/tests/cases/ac35_report.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw-fleet/tests/cases/ac35_report.sh",
+   "fp": "5555d5a8ac4f",
+   "in_delta": true,
+   "line": 47,
+   "message": "The fix is a class fix in report.sh (one obj() normaliser for r, p, b and j), but the tests only cover the j input. The new junk loop varies only the kubectl answer. The curl stub has no 200 response with an empty or non-object body, so the p and b paths through api_obj and obj() are untested. The previous finding explicitly asked to check that b is normalised too. Add table cases where the PR and build endpoints return 200 with an empty body, `<html>`, `[]` and a bare string. Assert the row is not `?` and that the totals are unchanged. Also confirm the 'row could not be built' case builds when `status_job` prints valid `{}`, so the record shape alone is shown to be the cause. `KUBE_FAIL=1` does not isolate that.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "GET build/builds/N returns 200 with an empty body. The old api_obj ran `jq -c 'if type==\"object\"...'` on empty input, which printed nothing and exited 0, so b was empty and `--argjson b \"\"` failed. The row became `?` with note 'row could not be built'. If obj() were reverted to that behaviour, nothing in this suite would fail, because only j is exercised.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/lib/report.sh",
+   "fp": "c566b1d8fc8c",
+   "in_delta": true,
+   "line": 51,
+   "message": "An unreadable or garbled cluster answer is folded into `{}`, the same as 'no job info'. The row keeps the records state with `note == null`, and the new test pins that behaviour. The report therefore cannot show that the live state was not checked. Consider a note such as 'cluster unreadable' on the row, or at least a flag, so 'could not ask' differs from 'nothing found'.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B3",
+   "scenario": "A change's Job has already failed, but kubectl returns `<html>` (proxy error). The row shows state running with no note and counts in `totals.running`, with nothing marking that the cluster check did not run.",
+   "severity": "minor"
+  },
+  {
+   "file": "plugins/specclaw-fleet/lib/report.sh",
+   "fp": "258c1be387b0",
+   "in_delta": true,
+   "line": 29,
+   "message": "obj() does not guarantee exactly one object. `jq -ce objects` emits one line per top-level object, and if input is a valid object followed by garbage, jq prints the object, exits 2, and the `|| echo '{}'` fallback appends a second `{}`. `--argjson` then fails on the two-line value. Take the first object only, for example `jq -ce 'first(objects)'` with a safe fallback, or capture the output and check the status before echoing.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "status_job prints `{\"a\":1}` followed by a stray log line. obj() prints `{\"a\":1}` then `{}`. `--argjson j` fails and the row becomes `?` with 'row could not be built'.",
+   "severity": "minor"
+  }
+ ],
+ "head": "7bfa86f80057ca38091345f424725a552a652736",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 14938,
+ "round": 4,
+ "since": "9dbca6c35e3c8fdf7c2489e853739e2958daa918",
+ "status": "escalate",
+ "system_chars": 8946,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794242417,
+ "ts_start": 1794242386
+}

@@ -19,6 +19,13 @@ for st in "NOT_APPROVED" MISSING '{"phases":{' '[]' '{"phases":{}}' '{"phases":{
 done
 AGENT_SLEEP=20 FLEET_AGENT_TIMEOUT=8 run_entry; late_rc=$?; late_status="$(cat "$TMP/status/exit")"; late_calls="$(cat "$CALLS")"
 
+repo_ok=1
+for case in ":r" "preset:preset" "other:other"; do
+  if [[ -z "${case%%:*}" ]]; then run_entry; else AZDO_REPO="${case%%:*}" run_entry; fi
+  [[ "$(cat "$TMP/azdorepo")" == "${case#*:}" ]] || { repo_ok=0; echo "  [AZDO_REPO ${case}] got $(cat "$TMP/azdorepo")"; }
+done
+azdo_repo_set() { (( repo_ok == 1 )); }
+
 keys_unset() { [[ ! -s "$TMP/leaked" ]]; }
 no_token_in_url() { ! grep -q "pat-secret" <<<"$ok_calls"; }
 pr_open_flow() {
@@ -38,6 +45,7 @@ commit_pinned() {
 approval_rechecked() { (( recheck_ok == 1 )); }
 deadline_leaves_room() { (( late_rc == 0 )) && [[ "$late_status" == 143 ]] && grep -q "exit=deadline branch=" <<<"$late_calls"; }
 
+check "R056 AC-1 the agent sees AZDO_REPO from the cloned repo URL; a preset AZDO_REPO wins" azdo_repo_set
 check "AC7 API-key variables unset before the agent runs" keys_unset
 check "AC7 clone URL and git args carry no token" no_token_in_url
 check "AC7 Running then PR Open when a PR is recorded" pr_open_flow
