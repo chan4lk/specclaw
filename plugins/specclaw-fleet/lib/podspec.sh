@@ -62,6 +62,7 @@ render_pg_sidecar() {
         - name: postgres
           image: $F_PG_IMAGE
           restartPolicy: Always
+          args: [-c, listen_addresses=127.0.0.1]
           securityContext: {readOnlyRootFilesystem: true, allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
           env:
             - {name: POSTGRES_USER, value: $(yaml_str "$F_PG_USER")}

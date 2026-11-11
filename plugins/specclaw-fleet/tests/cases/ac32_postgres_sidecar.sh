@@ -15,18 +15,23 @@ cp -R "$FLEET_ROOT" "$TMP/old"
 # shellcheck disable=SC2016 # a literal $( in the pattern
 sed -i.bak 's/\$(render_pg_[a-z]*)//' "$TMP/old/lib/manifest.sh"
 reset_env; FLEET="$TMP/old/bin/specclaw-fleet" dispatch --dry-run; before="$(job)"
-reset_env; FLEET_POSTGRES_IMAGE="postgres@$DIGEST" FLEET_POSTGRES_PORT=55432 dispatch --dry-run; pg_rc=$?; pg="$(job)"
+reset_env; FLEET_POSTGRES_IMAGE="postgres@$DIGEST" FLEET_POSTGRES_PORT=55432 FLEET_POSTGRES_USER=u1 FLEET_POSTGRES_PASSWORD=pw1 FLEET_POSTGRES_DB=db1 dispatch --dry-run; pg_rc=$?; pg="$(job)"
 
 unchanged_without_postgres() { [[ -n "$plain" && "$plain" == "$before" ]] && ! grep -qi "postgres\|PGPORT" <<<"$plain"; }
+agent_env() { sed -n '/- name: agent/,/^      containers:/p' <<<"$pg" | grep -q "{name: $1, value: $2}"; }
 sidecar_before_agent() {
   (( pg_rc == 0 )) || return 1
   local init; init="$(sed -n '/initContainers:/,/^      containers:/p' <<<"$pg")"
   [[ "$(grep -o 'name: [a-z]*$' <<<"$init" | head -2 | tr '\n' ' ')" == "name: postgres name: agent " ]] \
     && grep -q "image: postgres@$DIGEST" <<<"$init" && grep -q "restartPolicy: Always" <<<"$init" \
-    && grep -q 'command: \[pg_isready, -h, 127.0.0.1, -p, "55432", -U, "postgres"\]' <<<"$init" \
+    && grep -q 'command: \[pg_isready, -h, 127.0.0.1, -p, "55432", -U, "u1"\]' <<<"$init" \
     && grep -q '{name: PGPORT, value: "55432"}' <<<"$(sed -n '/- name: agent/,$p' <<<"$init")" \
-    && grep -q '{name: PGHOST, value: "127.0.0.1"}' <<<"$init" \
-    && grep -q "{name: pgdata, emptyDir: {}}" <<<"$pg" \
+    && grep -q "listen_addresses=127.0.0.1" <<<"$init" \
+    && grep -q '{name: POSTGRES_USER, value: "u1"}' <<<"$init" && grep -q '{name: POSTGRES_PASSWORD, value: "pw1"}' <<<"$init" \
+    && grep -q '{name: POSTGRES_DB, value: "db1"}' <<<"$init" \
+    && agent_env PGHOST '"127.0.0.1"' && agent_env PGUSER '"u1"' && agent_env PGPASSWORD '"pw1"' && agent_env PGDATABASE '"db1"' \
+    && grep -q "{name: pgdata, emptyDir: {}}" <<<"$pg" && grep -q "{name: pgrun, emptyDir: {}}" <<<"$pg" \
+    && grep -q "{name: pgtmp, emptyDir: {}}" <<<"$pg" \
     && python3 -c 'import sys,yaml; yaml.safe_load(sys.stdin)' <<<"$pg"
 }
 refused_all=1

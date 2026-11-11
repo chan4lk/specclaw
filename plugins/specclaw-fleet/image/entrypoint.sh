@@ -18,9 +18,14 @@ done
 repo_name="$FLEET_REPO_URL"; while [[ "$repo_name" == */ ]]; do repo_name="${repo_name%/}"; done; [[ "$repo_name" == *.[gG][iI][tT] ]] && repo_name="${repo_name%.*}"
 export AZDO_REPO="${AZDO_REPO:-${repo_name##*/}}"
 # The cloned repo names its own org and project; the shared fleet-azdo secret may pin another project.
+# Both Azure DevOps URL forms; hosts are case-insensitive. Legacy: <org>.visualstudio.com[/DefaultCollection]/<project>.
+shopt -s nocasematch
 if [[ "$repo_name" =~ ^https://([^/@]+@)?dev\.azure\.com/([^/]+)/([^/]+)/_git/[^/]+$ ]]; then
   AZDO_ORG="${BASH_REMATCH[2]}" AZDO_PROJECT="${BASH_REMATCH[3]}"
+elif [[ "$repo_name" =~ ^https://([^/@]+@)?([^./@]+)\.visualstudio\.com/(DefaultCollection/)?([^/]+)/_git/[^/]+$ ]]; then
+  AZDO_ORG="${BASH_REMATCH[2]}" AZDO_PROJECT="${BASH_REMATCH[4]}"
 fi
+shopt -u nocasematch
 # Every in-pod consumer (draft-pr, specclaw-azdo-pr/-issue) splices org, project and repo into URLs: make them URL-safe once,
 # whichever source they came from. Bytes outside the unreserved set are percent-encoded; existing %XX stays.
 url_seg() {
