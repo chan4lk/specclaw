@@ -18,9 +18,9 @@ done
 repo_name="$FLEET_REPO_URL"; while [[ "$repo_name" == */ ]]; do repo_name="${repo_name%/}"; done; [[ "$repo_name" == *.[gG][iI][tT] ]] && repo_name="${repo_name%.*}"
 export AZDO_REPO="${AZDO_REPO:-${repo_name##*/}}"
 # The cloned repo names its own org and project; the shared fleet-azdo secret may pin another project.
-url_part() { [[ "$1" =~ ^([^%\\]|%[0-9A-Fa-f]{2})*$ ]] && printf '%b' "${1//%/\\x}" || printf '%s' "$1"; }
+# Kept URL-encoded as in the clone URL: every in-pod consumer (draft-pr, specclaw-azdo-pr/-issue) splices them into URLs.
 if [[ "$repo_name" =~ ^https://([^/@]+@)?dev\.azure\.com/([^/]+)/([^/]+)/_git/[^/]+$ ]]; then
-  AZDO_ORG="$(url_part "${BASH_REMATCH[2]}")" AZDO_PROJECT="$(url_part "${BASH_REMATCH[3]}")"; export AZDO_ORG AZDO_PROJECT
+  AZDO_ORG="${BASH_REMATCH[2]// /%20}" AZDO_PROJECT="${BASH_REMATCH[3]// /%20}"; export AZDO_ORG AZDO_PROJECT
 fi
 [[ -n "$AZDO_REPO" ]] || echo "WARN: AZDO_REPO is empty: FLEET_REPO_URL [${FLEET_REPO_URL:-}] names no repo, so pr-azdo will fail" >&2
 finish() { printf '%s\n' "$1" > "$STATUS/exit"; exit 0; }

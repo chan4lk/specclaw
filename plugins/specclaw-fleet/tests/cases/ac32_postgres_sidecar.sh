@@ -30,16 +30,22 @@ sidecar_before_agent() {
     && python3 -c 'import sys,yaml; yaml.safe_load(sys.stdin)' <<<"$pg"
 }
 refused_all=1
-for bad in "FLEET_POSTGRES_IMAGE=postgres:16" "FLEET_POSTGRES_IMAGE=postgres@sha256:abc" \
-           "FLEET_POSTGRES_IMAGE=postgres@$DIGEST FLEET_POSTGRES_PORT=0" "FLEET_POSTGRES_IMAGE=postgres@$DIGEST FLEET_POSTGRES_PORT=70000" \
-           "FLEET_POSTGRES_IMAGE=postgres@$DIGEST FLEET_POSTGRES_USER=a:b" "FLEET_POSTGRES_IMAGE=postgres@$DIGEST FLEET_POSTGRES_DB=x}y"; do
-  reset_env; read -ra kv <<<"$bad"; env "${kv[@]}" FLEET_POSTGRES_PASSWORD='p"q' "$FLEET" dispatch "$CHANGE" > "$TMP/out" 2>&1 && refused_all=0
-  nothing_applied || refused_all=0
-done
-reset_env; env FLEET_POSTGRES_IMAGE="postgres@$DIGEST" FLEET_POSTGRES_PASSWORD='p"q' "$FLEET" dispatch "$CHANGE" > "$TMP/out" 2>&1 && refused_all=0
+while IFS='|' read -r field bad; do
+  reset_env; read -ra kv <<<"$bad"; env "${kv[@]}" "$FLEET" dispatch "$CHANGE" > "$TMP/out" 2>&1 && refused_all=0
+  nothing_applied && grep -q "FLEET_POSTGRES_$field" "$TMP/out" || { refused_all=0; echo "  not refused for $field: $bad"; }
+done <<ROWS
+IMAGE|FLEET_POSTGRES_IMAGE=postgres:16
+IMAGE|FLEET_POSTGRES_IMAGE=postgres@sha256:abc
+PORT|FLEET_POSTGRES_IMAGE=postgres@$DIGEST FLEET_POSTGRES_PORT=0
+PORT|FLEET_POSTGRES_IMAGE=postgres@$DIGEST FLEET_POSTGRES_PORT=70000
+USER|FLEET_POSTGRES_IMAGE=postgres@$DIGEST FLEET_POSTGRES_USER=a:b
+PASSWORD|FLEET_POSTGRES_IMAGE=postgres@$DIGEST FLEET_POSTGRES_PASSWORD=p"q
+DB|FLEET_POSTGRES_IMAGE=postgres@$DIGEST FLEET_POSTGRES_DB=x}y
+IMAGE|FLEET_POSTGRES_PORT=55432
+ROWS
 refuses() { (( refused_all == 1 )); }
 
 check "R058 AC-3 without postgres the Job is byte-identical to the pre-058 render" unchanged_without_postgres
 check "R058 AC-3 postgres runs as a native sidecar before the agent, gated by pg_isready; the agent gets PG* env; valid YAML" sidecar_before_agent
-check "R058 AC-2 an unpinned image, a bad port or a bad user/db/password is refused before anything is created" refuses
+check "R058 AC-2 an unpinned image, a bad port, user, password or db, or postgres settings without an image are refused, naming the field, before anything is created" refuses
 finish

@@ -40,11 +40,16 @@ render_run_env() {
 parse_postgres() {
   F_PG_IMAGE="${FLEET_POSTGRES_IMAGE:-}" F_PG_PORT="${FLEET_POSTGRES_PORT:-5432}"
   F_PG_USER="${FLEET_POSTGRES_USER:-postgres}" F_PG_PASSWORD="${FLEET_POSTGRES_PASSWORD:-postgres}" F_PG_DB="${FLEET_POSTGRES_DB:-postgres}"
-  [[ -z "$F_PG_IMAGE" ]] && return 0
+  if [[ -z "$F_PG_IMAGE" ]]; then
+    [[ -z "${FLEET_POSTGRES_PORT:-}${FLEET_POSTGRES_USER:-}${FLEET_POSTGRES_PASSWORD:-}${FLEET_POSTGRES_DB:-}" ]] \
+      || die "FLEET_POSTGRES_PORT, _USER, _PASSWORD or _DB is set but FLEET_POSTGRES_IMAGE is not; the Job would run without Postgres"
+    return 0
+  fi
   [[ "$F_PG_IMAGE" =~ ^[a-z0-9][a-z0-9._/:-]*@sha256:[0-9a-f]{64}$ ]] || die "FLEET_POSTGRES_IMAGE must be pinned by digest: <image>@sha256:<64 hex>"
   [[ "$F_PG_PORT" =~ ^[1-9][0-9]{0,4}$ && "$F_PG_PORT" -le 65535 ]] || die "FLEET_POSTGRES_PORT must be a port number (1-65535)"
-  local v; for v in "$F_PG_USER" "$F_PG_PASSWORD" "$F_PG_DB"; do
-    [[ "$v" =~ ^[A-Za-z0-9_-]{1,63}$ ]] || die "FLEET_POSTGRES_USER, _PASSWORD and _DB may use only letters, digits, _ and - (1-63 characters)"
+  local k v; for k in USER PASSWORD DB; do
+    v="F_PG_$k"; v="${!v}"
+    [[ "$v" =~ ^[A-Za-z0-9_-]{1,63}$ ]] || die "FLEET_POSTGRES_$k may use only letters, digits, _ and - (1-63 characters)"
   done
 }
 

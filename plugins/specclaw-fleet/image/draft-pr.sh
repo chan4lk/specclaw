@@ -29,7 +29,7 @@ ensure_pr() {
   url="$(jq -r '.phases.pr.url // empty' "$STATE" 2>/dev/null)"
   [[ -n "$url" ]] && { echo "$url false"; return 0; }
   [[ -n "$branch" ]] || return 0
-  api="https://dev.azure.com/$AZDO_ORG/${AZDO_PROJECT// /%20}/_apis/git/repositories/${FLEET_REPO_URL##*/}/pullrequests"
+  api="https://dev.azure.com/$AZDO_ORG/$AZDO_PROJECT/_apis/git/repositories/${FLEET_REPO_URL##*/}/pullrequests"
   local found isdraft
   found="$(azdo_api "$api?searchCriteria.sourceRefName=refs/heads/$branch&searchCriteria.status=active&api-version=7.1")" || return 0
   jq -e '.value | type == "array"' <<<"$found" >/dev/null 2>&1 || return 0
