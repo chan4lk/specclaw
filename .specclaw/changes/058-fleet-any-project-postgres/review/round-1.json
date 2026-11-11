@@ -1,0 +1,91 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 2
+ },
+ "escalated": [],
+ "files": [
+  ".claude-plugin/marketplace.json",
+  "plugins/specclaw-bf/.claude-plugin/plugin.json",
+  "plugins/specclaw-bf/.codex-plugin/plugin.json",
+  "plugins/specclaw-extras/.claude-plugin/plugin.json",
+  "plugins/specclaw-extras/.codex-plugin/plugin.json",
+  "plugins/specclaw-fleet/.claude-plugin/plugin.json",
+  "plugins/specclaw-fleet/.codex-plugin/plugin.json",
+  "plugins/specclaw-fleet/README.md",
+  "plugins/specclaw-fleet/image/draft-pr.sh",
+  "plugins/specclaw-fleet/image/entrypoint.sh",
+  "plugins/specclaw-fleet/lib/manifest.sh",
+  "plugins/specclaw-fleet/lib/podspec.sh",
+  "plugins/specclaw-fleet/lib/settings.sh",
+  "plugins/specclaw-fleet/skills/setup/SKILL.md",
+  "plugins/specclaw-fleet/tests/cases/ac22_settings.sh",
+  "plugins/specclaw-fleet/tests/cases/ac32_postgres_sidecar.sh",
+  "plugins/specclaw-fleet/tests/cases/ac7_entrypoint.sh",
+  "plugins/specclaw-fleet/tests/lib/entry-env.sh",
+  "plugins/specclaw-review/.claude-plugin/plugin.json",
+  "plugins/specclaw-review/.codex-plugin/plugin.json",
+  "plugins/specclaw-sync/.claude-plugin/plugin.json",
+  "plugins/specclaw-sync/.codex-plugin/plugin.json",
+  "plugins/specclaw/.claude-plugin/plugin.json",
+  "plugins/specclaw/.codex-plugin/plugin.json"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw-fleet/image/draft-pr.sh",
+   "fp": "1f9a6b742e85",
+   "in_delta": true,
+   "line": 32,
+   "message": "entrypoint.sh now percent-decodes the project and org from the clone URL into raw AZDO_PROJECT and AZDO_ORG. draft-pr.sh re-encodes only spaces (`${AZDO_PROJECT// /%20}`) at this one call site. Every other consumer that builds a dev.azure.com URL from these variables (tracker, work-item, boards and build calls) now gets the decoded raw value. Other characters that were encoded in the clone URL come back raw, e.g. `%25` becomes a bare `%`, and non-ASCII project names are sent unencoded. Encode once at the point of use with a shared helper (percent-encode every non-unreserved byte) and apply it to AZDO_ORG and AZDO_PROJECT at every URL site. Alternatively, keep the values URL-encoded and decode only for display.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "FLEET_REPO_URL=https://dev.azure.com/o/My%20Project/_git/r -> AZDO_PROJECT='My Project'. draft-pr.sh builds a valid URL, but any other caller that interpolates $AZDO_PROJECT unencoded (e.g. the work-item or build-status calls) sends a raw space. curl rejects it as malformed or Azure DevOps answers 400, so the work-item update fails even though the PR step works. For a project clone URL containing `%25`, even the draft-pr call sends a bare `%`.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/tests/cases/ac32_postgres_sidecar.sh",
+   "fp": "1fd6cba0b757",
+   "in_delta": true,
+   "line": 36,
+   "message": "Every refusal case in the loop also sets FLEET_POSTGRES_PASSWORD='p\"q', which is invalid on its own. The cases for port 0, port 70000, user a:b and db x}y are therefore refused because of the password. They stay green with the port, user and db validation deleted. Drop the bad password from the loop (keep it only in its own case with a valid image), and assert the refusal message names the field under test.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Delete the port range check in parse_postgres, then run FLEET_POSTGRES_IMAGE=<valid> FLEET_POSTGRES_PORT=70000 FLEET_POSTGRES_PASSWORD='p\"q' dispatch. It is still refused (password regex), so `refuses` passes and the regression is not caught.",
+   "severity": "minor"
+  },
+  {
+   "file": "plugins/specclaw-fleet/lib/podspec.sh",
+   "fp": "26cc7d25272e",
+   "in_delta": true,
+   "line": 42,
+   "message": "parse_postgres returns before validating anything when postgres_image is empty. A set but invalid port, user, password or db is silently ignored, and the Job runs without a database. Warn, or refuse, when any FLEET_POSTGRES_* value is set while the image is unset.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B6",
+   "scenario": "fleet: postgres_port: 5433 with postgres_image missing or mistyped as empty -> dispatch succeeds with no Postgres sidecar and no warning. The agent's tests fail later with connection refused.",
+   "severity": "minor"
+  }
+ ],
+ "head": "22abf04edf16e34175cf020d2c6191d5b748ed00",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 41446,
+ "round": 1,
+ "since": null,
+ "status": "open",
+ "system_chars": 8943,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794411738,
+ "ts_start": 1794411666
+}
