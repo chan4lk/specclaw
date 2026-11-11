@@ -18,7 +18,7 @@
   - Files: plugins/specclaw-fleet/lib/podspec.sh, plugins/specclaw-fleet/lib/manifest.sh, plugins/specclaw-fleet/tests/cases/ac32_postgres_sidecar.sh
   - Depends: T2
   - Kind: impl
-- [ ] `T4` — Docs, doctor hint and version bump (AC-4)
+- [x] `T4` — Docs, doctor hint and version bump (AC-4)
   - Files: plugins/specclaw-fleet/README.md, plugins/specclaw-fleet/skills/setup/SKILL.md, plugins/specclaw-fleet/lib/doctor.sh, plugins/*/.claude-plugin/plugin.json, plugins/*/.codex-plugin/plugin.json, .claude-plugin/marketplace.json, .agents/plugins/marketplace.json
   - Depends: T1, T3
   - Kind: docs
