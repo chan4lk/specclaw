@@ -18,10 +18,24 @@ done
 repo_name="$FLEET_REPO_URL"; while [[ "$repo_name" == */ ]]; do repo_name="${repo_name%/}"; done; [[ "$repo_name" == *.[gG][iI][tT] ]] && repo_name="${repo_name%.*}"
 export AZDO_REPO="${AZDO_REPO:-${repo_name##*/}}"
 # The cloned repo names its own org and project; the shared fleet-azdo secret may pin another project.
-# Kept URL-encoded as in the clone URL: every in-pod consumer (draft-pr, specclaw-azdo-pr/-issue) splices them into URLs.
 if [[ "$repo_name" =~ ^https://([^/@]+@)?dev\.azure\.com/([^/]+)/([^/]+)/_git/[^/]+$ ]]; then
-  AZDO_ORG="${BASH_REMATCH[2]// /%20}" AZDO_PROJECT="${BASH_REMATCH[3]// /%20}"; export AZDO_ORG AZDO_PROJECT
+  AZDO_ORG="${BASH_REMATCH[2]}" AZDO_PROJECT="${BASH_REMATCH[3]}"
 fi
+# Every in-pod consumer (draft-pr, specclaw-azdo-pr/-issue) splices these into URLs: make them URL-safe once,
+# whichever source they came from. Bytes outside the unreserved set are percent-encoded; existing %XX stays.
+url_seg() {
+  local LC_ALL=C s="$1" out="" c i
+  for ((i = 0; i < ${#s}; i++)); do
+    c="${s:i:1}"
+    case "$c" in
+      [A-Za-z0-9._~-]) out+="$c" ;;
+      %) [[ "${s:i+1:2}" =~ ^[0-9A-Fa-f]{2}$ ]] && out+="%" || out+="%25" ;;
+      *) printf -v c '%%%02X' "$(( $(printf '%d' "'$c") & 255 ))"; out+="$c" ;;
+    esac
+  done
+  printf '%s' "$out"
+}
+AZDO_ORG="$(url_seg "${AZDO_ORG:-}")" AZDO_PROJECT="$(url_seg "${AZDO_PROJECT:-}")"; export AZDO_ORG AZDO_PROJECT
 [[ -n "$AZDO_REPO" ]] || echo "WARN: AZDO_REPO is empty: FLEET_REPO_URL [${FLEET_REPO_URL:-}] names no repo, so pr-azdo will fail" >&2
 finish() { printf '%s\n' "$1" > "$STATUS/exit"; exit 0; }
 on_term() {

@@ -65,17 +65,20 @@ https://dev.azure.com/o/My%20Project/_git/r>o|My%20Project
 https://dev.azure.com/o/My Project/_git/r>o|My%20Project
 https://dev.azure.com/o/100%25%C3%A9/_git/r>o|100%25%C3%A9
 https://BistecGlobal@dev.azure.com/org2/proj2/_git/r.git/>org2|proj2
-https://dev.azure.com/o/a\x41b/_git/r>o|a\x41b
+https://dev.azure.com/o/a\x41b/_git/r>o|a%5Cx41b
+https://dev.azure.com/o/é?#/_git/r>o|%C3%A9%3F%23
 https://dev.azure.com/o/p/r>o|p
 https://github.com/x/y.git>o|p
 https://acme.visualstudio.com/proj/_git/r>o|p
 EOF
+rm -f "$TMP/azdoproj"; ENTRY_PROJECT='My Proj' ENTRY_REPO_URL=https://github.com/x/y.git run_entry
+[[ "$(cat "$TMP/azdoproj" 2>/dev/null)" == "o|My%20Proj" ]] || { proj_ok=0; echo "  [secret project] got $(cat "$TMP/azdoproj" 2>/dev/null)"; }
 azdo_project_from_url() { (( proj_ok == 1 )); }
 approval_rechecked() { (( recheck_ok == 1 )); }
 deadline_leaves_room() { (( late_rc == 0 )) && [[ "$late_status" == 143 ]] && grep -q "exit=deadline branch=" <<<"$late_calls"; }
 
 check "R056 AC-1 the agent sees AZDO_REPO from the cloned repo URL (a trailing slash or .git is stripped, an empty name warns); a preset AZDO_REPO wins" azdo_repo_set
-check "R058 AC-1 a dev.azure.com clone URL sets AZDO_ORG and AZDO_PROJECT (kept URL-encoded, a raw space encoded, user@ ignored); other URLs keep the secret's" azdo_project_from_url
+check "R058 AC-1 a dev.azure.com clone URL sets AZDO_ORG and AZDO_PROJECT (URL-encoded once: raw bytes encoded, %XX kept, user@ ignored); other URLs keep the secret's, also made URL-safe" azdo_project_from_url
 check "AC7 API-key variables unset before the agent runs" keys_unset
 check "AC7 clone URL and git args carry no token" no_token_in_url
 check "AC7 Running then PR Open when a PR is recorded" pr_open_flow
