@@ -30,7 +30,7 @@ The goal is a clean `specclaw-fleet doctor`. Run it first, then fix every line t
 | `image` | In the specclaw repo, push a `fleet-v<tag>` tag or run the `fleet-image` workflow. On first push, set the GHCR package to **public** (Package settings → Change visibility); ask first. The image contains no Claude binary. Each pod fetches `FLEET_CLAUDE_VERSION` and verifies it against Anthropic's signed manifest. |
 | `vault` | `az keyvault create --enable-rbac-authorization true`, then grant yourself `Key Vault Administrator` on it. Create the **writer** service principal with no role and the **dispatch** service principal with `Key Vault Secrets User` on the vault plus `Reader` on the resource group. Then run `specclaw-fleet onboard <upn> --vault <v> --writer <writer-object-id>` for each person. Each person then runs `specclaw-fleet login --agent claude` in a real terminal. |
 | `secret:fleet-vault-writer` | Create it from the writer service principal's file: tenant, client id and secret. |
-| `secret:fleet-azdo` | Have the operator paste a PAT (Code read/write, Work Items read/write, Build read, Service Connections read; `doctor` and `status` need the last two) at a hidden prompt in a real terminal. The prompt writes the secret, plus `.specclaw/.env` in the repo, which must be gitignored first. |
+| `secret:fleet-azdo` | Have the operator paste a PAT (Code read/write, Work Items read/write, Build read, Service Connections read; `doctor` and `status` need the last two) at a hidden prompt in a real terminal. One namespace serves every project in the org (each pod takes the project from its clone URL), so the PAT must reach every project whose repos use this fleet. The prompt writes the secret, plus `.specclaw/.env` in the repo, which must be gitignored first. |
 | `service-connections` | **Kubernetes:** scheme `Kubernetes`, `authorizationType: Kubeconfig`. Use a kubeconfig with a `kubectl create token fleet-dispatcher --duration=…` token, never an admin kubeconfig, and rotate it before it expires. **ARM:** the dispatch service principal. Enable both for pipelines, and add a **Branch control** check to both, allowing only `refs/heads/main` (plus branch-policy-protected `refs/heads/feature/*` for coordinated features): this, not the YAML, is what stops another branch's pipeline from using them. |
 | `pipeline` | Copy `pipelines/dispatch-hosted.yml` (or `dispatch.yml` for local mode) into the repo and set its variables. `fleetSpecclawRef` must be a **full 40-character commit SHA** of specclaw: the pipeline refuses tag names and verifies the fetched commit. Push after asking, then `az pipelines create --skip-first-run`. A root-level `pool:` cannot use a template expression. | The hosted template also refreshes `.specclaw/STATUS.md` on `main`/`feature/*` after each run and pushes it with `[skip ci]`: grant the repo's **Build Service** identity **Contribute** on the repo (Project Settings → Repositories → Security). On a branch whose policy forbids direct pushes, the step only warns.
 
@@ -41,7 +41,9 @@ Set these in `.specclaw/config.yaml`:
 - `azdo.boards.sync: true`, with a `work_item_type` that exists in the process (Basic: `Issue`);
 - `azdo.fleet_states` mapped to real states;
 - `pr.test_policy` set, so PRs never prompt;
-- `git.base_branch`.
+- `git.base_branch`;
+- `fleet.postgres_image` (pinned by digest), when the repo's tests need Postgres; set `postgres_port` to the port the tests expect;
+- a `@playwright/test` version equal to the image's `PLAYWRIGHT_VERSION`, when the repo has browser tests.
 
 ## Local mode only
 

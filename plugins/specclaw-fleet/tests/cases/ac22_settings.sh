@@ -67,10 +67,14 @@ for v in "sk-ant-oat01-abcdef" "eyJhbGciOiJIUzI1NiJ9.e30.x" "abcdefghijklmnopqrs
   cfg 'fleet:' "  vault: $v"; out="$(load)"; rc=$?
   (( rc != 0 )) && [[ "$out" == *"fleet.vault"*"looks like a secret"* && "$out" != *"$v"* ]] || { secret_rows=0; echo "  secret not refused: rc=$rc $out"; }
 done
+printf 'fleet:\n  postgres_image: postgres@sha256:%064d\n' 0 > "$TMP/pg-trusted.yaml"
+cfg 'fleet:' "  postgres_image: evil/pg@sha256:$(printf '%064d' 1)"; pg_evil="$(load FLEET_TRUSTED_CONFIG="$TMP/pg-trusted.yaml")"; pg_evil_rc=$?
+pg_trusted() { (( pg_evil_rc != 0 )) && [[ "$pg_evil" == *"fleet.postgres_image on this branch differs from the trusted branch"* ]]; }
 precedence() { (( rows == 1 )); }
 secrets() { (( secret_rows == 1 )); }
 check "R053 AC-1 fleet: config fills unset env only; env (even empty) wins; quotes, comments, CRLF; only the fleet: block; unknown keys warn; the local cluster pointer comes only from env or .specclaw/.env (relative KUBECONFIG resolved at the repo root), never fleet:; long paths are not secrets" precedence
 check "R053 AC-1 a secret-looking fleet: value is refused without printing it" secrets
+check "R058 AC-2 fleet.postgres_image comes only from the trusted branch" pg_trusted
 check "R051 inside a pipeline run (TF_BUILD) a committed .specclaw/.env cannot point kubectl at another cluster or kubeconfig" pipeline_ignores_env
 mkdir -p "$TMP/repo/.specclaw"; printf 'fleet:\n  vault: cfg-kv\n' > "$TMP/repo/.specclaw/config.yaml"
 flag_out="$(cd "$TMP/repo" && "$FLEET" dispatch x --vault flag-kv --dry-run 2>&1)"

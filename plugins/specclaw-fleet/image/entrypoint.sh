@@ -17,6 +17,30 @@ for lib in tracker egress-gate agent-auth workspace draft-pr claude-fetch integr
 done
 repo_name="$FLEET_REPO_URL"; while [[ "$repo_name" == */ ]]; do repo_name="${repo_name%/}"; done; [[ "$repo_name" == *.[gG][iI][tT] ]] && repo_name="${repo_name%.*}"
 export AZDO_REPO="${AZDO_REPO:-${repo_name##*/}}"
+# The cloned repo names its own org and project; the shared fleet-azdo secret may pin another project.
+# Both Azure DevOps URL forms; hosts are case-insensitive. Legacy: <org>.visualstudio.com[/DefaultCollection]/<project>.
+shopt -s nocasematch
+if [[ "$repo_name" =~ ^https://([^/@]+@)?dev\.azure\.com/([^/]+)/([^/]+)/_git/[^/]+$ ]]; then
+  AZDO_ORG="${BASH_REMATCH[2]}" AZDO_PROJECT="${BASH_REMATCH[3]}"
+elif [[ "$repo_name" =~ ^https://([^/@]+@)?([^./@]+)\.visualstudio\.com/(DefaultCollection/)?([^/]+)/_git/[^/]+$ ]]; then
+  AZDO_ORG="${BASH_REMATCH[2]}" AZDO_PROJECT="${BASH_REMATCH[4]}"
+fi
+shopt -u nocasematch
+# Every in-pod consumer (draft-pr, specclaw-azdo-pr/-issue) splices org, project and repo into URLs: make them URL-safe once,
+# whichever source they came from. Bytes outside the unreserved set are percent-encoded; existing %XX stays.
+url_seg() {
+  local LC_ALL=C s="$1" out="" c i
+  for ((i = 0; i < ${#s}; i++)); do
+    c="${s:i:1}"
+    case "$c" in
+      [A-Za-z0-9._~-]) out+="$c" ;;
+      %) [[ "${s:i+1:2}" =~ ^[0-9A-Fa-f]{2}$ ]] && out+="%" || out+="%25" ;;
+      *) printf -v c '%%%02X' "$(( $(printf '%d' "'$c") & 255 ))"; out+="$c" ;;
+    esac
+  done
+  printf '%s' "$out"
+}
+AZDO_ORG="$(url_seg "${AZDO_ORG:-}")" AZDO_PROJECT="$(url_seg "${AZDO_PROJECT:-}")" AZDO_REPO="$(url_seg "$AZDO_REPO")"; export AZDO_ORG AZDO_PROJECT AZDO_REPO
 [[ -n "$AZDO_REPO" ]] || echo "WARN: AZDO_REPO is empty: FLEET_REPO_URL [${FLEET_REPO_URL:-}] names no repo, so pr-azdo will fail" >&2
 finish() { printf '%s\n' "$1" > "$STATUS/exit"; exit 0; }
 on_term() {

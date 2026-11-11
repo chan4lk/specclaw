@@ -24,7 +24,7 @@ spec:
       automountServiceAccountToken: false
       securityContext: {runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
 $(render_pod_extras)
-      initContainers:
+      initContainers:$(render_pg_sidecar)
         - name: agent
           image: $F_IMAGE
           command: ["/opt/fleet/entrypoint.sh"]
@@ -44,7 +44,7 @@ $(render_run_env)
             - {name: TMPDIR, value: /tmp}
             - {name: HTTPS_PROXY, value: "http://fleet-egress.specclaw-fleet-egress:3128"}
             - {name: HTTP_PROXY, value: "http://fleet-egress.specclaw-fleet-egress:3128"}
-            - {name: NO_PROXY, value: "localhost,127.0.0.1"}
+            - {name: NO_PROXY, value: "localhost,127.0.0.1"}$(render_pg_env)
           volumeMounts:
             - {name: work, mountPath: /fleet/work}
             - {name: home, mountPath: /home/agent}
@@ -75,6 +75,6 @@ $(render_run_env)
         - {name: codex, emptyDir: {}}
         - {name: tmp, emptyDir: {}}
         - {name: wbhome, emptyDir: {}}
-        - {name: cred, secret: {secretName: $F_SECRET_OBJ}}
+        - {name: cred, secret: {secretName: $F_SECRET_OBJ}}$(render_pg_volumes)
 YAML
 }
