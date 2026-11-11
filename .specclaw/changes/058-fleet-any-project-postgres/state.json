@@ -1,0 +1,12 @@
+{
+  "change": "058-fleet-any-project-postgres",
+  "phase": "build",
+  "branch": "specclaw/058-fleet-any-project-postgres",
+  "size": "bounded",
+  "phases": {
+    "proposal": {"status":"approved","at":"2026-11-11T14:47:28Z"},
+    "spec": {"status":"done","at":"2026-11-11T15:24:09Z"},
+    "tasks": {"status":"done","at":"2026-11-11T15:24:09Z"},
+    "build": {"status":"in-progress","at":"2026-11-11T15:24:45Z"}
+  }
+}

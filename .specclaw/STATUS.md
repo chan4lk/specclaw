@@ -1,7 +1,7 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** specclaw
-**Last Updated:** 2026-11-10 01:50 UTC
+**Last Updated:** 2026-11-11 15:24 UTC
 
 _4 unnumbered changes · run `/specclaw-extras:renumber` to order them_
 
@@ -21,9 +21,11 @@ _4 unnumbered changes · run `/specclaw-extras:renumber` to order them_
 - 🔍 **051-fleet-azdo-agents** ▫ — verify FAIL | 1/1 tasks (100%) | 0 failed | 55s
 - 🔍 **052-fleet-setup-and-run-skills** ▣ — verify FAIL | 6/6 tasks (100%) | 0 failed | PR #112 merged | 1h5m
 - 🔍 **053-fleet-optin-status-run** ▫ — verify FAIL | 6/6 tasks (100%) | 0 failed
-- 🔨 **054-fleet-build-report-mod** ▣ — build done | 5/5 tasks (100%) | 0 failed | PR #114 merged | 54s
+- 🔍 **054-fleet-build-report-mod** ▣ — verify done | 5/5 tasks (100%) | 0 failed | PR #114 merged | 54s
 - 🔨 **055-fleet-trusted-config-sigpipe** — build done | 1/1 tasks (100%) | 0 failed
 - 🔨 **056-fleet-pod-azdo-repo** — build done | 1/1 tasks (100%) | 0 failed
+- ✅ **057-status-integration-only** — 2/2 tasks (100%) | 0 failed
+- 📝 **058-fleet-any-project-postgres** ▫ — tasks done | 0/4 tasks (0%) | 0 failed | 5h55m
 
 ## Pending Proposals
 
@@ -79,6 +81,6 @@ _None._
 
 ## Stats
 
-- **Total changes:** 60
-- **Active:** 16
+- **Total changes:** 62
+- **Active:** 18
 - **Completed:** 44
