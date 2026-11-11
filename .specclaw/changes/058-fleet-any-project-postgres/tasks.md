@@ -5,7 +5,7 @@
 
 ## Wave 1
 
-- [ ] `T1` — Entrypoint exports AZDO_ORG/AZDO_PROJECT from a dev.azure.com clone URL; table test (AC-1)
+- [x] `T1` — Entrypoint exports AZDO_ORG/AZDO_PROJECT from a dev.azure.com clone URL; table test (AC-1)
   - Files: plugins/specclaw-fleet/image/entrypoint.sh, plugins/specclaw-fleet/tests/lib/entry-env.sh, plugins/specclaw-fleet/tests/cases/ac7_entrypoint.sh
   - Kind: impl
 - [ ] `T2` — postgres_* fleet settings: parse, validate, trusted-branch image; table test (AC-2)
