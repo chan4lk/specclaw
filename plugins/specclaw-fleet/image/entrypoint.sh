@@ -21,7 +21,7 @@ export AZDO_REPO="${AZDO_REPO:-${repo_name##*/}}"
 if [[ "$repo_name" =~ ^https://([^/@]+@)?dev\.azure\.com/([^/]+)/([^/]+)/_git/[^/]+$ ]]; then
   AZDO_ORG="${BASH_REMATCH[2]}" AZDO_PROJECT="${BASH_REMATCH[3]}"
 fi
-# Every in-pod consumer (draft-pr, specclaw-azdo-pr/-issue) splices these into URLs: make them URL-safe once,
+# Every in-pod consumer (draft-pr, specclaw-azdo-pr/-issue) splices org, project and repo into URLs: make them URL-safe once,
 # whichever source they came from. Bytes outside the unreserved set are percent-encoded; existing %XX stays.
 url_seg() {
   local LC_ALL=C s="$1" out="" c i
@@ -35,7 +35,7 @@ url_seg() {
   done
   printf '%s' "$out"
 }
-AZDO_ORG="$(url_seg "${AZDO_ORG:-}")" AZDO_PROJECT="$(url_seg "${AZDO_PROJECT:-}")"; export AZDO_ORG AZDO_PROJECT
+AZDO_ORG="$(url_seg "${AZDO_ORG:-}")" AZDO_PROJECT="$(url_seg "${AZDO_PROJECT:-}")" AZDO_REPO="$(url_seg "$AZDO_REPO")"; export AZDO_ORG AZDO_PROJECT AZDO_REPO
 [[ -n "$AZDO_REPO" ]] || echo "WARN: AZDO_REPO is empty: FLEET_REPO_URL [${FLEET_REPO_URL:-}] names no repo, so pr-azdo will fail" >&2
 finish() { printf '%s\n' "$1" > "$STATUS/exit"; exit 0; }
 on_term() {

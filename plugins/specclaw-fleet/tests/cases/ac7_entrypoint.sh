@@ -33,6 +33,8 @@ other||other
 |https://dev.azure.com/o/p/_git/r//|r
 |https://dev.azure.com/o/p/_git/r.git//|r
 |https://dev.azure.com/o/p/_git/R.GIT|R
+|https://dev.azure.com/o/p/_git/my%20repo|my%20repo
+a b||a%20b
 |https://dev.azure.com/o/p/_git/r/|r
 |https://dev.azure.com/o/p/_git/r.git|r
 |https://dev.azure.com/o/p/_git/r.git/|r
@@ -71,8 +73,16 @@ https://dev.azure.com/o/p/r>o|p
 https://github.com/x/y.git>o|p
 https://acme.visualstudio.com/proj/_git/r>o|p
 EOF
-rm -f "$TMP/azdoproj"; ENTRY_PROJECT='My Proj' ENTRY_REPO_URL=https://github.com/x/y.git run_entry
-[[ "$(cat "$TMP/azdoproj" 2>/dev/null)" == "o|My%20Proj" ]] || { proj_ok=0; echo "  [secret project] got $(cat "$TMP/azdoproj" 2>/dev/null)"; }
+while IFS='>' read -r org proj want; do
+  rm -f "$TMP/azdoproj"; ENTRY_ORG="$org" ENTRY_PROJECT="$proj" ENTRY_REPO_URL=https://github.com/x/y.git run_entry
+  [[ "$(cat "$TMP/azdoproj" 2>/dev/null)" == "$want" ]] || { proj_ok=0; echo "  [secret $org|$proj] got $(cat "$TMP/azdoproj" 2>/dev/null)"; }
+done <<'EOF'
+My Org>My Proj>My%20Org|My%20Proj
+a%20b>c%2Fd>a%20b|c%2Fd
+100%>50%x>100%25|50%25x
+é>ü>%C3%A9|%C3%BC
+a?b>c#d>a%3Fb|c%23d
+EOF
 azdo_project_from_url() { (( proj_ok == 1 )); }
 approval_rechecked() { (( recheck_ok == 1 )); }
 deadline_leaves_room() { (( late_rc == 0 )) && [[ "$late_status" == 143 ]] && grep -q "exit=deadline branch=" <<<"$late_calls"; }
