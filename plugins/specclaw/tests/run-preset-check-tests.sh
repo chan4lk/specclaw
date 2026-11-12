@@ -137,9 +137,9 @@ check "AC-7 lean build reads presets via specclaw-presets" 'grep -q "specclaw-pr
 
 # Change 059: base.md carries a Security section with one rule per keyword; a missing one is named.
 security_missing() {
-  local f="$1" k miss=""
+  local f="$1" k miss="" keys="${2:-Secrets Input Injection Access Errors Logging Dependencies Crypto}"
   grep -q '^## Security$' "$f" || miss=" heading"
-  for k in Secrets Input Injection Access Errors Logging Dependencies Crypto; do
+  for k in $keys; do
     sed -n '/^## Security$/,/^## /p' "$f" | grep -q "^- \*\*$k:\*\* " || miss="$miss $k"
   done
   echo "$miss"
@@ -154,6 +154,23 @@ mutant "deleted Logging rule"        '/^- \*\*Logging:\*\* /d'                  
 mutant "two deleted rules"           '/^- \*\*\(Secrets\|Crypto\):\*\* /d'               " Secrets Crypto"
 mutant "missing Security heading"    '/^## Security$/d'                                  " heading Secrets Input Injection Access Errors Logging Dependencies Crypto"
 mutant "rule moved under ## Tests"   '/^- \*\*Access:\*\* /{h;d};/^## Tests$/G'          " Access"
+
+# Change 060: each stack preset keeps its own stack-specific Security rules; a missing one is named.
+stack_keys() {
+  case "$1" in
+    dotnet) echo "Authorization Binding Errors Http Cors" ;;
+    python) echo "Authorization Models Execution Parsing Http" ;;
+    node) echo "Authorization Schemas Execution Pollution Cors" ;;
+    nextjs) echo "ServerOnly Cookies Redirects Headers Html" ;;
+    react-spa) echo "Tokens Redirects Env Html Links" ;;
+  esac
+}
+for st in dotnet python node nextjs react-spa; do
+  check "060 AC-1 $st has all its Security rules" '[ -z "$(security_missing "$PLUGIN_DIR/presets/$st.md" "$(stack_keys $st)")" ]'
+  first="$(stack_keys $st | cut -d' ' -f1)"
+  sed "/^- \*\*$first:\*\* /d" "$PLUGIN_DIR/presets/$st.md" > "$TMP/stack-mutant.md"
+  check "060 AC-3 $st with the $first rule deleted is reported by name" '[ "$(security_missing "$TMP/stack-mutant.md" "$(stack_keys $st)")" = " $first" ]'
+done
 
 echo
 [ "$FAILS" -eq 0 ] && echo "All preset-check tests passed." || echo "$FAILS failure(s)."
