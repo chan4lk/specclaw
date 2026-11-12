@@ -30,7 +30,8 @@ test/
 - **Schemas:** Zod `.strict()` on body, query and params.
 - **Execution:** no `exec`, `eval` or `new Function`.
 - **Pollution:** never merge untrusted objects into others; parse with Zod first.
-- **Cors:** list explicit origins; rate-limit auth routes.
+- **Cors:** list explicit origins.
+- **RateLimit:** rate-limit auth routes.
 
 ## Shared
 - `src/lib/` (or `packages/shared/` in a monorepo): base handlers, Zod schemas reused by several routes, HTTP and retry helpers.

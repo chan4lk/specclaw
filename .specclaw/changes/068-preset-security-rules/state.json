@@ -1,0 +1,13 @@
+{
+  "change": "059-preset-security-rules",
+  "phase": "verify",
+  "branch": "",
+  "size": "bounded",
+  "phases": {
+    "proposal": {"status":"approved","at":"2026-11-12T07:37:48Z"},
+    "spec": {"status":"done","at":"2026-11-12T10:00:15Z"},
+    "tasks": {"status":"done","at":"2026-11-12T10:00:17Z"},
+    "build": {"status":"done","at":"2026-11-12T10:17:55Z","tasks":{"done":4,"total":4,"failed":0}},
+    "verify": {"status":"passed","at":"2026-11-12T10:35:54Z","verdict":"PASS"}
+  }
+}

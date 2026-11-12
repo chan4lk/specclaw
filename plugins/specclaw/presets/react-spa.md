@@ -26,7 +26,7 @@ src/
 - Local state stays local; no global store unless two features need it.
 
 ## Security
-- **Tokens:** no tokens in `localStorage`; use `httpOnly` cookies.
+- **Tokens:** no tokens in `localStorage`; the server sets them `httpOnly` and `sameSite`.
 - **Redirects:** the login return path must be a local path (open redirect).
 - **Env:** no secrets in `VITE_*` variables; they ship to the browser.
 - **Html:** no `dangerouslySetInnerHTML` with unsanitised data.

@@ -28,7 +28,7 @@ tests/<App>.Tests/
 ## Security
 - **Authorization:** endpoints require authorization by default (a fallback policy or `RequireAuthorization()` on the group). Anonymous routes are listed.
 - **Binding:** bind requests to DTOs, never to entities (over-posting).
-- **Errors:** one exception handler returns `ProblemDetails`; no stack trace outside Development.
+- **Errors:** one exception handler returns `ProblemDetails`.
 - **Http:** outbound calls use `IHttpClientFactory`, never a new `HttpClient` per call.
 - **Cors:** list explicit origins; never `AllowAnyOrigin` together with credentials.
 

@@ -1,0 +1,81 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 1
+ },
+ "escalated": [],
+ "files": [
+  ".claude-plugin/marketplace.json",
+  "plugins/specclaw-bf/.claude-plugin/plugin.json",
+  "plugins/specclaw-bf/.codex-plugin/plugin.json",
+  "plugins/specclaw-extras/.claude-plugin/plugin.json",
+  "plugins/specclaw-extras/.codex-plugin/plugin.json",
+  "plugins/specclaw-fleet/.claude-plugin/plugin.json",
+  "plugins/specclaw-fleet/.codex-plugin/plugin.json",
+  "plugins/specclaw-review/.claude-plugin/plugin.json",
+  "plugins/specclaw-review/.codex-plugin/plugin.json",
+  "plugins/specclaw-sync/.claude-plugin/plugin.json",
+  "plugins/specclaw-sync/.codex-plugin/plugin.json",
+  "plugins/specclaw/.claude-plugin/plugin.json",
+  "plugins/specclaw/.codex-plugin/plugin.json",
+  "plugins/specclaw/presets/base.md",
+  "plugins/specclaw/presets/dotnet.md",
+  "plugins/specclaw/presets/nextjs.md",
+  "plugins/specclaw/presets/node.md",
+  "plugins/specclaw/presets/python.md",
+  "plugins/specclaw/presets/react-spa.md",
+  "plugins/specclaw/tests/run-preset-check-tests.sh"
+ ],
+ "final": true,
+ "findings": [
+  {
+   "file": "plugins/specclaw/tests/run-preset-check-tests.sh",
+   "fp": "2dfc5ea0b80f",
+   "in_delta": true,
+   "line": 155,
+   "message": "Two of the Security AC-3 mutant scripts only work with GNU sed. The `\\|` alternation in the 'two deleted rules' mutant (line 155) is a GNU basic-regex extension. The one-line block `{h;d}` in the 'rule moved under ## Tests' mutant (line 157) needs a `;` before `}` in BSD sed. On macOS the first matches nothing and the second is a sed error. Either way the mutant file is not the intended mutation, so these checks fail even though base.md is correct. Fix: use two `-e '/.../d'` expressions instead of `\\|`, and write `{h;d;}`. Or state in the test header that the suite needs GNU sed.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B10",
+   "scenario": "Run tests/run-preset-check-tests.sh on macOS with the system sed. The 'two deleted rules' mutant deletes nothing, so security_missing returns '' instead of ' Secrets Crypto' and the check fails. The 'rule moved' mutant hits a BSD sed brace error, which leaves an empty or partial mutant file, so that check also reports a failure. base.md itself is correct in both cases.",
+   "severity": "minor"
+  }
+ ],
+ "head": "c030de41d022b84f5550cd87ef663dd47c5a90fc",
+ "impact": [
+  "plugins/specclaw-bf/bin/specclaw-bf-baseline",
+  "plugins/specclaw-bf/bin/specclaw-bf-e2e-run",
+  "plugins/specclaw-bf/bin/specclaw-bf-prototype",
+  "plugins/specclaw-bf/bin/specclaw-bf-replay",
+  "plugins/specclaw-bf/bin/specclaw-bf-ui",
+  "plugins/specclaw-bf/tests/run-bootstrap-gate-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-brief-contract-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-byte-identity-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-checklist-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-gates-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-id-permanence-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-readiness-scope-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-screen-coverage-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-stack-resolver-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-status-machine-tests.sh",
+  "plugins/specclaw-review/lib/review_core.py",
+  "plugins/specclaw-review/mcp/server.py",
+  "plugins/specclaw/bin/specclaw-update-context",
+  "plugins/specclaw/lib/quality-exclusions.yaml"
+ ],
+ "model": "opus",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 30545,
+ "round": 7,
+ "since": null,
+ "status": "clean",
+ "system_chars": 9002,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794479662,
+ "ts_start": 1794479628
+}
