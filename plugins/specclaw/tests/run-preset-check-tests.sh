@@ -135,6 +135,19 @@ mkdir -p "$TMP/i" && "$BIN/specclaw-init" "$TMP/i" demo d >/dev/null
 check "AC-6 init scaffolds .specclaw/presets/README.md from the template" 'cmp -s "$TMP/i/.specclaw/presets/README.md" "$PLUGIN_DIR/templates/presets-README.md"'
 check "AC-7 lean build reads presets via specclaw-presets" 'grep -q "specclaw-presets .specclaw" "$PLUGIN_DIR/skills/build/SKILL.md" && ! grep -q "presets/base.md" "$PLUGIN_DIR/skills/build/SKILL.md"'
 
+# Change 059: base.md carries a Security section with one rule per keyword; a missing one is named.
+security_missing() {
+  local f="$1" k miss=""
+  grep -q '^## Security$' "$f" || miss=" heading"
+  for k in Secrets Input Injection Access Errors Logging Dependencies Crypto; do
+    sed -n '/^## Security$/,/^## /p' "$f" | grep -q "^- \*\*$k:\*\* " || miss="$miss $k"
+  done
+  echo "$miss"
+}
+check "059 AC-1 base.md has a Security rule for all eight keywords" '[ -z "$(security_missing "$PLUGIN_DIR/presets/base.md")" ]'
+sed '/^- \*\*Logging:\*\* /d' "$PLUGIN_DIR/presets/base.md" > "$TMP/base-nolog.md"
+check "059 AC-3 a deleted rule is reported by name" '[ "$(security_missing "$TMP/base-nolog.md")" = " Logging" ]'
+
 echo
 [ "$FAILS" -eq 0 ] && echo "All preset-check tests passed." || echo "$FAILS failure(s)."
 exit $((FAILS > 0))
