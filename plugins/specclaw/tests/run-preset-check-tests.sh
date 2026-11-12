@@ -145,8 +145,15 @@ security_missing() {
   echo "$miss"
 }
 check "059 AC-1 base.md has a Security rule for all eight keywords" '[ -z "$(security_missing "$PLUGIN_DIR/presets/base.md")" ]'
-sed '/^- \*\*Logging:\*\* /d' "$PLUGIN_DIR/presets/base.md" > "$TMP/base-nolog.md"
-check "059 AC-3 a deleted rule is reported by name" '[ "$(security_missing "$TMP/base-nolog.md")" = " Logging" ]'
+mutant() {
+  local label="$1" script="$2" want="$3"
+  sed "$script" "$PLUGIN_DIR/presets/base.md" > "$TMP/base-mutant.md"
+  check "059 AC-3 $label is reported" '[ "$(security_missing "$TMP/base-mutant.md")" = "$want" ]'
+}
+mutant "deleted Logging rule"        '/^- \*\*Logging:\*\* /d'                          " Logging"
+mutant "two deleted rules"           '/^- \*\*\(Secrets\|Crypto\):\*\* /d'               " Secrets Crypto"
+mutant "missing Security heading"    '/^## Security$/d'                                  " heading Secrets Input Injection Access Errors Logging Dependencies Crypto"
+mutant "rule moved under ## Tests"   '/^- \*\*Access:\*\* /{h;d};/^## Tests$/G'          " Access"
 
 echo
 [ "$FAILS" -eq 0 ] && echo "All preset-check tests passed." || echo "$FAILS failure(s)."

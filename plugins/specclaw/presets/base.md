@@ -22,7 +22,7 @@ Always applies. Listed presets add to it; `preset_overrides` in `config.yaml` ma
 - **Errors:** fail closed. Never send stack traces or internal details to the client.
 - **Logging:** no secrets, tokens or personal data in logs.
 - **Dependencies:** no new dependency without a reason. Commit the lockfile.
-- **Crypto:** platform libraries only. No home-made crypto, no MD5 or SHA-1 for passwords.
+- **Crypto:** use vetted platform libraries, never home-made crypto. Store passwords with a slow, salted password hash (Argon2id, bcrypt or scrypt), never a plain digest such as MD5 or SHA-256.
 
 ## Tests
 - At most one test per acceptance criterion, named after it (`ac1_…`, `AC1 …`).
