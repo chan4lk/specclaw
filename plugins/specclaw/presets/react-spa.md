@@ -25,6 +25,13 @@ src/
 - One API client in `shared/api`, typed by Zod schemas.
 - Local state stays local; no global store unless two features need it.
 
+## Security
+- **Tokens:** no tokens in `localStorage`; use `httpOnly` cookies.
+- **Redirects:** the login return path must be a local path (open redirect).
+- **Env:** no secrets in `VITE_*` variables; they ship to the browser.
+- **Html:** no `dangerouslySetInnerHTML` with unsanitised data.
+- **Links:** no user-supplied URLs in `href` (`javascript:` links).
+
 ## Shared
 - `src/shared/`: the API client, shared hooks, UI primitives, schema helpers.
 
