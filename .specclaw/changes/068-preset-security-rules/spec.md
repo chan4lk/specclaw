@@ -1,12 +1,12 @@
 # Spec: Security rules in the presets
 
-**Change:** 059-preset-security-rules
+**Change:** 068-preset-security-rules
 **Size:** bounded
 
 ## Functional Requirements
 
 - **FR-1** `plugins/specclaw/presets/base.md` has a `## Security` section with one rule line for
-  each of: secrets, input, injection, access, errors, logging, dependencies, crypto.
+  each of: secrets, input, injection, access, errors, logging, dependencies, crypto, sessions, enumeration, codes, devflags, urls.
 - **FR-2** `presets/dotnet.md`, `python.md`, `node.md`, `nextjs.md` and `react-spa.md` each have a
   `## Security` section.
 - **FR-3** Each stack section holds only stack-specific rules, one short bullet each, led by a bold
@@ -20,8 +20,9 @@
 
 ## Required rules (keyword → what it covers)
 
-- **base:** Secrets, Input, Injection, Access, Errors, Logging, Dependencies, Crypto. The rules name
-  no stack, framework or library.
+- **base:** Secrets, Input, Injection, Access, Errors, Logging, Dependencies, Crypto, Sessions (logout and credential change end every
+  session), Enumeration (same response for existing and new accounts), Codes (out-of-band, capped attempts), DevFlags (no flag weakens
+  auth), Urls (compare the parsed hostname). The rules name no stack, framework or library.
 - **dotnet:** Authorization (default-deny, anonymous routes listed), Binding (DTOs never bind
   entities), Errors (one exception handler returns `ProblemDetails`), Http (`IHttpClientFactory`),
   Cors (explicit origins, never `AllowAnyOrigin` with credentials).
@@ -30,7 +31,7 @@
   TLS verification on).
 - **node:** Authorization (auth hook on the route group), Schemas (Zod `.strict()` on body, query,
   params), Execution (no `exec`, `eval`, `new Function`), Pollution (no merging untrusted objects),
-  Cors (explicit origins), RateLimit (rate-limit auth routes).
+  Cors (explicit origins), RateLimit (rate-limit auth routes), Proxy (`trustProxy` set to trusted addresses, never `true`).
 - **nextjs:** ServerOnly (`server-only` on server modules), Cookies (`httpOnly`, `secure`,
   `sameSite`), Redirects (local paths only, never a user-supplied URL), Headers (CSP and security
   headers in `next.config`), Html (no `dangerouslySetInnerHTML` with unsanitised data).
@@ -40,13 +41,14 @@
 
 ## Required review rules (id → what it flags)
 
-- **base:** B11 (no caller or ownership check), B12 (stack trace or internal detail sent to the client),
-  B13 (home-made crypto, or a plain or fast digest for passwords).
+- **base:** B13 (no caller or ownership check), B14 (stack trace or internal detail sent to the client),
+  B15 (home-made crypto, or a plain or fast digest for passwords), B16 (dev bypass), B17 (sessions survive logout), B18 (account
+  enumeration), B19 (no cap on failed codes), B20 (URL allowlist by substring or regex).
 - **dotnet:** DN7 (entity bound directly), DN8 (no authorization policy), DN9 (`AllowAnyOrigin` with credentials).
 - **python:** PY8 (route without auth `Depends`), PY9 (`pickle`/`eval`/`exec`/`yaml.load` on external data),
   PY10 (no timeout or `verify=False`), PY11 (request model without `extra="forbid"`).
 - **node:** ND6 (no auth hook), ND7 (no or non-strict schema), ND8 (`eval`, `new Function`, prototype
-  pollution), ND9 (CORS wildcard with credentials), ND10 (auth route without rate limit).
+  pollution), ND9 (CORS wildcard with credentials), ND10 (auth route without rate limit), ND11 (`trustProxy: true` or IP-only rate-limit key).
 - **nextjs:** NX5 (auth cookie flags), NX6 (redirect to user-supplied URL), NX7 (no CSP or security headers),
   NX8 (unsanitised `dangerouslySetInnerHTML`).
 - **react-spa:** RS7 (token in web storage), RS8 (open redirect on login return), RS9 (secret in `VITE_*`),

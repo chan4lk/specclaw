@@ -1,8 +1,8 @@
 # Tasks: Security rules in the presets
 
-**Change:** 059-preset-security-rules
+**Change:** 068-preset-security-rules
 **Created:** 2026-11-12
-**Total Tasks:** 6
+**Total Tasks:** 8
 
 ## Summary
 
@@ -64,6 +64,22 @@ security rules to the review rule packs and guard those with a test.
   - Kind: test
   - Depends: T5
   - Notes: one presence check per pack plus a deleted-rule mutant per id, reported by id.
+
+### Wave 7 — Auth-flow and URL rules
+
+- [x] `T7` — Add Sessions, Enumeration, Codes, DevFlags, Urls to base and Proxy to node (AC-1, AC-4)
+  - Files: plugins/specclaw/presets/base.md, plugins/specclaw/presets/node.md, plugins/specclaw/tests/run-preset-check-tests.sh
+  - Estimate: small
+  - Kind: docs
+  - Depends: T1, T3
+  - Notes: stack-agnostic wording in base; test keys extended; each file stays <= 60 lines.
+
+- [x] `T8` — Add B16-B20 and ND11 to the review packs (AC-6, AC-7)
+  - Files: plugins/specclaw-review/review-rules/base.md, plugins/specclaw-review/review-rules/node.md, plugins/specclaw-review/tests/run-review-tests.sh
+  - Estimate: small
+  - Kind: docs
+  - Depends: T5, T7
+  - Notes: severities from the pen test; no duplicate ids; test ids extended.
 
 ---
 

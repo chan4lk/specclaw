@@ -41,9 +41,15 @@ hash, vetted libraries).
 Each preset stays under the 60-line limit. A test fails if a preset loses its Security rules or one
 of its required rules.
 
-**3. The review rule packs check the same things.** `specclaw-review` rules are what the reviewer checks
+**3. Auth-flow and URL rules, from a pen test.** A penetration test of a project built with SpecClaw found flaws that
+no rule covered: a dev bypass that returned a one-time code, other sessions surviving logout, sign-up answering
+differently for existing accounts, no cap on failed code attempts, a URL allowlist checked by substring, and a proxy
+setting that let a spoofed `X-Forwarded-For` reset rate limits. Base gets five rules (Sessions, Enumeration, Codes,
+DevFlags, Urls) and the Node preset one (Proxy). They are stack-agnostic except Proxy.
+
+**4. The review rule packs check the same things, including these.** `specclaw-review` rules are what the reviewer checks
 after build. `plugins/specclaw-review/review-rules/` gets matching security rules, so the reviewer checks
-what the builder was told: base B11-B13 (access control, error leaks, password storage) and, per stack,
+what the builder was told: base B13-B15 (access control, error leaks, password storage) and, per stack,
 authorization, input binding, CORS, redirects, token storage and the other traps above. Rules that already
 exist there (B8, DN5, ND3, PY4, RS4, NX1, NX2) are not repeated. Each rule carries a severity. A test fails
 if a pack loses one of its security rules.

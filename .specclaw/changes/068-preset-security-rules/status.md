@@ -1,6 +1,6 @@
 # Status: Security rules in the presets
 
-**Change:** 059-preset-security-rules
+**Change:** 068-preset-security-rules
 **Started:** 2026-11-12
 **Last Updated:** 2026-11-12
 
@@ -12,7 +12,7 @@
 | Spec | ✅ Done |  |
 | Design | ⏳ Pending | |
 | Tasks | ✅ Done |  |
-| Build | ✅ Done | 6/6 tasks |
+| Build | ✅ Done | 8/8 tasks |
 | Verify | ✅ Passed | PASS |
 
 ## Task Progress
