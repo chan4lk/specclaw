@@ -11,3 +11,7 @@
 - **PY6** Async code that calls blocking I/O (`requests`, `time.sleep`, sync DB drivers) inside `async def`
   → **major**.
 - **PY7** Tests that `monkeypatch` the function under test, or assert on mocks only, prove nothing (B2).
+- **PY8** A route with no auth `Depends` (or equivalent) that reads or changes user data → **blocker** (B13).
+- **PY9** `pickle`, `eval`, `exec` or `yaml.load` on external data → **blocker** (B8).
+- **PY10** `httpx`/`requests` with no timeout, or `verify=False` → **major**.
+- **PY11** A Pydantic request model without `extra="forbid"` that feeds a write → **major**; otherwise **minor**.

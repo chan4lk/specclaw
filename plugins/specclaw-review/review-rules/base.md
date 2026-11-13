@@ -36,6 +36,12 @@ defects left by a fix that patched only the case the reviewer named.
   or between two writers; a write that a crash can leave half done (write a temp file, then rename); and a
   retry or re-run that is not idempotent (it doubles a charge, a row or a message). Each that a concrete
   scenario shows is a **major**.
+- **B13 Access control.** An endpoint or handler that does not check who the caller is, or that they own
+  the resource it reads or changes, is a **blocker**. Access must be denied by default.
+- **B14 Errors leak.** A stack trace, exception message or other internal detail sent to the client is a
+  **major**. Fail closed with a generic error.
+- **B15 Weak password storage.** Home-made crypto, or a password stored with a plain or fast digest (MD5,
+  SHA-1, SHA-256) instead of Argon2id, bcrypt or scrypt, is a **blocker**.
 
 ### Severity calibration
 

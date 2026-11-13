@@ -9,3 +9,7 @@
 - **RS5** The same derived value computed in two components (B4) instead of one selector/hook.
 - **RS6** Interactive elements without an accessible name, or a click handler on a non-button → **minor**,
   unless it blocks keyboard use → **major**.
+- **RS7** A token stored in `localStorage` or `sessionStorage` → **major**.
+- **RS8** A login return path taken from the URL without checking it is a local path (open redirect) → **major**.
+- **RS9** A secret placed in a `VITE_*` variable (it ships to the browser) → **blocker** (B8).
+- **RS10** A user-supplied URL put in `href` without checking the scheme (`javascript:`) → **major**.

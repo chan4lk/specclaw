@@ -7,3 +7,7 @@
 - **DN4** An inner Clean Architecture layer referencing an outer one (Domain → Infrastructure) → **major**.
 - **DN5** String-concatenated SQL or `FromSqlRaw` with interpolated input → **blocker** (B8).
 - **DN6** `IDisposable`/`HttpClient` created per call without `using` or a factory → **major**.
+- **DN7** A request model that binds an entity directly instead of a DTO (over-posting) → **major**.
+- **DN8** An endpoint with no authorization policy where the app has no fallback policy, or an anonymous route
+  not intended to be public → **blocker** (B13).
+- **DN9** CORS with `AllowAnyOrigin` combined with credentials → **major**.
