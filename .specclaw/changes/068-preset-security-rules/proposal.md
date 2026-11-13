@@ -41,21 +41,29 @@ hash, vetted libraries).
 Each preset stays under the 60-line limit. A test fails if a preset loses its Security rules or one
 of its required rules.
 
+**3. The review rule packs check the same things.** `specclaw-review` rules are what the reviewer checks
+after build. `plugins/specclaw-review/review-rules/` gets matching security rules, so the reviewer checks
+what the builder was told: base B11-B13 (access control, error leaks, password storage) and, per stack,
+authorization, input binding, CORS, redirects, token storage and the other traps above. Rules that already
+exist there (B8, DN5, ND3, PY4, RS4, NX1, NX2) are not repeated. Each rule carries a severity. A test fails
+if a pack loses one of its security rules.
+
 ## Scope
 
 ### In Scope
 - A `## Security` section in `presets/base.md` and in each of the five stack presets (`nextjs` and
   `react-spa` extend their existing Auth guard section, they do not replace it).
 - Tests that every one of them keeps its required rules.
+- Security rules in the six `specclaw-review` rule packs, and a test that each pack keeps them.
 - One patch version bump for the whole change.
 
 ### Out of Scope
-- Review rule packs (`specclaw-review`) and the `code-reviewer` agent.
+- The `code-reviewer` agent.
 - Pen-test style checks after build, and security scanners at verify.
 
 ## Impact
 
-- **Size:** bounded (alters six existing preset files and one test file)
-- **Files affected:** 8 (estimated) plus the version files
+- **Size:** bounded (alters six preset files, six review rule packs and two test files)
+- **Files affected:** 14 (estimated) plus the version files
 - **Complexity:** small
 - **Risk:** low

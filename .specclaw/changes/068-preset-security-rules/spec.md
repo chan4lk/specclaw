@@ -14,6 +14,9 @@
 - **FR-4** Each rule is one short line an agent can follow and a reviewer can check against code.
 - **FR-5** A test fails if a preset loses its section or any of its required rules, and names the
   missing one.
+- **FR-6** Each of the six `plugins/specclaw-review/review-rules/` packs has security rules with a
+  severity, listed below. They repeat no rule already in the pack (B8, DN5, ND3, PY4, RS4, NX1, NX2).
+- **FR-7** A test fails if a review pack loses one of those rules, and names its id.
 
 ## Required rules (keyword → what it covers)
 
@@ -35,6 +38,20 @@
   `sameSite`), Redirects (login return path must be a local path), Env (no secrets in `VITE_*`), Html
   (no `dangerouslySetInnerHTML` with unsanitised data), Links (no user-supplied URLs in `href`).
 
+## Required review rules (id → what it flags)
+
+- **base:** B11 (no caller or ownership check), B12 (stack trace or internal detail sent to the client),
+  B13 (home-made crypto, or a plain or fast digest for passwords).
+- **dotnet:** DN7 (entity bound directly), DN8 (no authorization policy), DN9 (`AllowAnyOrigin` with credentials).
+- **python:** PY8 (route without auth `Depends`), PY9 (`pickle`/`eval`/`exec`/`yaml.load` on external data),
+  PY10 (no timeout or `verify=False`), PY11 (request model without `extra="forbid"`).
+- **node:** ND6 (no auth hook), ND7 (no or non-strict schema), ND8 (`eval`, `new Function`, prototype
+  pollution), ND9 (CORS wildcard with credentials), ND10 (auth route without rate limit).
+- **nextjs:** NX5 (auth cookie flags), NX6 (redirect to user-supplied URL), NX7 (no CSP or security headers),
+  NX8 (unsanitised `dangerouslySetInnerHTML`).
+- **react-spa:** RS7 (token in web storage), RS8 (open redirect on login return), RS9 (secret in `VITE_*`),
+  RS10 (user-supplied URL in `href`).
+
 ## Non-Functional Requirements
 
 - Every preset stays within the 60-line limit (`run-preset-check-tests.sh` AC-10).
@@ -53,6 +70,10 @@
 - [ ] **AC-5** — GIVEN any one required rule deleted from any of the five stack presets, WHEN the
   test runs, THEN it fails and names the stack and the missing keyword. Every required rule of every
   stack is deleted in turn.
+- [ ] **AC-6** — GIVEN any of the six review packs, WHEN read, THEN it has a rule for every id listed
+  above for that pack.
+- [ ] **AC-7** — GIVEN any one of those rules deleted from a pack, WHEN the review test runs, THEN it
+  fails and names the pack and the rule id.
 
 ## Edge Cases
 
@@ -74,5 +95,7 @@ File map:
 - `plugins/specclaw/presets/base.md` — add `## Security`
 - `plugins/specclaw/presets/dotnet.md`, `python.md`, `node.md`, `nextjs.md`, `react-spa.md` — add `## Security`
 - `plugins/specclaw/tests/run-preset-check-tests.sh` — add the Security checks
+- `plugins/specclaw-review/review-rules/{base,dotnet,python,node,nextjs,react-spa}.md` — add the security rules
+- `plugins/specclaw-review/tests/run-review-tests.sh` — add the pack checks
 - version files (`plugins/*/.claude-plugin/plugin.json`, `plugins/*/.codex-plugin/plugin.json`,
   `.claude-plugin/marketplace.json`, `.agents/plugins/marketplace.json`) — patch bump per CLAUDE.md

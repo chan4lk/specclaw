@@ -2,12 +2,13 @@
 
 **Change:** 059-preset-security-rules
 **Created:** 2026-11-12
-**Total Tasks:** 4
+**Total Tasks:** 6
 
 ## Summary
 
 Add a `## Security` section to the base preset with a test that guards it, bump the version, then add
-stack-specific Security sections to the five stack presets and guard them with a test.
+stack-specific Security sections to the five stack presets and guard them with a test, then add matching
+security rules to the review rule packs and guard those with a test.
 
 ## Tasks
 
@@ -45,6 +46,24 @@ stack-specific Security sections to the five stack presets and guard them with a
   - Kind: test
   - Depends: T1, T3
   - Notes: reuse the T1 helper; one case per stack plus deleted-rule mutants that name stack and keyword.
+
+### Wave 5 — Review rule packs
+
+- [x] `T5` — Add security rules to the six specclaw-review rule packs (AC-6)
+  - Files: plugins/specclaw-review/review-rules/base.md, plugins/specclaw-review/review-rules/dotnet.md, plugins/specclaw-review/review-rules/python.md, plugins/specclaw-review/review-rules/node.md, plugins/specclaw-review/review-rules/nextjs.md, plugins/specclaw-review/review-rules/react-spa.md
+  - Estimate: small
+  - Kind: docs
+  - Depends: T3
+  - Notes: only the ids listed in spec.md; each with a severity; none repeat B8, DN5, ND3, PY4, RS4, NX1, NX2.
+
+### Wave 6 — Review pack test
+
+- [x] `T6` — Test that each review pack keeps its security rules (AC-7)
+  - Files: plugins/specclaw-review/tests/run-review-tests.sh
+  - Estimate: small
+  - Kind: test
+  - Depends: T5
+  - Notes: one presence check per pack plus a deleted-rule mutant per id, reported by id.
 
 ---
 
