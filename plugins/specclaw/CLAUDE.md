@@ -260,6 +260,7 @@ All executable scripts live in `bin/`. Key ones:
 | `specclaw-parse-tasks` | Parse `tasks.md` → JSON; **the only task counter** (`--count`) — see below |
 | `specclaw-bootstrap-snapshot` | The live state block the `SessionStart` hook injects: one row per active change and pending proposal, from `state.json` / `tasks.md` / `proposal.md`. Reads only — writes nothing anywhere, spawns no model, exits 0 on every path |
 | `specclaw-timer` | The timing ledger: `start` / `stop` / `report` (`--baseline`, `--write`) / `agent-runs` / `active`. Append-only JSONL, no locking, **exits 0 on every path but a usage error** |
+| `specclaw-suggest` | One install tip for an add-on plugin (`review` `fleet` `sync` `bf` `extras`) when it is missing and not in `plugins.dismissed`; `--dismiss <feature>` adds it there (a block list is folded into one inline list). Prints nothing on Codex (`CODEX_THREAD_ID`/`CODEX_SANDBOX` set). The feature table and install check are `lib/plugins.sh`, shared with `hooks/session-start`, whose notices also honour `plugins.dismissed`. **Exits 0 on every path** |
 | `specclaw-progress` | One line naming the active step, its elapsed time and the current bottleneck — what lets an operator or a watchdog judge liveness instead of guessing |
 | `specclaw-check-staged` | The staged-files gate: four buckets, `--json`, `--strict`. Exit 1 on a BLOCK, 2 on a usage error — a caller must be able to tell "this PR is wrong" from "you called me wrong" |
 | `specclaw-build` | Build orchestration: `setup` / `commit` / `finalize` / `worktree-path` / `synth-agent` / `check-report` (**the evidence gate on `done`**) / `review-package` (prepare one task's diff for a task-scoped review; read-only w.r.t. git) |
@@ -387,6 +388,7 @@ Suites live in `tests/`, are bash + coreutils only (no jq in the suites themselv
 | `run-debug-protocol-tests.sh` | the investigation record's grammar and its two refusals, the `architecture-question` halt and its four counting rules, halt-reason slugs, the fix agent's root-cause payload, and cause-based pattern clustering |
 | `run-change-size-tests.sh` | the size field's round-trip and carry-over, the per-size validation matrix (including the no-size row), every ratchet refusal, the status.md row, the re-required `design.md`, and the dashboard glyph |
 | `run-bootstrap-hook-tests.sh` | the session-start hook: both silent paths, JSON validity, the router and state content, the block-scoped `bootstrap.enabled` read against decoy keys, the byte cap, `max_lines`, and the snapshot's no-write guarantee |
+| `run-suggest-tests.sh` | `specclaw-suggest`: the tip line, installed on PATH or in the plugin cache, `--dismiss` (idempotent, creates the block, reads and folds a block list), unknown feature / no config / Codex silent; the shared lib and the hook honouring a dismissal; the `lesson` line from `specclaw-log-learning` and `specclaw-timer` skipping it; the skill call sites |
 | `run-description-lint-tests.sh` | **the lint itself**, not a test of it — `LEN` / `TRIGGER` / `NARRATION` over every `skills/*/SKILL.md`, against `description-lint-baseline.txt` |
 | `run-lint-meta-tests.sh` | the lint's rules, pinned against synthetic skills in a temp tree so they do not depend on what the real descriptions say today; plus the trigger fixture's shape and the runner's opt-in and fail-loud behaviour |
 | `run-trigger-tests.sh` | **opt-in, costs API calls** (`SPECCLAW_TRIGGER_EVALS=1`) — does an utterance reach the right verb. Nightly in `trigger-evals.yml`, never on push |
@@ -413,6 +415,10 @@ events per span, never a rewrite**. Three consequences, all of them the point:
   instead would make a hang indistinguishable from a step that never started — the exact question
   this exists to answer.
 - Nothing needs locking, so a timer call is one `date` and one `>>`.
+
+The ledger also holds lesson records (change 059): `specclaw-log-learning` appends one
+`{"kind":"lesson","at",…}` line per learning. It has no `ev` and no `ts`, so it is not a span, the
+timer skips it, and `update-status` elapsed time ignores it.
 
 **Every path exits 0** except a usage error. A build that failed because its *stopwatch* broke would
 be strictly worse than the unaccountability being fixed, and the call sites are inside the longest

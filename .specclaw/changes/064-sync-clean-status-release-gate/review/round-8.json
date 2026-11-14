@@ -1,0 +1,30 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 0
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw-review/lib/review_core.py",
+  "plugins/specclaw-review/skills/review/SKILL.md",
+  "plugins/specclaw-review/tests/run-review-tests.sh"
+ ],
+ "final": false,
+ "findings": [],
+ "head": "792803b141277cb8558eee77029f0f06fb4e51dc",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 15050,
+ "round": 8,
+ "since": "bfa99d76ac",
+ "status": "clean",
+ "system_chars": 8938,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794635315,
+ "ts_start": 1794635305
+}

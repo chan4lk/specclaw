@@ -77,24 +77,18 @@ section_val() {
     inblk && $0 ~ "^  " key ":" { v=$0; sub("^  " key ":[[:space:]]*","",v); print v; exit }
   ' "$CONFIG" 2>/dev/null | sed -E 's/[[:space:]]*#.*$//; s/[[:space:]]+$//' || true
 }
-# An add-on counts as installed when its command is on PATH, or when it sits next
-# to this plugin: plugins/<name>/bin in a checkout, <cache>/<owner>/<name>/<ver>/bin
-# in the plugin cache. The second check covers hook environments without plugin
-# bin/ dirs on PATH.
-PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-installed() {
-  command -v "$1" >/dev/null 2>&1 \
-    || compgen -G "$PLUGIN_ROOT/../$2/bin/$1" >/dev/null \
-    || compgen -G "$PLUGIN_ROOT/../../$2/*/bin/$1" >/dev/null
-}
-missing() { installed "$2" "$3" || NOTICE="${NOTICE}
-- This project uses $1, but the $3 plugin is not installed: /plugin install $3@chan4lk"; }
+# shellcheck disable=SC2034  # read by lib/plugins.sh
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$PLUGIN_DIR}"
 NOTICE=""
-[ -d ./.specclaw/analysis ] && missing "brownfield analysis" specclaw-bf-status specclaw-bf
-{ [ "$(section_val github sync)" = true ] || [ "$(section_val azdo enabled)" = true ] || [ "$(section_val jira enabled)" = true ]; } \
-  && missing "tracker sync" specclaw-gh-sync specclaw-sync
-{ [ "$(section_val party enabled)" = true ] || [ "$(section_val automation auto_mode)" = true ]; } \
-  && missing "the review panel or automation" specclaw-party specclaw-extras
+# A missing lib drops the notices, never the router (rule 2).
+# shellcheck disable=SC1091  # sourced lib, resolved at runtime
+if . "${PLUGIN_DIR}/lib/plugins.sh" 2>/dev/null; then
+  [ -d ./.specclaw/analysis ] && missing "brownfield analysis" bf
+  { [ "$(section_val github sync)" = true ] || [ "$(section_val azdo enabled)" = true ] || [ "$(section_val jira enabled)" = true ]; } \
+    && missing "tracker sync" sync
+  { [ "$(section_val party enabled)" = true ] || [ "$(section_val automation auto_mode)" = true ]; } \
+    && missing "the review panel or automation" extras
+fi
 [ -n "$NOTICE" ] && CONTEXT="${CONTEXT}
 
 ## Missing specclaw plugins${NOTICE}"

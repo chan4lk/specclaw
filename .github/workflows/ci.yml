@@ -65,6 +65,12 @@ jobs:
         run: bash plugins/specclaw-sync/tests/run-azdo-issue-claim-tests.sh
       - name: Run azdo-issue optin/whoami/records tests
         run: bash plugins/specclaw-sync/tests/run-azdo-issue-optin-tests.sh
+      - name: Run clean-loop status tests (GitHub)
+        run: bash plugins/specclaw/tests/run-review-status-tests.sh
+      - name: Run clean-loop status tests (AzDO)
+        run: bash plugins/specclaw-sync/tests/run-azdo-review-status-tests.sh
+      - name: Run release gate tests
+        run: bash plugins/specclaw-sync/tests/run-release-tests.sh
       - name: Ensure PyYAML for fleet tests
         run: python3 -c 'import yaml' || pip3 install --break-system-packages pyyaml
       - name: Run specclaw-fleet tests
@@ -122,6 +128,8 @@ jobs:
         run: bash plugins/specclaw/tests/run-change-size-tests.sh
       - name: Run session-bootstrap hook tests
         run: bash plugins/specclaw/tests/run-bootstrap-hook-tests.sh
+      - name: Run plugin-suggestion and lesson-record tests
+        run: bash plugins/specclaw/tests/run-suggest-tests.sh
       - name: Run description-lint meta tests
         run: bash plugins/specclaw/tests/run-lint-meta-tests.sh
       # The lint itself. Pure bash, no network, no API key — cheap enough to run
