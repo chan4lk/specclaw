@@ -11,7 +11,8 @@ export const dur = (ms: number) => {
 }
 const age = (ms: number) => (ms < 60000 ? 'just now' : `${dur(ms)} old`)
 export const tokens = (n: number) => (n >= 1e9 ? `${(n / 1e9).toFixed(1)}B` : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : String(n))
-const lowerBound = (t: TokenData) => (t.skipped > 0 ? '≥' : '')
+// A skipped transcript or an unreadable record is spend left out of every total, so the totals are a lower bound.
+const lowerBound = (t: TokenData) => (t.skipped > 0 || t.unreadable > 0 ? '≥' : '')
 export const money = (t: TokenData, usd: number) => `${lowerBound(t)}$${usd.toFixed(2)}`
 
 // A section that is not ok draws one line: its install card or its error. Never its old numbers.
@@ -47,7 +48,7 @@ const tokenLines = (t: TokenData) => [
   `  today (UTC) ${lowerBound(t)}${tokens(t.today.tokens)} tokens · ${money(t, t.today.usd)} · 7 days ${lowerBound(t)}${tokens(t.week.tokens)} tokens · ${money(t, t.week.usd)}`,
   ...t.sessions.map(s => `  ${pad(s.name, 28)} ${money(t, s.usd).padStart(9)}${s.context === null ? '' : ` · context ${Math.round((s.context / CONTEXT_WINDOW) * 100)}%`}`),
   `  by role: ${t.roles.map(r => `${r.name} ${money(t, r.usd)}`).join(' · ') || '-'}`,
-  `  ${t.files} transcripts${t.skipped ? ` · ${t.skipped} not counted, over 4 MiB or unreadable (totals are a lower bound)` : ''}${t.unreadable ? ` · ${t.unreadable} unreadable records` : ''}`,
+  `  ${t.files} transcripts${t.skipped ? ` · ${t.skipped} not counted, over 4 MiB or unreadable (totals are a lower bound)` : ''}${t.unreadable ? ` · ${t.unreadable} unreadable records (totals are a lower bound)` : ''}`,
 ]
 
 const section = <T>(title: string, s: Section<T>, draw: (d: T) => string[]) => [title, ...(s.kind === 'ok' ? draw(s.data) : other(s))]

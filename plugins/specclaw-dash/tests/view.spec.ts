@@ -55,6 +55,21 @@ test('R062 AC-5 a skipped big transcript makes every total a lower bound', () =>
   expect(bandText(view)).toContain('≥$3.20 today')
 })
 
+test.each([
+  ['none skipped', 0, 0, ''],
+  ['skipped only', 2, 0, '≥'],
+  ['unreadable only', 0, 3, '≥'],
+  ['both', 2, 3, '≥'],
+])('R062 AC-5 lower bound: %s', (_name, skipped, unreadable, mark) => {
+  const view = { ...VIEW, tokens: { kind: 'ok' as const, data: { ...TOKENS, skipped, unreadable } } }
+  const lines = paneLines(view, NOW)
+  expect(lines).toContain(`  today (UTC) ${mark}1.2M tokens · ${mark}$3.20 · 7 days ${mark}9.1M tokens · ${mark}$22.10`)
+  expect(lines).toContain(`  Build 062                      ${mark ? '' : ' '}${mark}$20.00 · context 34%`)
+  expect(lines).toContain(`  by role: main ${mark}$18.00 · code-reviewer ${mark}$4.10`)
+  expect(bandText(view)).toBe(`dash · 1 building · 1 in review · ${mark}$3.20 today, API-equivalent estimate`)
+  expect(statusText(view)).toBe(`dash: 1 building · ${mark}$3.20 today (API-equivalent estimate)`)
+})
+
 test('R062 AC-5 missing sources show their card; errors show one line and no numbers', () => {
   const view: DashView = {
     at: NOW,
