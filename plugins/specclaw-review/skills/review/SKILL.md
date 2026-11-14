@@ -64,6 +64,38 @@ The plugin's hook hands up to `review.recall_k` (default 3) past lessons to `/sp
 the files the change names, then similar lessons of other changes. Answer each. A "no" needs a task or a
 fix. A recall that fails says `recall unavailable`, and the work goes on.
 
+## The clean-loop PR status
+
+`/specclaw:pr` (`specclaw-pr`) and `specclaw-azdo-pr` post a `specclaw/review-loop` status (`clean`) on the
+PR once it exists. Branch policy can require it. They post only when
+`specclaw-review verdict --change <change> --head <pr-head-sha>` exits 0: the verdict is clean **and** the
+final pass ran at that SHA, or the net change from the final pass to that SHA touches only `.specclaw/` paths. So the round
+records (step 5) and the PR bookkeeping commit keep the status. A commit that touches any other path, docs
+included, gets no status. The `ci/` templates post the same status from the pipeline. Nothing here approves
+or merges a PR.
+
+## Fast track and the release gate
+
+```yaml
+review:
+  fast_track: all            # or [<change>, ...]; off by default
+release_gate:
+  block_on: [law, security, data-loss]   # the default
+```
+
+- **Fast track.** For a covered change, every `run` is the final pass: one round over the whole change.
+  Only `blocker` findings whose class is in `release_gate.block_on` must be fixed. Every other finding goes
+  to `.specclaw/debt.md` through the review writer, never by hand. Tick an item (`- [x]`) when it is fixed.
+- **Class.** Each finding carries `class`: `law`, `security`, `data-loss` or `other`. A blocker or major
+  the reviewer left unlabelled is written as `unclassified` (fail closed): an unlabelled blocker keeps the
+  fast-track round open, and an unlabelled major goes to `debt.md` and blocks at release. An unlabelled minor
+  is `other`.
+- **Release gate.** `specclaw-sync release <base> <target>` (from specclaw-sync) lists every open
+  `debt.md` and `follow-ups.md` item that the range adds. It exits 1 only when an item's class is in
+  `block_on`, or is `unclassified`. Other debt is listed and released.
+- **Closing an item.** Tick a `debt.md` item (`- [x]`) when it is fixed. A `follow-ups.md` line has no
+  checkbox: delete it, or change its leading `- [` to `- [x] [`, when it is fixed.
+
 ## Rules
 
 `specclaw-review rules` prints the exact rulebook, in this order:
