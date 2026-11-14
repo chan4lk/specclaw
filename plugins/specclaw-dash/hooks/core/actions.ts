@@ -67,7 +67,7 @@ export const parseDismissed = (text: string) => text.split('\n').map(l => l.trim
 
 // The Bash tool gives no exit code, so the runner prints one after the command's output.
 const MARK = '__dash_exit='
-export const wrap = (cwd: string, command: string) => `cd ${quote(cwd)} && { ${command} ; } 2>&1; echo "${MARK}$?"`
+export const wrap = (cwd: string, command: string) => `{ cd ${quote(cwd)} && { ${command} ; } ; } 2>&1; echo "${MARK}$?"`
 export const unwrap = (stdout: string) => {
   const at = stdout.lastIndexOf(MARK)
   if (at < 0) return { code: -1, out: stdout.trimEnd() } // cut off before the mark: the exit code is unknown

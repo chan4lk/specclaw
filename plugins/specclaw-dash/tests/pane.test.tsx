@@ -201,7 +201,7 @@ type Answer = { stdout: string } | { deny: string }
 const shell = (on: Parameters<Parameters<typeof test>[1]>[1], answer: (command: string) => Answer) => {
   const ran: string[] = []
   on('tool.call', (_, e) => {
-    const inner = /^cd '\/x' && \{ (.*) ; \} 2>&1; echo "__dash_exit=\$\?"$/.exec(String((e as { command?: unknown }).command))
+    const inner = /^\{ cd '\/x' && \{ (.*) ; \} ; \} 2>&1; echo "__dash_exit=\$\?"$/.exec(String((e as { command?: unknown }).command))
     if (e.tool !== 'Bash' || !inner) throw new Error(`unexpected tool call ${JSON.stringify(e)}`)
     ran.push(inner[1]!)
     const a = answer(inner[1]!)

@@ -90,7 +90,7 @@ function Actions$($: EngineInterface, e: Parameters<EngineInterface['ui']['resol
         </Box>
       ))}
       {a.last && <Text>{`  last: ${a.last.command || '(refused)'} · ${a.last.code === null ? 'sent to the prompt' : `exit ${a.last.code}`}`}</Text>}
-      {a.last && a.last.out.split('\n').slice(-12).map(line => <Text dimColor>{`    ${line}`}</Text>)}
+      {a.last && a.last.out.split('\n').slice(-12).map((line, i) => <Text key={`last-${i}`} dimColor>{`    ${line}`}</Text>)}
     </Box>
   )
 }

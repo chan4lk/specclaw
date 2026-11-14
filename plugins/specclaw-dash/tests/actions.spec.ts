@@ -57,7 +57,7 @@ test('R063 AC-1 caps JSON from specclaw-budget roles (065), sorted; any other sh
 
 test('R063 AC-1 the dismissed list, and the exit code the runner appends', () => {
   expect(parseDismissed('review\nbf\n\n')).toEqual(['review', 'bf'])
-  expect(wrap('/r', 'specclaw-x')).toBe(`cd '/r' && { specclaw-x ; } 2>&1; echo "__dash_exit=$?"`)
+  expect(wrap('/r', 'specclaw-x')).toBe(`{ cd '/r' && { specclaw-x ; } ; } 2>&1; echo "__dash_exit=$?"`)
   expect(unwrap('line\n__dash_exit=4\n')).toEqual({ code: 4, out: 'line' })
   expect(unwrap('cut off')).toEqual({ code: -1, out: 'cut off' })
 })

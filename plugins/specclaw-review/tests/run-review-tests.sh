@@ -422,9 +422,10 @@ check "AC-7 learn_threshold: 2 proposes it" '"$SR" learn | grep -q "^- fp "'
 git checkout -q -- .specclaw/config.yaml
 mkdir -p .specclaw/changes/003-c; "$SR" run --change 003-c >/dev/null
 check "AC-7 a lesson seen in 3 changes is proposed" '"$SR" learn | grep -q "seen 3x"'
-fp="$("$SR" learn | sed -nE 's/^- fp ([0-9a-f]+).*/\1/p' | head -1)"
+proposed="$("$SR" learn | grep -m1 "^- fp ")"; fp="$(sed -nE 's/^- fp ([0-9a-f]+).*/\1/p' <<<"$proposed")"
+lesson="$(sed -E 's/^- fp [0-9a-f]+ \[[^]]*\] seen [0-9]+x in [^:]*: //' <<<"$proposed")"
 "$SR" learn --reject "$fp" >/dev/null; rc=$?
-check "063 AC-6 learn --reject stops proposing the lesson and keeps it for recall" '[ "$rc" = 0 ] && [ -n "$fp" ] && "$SR" learn | grep -q "no recurring lessons" && "$SR" memory query --files x | grep -q .'
+check "063 AC-6 learn --reject stops proposing the lesson and keeps it for recall" '[ "$rc" = 0 ] && [ -n "$fp" ] && "$SR" learn | grep -q "no recurring lessons" && [ -n "$lesson" ] && "$SR" memory query --files x | grep -qF "$lesson"'
 "$SR" learn --reject "$fp" >/dev/null 2>&1; rc=$?
 check "063 AC-6 rejecting a lesson that is not proposed exits 2" '[ "$rc" = 2 ]'
 
