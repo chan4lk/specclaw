@@ -62,8 +62,7 @@ export type DashView = {
 // A role's context cap as `specclaw-budget roles --json` prints it (change 065).
 export type CapRow = { role: string; context: number; default: number; min: number; max: number; source: string }
 
-// What the pane's actions hold: the launch selection, the dry run of exactly that selection, the last command
-// and what it printed (code null: it was put into the prompt, not run), and the caps and dismissed lists.
+// The launch selection, the dry run of exactly it, the last command (code null: put into the prompt), the lists.
 export type Ran = { command: string; code: number | null; out: string }
 export type Actions = {
   selected: string[]

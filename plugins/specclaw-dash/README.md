@@ -26,29 +26,23 @@ in Codex, so its Codex manifest carries metadata only.
 
 ## Actions
 
-Each action runs one existing command through the Bash tool. That tool has the plugins' `bin/` folders on
-`PATH`, and your permission rules decide whether the command runs. When no rule allows it (for example in default
-mode), the pane puts the exact command into the prompt for you to send. The pane shows each command, its exit
-code and the end of its output.
+Each action runs one existing command through the Bash tool, which has the plugins' `bin/` folders on `PATH`;
+your permission rules decide whether it runs. When no rule allows it, the pane puts the exact command into the
+prompt for you to send. A value that does not match its fixed pattern is never put into a command.
 
 | Action | Command |
 |---|---|
 | **Launch:** pick approved changes (before build, no PR) or `**Feature:**` modules, then **Dry run** | `specclaw-fleet optin <items> --dry-run` |
-| **Confirm launch:** shown only after a dry run of exactly the selection | `specclaw-fleet optin <ok> && specclaw-fleet trigger <change> … && specclaw-fleet feature start <module>` |
-| **Approve** / **Reject** a rule `learn` proposes | `specclaw-review learn --apply <fp>` / `specclaw-review learn --reject <fp>` |
-| **Show caps**, then type a new cap and press Enter | `specclaw-budget roles --json <dir>` / `specclaw-budget set <dir> <role> <n>` |
-| **Show dismissed**, then **Undo** | `specclaw-suggest <dir> --dismissed` / `specclaw-suggest <dir> --undismiss <feature>` |
+| **Confirm launch**, only after a dry run of exactly the selection | `specclaw-fleet optin <ok> && specclaw-fleet trigger <change> … && specclaw-fleet feature start <module>` |
+| **Approve** / **Reject** a proposed rule (a rejected lesson stays in memory) | `specclaw-review learn --apply <fp>` / `--reject <fp>` |
+| **Show caps**, then type a cap and press Enter | `specclaw-budget roles --json <dir>` / `specclaw-budget set <dir> <role> <n>` |
+| **Show dismissed**, then **Undo** | `specclaw-suggest <dir> --dismissed` / `--undismiss <feature>` |
 
-- **Launch follows fleet's consent rule.** `optin` runs as the identity behind your own `AZDO_TOKEN`. It assigns
-  each item to you and adds `fleet:auto` as you, and it refuses an item assigned to someone else. Confirm offers
-  only the items the dry run did not refuse, and `trigger` checks consent again before it spends your plan. Confirm
-  spends your plan and pushes a branch. Without specclaw-fleet, or with fleet not set up, Launch shows how to set
-  it up and offers no Confirm.
-- **Caps** need `specclaw-budget` (the context-gate release, change 065). Without it the part shows one note
-  and no controls. The pane never writes `config.yaml`; `specclaw-budget set` checks the range.
-- A rejected rule is not proposed again. Its lesson stays in review memory.
-- Every value put into a command (change, module, fingerprint, role, number, feature) must match a fixed
-  pattern, or the action is refused before anything runs.
+- **Launch follows fleet's consent rule.** `optin` runs as the identity behind your own `AZDO_TOKEN`: it assigns
+  each item to you, adds `fleet:auto` as you, and refuses an item assigned to someone else. Confirm offers only
+  what the dry run did not refuse; it spends your plan and pushes a branch. Without fleet set up, Launch shows how.
+- **Caps** need `specclaw-budget` (change 065); without it the part shows one note. The pane never writes
+  `config.yaml`.
 
 **Cost is an API-equivalent estimate:** what the same tokens would cost at API list prices. It is not a bill,
 and on a subscription plan it is not what you pay. Prices are in `hooks/core/scan.ts`.

@@ -6,7 +6,6 @@ import { act, readActions, updateActions } from './act.ts'
 import { notify, readView, refreshQuietly } from './read.ts'
 
 const PANE = 'dash'
-const MAX_OUT = 12
 
 const specclawDir = async ($: EngineInterface) => `${await $.session.cwd()}/.specclaw`
 
@@ -27,14 +26,9 @@ async function launch($: EngineInterface) {
   await act($, () => commands.launch(plan.launchable), () => ({ selected: [], plan: null }))
 }
 
-const loadCaps = async ($: EngineInterface) => {
-  const dir = await specclawDir($)
-  await act($, () => commands.caps(dir), ran => ({ caps: listSection(ran, parseCaps, CAPS_NOTE) }), true)
-}
-const loadDismissed = async ($: EngineInterface) => {
-  const dir = await specclawDir($)
-  await act($, () => commands.dismissed(dir), ran => ({ dismissed: listSection(ran, parseDismissed, 'specclaw-suggest is not on PATH: /plugin install specclaw@chan4lk') }), true)
-}
+const loadCaps = ($: EngineInterface) => specclawDir($).then(dir => act($, () => commands.caps(dir), ran => ({ caps: listSection(ran, parseCaps, CAPS_NOTE) }), true))
+const loadDismissed = ($: EngineInterface) => specclawDir($).then(dir =>
+  act($, () => commands.dismissed(dir), ran => ({ dismissed: listSection(ran, parseDismissed, 'specclaw-suggest is not on PATH: /plugin install specclaw@chan4lk') }), true))
 
 function Actions$($: EngineInterface, e: Parameters<EngineInterface['ui']['resolve']>[0], view: DashView, a: Actions) {
   const { Box, Text, Button, Input } = $.ui.resolve(e)
@@ -92,7 +86,7 @@ function Actions$($: EngineInterface, e: Parameters<EngineInterface['ui']['resol
         </Box>
       ))}
       {a.last && <Text>{`  last: ${a.last.command || '(refused)'} · ${a.last.code === null ? 'sent to the prompt' : `exit ${a.last.code}`}`}</Text>}
-      {a.last && a.last.out.split('\n').slice(-MAX_OUT).map(line => <Text dimColor>{`    ${line}`}</Text>)}
+      {a.last && a.last.out.split('\n').slice(-12).map(line => <Text dimColor>{`    ${line}`}</Text>)}
     </Box>
   )
 }

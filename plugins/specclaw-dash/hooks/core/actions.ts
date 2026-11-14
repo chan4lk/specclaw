@@ -1,16 +1,10 @@
-// Each pane action as the one existing command it runs, and the parsers for what those commands print. Pure.
-// The pane owns no logic: specclaw-fleet, specclaw-review, specclaw-budget (065) and specclaw-suggest decide.
+// Each pane action as the one existing command it runs, and parsers for what those print. Pure; the commands decide.
 import type { CapRow, ChangeRow, Section } from '../../types/index.d.ts'
 
 // Every value put into a command must match its pattern, or the action is refused before a command exists.
 const CHANGE = /^\d{3}-[a-z0-9][a-z0-9-]*$/
-const PATTERNS = {
-  'feature module': /^[a-z][a-z0-9_-]*$/,
-  fingerprint: /^[0-9a-f]{6,64}$/,
-  role: /^[a-z][a-z0-9_-]*$/,
-  number: /^\d{1,9}$/,
-  feature: /^[a-z]+$/,
-} as const
+const PATTERNS = { 'feature module': /^[a-z][a-z0-9_-]*$/, fingerprint: /^[0-9a-f]{6,64}$/, role: /^[a-z][a-z0-9_-]*$/,
+  number: /^\d{1,9}$/, feature: /^[a-z]+$/ } as const
 
 export const valid = (what: keyof typeof PATTERNS, value: string) => {
   if (!PATTERNS[what].test(value)) throw new Error(`refused: ${what} ${JSON.stringify(value)} is not a valid value`)
@@ -44,9 +38,8 @@ export const launchItems = (changes: ChangeRow[]) => [
   ...[...new Set(changes.flatMap(c => (c.feature ? [c.feature] : [])))].sort(),
 ]
 
-// `optin --dry-run` prints one `<item>: …` line per item. Only `would …` and `already opted in by …` can
-// launch; `refused: assigned to …` (someone else's) and any error cannot. No line for any item means fleet
-// could not run at all (not set up, no token), and nothing is launchable.
+// `optin --dry-run` prints `<item>: …` per item; only `would …` and `already opted in by …` can launch (never
+// `refused: assigned to …`, someone else's). No line for any item: fleet could not run at all (not set up).
 export const dryRunResult = (list: string[], out: string) => {
   const said = (i: string) => out.split('\n').find(l => l.startsWith(`${i}: `))?.slice(i.length + 2)
   return {

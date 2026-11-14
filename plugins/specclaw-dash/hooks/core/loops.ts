@@ -104,8 +104,7 @@ export const proposedCount = (text: string) => {
   throw new Error('learn_propose answered in an unknown form')
 }
 
-// Its rule lines: `- fp <fp> [<severity> <rule>] seen <n>x in <files>: <lesson>`. A count that does not match
-// the lines is an unknown form, never a partial list.
+// `- fp <fp> [<severity> <rule>] seen <n>x in <files>: <lesson>`; a count that does not match is an unknown form.
 const RULE = /^- fp ([0-9a-f]+) \[[^\]]*\] seen (\d+)x in .*?: (.*)$/
 export const proposedRules = (text: string): RuleRow[] => {
   const count = proposedCount(text)
