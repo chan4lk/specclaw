@@ -27,20 +27,22 @@ PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$CORE_DIR}"
 if [ "$2" = "--dismiss" ]; then
   f="${3:-}"
   plugin_feature "$f" >/dev/null || { echo "specclaw-suggest: unknown feature '$f'" >&2; exit 0; }
-  [ -f "$CONFIG" ] || exit 0
+  fail() { echo "specclaw-suggest: could not record dismissal of '$f' in $CONFIG" >&2; rm -f "${tmp:-}"; exit 0; }
+  [ -f "$CONFIG" ] || fail
   plugin_dismissed "$f" && exit 0
   list="$(plugins_dismissed | sed 's/ /, /g')"
   list="${list:+$list, }$f"
-  tmp="$(mktemp "$CONFIG.XXXXXX")" || exit 0
-  if awk -v line="  dismissed: [$list]" '
+  tmp="$(mktemp "$CONFIG.XXXXXX")" || fail
+  cp -p "$CONFIG" "$tmp" || fail
+  awk -v line="  dismissed: [$list]" '
     /^[a-zA-Z_]/ { if (inblk && !done) { print line; done = 1 } inblk = ($0 ~ /^plugins:/); skip = 0 }
     inblk && /^  dismissed:/ { if (!done) print line; done = 1; skip = 1; next }
     skip && /^[[:space:]]+-[[:space:]]/ { next }
     skip && /^[[:space:]]*(#.*)?$/ { print; next }
     { skip = 0; print }
     END { if (inblk && !done) print line; else if (!done) printf "\nplugins:\n%s\n", line }
-  ' "$CONFIG" > "$tmp" 2>/dev/null; then cat "$tmp" > "$CONFIG"; fi
-  rm -f "$tmp"
+  ' "$CONFIG" > "$tmp" 2>/dev/null || fail
+  mv "$tmp" "$CONFIG" || fail
   exit 0
 fi
 
