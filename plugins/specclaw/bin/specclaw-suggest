@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# specclaw-suggest — one install tip for an add-on plugin, at the moment it would help (change 059).
+#
+# Usage:
+#   specclaw-suggest <specclaw_dir> <feature>             feature: review fleet dash sync bf
+#   specclaw-suggest <specclaw_dir> --dismiss <feature>   never suggest it again
+#
+# Prints one line only when the feature's plugin is not installed and the feature
+# is not in config.yaml `plugins.dismissed`:
+#   Tip: <what it adds>. Install: /plugin install <plugin>@chan4lk (say "no" to never see this again)
+# Prints nothing on Codex: `/plugin install` is Claude Code syntax. Codex sets
+# CODEX_THREAD_ID (and CODEX_SANDBOX when sandboxed) in its shell tool environment.
+#
+# Every path exits 0. A tip is never the reason a skill stops.
+
+set -u
+
+[ $# -ge 2 ] || exit 0
+CONFIG="$1/config.yaml"
+CORE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" || exit 0
+# shellcheck disable=SC2034  # read by lib/plugins.sh
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$CORE_DIR}"
+
+# feature → command the plugin ships, plugin name, what it adds
+feature() {
+  case "$1" in
+    review) echo "specclaw-review|specclaw-review|a review loop checks each change against your project's rules before its PR" ;;
+    fleet)  echo "specclaw-fleet|specclaw-fleet|run approved changes in parallel as headless jobs" ;;
+    dash)   echo "specclaw-dash|specclaw-dash|one pane shows the build, review and learning loops" ;;
+    sync)   echo "specclaw-gh-sync|specclaw-sync|keep changes in step with GitHub issues, Azure Boards or Jira" ;;
+    bf)     echo "specclaw-bf-status|specclaw-bf|brownfield analysis maps an existing codebase before you change it" ;;
+    *) return 1 ;;
+  esac
+}
+
+dismissed() {
+  awk '
+    /^[a-zA-Z_]/ { inblk = ($0 ~ /^plugins:/); next }
+    inblk && /^  dismissed:/ { sub(/^  dismissed:[[:space:]]*/, ""); sub(/[[:space:]]*#.*$/, ""); gsub(/[][,"'"'"']/, " "); print; exit }
+  ' "$CONFIG" 2>/dev/null
+}
+
+is_dismissed() { case " $(dismissed | xargs) " in *" $1 "*) return 0 ;; esac; return 1; }
+
+if [ "$2" = "--dismiss" ]; then
+  f="${3:-}"
+  feature "$f" >/dev/null || { echo "specclaw-suggest: unknown feature '$f'" >&2; exit 0; }
+  [ -f "$CONFIG" ] || exit 0
+  is_dismissed "$f" && exit 0
+  list="$(dismissed | xargs | sed 's/ /, /g')"
+  list="${list:+$list, }$f"
+  if awk -v line="  dismissed: [$list]" '
+    /^[a-zA-Z_]/ { if (inblk && !done) { print line; done = 1 } inblk = ($0 ~ /^plugins:/) }
+    inblk && /^  dismissed:/ { if (!done) print line; done = 1; next }
+    { print }
+    END { if (inblk && !done) print line; else if (!done) printf "\nplugins:\n%s\n", line }
+  ' "$CONFIG" > "$CONFIG.tmp" 2>/dev/null; then mv "$CONFIG.tmp" "$CONFIG"; else rm -f "$CONFIG.tmp"; fi
+  exit 0
+fi
+
+[ -n "${CODEX_THREAD_ID:-}${CODEX_SANDBOX:-}" ] && exit 0
+[ -f "$CONFIG" ] || exit 0
+spec="$(feature "$2")" || exit 0
+IFS='|' read -r cmd plugin what <<<"$spec"
+is_dismissed "$2" && exit 0
+# shellcheck disable=SC1091  # sourced lib, resolved at runtime
+. "$CORE_DIR/lib/plugins.sh" 2>/dev/null || exit 0
+installed "$cmd" "$plugin" && exit 0
+echo "Tip: $what. Install: /plugin install $plugin@chan4lk (say \"no\" to never see this again)"
+exit 0
