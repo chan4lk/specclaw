@@ -1,0 +1,11 @@
+{
+  "change": "061-review-recall-fix-proof",
+  "phase": "tasks",
+  "branch": "",
+  "size": "bounded",
+  "phases": {
+    "proposal": {"status":"approved","at":"2026-11-14T04:47:17Z"},
+    "spec": {"status":"done","at":"2026-11-14T06:35:42Z"},
+    "tasks": {"status":"done","at":"2026-11-14T06:35:42Z"}
+  }
+}
