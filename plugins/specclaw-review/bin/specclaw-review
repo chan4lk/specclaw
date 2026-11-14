@@ -76,7 +76,7 @@ def main(argv):
             if proof:
                 print(f"  fix-proof: {'proven' if proof['status'] == 'proven' else 'not proven'}: {proof['reason']}")
             for f in rec["findings"]:
-                tag = " (pre-existing)" if f.get("pre_existing") else " (carried: fix not proven)" if f.get("carried") else ""
+                tag = " (pre-existing)" if f.get("pre_existing") else f" (carried: {f['carried']})" if f.get("carried") else ""
                 print(f"  {f['severity']}{tag} [{f.get('rule','')}] {f['file']}:{f['line']} {f.get('message','')}")
             if rec.get("error"):
                 print(f"  NOT RUN: {rec['error']}", file=sys.stderr)

@@ -53,10 +53,10 @@ def recall(root, change, verb):
     cfg = rc.Config(root)
     cdir = rc.change_dir(cfg, change)
     k = cfg.num("recall_k", 3)
-    files = sorted(set(PATH.findall(read(cdir, "tasks.md", "spec.md", "proposal.md"))))
+    files = sorted(set(PATH.findall(read(cdir, "change.md", "tasks.md", "spec.md", "proposal.md"))))
     checks = [(lesson, "this change") for lesson in lessons(cdir)]
     checks += [(e.get("lesson", ""), "review memory") for e in mem.closest(cfg.mem_dir, files, k)]
-    words = set(WORD.findall(read(cdir, "proposal.md").lower()))
+    words = set(WORD.findall(read(cdir, "change.md", "proposal.md").lower()))   # lean flow: change.md
     others = []
     for d in glob.glob(os.path.join(glob.escape(cfg.sc), "changes", "*")) + \
             glob.glob(os.path.join(glob.escape(cfg.sc), "changes", "archive", "*")):

@@ -731,7 +731,11 @@ def run_round(cfg, change, since=None, final=False):
     base, carried = _proof_due(prev, since, final)
     if base:
         rec["fix_proof"] = fix_proof(cfg, base)
-        carried = [] if rec["fix_proof"]["status"] == "proven" else [dict(f, carried=True) for f in carried]
+        proven = rec["fix_proof"]["status"] == "proven"
+        # A proof is per round, not per finding: a finding whose file the fix never touched stays open anyway.
+        touched = set(git(cfg.root, "diff", "--name-only", f"{base}..HEAD", check=False).splitlines())
+        carried = [dict(f, carried="its file did not change since the pre-fix commit" if proven else "fix not proven")
+                   for f in carried if not proven or f["file"] not in touched]
     try:
         if cls["tier"] == "skip":
             rec["status"] = "skipped"

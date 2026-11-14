@@ -331,6 +331,13 @@ mkdir -p tests && echo 'grep -q "a + 2" a.py' > tests/check_fix.sh && fix
 out_json '[]'; "$SR" run --change "$CH" --since "$H1" >/dev/null; rc=$?
 check "AC-4 a test that fails on the pre-fix commit and passes on HEAD proves the fix; the round is clean" '[ "$rc" = 0 ] && [ "$(proof 2 status)" = proven ] && [ "$(proof 2 base)" = "$H1" ] && [ "$(carried 2)" = 0 ] && [ -z "$(git worktree list | sed 1d)" ]'
 
+fpround "$TMP/fp7" "sh {files}"
+out_json '[{"severity":"major","rule":"B1","file":"a.py","line":2,"message":"off by one","scenario":"s","in_delta":true},{"severity":"major","rule":"B6","file":"b.py","line":2,"message":"unchecked call","scenario":"s","in_delta":true}]'
+"$SR" run --change "$CH" >/dev/null; H2="$(git rev-parse HEAD)"
+mkdir -p tests && echo 'grep -q "a + 2" a.py' > tests/check_fix.sh && fix
+out_json '[]'; "$SR" run --change "$CH" --since "$H2" >/dev/null; rc=$?
+check "AC-4 a proven fix still carries a finding whose file it never touched" '[ "$rc" = 1 ] && [ "$(proof 3 status)" = proven ] && [ "$(field "$RD/round-3.json" "\",\".join(f[\"file\"] for f in d[\"findings\"] if f.get(\"carried\"))")" = b.py ]'
+
 fpround "$TMP/fp3" "sh {files}"
 mkdir -p tests && echo 'exit 0' > tests/check_fix.sh && fix
 out_json '[]'; "$SR" run --change "$CH" --since "$H1" >/dev/null; rc=$?
@@ -393,6 +400,8 @@ check "AC-1 a Skill call of specclaw:build recalls too; a similar lesson of anot
 check "AC-1 other prompts and skills print nothing" '[ -z "$(hook "{\"prompt\":\"hello\",\"cwd\":\"$TMP/rc\"}")" ] && [ -z "$(hook "{\"tool_input\":{\"skill\":\"specclaw:verify\",\"args\":\"010-new\"},\"cwd\":\"$TMP/rc\"}")" ] && [ -z "$(hook "not json")" ]'
 u="$(ctx "{\"prompt\":\"/specclaw:build 404-none\",\"cwd\":\"$TMP/rc\",\"hook_event_name\":\"UserPromptSubmit\"}")"; urc=$?
 check "AC-2 a missing change says recall unavailable, exit 0" '[ "$urc" = 0 ] && grep -q "recall unavailable" <<<"$u"'
+mkdir -p .specclaw/changes/012-lean && printf '# Change\nTouches `src/pay/export.py`.\n' > .specclaw/changes/012-lean/change.md
+check "AC-1 a lean change (change.md only) recalls memory for the files it names" 'ctx "{\"prompt\":\"/specclaw:build 012-lean\",\"cwd\":\"$TMP/rc\"}" | grep -q "memory lesson for export"'
 mkdir -p .specclaw/changes/011-empty
 check "AC-2 no lessons is said, not silent" 'ctx "{\"prompt\":\"/specclaw:plan 011-empty\",\"cwd\":\"$TMP/rc\"}" | grep -q "no past lessons"'
 check "AC-8 hooks.json registers recall on UserPromptSubmit and PostToolUse(Skill)" 'python3 - "$PLUGIN_DIR/hooks/hooks.json" <<"PY"

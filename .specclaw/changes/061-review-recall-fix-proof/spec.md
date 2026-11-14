@@ -12,7 +12,8 @@
 - **FR-2 Recall sources, in this order:** the change's own `lesson` lines in `timeline.jsonl` (059), newest
   first; then memory lessons whose files share a file, folder or top folder with the change's files (the
   `memory_query` ranking); then `lesson` lines of other changes that share at least two words with the
-  change's proposal. The change's files are the paths named in its `tasks.md`, `spec.md` and `proposal.md`.
+  change's proposal. The change's files are the paths named in its `change.md` (lean flow), `tasks.md`, `spec.md` and
+  `proposal.md`.
   The change is found from the event's `cwd` upwards.
 - **FR-3 Recall never fails silently.** Any error prints `specclaw-review recall unavailable: <reason>` as the
   context. No lesson prints `specclaw-review recall: no past lessons for <change>`.
@@ -24,7 +25,8 @@
 - **FR-5 Not proven keeps findings open.** Every other outcome is `not proven: <reason>`: no
   `test_command`, no changed test file, a checkout that fails, tests that pass on the pre-fix commit, tests
   that fail on HEAD, a timeout. The previous round's blocker/major findings are then carried into this round
-  (`carried: true`), so the round is `open` (or `escalate`). The result is recorded as `fix_proof` in the round
+  (`carried: <reason>`), so the round is `open` (or `escalate`). A proven round still carries a finding whose
+  file did not change since the pre-fix commit: the proof is per round, so it cannot clear a file it never touched. The result is recorded as `fix_proof` in the round
   file, printed by the CLI and returned by `review_run`.
 - **FR-6** A `--final` pass right after a not-proven round runs the same check, so a final pass cannot clear an
   unproven fix.
@@ -36,10 +38,12 @@
 ## Acceptance Criteria
 
 - **AC-1:** `/specclaw:plan <c>` and a Skill call `specclaw:build` with args `<c>` both return the lessons as
-  yes/no checks, own-change first, memory next, capped at `recall_k`; other prompts return nothing.
+  yes/no checks, own-change first, memory next, capped at `recall_k`; a lean `change.md` names files too;
+  other prompts return nothing.
 - **AC-2:** A missing change returns `recall unavailable`, exit 0, valid JSON.
 - **AC-3:** A since round with an open major and no `test_command` → `not proven`, the major carried, exit 1.
-- **AC-4:** A test that fails on the pre-fix commit and passes on HEAD → `proven`, a clean round exits 0.
+- **AC-4:** A test that fails on the pre-fix commit and passes on HEAD → `proven`, a clean round exits 0; a
+  finding in a file the fix never touched is still carried.
 - **AC-5:** A test that passes on the pre-fix commit, or fails on HEAD, or no changed test → `not proven`
   with that reason.
 - **AC-6:** After a not-proven round, a later test is checked against the first pre-fix commit; a `--final`
