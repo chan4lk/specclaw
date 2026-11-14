@@ -16,7 +16,7 @@ const PRICES: [string, [number, number, number]][] = [
   ['claude-fable-5-1', [10, 50, 0.25]],
   ['claude-haiku-5-5', [0.1, 0.5, 0.01]],
 ]
-const DEAREST: [number, number, number] = [10, 50, 0.25]
+const DEAREST = PRICES.reduce((a, b) => (b[1][0] > a[1][0] ? b : a))[1]
 
 // Longest id first, so `claude-opus-5-5[1m]` is opus-5-5 and not opus-5.
 const BY_LENGTH = [...PRICES].sort((a, b) => b[0].length - a[0].length)

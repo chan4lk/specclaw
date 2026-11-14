@@ -18,7 +18,7 @@ const REVIEW_MCP = 'plugin:specclaw-review:specclaw-review'
 
 // The scan state: a reload starts it over, which is a full rescan.
 const scans = new Map<string, FileScan>()
-const roles = new Map<string, string | null>()
+const roles = new Map<string, string>()
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
@@ -28,8 +28,10 @@ async function text($: EngineInterface, path: string) {
   if (typeof value !== 'string') throw new Error(`${path} is not text`)
   return value
 }
-async function quietText($: EngineInterface, path: string) {
-  return text($, path).catch(() => undefined)
+// For HEAD: a missing path or a folder is undefined; any other failed read throws, so HEAD reads as unknown.
+async function fileText($: EngineInterface, path: string) {
+  if (!(await $.fs.exists(path)) || (await $.fs.stat(path)).kind !== 'file') return undefined
+  return text($, path)
 }
 
 type ChangeRead = { row: ChangeRow; rounds: { n: number; text: string }[]; lessons: LessonRow[] }
@@ -84,7 +86,7 @@ async function readLoops($: EngineInterface, cwd: string): Promise<Pick<DashView
   let review: Section<ReviewRow[]>
   if (reviewed.length === 0 && rules.kind === 'missing') review = { kind: 'missing', card: 'Review loop: no rounds yet. Install specclaw-review: /plugin install specclaw-review@chan4lk' }
   else {
-    const head = reviewed.length ? await resolveHead(path => quietText($, path), cwd) : null
+    const head = reviewed.length ? await resolveHead(path => fileText($, path), cwd).catch(() => null) : null
     try {
       review = { kind: 'ok', data: reviewed.map(c => reviewRow(c.row.name, c.rounds, head)) }
     } catch (error) {
@@ -98,21 +100,24 @@ async function readLoops($: EngineInterface, cwd: string): Promise<Pick<DashView
   return { build: { kind: 'ok', data: build }, review, learning: { kind: 'ok', data: learning } }
 }
 
+// Only a parsed agent type is cached. An absent or unreadable meta is asked again on the next refresh, so
+// "could not ask" never sticks as "no type".
 async function role($: EngineInterface, path: string) {
-  if (!roles.has(path)) {
-    const meta = await text($, path.replace(/\.jsonl$/, '.meta.json')).catch(() => undefined)
-    let type: string | null = null
-    try {
-      const doc = meta === undefined ? undefined : JSON.parse(meta)
-      if (typeof doc?.agentType === 'string') type = doc.agentType
-    } catch { /* a bad meta: the agent is "subagent" */ }
-    roles.set(path, type)
+  if (roles.has(path)) return roles.get(path)!
+  try {
+    const meta = await text($, path.replace(/\.jsonl$/, '.meta.json'))
+    const doc = meta === undefined ? undefined : JSON.parse(meta)
+    if (typeof doc?.agentType === 'string') roles.set(path, doc.agentType)
+    return typeof doc?.agentType === 'string' ? doc.agentType as string : null
+  } catch {
+    return null
   }
-  return roles.get(path) ?? null
 }
 
 async function readTokens($: EngineInterface, cwd: string, now: number): Promise<Section<TokenData>> {
-  const base = (await $.env.get('CLAUDE_CONFIG_DIR')) ?? `${await $.env.get('HOME')}/.claude`
+  const config = await $.env.get('CLAUDE_CONFIG_DIR'), home = await $.env.get('HOME')
+  if (!config && !home) throw new Error('neither CLAUDE_CONFIG_DIR nor HOME is set')
+  const base = config || `${home}/.claude`
   const dir = `${base}/projects/${encodeProject(cwd)}`
   if (!(await $.fs.exists(dir))) return { kind: 'missing', card: `No Claude Code transcripts at ${dir}` }
   const found: { path: string; size: number; mtimeMs: number; session: string; agent: string | null }[] = []
@@ -126,7 +131,7 @@ async function readTokens($: EngineInterface, cwd: string, now: number): Promise
   }
   const recent = found.filter(f => f.mtimeMs >= now - WEEK)
   const kept = new Set(recent.map(f => f.path))
-  for (const path of scans.keys()) if (!kept.has(path)) scans.delete(path)
+  for (const map of [scans, roles]) for (const path of map.keys()) if (!kept.has(path)) map.delete(path)
   let skipped = 0
   const transcripts: Transcript[] = []
   for (const f of recent) {

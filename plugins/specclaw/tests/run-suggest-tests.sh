@@ -112,6 +112,7 @@ check "AC-6 timer report does not call the lesson line unparseable" '! "$BIN/spe
 # 062 AC-8: specclaw-dash ships no command; it is found by its manifest, next to core or in the cache.
 check "062 AC-8 dash missing prints the dash tip" '[ "$(sug "$S" dash)" = "Tip: a /dash pane shows builds, review rounds, lessons and token use in one place. Install: /plugin install specclaw-dash@chan4lk (say \"no\" to never see this again)
 rc=0" ]'
+check "062 AC-8 Codex never gets the dash tip (mods do not run there)" '[ "$(CODEX_THREAD_ID=t sug "$S" dash 2>&1)" = "rc=0" ] && [ "$(CODEX_SANDBOX=1 sug "$S" dash 2>&1)" = "rc=0" ] && [ "$(sug "$S" dash | head -1)" != "rc=0" ]'
 mkdir -p "$TMP/cache/chan4lk/specclaw-dash/0.9.8/.claude-plugin" && : > "$TMP/cache/chan4lk/specclaw-dash/0.9.8/.claude-plugin/plugin.json"
 check "062 AC-8 dash in the plugin cache prints nothing" '[ "$(sug "$S" dash)" = "rc=0" ]'
 mkdir -p "$TMP/co/specclaw" "$TMP/co/specclaw-dash/.claude-plugin" && : > "$TMP/co/specclaw-dash/.claude-plugin/plugin.json"

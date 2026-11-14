@@ -80,7 +80,8 @@ export const parseFleet = (text: string | undefined): Section<FleetLine> => {
   if (text === undefined) return { kind: 'missing', card: 'fleet: no report. Install specclaw-fleet (/plugin install specclaw-fleet@chan4lk), then run specclaw-fleet report --save' }
   const doc = json(text)
   const totals = isObject(doc) && isObject(doc.totals) ? doc.totals : undefined
-  if (!isObject(doc) || doc.version !== 1 || typeof doc.generated_at !== 'string' || Number.isNaN(Date.parse(doc.generated_at)) || totals === undefined
+  // The same validity check as specclaw-fleet's hooks/core/report.ts parseReport (plugins cannot import each other).
+  if (!isObject(doc) || doc.version !== 1 || !Array.isArray(doc.rows) || typeof doc.generated_at !== 'string' || Number.isNaN(Date.parse(doc.generated_at)) || totals === undefined
     || !['running', 'prs_open', 'jobs'].every(k => typeof totals[k] === 'number')) return { kind: 'error', error: 'fleet report unreadable' }
   return { kind: 'ok', data: { running: num(totals.running), prs_open: num(totals.prs_open), jobs: num(totals.jobs), generated_at: doc.generated_at } }
 }

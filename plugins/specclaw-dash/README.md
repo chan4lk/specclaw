@@ -26,7 +26,7 @@ Codex manifest.
 **Cost is an API-equivalent estimate:** what the same tokens would cost at API list prices. It is not a bill,
 and on a subscription plan it is not what you pay. Prices are in `hooks/core/scan.ts`.
 
-**Privacy.** The transcript scanner keeps counts, times, ids, model names, session titles and agent types.
+**Privacy.** The transcript scanner keeps counts, times, ids, model names, session titles, git branch names and agent types.
 It never keeps or shows prompt text, tool input or output, or thinking text.
 
 **Missing and failed sources.** A source that is not there shows an install card (for example, no fleet report

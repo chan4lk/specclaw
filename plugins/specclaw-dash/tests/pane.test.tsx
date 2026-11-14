@@ -51,6 +51,10 @@ const engine = (on: Parameters<Parameters<typeof test>[1]>[1], files: Record<str
       name: p.slice(e.path.length + 1), kind: files[p] === null ? 'dir' : 'file', size: (files[p] ?? '').length, mtimeMs: files[p] === null ? 0 : NOW - 1000, isLink: false,
     })),
   }))
+  on('fs.stat', (_, e) => {
+    if (!(e.path in files)) throw new Error(`no file ${e.path}`)
+    return { value: { kind: files[e.path] === null ? 'dir' : 'file', size: (files[e.path] ?? '').length, mtimeMs: NOW - 1000, isLink: false } }
+  })
   on('fs.write', () => { calls.writes += 1; return { value: undefined } })
   on('mcp.call', () => { calls.mcp += 1; return mcp() })
   on('ui.status', (_, e) => (statuses.push(e.text), { value: undefined }))
@@ -141,5 +145,20 @@ test('R062 AC-5 a failed read shows an error line, never numbers', async ($, on)
   const ui = await $.ui.mount(PANE)
   expect((await ui.find({ type: 'Text', text: /^ {2}error:/ }))?.text).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /rounds/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('R062 AC-2 a subagent meta that is missing at first is read again, never cached as "subagent"', async ($, on) => {
+  const files = seed()
+  const meta = files[`${T}/s1/subagents/agent-a1.meta.json`]!
+  delete files[`${T}/s1/subagents/agent-a1.meta.json`]
+  engine(on, files, [], { reads: [], writes: 0, mcp: 0 }, RULES)
+  on('turn.complete', (_, e) => ({ text: e.answer }))
+  await $.command.run({ command: 'dash', args: '' })
+  const ui = await $.ui.mount(PANE)
+  expect((await ui.find({ type: 'Text', text: /by role/ }))?.text).toBe('  by role: main $0.02 · subagent $0.01')
+  files[`${T}/s1/subagents/agent-a1.meta.json`] = meta
+  await $.turn.complete({ answer: 'a', durationMs: 1, isAborted: false, turnId: 't', reason: 'answer' })
+  expect((await ui.find({ type: 'Text', text: /by role/ }))?.text).toBe('  by role: main $0.02 · code-reviewer $0.01')
   await ui.unmount()
 })

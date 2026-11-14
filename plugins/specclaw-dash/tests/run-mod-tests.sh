@@ -11,12 +11,12 @@ fi
 
 (cd "$PLUGIN_DIR" && bun test ./tests/*.spec.ts) || FAILS=$((FAILS + 1))
 
-# AC-7: the pane is read only. No file write, no process, anywhere in the mod.
-if grep -rnE '\$\.fs\.write|\$\.process' "$PLUGIN_DIR/hooks"; then
-  echo "FAIL: AC-7 the mod writes a file or runs a process"
+# AC-7: the pane is read only. The mod may call only the read methods of $.fs, and never $.process.
+if grep -rnoE '\$\.(fs\.[a-zA-Z]+|process)' "$PLUGIN_DIR/hooks" | grep -vE '\$\.fs\.(exists|read|list|stat)$'; then
+  echo "FAIL: AC-7 the mod calls a non-read \$.fs method or \$.process"
   FAILS=$((FAILS + 1))
 else
-  echo "PASS: AC-7 no \$.fs.write or \$.process in the mod"
+  echo "PASS: AC-7 the mod calls only \$.fs exists/read/list/stat and no \$.process"
 fi
 
 if ! command -v claude >/dev/null 2>&1; then
