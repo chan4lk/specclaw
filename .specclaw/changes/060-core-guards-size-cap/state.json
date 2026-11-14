@@ -1,11 +1,12 @@
 {
   "change": "060-core-guards-size-cap",
-  "phase": "tasks",
+  "phase": "build",
   "branch": "",
   "size": "bounded",
   "phases": {
     "proposal": {"status":"approved","at":"2026-11-14T04:47:17Z"},
     "spec": {"status":"done","at":"2026-11-14T04:52:58Z"},
-    "tasks": {"status":"done","at":"2026-11-14T04:52:58Z"}
+    "tasks": {"status":"done","at":"2026-11-14T04:52:58Z"},
+    "build": {"status":"done","at":"2026-11-14T04:58:39Z"}
   }
 }

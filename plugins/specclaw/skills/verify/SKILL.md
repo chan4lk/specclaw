@@ -7,7 +7,7 @@ description: Use when a build is finished and the user asks whether it is done o
 # specclaw verify (lean)
 
 1. `specclaw-validate-change .specclaw <change> verify`. Stop if it fails.
-2. Run the configured test, lint and build commands (`config.yaml`, or the project's standard ones). Record the commands and their exit codes. Then run `specclaw-preset-check .`; exit 1 is a FAIL, and its JSON lists each violation to fix. Then run `specclaw-quality-scan . --gate`: exit 1 is a FAIL (name the `high` functions and the duplicates), and exit 2 means a tool did not run, which is also a FAIL until it can.
+2. Run the configured test, lint and build commands (`config.yaml`, or the project's standard ones). Record the commands and their exit codes. Then run `specclaw-preset-check .`; exit 1 is a FAIL, and its JSON lists each violation to fix. Then run `specclaw-quality-scan . --gate`: exit 1 is a FAIL (name the `high` functions and the duplicates), and exit 2 means a tool did not run, which is also a FAIL until it can. Then run `specclaw-verify size .specclaw <change>`: exit 1 (over `pr.size_cap` with no `Size waiver:` line) is a FAIL; record its line, including any split note.
 3. Screenshots, saved under `.specclaw/changes/<change>/shots/`:
    - Start the app if the change has a UI.
    - Run `specclaw-screenshot <app-url> …/shots/app.png` and `specclaw-screenshot .specclaw/mock/index.html#<change> …/shots/mock.png`.

@@ -7,6 +7,7 @@ The specclaw plugin includes a [Claude Code mod](https://code.claude.com/docs/en
 | `/specclaw-pane` | A pane beside the chat with one row per active change: name, phase, tasks done/total, failed count, verify verdict and PR link. |
 | Band above the prompt | `specclaw · <change> · <phase> · <done>/<total> tasks` for the change whose `state.json` changed most recently. |
 | Status line | `specclaw: <n> active`, plus `· building <NNN>` while a change is in `build`. |
+| Branch guard | The propose gate also holds an edit to a project file outside `.specclaw/` and `.git/` while the checkout is on the base branch, even when a change is approved: `specclaw: main is the base branch. Create a change branch first before editing <file>.` |
 | Propose gate | Checks `Edit`, `Write` and `NotebookEdit` on files inside the project but outside `.specclaw/` and `.git/` when no active change has an approved proposal: a toast in `warn` mode (the default), a denial in `block` mode. Edits to a change's `state.json` are checked too, so the model cannot approve its own proposal with an edit. So are writes that would replace `.specclaw/`, `.specclaw/changes/` or a change's `state.json`, `tasks.md` or `change.md` with something the mod can no longer read, such as `tasks.md/x`. |
 
 The mod refreshes its view at session start, after every turn, and after any tool call that mentions `.specclaw`. It never writes to `.specclaw/`.
@@ -33,6 +34,10 @@ Set `gate` in the plugin's config (`/plugin`, then the plugin's options) to:
 
 Case and surrounding spaces are ignored. Any other value is read as `warn`, and a toast at session start names the value.
 
+### Branch guard
+
+The base branch is `git.base_branch` in `.specclaw/config.yaml`, else `origin/HEAD`, else `main`. The current branch is read from the session's working directory with `git branch --show-current`. The guard follows the gate's mode (`warn`, `block`, `off`). Outside git, on a detached HEAD, or when `git` fails, it does not check.
+
 If the gate itself fails (for example, it cannot read `.specclaw/`), it allows the edit and shows a toast, in every mode. This is deliberate: a broken gate must never stop work.
 
 **Known gaps:**
@@ -41,6 +46,16 @@ If the gate itself fails (for example, it cannot read `.specclaw/`), it allows t
 - File writes through `Bash` (`sed -i`, redirects) are not checked.
 - `.specclaw/` is looked up only in the session's working directory, not in parent folders.
 - Paths are resolved through the file system before they are compared, so symbolic links and the letter case of existing folders resolve. The `state.json` check ignores case, so a new `State.json` is held too. A spelling that cannot be resolved, such as a `\\?\` or UNC prefix, a drive-relative path or a `:` stream name, is held as if it were inside the project.
+
+## Done guard
+
+`hooks/done-guard` is a `Stop` command hook, registered in `hooks/mod.json`, so it runs in Claude Code only. For each active change touched on this branch (since the merge-base with the base branch) whose tasks are all done, it names each missing step on stderr and exits 2, which keeps the turn going:
+
+- no verify verdict, or one that is not PASS;
+- code outside `.specclaw/` committed after the verify verdict;
+- when `specclaw-review` is on PATH, a review verdict that is not clean.
+
+It exits 0 when a Stop is already held by it (`stop_hook_active`), when the project has no `.specclaw/config.yaml`, and on any internal error. It is not registered in `hooks/hooks.json`: Codex reads that file, and nothing shows that Codex accepts a `Stop` command hook.
 
 ## Development
 
