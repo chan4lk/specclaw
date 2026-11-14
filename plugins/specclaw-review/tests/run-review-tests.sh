@@ -318,8 +318,17 @@ fh="$(git rev-parse HEAD)"
 o="$("$SR" verdict --change "$CH" --head "$fh")"; rc=$?
 check "064 AC-1 --head at the final-pass SHA exits 0 and prints the final round file" '[ "$rc" = 0 ] && [ "$(sed -n 2p <<<"$o")" = "$RD/round-1.json" ]'
 check "064 AC-1 --head at another SHA exits 1" '! "$SR" verdict --change "$CH" --head "$(git rev-parse HEAD~1)" >/dev/null'
-git add -A && git commit -qm records
-check "064 AC-1 records-only commit: plain verdict OK, --head at the new HEAD exits 1" '"$SR" verdict --change "$CH" >/dev/null && ! "$SR" verdict --change "$CH" --head "$(git rev-parse HEAD)" >/dev/null'
+git add .specclaw && git commit -qm records
+check "064 AC-1 .specclaw-only commits after the final pass: --head at the new HEAD exits 0" '"$SR" verdict --change "$CH" --head "$(git rev-parse HEAD)" >/dev/null'
+check "064 AC-1 a prefix of the head SHA is refused" '! "$SR" verdict --change "$CH" --head "$(git rev-parse --short=10 HEAD)" >/dev/null'
+check "064 AC-1 an option-looking head is refused" '! "$SR" verdict --change "$CH" --head "--output=$TMP/pwned" >/dev/null 2>&1 && [ ! -e "$TMP/pwned" ]'
+rec_head="$(git rev-parse HEAD)"
+echo "doc" > NOTES.md && git add NOTES.md && git commit -qm docs
+check "064 AC-1 a docs commit outside .specclaw: plain verdict OK, --head exits 1" '"$SR" verdict --change "$CH" >/dev/null && ! "$SR" verdict --change "$CH" --head "$(git rev-parse HEAD)" >/dev/null'
+git reset -q --hard "$rec_head"
+echo "x = 2" >> b.py && echo r > .specclaw/r.md && git add -A && git commit -qm mixed
+check "064 AC-1 a commit touching one code file and one .specclaw file: --head exits 1" '! "$SR" verdict --change "$CH" --head "$(git rev-parse HEAD)" >/dev/null'
+git reset -q --hard "$rec_head"
 out_json "$MAJOR"; "$SR" run --change "$CH" --final >/dev/null
 check "064 AC-1 an open final pass at the given SHA exits 1" '! "$SR" verdict --change "$CH" --head "$(git rev-parse HEAD)" >/dev/null'
 

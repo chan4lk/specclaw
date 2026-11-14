@@ -19,8 +19,10 @@ Decided open question: `review.fast_track`, the class gate and the `debt.md` wri
 ### Functional Requirements
 
 - **FR-1 Head-bound verdict.** `specclaw-review verdict --change <c> --head <sha>` exits 0 only when the
-  verdict is clean **and** the final pass's recorded head equals `<sha>` exactly. A records-only drift that the
-  plain verdict accepts is a mismatch here. On success it prints the final round file path on line 2.
+  verdict is clean **and** `<sha>` is a full commit id that is either the final pass's head or a descendant
+  whose commits since the final pass touch only `.specclaw/` paths (operator decision, 2026-11-14). A
+  commit touching any other path, docs included, is a mismatch. On success it prints the final round file
+  path on line 2.
 - **FR-2 GitHub status.** After the PR exists, `specclaw-pr` reads the PR's current head SHA from GitHub and
   runs FR-1 against it. On exit 0 it posts one commit status on that SHA: context `specclaw/review-loop`,
   state `success`, description `clean`, target URL the final round file on the PR branch. On any other
@@ -53,8 +55,9 @@ Decided open question: `review.fast_track`, the class gate and the `debt.md` wri
 
 ## Acceptance Criteria
 
-- **AC-1** `verdict --head`: clean final at the given SHA → exit 0 and round file on line 2; a different SHA
-  (including a records-only commit after the final pass) → exit 1; a non-clean verdict → exit 1.
+- **AC-1** `verdict --head`: clean final at the given SHA → exit 0 and round file on line 2; a descendant
+  reached by `.specclaw/`-only commits → exit 0; an unrelated SHA, a SHA prefix, a docs commit, or a commit
+  touching one code file and one `.specclaw/` file → exit 1; a non-clean verdict → exit 1.
 - **AC-2** `specclaw-pr` status step with stubbed `gh`: matching head → exactly one `statuses/<sha>` POST with
   context `specclaw/review-loop` and state `success`; mismatched head → no POST; open verdict → no POST;
   `specclaw-review` absent → no POST and exit 0.
@@ -80,8 +83,8 @@ Decided open question: `review.fast_track`, the class gate and the `debt.md` wri
 
 ## Assumptions
 
-- Strict head equality (operator requirement) means the status posts only when no commit, not even a
-  records-only one, follows the final pass on the PR branch. In the default `specclaw-pr` flow the
-  bookkeeping commit follows PR creation, so the status will not post there until a later change relaxes
-  this or reorders the flow. This is reported, not worked around.
+- First built with strict head equality, which meant the status never posted in the normal flow (round
+  records and PR bookkeeping are committed after the final pass). The operator then approved allowing
+  commits that touch only `.specclaw/` paths (2026-11-14). The plain verdict's drift rule is reused,
+  narrowed to `.specclaw/`, because that rule also lets docs through.
 - The PR-size step for the CI templates waits for change 060's command; it is not added here.

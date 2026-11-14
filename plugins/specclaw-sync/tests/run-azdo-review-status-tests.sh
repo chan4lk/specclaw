@@ -65,6 +65,14 @@ for other in 0000000000000000000000000000000000000000 "${SHA:0:10}"; do
   PR_HEAD="$other" post "$TMP/stub:$REVIEW_BIN"; rc=$?
   check "AC-3 iteration commit ${other:0:10}… differs from the final pass: nothing posted, exit 0" '[ "$rc" = 0 ] && [ "$(posts)" = 0 ] && grep -q "not posted" "$TMP/out"'
 done
+git add .specclaw && git commit -qm records-only
+REC="$(git rev-parse HEAD)"
+PR_HEAD="$REC" post "$TMP/stub:$REVIEW_BIN"; rc=$?
+check "AC-3 .specclaw-only commits after the final pass: one PR status POST" '[ "$rc" = 0 ] && [ "$(posts)" = 1 ]'
+echo c > c.txt && echo r > .specclaw/r.md && git add -A && git commit -qm mixed
+PR_HEAD="$(git rev-parse HEAD)" post "$TMP/stub:$REVIEW_BIN"; rc=$?
+check "AC-3 a commit touching one code file and one .specclaw file: nothing posted" '[ "$rc" = 0 ] && [ "$(posts)" = 0 ] && grep -q "not posted" "$TMP/out"'
+git reset -q --hard "$SHA"
 round open
 PR_HEAD="$SHA" post "$TMP/stub:$REVIEW_BIN"; rc=$?
 check "AC-3 open verdict: nothing posted" '[ "$rc" = 0 ] && [ "$(posts)" = 0 ]'

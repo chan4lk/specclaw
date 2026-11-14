@@ -61,10 +61,10 @@ specclaw-sync release BASE TARGET ── git show {BASE,TARGET}:debt.md|follow-u
 
 ## Key Decisions
 
-1. **Strict head equality** (operator requirement). `--head` refuses the records-only drift the plain verdict
-   accepts. Consequence: in the default `specclaw-pr` flow the post-PR bookkeeping commit moves the head, so
-   no status posts there. Flagged in the PR for an operator decision; relaxing it is a one-line change in
-   `verdict_at`.
+1. **Head equality up to `.specclaw/`-only commits** (operator decision). `--head` takes a full commit id
+   and reuses the plain verdict's `_final_pass_drift`, with the allowed paths narrowed from `is_skip`
+   (records, docs, generated) to `.specclaw/` only. Round records and PR bookkeeping can follow the final
+   pass, but no other file can.
 2. **AzDO status bound to an iteration.** A PR status without `iterationId` survives later pushes; binding it
    to the iteration whose source commit was checked lets "reset on source update" policies drop it.
 3. **Fast track = final pass.** "One round" is implemented by making each fast-track `run` a final pass, so

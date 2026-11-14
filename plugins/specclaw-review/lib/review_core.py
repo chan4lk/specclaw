@@ -737,14 +737,18 @@ EXIT_BY_STATUS = {"clean": 0, "skipped": 0, "open": 1, "not_run": 3, "escalate":
 
 # ─── verdict ─────────────────────────────────────────────────────────────────
 
-def _final_pass_drift(cfg, fsha):
-    """(still_ok, note) for a final pass that is not HEAD: only records-only commits may follow it."""
-    reachable = subprocess.run(["git", "-C", cfg.root, "merge-base", "--is-ancestor", fsha, "HEAD"],
+def _final_pass_drift(cfg, fsha, to="HEAD", allowed=None):
+    """(still_ok, note) for a final pass that is not `to`: only records-only commits may follow it.
+
+    `allowed(path)` decides what counts as a record; the default is `is_skip` (records, docs, generated).
+    """
+    allowed = allowed or (lambda f: is_skip(cfg, f))
+    reachable = subprocess.run(["git", "-C", cfg.root, "merge-base", "--is-ancestor", fsha, to],
                                capture_output=True).returncode == 0
     if not reachable:
-        return False, " (the final pass is not in HEAD's history: rebased or shallow; run --final again)"
-    later = [f for f in git(cfg.root, "diff", "--name-only", f"{fsha}..HEAD").splitlines() if f.strip()]
-    if any(not is_skip(cfg, f) for f in later):
+        return False, f" (the final pass is not in {to[:10]}'s history: rebased or shallow; run --final again)"
+    later = [f for f in git(cfg.root, "diff", "--name-only", f"{fsha}..{to}").splitlines() if f.strip()]
+    if any(not allowed(f) for f in later):
         return False, " (code changed after the final pass)"
     return True, " (+ records-only commits)"
 
@@ -776,17 +780,21 @@ def verdict(cfg, change):
 def verdict_at(cfg, change, sha):
     """(code, line, round_file): 0 only when the verdict is clean AND its final pass ran at exactly `sha`.
 
-    The gate for the clean-loop PR status: a records-only commit after the final pass, which the plain
-    verdict accepts, is still a different head here. Strict by operator decision (change 064): the status
-    posts only for a PR whose head is the final pass's commit, so committing the round records afterwards
-    means no status. Relaxing this to records-only drift is a separate, explicit decision.
+    The gate for the clean-loop PR status. `sha` must be a full commit id. Commits between the final pass
+    and `sha` are allowed only when every path they touch is under `.specclaw/` (operator decision, change
+    064): the plain verdict's drift rule, narrowed, because it also lets docs through.
     """
     code, line = verdict(cfg, change)
     cdir = change_dir(cfg, change)
     rs = rounds(cdir)
     last = rs[-1] if rs else {}
-    if code == 0 and last.get("head") != sha:
-        code, line = 1, f"{line} (final pass {str(last.get('head'))[:10]} is not head {sha[:10]})"
+    fsha = str(last.get("head"))
+    if code == 0 and not re.fullmatch(r"[0-9a-f]{40}([0-9a-f]{24})?", sha):   # no prefix, never an option
+        code, line = 1, f"{line} (head {sha[:12]!r} is not a full commit id)"
+    elif code == 0 and fsha != sha:
+        ok, note = _final_pass_drift(cfg, fsha, sha, lambda f: f.startswith(".specclaw/"))
+        if not ok:
+            code, line = 1, f"{line} (final pass {fsha[:10]} does not cover head {sha[:10]}:{note.strip(' ()')})"
     if code:
         return code, line, None
     return code, line, os.path.relpath(os.path.join(cdir, "review", f"round-{last['round']}.json"), cfg.root)
