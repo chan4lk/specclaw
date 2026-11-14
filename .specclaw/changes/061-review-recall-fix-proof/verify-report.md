@@ -42,3 +42,7 @@
 ## Version
 
 `chore: bump version to 0.9.8` updates 12 plugin manifests (Claude and Codex) and the 6 entries in `.claude-plugin/marketplace.json`.
+
+## After verify
+
+`origin/main` gained 060 (#130) and 064 (#128) after the suite run. The merge conflicted only in `skills/review/SKILL.md` and `tests/run-review-tests.sh`. Both were additive, and both sides were kept. The specclaw-review suite passes after the merge. The other 59 suites were not re-run after the merge.
