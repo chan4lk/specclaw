@@ -1,0 +1,11 @@
+{
+  "change": "063-dash-launch-approve-caps",
+  "phase": "tasks",
+  "branch": "",
+  "size": "bounded",
+  "phases": {
+    "proposal": {"status":"approved","at":"2026-11-14T04:47:17Z"},
+    "spec": {"status":"done","at":"2026-11-14T11:54:37Z"},
+    "tasks": {"status":"done","at":"2026-11-14T11:54:38Z"}
+  }
+}
