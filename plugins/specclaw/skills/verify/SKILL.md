@@ -13,7 +13,7 @@ description: Use when a build is finished and the user asks whether it is done o
    - Run `specclaw-screenshot <app-url> …/shots/app.png` and `specclaw-screenshot .specclaw/mock/index.html#<change> …/shots/mock.png`.
    - **Exit 3** (Playwright unavailable): give the user both locations and ask them to compare by eye. Record `compared by eye: <name>` only after they answer.
    - **Never record a pass without a screenshot or a human comparison.**
-3b. **Local review (only when `command -v specclaw-review` succeeds; skip silently otherwise).** Run the review loop from the `specclaw-review:review` skill until `specclaw-review verdict --change <change>` exits 0. Record its one-line output under `## Verify`. A non-zero verdict is a FAIL.
+3b. **Local review.** When `command -v specclaw-review` succeeds, run the review loop from the `specclaw-review:review` skill until `specclaw-review verdict --change <change>` exits 0. Record its one-line output under `## Verify`. A non-zero verdict is a FAIL. Otherwise run `specclaw-suggest .specclaw review` and show any line it prints, at most once per session; if the user says no, run `specclaw-suggest .specclaw --dismiss review`.
 4. Under `## Verify` in `change.md`, write:
    - `**Verdict:** PASS` or `FAIL` on the first line
    - one `- AC-n: pass|fail — <evidence>` line per criterion

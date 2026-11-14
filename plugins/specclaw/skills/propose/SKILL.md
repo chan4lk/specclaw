@@ -8,7 +8,7 @@ description: Use when the user wants to add, build, change or remove anything in
 
 A lean change is one page plus a visible mock edit, approved before any code exists.
 
-1. Ask once for the idea if it is missing. Name the change `<NNN>-<slug>`, with NNN from `specclaw-next-change-number .specclaw`. Create `.specclaw/changes/<change>/`.
+1. Ask once for the idea if it is missing. If it names an issue, work item or PR, run `specclaw-suggest .specclaw sync` and show any line it prints, at most once per session; if the user says no, run `specclaw-suggest .specclaw --dismiss sync`. Name the change `<NNN>-<slug>`, with NNN from `specclaw-next-change-number .specclaw`. Create `.specclaw/changes/<change>/`.
 2. Write `change.md` from `$CLAUDE_PLUGIN_ROOT/templates/lean/change.md`:
    - **Problem:** 2–3 lines.
    - **Acceptance Criteria:** numbered `AC-n`, each checkable by one test or by looking at the screen. Cover everything; no padding.

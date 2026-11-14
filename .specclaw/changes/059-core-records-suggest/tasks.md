@@ -25,7 +25,7 @@ then the version bump.
 
 ### Wave 2 — Call sites
 
-- [ ] `T3` — Five skill call sites, lean and full, plus docs (AC-7)
+- [x] `T3` — Five skill call sites, lean and full, plus docs (AC-7)
   - Files: plugins/specclaw/skills/verify/SKILL.md, plugins/specclaw/skills/status/SKILL.md, plugins/specclaw/skills/propose/SKILL.md, plugins/specclaw/skills/init/SKILL.md, plugins/specclaw/references/full/verify.md, plugins/specclaw/references/full/status.md, plugins/specclaw/references/full/propose.md, plugins/specclaw/references/full/init.md, plugins/specclaw/CLAUDE.md, plugins/specclaw/tests/run-suggest-tests.sh
   - Estimate: small
   - Kind: docs
