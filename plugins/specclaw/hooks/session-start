@@ -83,11 +83,11 @@ NOTICE=""
 # A missing lib drops the notices, never the router (rule 2).
 # shellcheck disable=SC1091  # sourced lib, resolved at runtime
 if . "${PLUGIN_DIR}/lib/plugins.sh" 2>/dev/null; then
-  [ -d ./.specclaw/analysis ] && missing "brownfield analysis" specclaw-bf-status specclaw-bf
+  [ -d ./.specclaw/analysis ] && missing "brownfield analysis" bf
   { [ "$(section_val github sync)" = true ] || [ "$(section_val azdo enabled)" = true ] || [ "$(section_val jira enabled)" = true ]; } \
-    && missing "tracker sync" specclaw-gh-sync specclaw-sync
+    && missing "tracker sync" sync
   { [ "$(section_val party enabled)" = true ] || [ "$(section_val automation auto_mode)" = true ]; } \
-    && missing "the review panel or automation" specclaw-party specclaw-extras
+    && missing "the review panel or automation" extras
 fi
 [ -n "$NOTICE" ] && CONTEXT="${CONTEXT}
 

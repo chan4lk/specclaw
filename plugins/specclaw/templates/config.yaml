@@ -454,7 +454,7 @@ plugin:
 
 # Add-on plugin tips (specclaw-suggest). A "no" to a tip adds its feature here.
 plugins:
-  dismissed: []        # any of: review, fleet, dash, sync, bf
+  dismissed: []        # any of: review, fleet, sync, bf, extras
 
 # Azure DevOps integration (optional)
 # Run `specclaw auth azdo` to configure. Token stored in .specclaw/.env (gitignored).
