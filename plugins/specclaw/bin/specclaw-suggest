@@ -29,17 +29,14 @@ if [ "$2" = "--dismiss" ]; then
   plugin_feature "$f" >/dev/null || { echo "specclaw-suggest: unknown feature '$f'" >&2; exit 0; }
   [ -f "$CONFIG" ] || exit 0
   plugin_dismissed "$f" && exit 0
-  if awk '/^[a-zA-Z_]/ { inblk = ($0 ~ /^plugins:/); next } inblk && /^  dismissed:[[:space:]]*(#.*)?$/ { found = 1 } END { exit !found }' "$CONFIG"; then
-    echo "specclaw-suggest: plugins.dismissed is a block list; add '$f' to it by hand" >&2
-    exit 0
-  fi
   list="$(plugins_dismissed | sed 's/ /, /g')"
   list="${list:+$list, }$f"
   tmp="$(mktemp "$CONFIG.XXXXXX")" || exit 0
   if awk -v line="  dismissed: [$list]" '
-    /^[a-zA-Z_]/ { if (inblk && !done) { print line; done = 1 } inblk = ($0 ~ /^plugins:/) }
-    inblk && /^  dismissed:/ { if (!done) print line; done = 1; next }
-    { print }
+    /^[a-zA-Z_]/ { if (inblk && !done) { print line; done = 1 } inblk = ($0 ~ /^plugins:/); skip = 0 }
+    inblk && /^  dismissed:/ { if (!done) print line; done = 1; skip = 1; next }
+    skip && /^[[:space:]]+-[[:space:]]/ { next }
+    { skip = 0; print }
     END { if (inblk && !done) print line; else if (!done) printf "\nplugins:\n%s\n", line }
   ' "$CONFIG" > "$tmp" 2>/dev/null; then cat "$tmp" > "$CONFIG"; fi
   rm -f "$tmp"

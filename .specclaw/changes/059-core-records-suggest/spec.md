@@ -33,7 +33,7 @@
 
 - **AC-1:** Missing plugin, not dismissed → the exact tip line for that feature; exit 0.
 - **AC-2:** Installed plugin (on PATH, or next to core in the plugin cache) → no output; exit 0.
-- **AC-3:** Dismissed feature → no output. `--dismiss` is idempotent, creates the block when absent, and leaves a hand-written block list untouched.
+- **AC-3:** Dismissed feature → no output. `--dismiss` is idempotent, creates the block when absent, and reads a hand-written block list, folding it into one inline list.
 - **AC-4:** Unknown feature, missing config, or `CODEX_THREAD_ID` set → no output; exit 0.
 - **AC-5:** `session-start` sources `lib/plugins.sh`, drops a dismissed feature's notice, and `run-plugin-split-tests.sh` and `run-bootstrap-hook-tests.sh` still pass.
 - **AC-6:** `specclaw-log-learning` appends one valid JSON `lesson` line with the given fields, and `specclaw-timer report` prints no "unparseable" warning for it.

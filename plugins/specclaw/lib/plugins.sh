@@ -16,10 +16,15 @@ plugin_feature() {
 }
 
 # plugins_dismissed — the features in config.yaml `plugins.dismissed`, space-separated.
+# Reads an inline list (`dismissed: [a, b]`) and a block list (`- a` lines under it).
 plugins_dismissed() {
   awk '
-    /^[a-zA-Z_]/ { inblk = ($0 ~ /^plugins:/); next }
-    inblk && /^  dismissed:/ { sub(/^  dismissed:[[:space:]]*/, ""); sub(/[[:space:]]*#.*$/, ""); gsub(/[][,"'"'"']/, " "); print; exit }
+    /^[a-zA-Z_]/ { inblk = ($0 ~ /^plugins:/); inlist = 0; next }
+    !inblk { next }
+    /^  dismissed:/ { v = $0; sub(/^  dismissed:[[:space:]]*/, "", v); sub(/[[:space:]]*#.*$/, "", v); out = out " " v; inlist = 1; next }
+    inlist && /^[[:space:]]+-[[:space:]]/ { v = $0; sub(/^[[:space:]]+-[[:space:]]*/, "", v); sub(/[[:space:]]*#.*$/, "", v); out = out " " v; next }
+    /^  [a-zA-Z_]/ { inlist = 0 }
+    END { gsub(/[][,"'"'"']/, " ", out); print out }
   ' "$CONFIG" 2>/dev/null | xargs
 }
 

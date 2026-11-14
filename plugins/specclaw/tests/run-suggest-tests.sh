@@ -32,8 +32,10 @@ check "AC-3 dismissed feature prints nothing, list is idempotent" '[ "$(sug "$S"
 mkdir -p "$TMP/bare" && printf 'version: 1\nproject:\n  name: x\n' > "$TMP/bare/config.yaml"
 sug "$TMP/bare" --dismiss sync >/dev/null
 check "AC-3 --dismiss creates the plugins block" 'grep -qx "plugins:" "$TMP/bare/config.yaml" && grep -qx "  dismissed: \[sync\]" "$TMP/bare/config.yaml" && [ "$(sug "$TMP/bare" sync)" = "rc=0" ]'
-mkdir -p "$TMP/blk" && printf 'plugins:\n  dismissed:\n    - review\n' > "$TMP/blk/config.yaml" && cp "$TMP/blk/config.yaml" "$TMP/blk.orig"
-check "AC-3 a block-list dismissed is left alone, not corrupted" '[ "$(sug "$TMP/blk" --dismiss bf 2>/dev/null)" = "rc=0" ] && cmp -s "$TMP/blk/config.yaml" "$TMP/blk.orig"'
+mkdir -p "$TMP/blk" && printf 'plugins:\n  dismissed:\n    - review\n  other: 1\n' > "$TMP/blk/config.yaml"
+check "AC-3 a block-list dismissal is honoured" '[ "$(sug "$TMP/blk" review)" = "rc=0" ]'
+sug "$TMP/blk" --dismiss bf >/dev/null
+check "AC-3 --dismiss folds a block list into one inline list" '[ "$(cat "$TMP/blk/config.yaml")" = "$(printf "plugins:\n  dismissed: [review, bf]\n  other: 1")" ]'
 
 check "AC-4 unknown feature, missing config and Codex print nothing" '[ "$(sug "$S" nope 2>&1)" = "rc=0" ] && [ "$(sug "$TMP/none" review 2>&1)" = "rc=0" ] && [ "$(CODEX_THREAD_ID=t sug "$S" review 2>&1)" = "rc=0" ]'
 
@@ -50,6 +52,8 @@ mkdir -p "$S/changes/001-x"
 "$BIN/specclaw-timer" stop "$S" 001-x T1 >/dev/null
 lesson="$(grep '"kind":"lesson"' "$S/changes/001-x/timeline.jsonl" | sed -E 's/"at":"[0-9TZ:-]+"/"at":"X"/')"
 check "AC-6 log-learning appends one lesson line, control characters blanked" '[ "$lesson" = '"'"'{"kind":"lesson","at":"X","category":"pattern","priority":"high","detail":"say \"hi\" a b c","action":"do it"}'"'"' ]'
+"$BIN/specclaw-log-learning" "$S" 001-x spec_gap low d "$(printf 'q" s\\ b\b f\f x\001 end')" >/dev/null
+check "AC-6 the action field is escaped too" 'grep -qF '"'"'"category":"spec_gap","priority":"low","detail":"d","action":"q\" s\\ b  f  x  end"}'"'"' "$S/changes/001-x/timeline.jsonl"'
 check "AC-6 timer report does not call the lesson line unparseable" '! "$BIN/specclaw-timer" report "$S" 001-x 2>&1 >/dev/null | grep -q unparseable'
 
 check "AC-7 every call site names specclaw-suggest, verify no longer skips silently" '(for f in skills/verify/SKILL.md references/full/verify.md skills/status/SKILL.md references/full/status.md skills/propose/SKILL.md references/full/propose.md skills/init/SKILL.md references/full/init.md; do grep -q "specclaw-suggest" "$PLUGIN_DIR/$f" || exit 1; done) && ! grep -qiE "skip(s)? (it )?silently" "$PLUGIN_DIR/skills/verify/SKILL.md" "$PLUGIN_DIR/references/full/verify.md"'
