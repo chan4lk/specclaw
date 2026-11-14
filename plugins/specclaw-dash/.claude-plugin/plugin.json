@@ -1,6 +1,6 @@
 {
   "name": "specclaw-dash",
-  "version": "0.9.10",
+  "version": "0.9.12",
   "description": "Dashboard mod for specclaw in Claude Code: one /dash pane for the build, review and learning loops and token use (API-equivalent estimate), with actions that run existing commands: launch fleet runs, approve lessons, edit context caps, undo dismissed tips.",
   "author": {
     "name": "Chandima Ranaweera",
