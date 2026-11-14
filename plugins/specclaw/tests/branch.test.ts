@@ -30,6 +30,9 @@ for (const [name, branch, codes, stderr, runs, toast] of ROWS) {
     on('fs.read', () => ({ value: APPROVED }))
     on('fs.stat', (_, e) => ({ value: { kind: 'dir', size: 0, mtimeMs: 0, isLink: false, realPath: e.path } }))
     on('process.run', (_, e) => {
+      // Every git call runs with LC_ALL=C (merged over the host env per ProcessRunInit.env), so the
+      // "not a git repository" match below holds in any locale.
+      if (e.init?.env?.LC_ALL !== 'C') throw new Error(`git ${e.argv.join(' ')} ran without LC_ALL=C`)
       const call = ['rev-parse', 'branch', 'symbolic-ref'].indexOf(e.argv[3] ?? '')
       const exitCode = codes[call] ?? 0
       if (exitCode === -1) throw new Error('spawn git ENOENT')
