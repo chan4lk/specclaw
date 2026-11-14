@@ -123,7 +123,7 @@ export const summarize = (transcripts: Transcript[], dayStart: number, n = 5): O
   const sessions = new Map<string, TokenRow>(), roles = new Map<string, TokenRow>()
   for (const t of transcripts) {
     unreadable += t.scan.unreadable
-    const session = sessions.get(t.session) ?? { name: t.session, tokens: 0, usd: 0, context: null }
+    const session = sessions.get(t.session) ?? { name: t.session.slice(0, 8), tokens: 0, usd: 0, context: null }
     const roleName = t.agent === null ? 'main' : (t.role ?? 'subagent')
     const role = roles.get(roleName) ?? { name: roleName, tokens: 0, usd: 0, context: null }
     for (const [id, call] of Object.entries(t.scan.calls)) {

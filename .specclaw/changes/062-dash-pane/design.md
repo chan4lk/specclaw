@@ -69,4 +69,5 @@ session.start / /dash / turn.complete / tool.call(.specclaw)
 - **Large histories.** Every refresh lists the transcript folder and each session's `subagents/` folder. Reads
   are limited to changed files from the last 7 days.
 - **Transcript format drift.** A record that does not match is counted as unreadable and shown, not guessed.
-- **A slow MCP server** would delay a refresh; `learn_propose` is called on `/dash` and session start only.
+- **A slow MCP server** would delay a refresh. `learn_propose` is a local stdio call made on every refresh, so
+  the count is never older than the rest of the pane.

@@ -20,7 +20,7 @@ then the 059 follow-up for `dash`.
 
 ### Wave 2 — Mod and packaging
 
-- [ ] `T2` — Mod: `/dash`, pane, band, status line, refresh, reads through `$.fs`/`$.env`/`$.mcp`; kit test (AC-5, AC-6, AC-7)
+- [x] `T2` — Mod: `/dash`, pane, band, status line, refresh, reads through `$.fs`/`$.env`/`$.mcp`; kit test (AC-5, AC-6, AC-7)
   - Files: plugins/specclaw-dash/.claude-plugin/plugin.json, plugins/specclaw-dash/hooks/mod.json, plugins/specclaw-dash/hooks/register.tsx, plugins/specclaw-dash/hooks/read.ts, plugins/specclaw-dash/tests/pane.test.tsx, plugins/specclaw-dash/tests/run-mod-tests.sh
   - Estimate: medium
   - Kind: impl

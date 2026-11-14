@@ -40,7 +40,7 @@ test('R062 AC-4 AC-6 the pane draws every part; every cost sits under the labell
   expect(lines).toContain('  059-core                     17 rounds · clean · last 0/0/4 b/M/m · 0 escalated · final 03a8e23b46 at HEAD')
   expect(lines).toContain('  1 lessons · pattern 1')
   expect(lines).toContain('  3 proposed rules awaiting approval (specclaw-review learn)')
-  expect(lines).toContain('  today 1.2M tokens · $3.20 · 7 days 9.1M tokens · $22.10')
+  expect(lines).toContain('  today (UTC) 1.2M tokens · $3.20 · 7 days 9.1M tokens · $22.10')
   expect(lines).toContain('  Build 062                       $20.00 · context 34%')
   const header = lines.findIndex(l => l.startsWith('TOKENS'))
   expect(lines[header]).toContain('API-equivalent estimate')
@@ -50,8 +50,8 @@ test('R062 AC-4 AC-6 the pane draws every part; every cost sits under the labell
 test('R062 AC-5 a skipped big transcript makes every total a lower bound', () => {
   const view = { ...VIEW, tokens: { kind: 'ok' as const, data: { ...TOKENS, skipped: 2 } } }
   const lines = paneLines(view, NOW)
-  expect(lines).toContain('  today ≥1.2M tokens · ≥$3.20 · 7 days ≥9.1M tokens · ≥$22.10')
-  expect(lines).toContain('  12 transcripts · 2 over 4 MiB not counted (totals are a lower bound)')
+  expect(lines).toContain('  today (UTC) ≥1.2M tokens · ≥$3.20 · 7 days ≥9.1M tokens · ≥$22.10')
+  expect(lines).toContain('  12 transcripts · 2 not counted, over 4 MiB or unreadable (totals are a lower bound)')
   expect(bandText(view)).toContain('≥$3.20 today')
 })
 

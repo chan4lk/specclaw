@@ -1,0 +1,20 @@
+{
+  "name": "specclaw-dash",
+  "version": "0.9.7",
+  "description": "Read-only dashboard mod for specclaw in Claude Code: one /dash pane for the build, review and learning loops and token use (API-equivalent estimate).",
+  "author": {
+    "name": "Chandima Ranaweera",
+    "email": "chan4lk@gmail.com"
+  },
+  "homepage": "https://github.com/chan4lk/specclaw",
+  "repository": "https://github.com/chan4lk/specclaw",
+  "license": "MIT",
+  "keywords": [
+    "spec-driven",
+    "dashboard",
+    "mod",
+    "tokens"
+  ],
+  "types": "./types/index.d.ts",
+  "hooks": "./hooks/mod.json"
+}

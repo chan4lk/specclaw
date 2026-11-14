@@ -44,10 +44,10 @@ const learningLines = (l: LearningData) => [
 ]
 
 const tokenLines = (t: TokenData) => [
-  `  today ${lowerBound(t)}${tokens(t.today.tokens)} tokens · ${money(t, t.today.usd)} · 7 days ${lowerBound(t)}${tokens(t.week.tokens)} tokens · ${money(t, t.week.usd)}`,
+  `  today (UTC) ${lowerBound(t)}${tokens(t.today.tokens)} tokens · ${money(t, t.today.usd)} · 7 days ${lowerBound(t)}${tokens(t.week.tokens)} tokens · ${money(t, t.week.usd)}`,
   ...t.sessions.map(s => `  ${pad(s.name, 28)} ${money(t, s.usd).padStart(9)}${s.context === null ? '' : ` · context ${Math.round((s.context / CONTEXT_WINDOW) * 100)}%`}`),
   `  by role: ${t.roles.map(r => `${r.name} ${money(t, r.usd)}`).join(' · ') || '-'}`,
-  `  ${t.files} transcripts${t.skipped ? ` · ${t.skipped} over 4 MiB not counted (totals are a lower bound)` : ''}${t.unreadable ? ` · ${t.unreadable} unreadable records` : ''}`,
+  `  ${t.files} transcripts${t.skipped ? ` · ${t.skipped} not counted, over 4 MiB or unreadable (totals are a lower bound)` : ''}${t.unreadable ? ` · ${t.unreadable} unreadable records` : ''}`,
 ]
 
 const section = <T>(title: string, s: Section<T>, draw: (d: T) => string[]) => [title, ...(s.kind === 'ok' ? draw(s.data) : other(s))]
