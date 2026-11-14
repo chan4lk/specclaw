@@ -25,7 +25,7 @@ then the 059 follow-up for `dash`.
   - Estimate: medium
   - Kind: impl
   - Depends: T1
-- [ ] `T3` — Packaging: marketplace entry, README row and plugin README, CI step, split test knows dash is Claude-only (AC-1)
+- [x] `T3` — Packaging: marketplace entry, README row and plugin README, CI step, split test knows dash is Claude-only (AC-1)
   - Files: .claude-plugin/marketplace.json, README.md, plugins/specclaw-dash/README.md, .github/workflows/ci.yml, plugins/specclaw/tests/run-plugin-split-tests.sh
   - Estimate: small
   - Kind: config

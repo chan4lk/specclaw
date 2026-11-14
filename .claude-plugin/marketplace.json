@@ -72,6 +72,17 @@
       },
       "homepage": "https://github.com/chan4lk/specclaw",
       "license": "MIT"
+    },
+    {
+      "name": "specclaw-dash",
+      "source": "./plugins/specclaw-dash",
+      "version": "0.9.7",
+      "description": "Read-only dashboard mod for specclaw in Claude Code: one /dash pane for the build, review and learning loops and token use (API-equivalent estimate).",
+      "author": {
+        "name": "Chandima Ranaweera"
+      },
+      "homepage": "https://github.com/chan4lk/specclaw",
+      "license": "MIT"
     }
   ]
 }

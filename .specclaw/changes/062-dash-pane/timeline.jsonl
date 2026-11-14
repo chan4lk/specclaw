@@ -3,3 +3,4 @@
 {"ev":"start","span":"W1","kind":"wave","label":"wave 1","at":"2026-11-14T06:37:01Z","ts":1794638221}
 {"ev":"stop","span":"W1","at":"2026-11-14T06:40:09Z","ts":1794638409,"status":"ok"}
 {"ev":"start","span":"W2","kind":"wave","label":"wave 2","at":"2026-11-14T06:42:28Z","ts":1794638548}
+{"ev":"stop","span":"W2","at":"2026-11-14T06:42:58Z","ts":1794638578,"status":"ok"}
