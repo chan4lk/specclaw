@@ -81,10 +81,11 @@ def open_items(text):
 
 
 def list_paths(ref):
-    code, tree = git("ls-tree", "-r", "--full-name", "--name-only", ref, "--", ".specclaw")
+    # -z: raw paths; a quoted non-ASCII path would miss LIST_RE and its items would go ungated
+    code, tree = git("ls-tree", "-r", "-z", "--full-name", "--name-only", ref, "--", ".specclaw")
     if code != 0:
         raise GateError(f"git ls-tree {ref} failed")
-    return sorted(p for p in tree.splitlines() if LIST_RE.match(p))
+    return sorted(p for p in tree.split("\0") if LIST_RE.match(p))
 
 
 def release(base, target):

@@ -86,6 +86,12 @@ check "AC-6 an unknown ref exits 2" '[ "$rc" = 2 ]'
 rel base; rc=$?
 check "AC-6 a missing argument exits 2" '[ "$rc" = 2 ]'
 
+git checkout -q -f security && git checkout -q -b non-ascii && mkdir -p ".specclaw/changes/065-café" \
+  && printf -- '- [minor S3] `g.py:1` secret in log (round 1) <!-- fp:abc1 class:security -->\n' > ".specclaw/changes/065-café/follow-ups.md" \
+  && git add -A && git commit -qm non-ascii
+rel security HEAD; rc=$?
+check "AC-6 a list under a non-ASCII change folder is read and gated" '[ "$rc" = 1 ] && grep -q "secret in log" "$TMP/out"'
+
 # A listed list or config whose blob cannot be read is an error (exit 2), never "nothing there".
 i=0
 for path in .specclaw/debt.md .specclaw/changes/001-a/follow-ups.md; do

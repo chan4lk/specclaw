@@ -873,7 +873,8 @@ main() {
   save_pr_url "$pr_url" || warn "failed to record the PR URL in status.md — PR is live at $pr_url"
   pr_commit_bookkeeping "$CHANGE_NAME" "$pr_url" \
     "$CHANGE_DIR/state.json" "$CHANGE_DIR/status.md" "$SPECCLAW_DIR/STATUS.md"
-  # After the bookkeeping push, so the head checked is the head branch policy sees.
+  # After the bookkeeping push. The host may not show that push yet; then the gate sees an older
+  # head and posts nothing (fail closed). The ci/ templates are the reliable poster.
   post_review_status "$pr_url" || true
 
   # Step 8: Update project context (always-on; errors are non-blocking)

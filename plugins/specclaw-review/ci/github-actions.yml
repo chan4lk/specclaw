@@ -35,7 +35,7 @@ jobs:
           REPO: ${{ github.repository }}
           SERVER: ${{ github.server_url }}
         run: |
-          set -uo pipefail
+          set -euo pipefail
           if OUT="$(python3 path/to/specclaw-review/bin/specclaw-review verdict --change "$CHANGE" --head "$HEAD_SHA")"; then
             gh api "repos/$REPO/statuses/$HEAD_SHA" -f state=success -f context=specclaw/review-loop \
               -f description=clean -f target_url="$SERVER/$REPO/blob/$HEAD_REF/$(sed -n 2p <<<"$OUT")"
