@@ -12,19 +12,19 @@ Fix proof and promotion threshold in the core (tests first), then the recall hoo
 
 ### Wave 1 — Core
 
-- [ ] `T1` — Fix proof in `run --since` and `--final`, carried findings, `learn_threshold` (AC-3…AC-7)
+- [x] `T1` — Fix proof in `run --since` and `--final`, carried findings, `learn_threshold` (AC-3…AC-7)
   - Files: plugins/specclaw-review/lib/review_core.py, plugins/specclaw-review/bin/specclaw-review, plugins/specclaw-review/mcp/server.py, plugins/specclaw-review/tests/run-review-tests.sh
   - Estimate: medium
   - Kind: impl
 
-- [ ] `T2` — Recall hook and its registration (AC-1, AC-2)
+- [x] `T2` — Recall hook and its registration (AC-1, AC-2)
   - Files: plugins/specclaw-review/hooks/recall, plugins/specclaw-review/hooks/hooks.json, plugins/specclaw-review/lib/review_memory.py, plugins/specclaw-review/tests/run-review-tests.sh
   - Estimate: small
   - Kind: impl
 
 ### Wave 2 — Rules and docs
 
-- [ ] `T3` — B11, B12 in `base.md`; review and learn skills describe fix proof, recall and the threshold (AC-8)
+- [x] `T3` — B11, B12 in `base.md`; review and learn skills describe fix proof, recall and the threshold (AC-8)
   - Files: plugins/specclaw-review/review-rules/base.md, plugins/specclaw-review/skills/review/SKILL.md, plugins/specclaw-review/skills/learn/SKILL.md, plugins/specclaw-review/tests/run-review-tests.sh
   - Estimate: small
   - Kind: docs

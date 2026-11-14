@@ -29,6 +29,13 @@ Tools: the `specclaw-review` MCP server (`review_run`, `review_verdict`, `memory
    - Re-review only what changed: `specclaw-review run --change <change> --since <head of the previous round>`.
      The round file (`review/round-<n>.json`) records `head`. Code merged from the base branch is excluded
      automatically.
+   - **Fix proof.** That `--since` round first checks the fix: the test files the fix added or changed (by
+     `review.test_paths`, with common defaults) run with `review.test_command` (`{files}` expands to them) in
+     a clean checkout of the pre-fix commit, where they must fail, and of HEAD, where they must pass. Any
+     other outcome prints `fix-proof: not proven: <reason>` and keeps the previous round's blockers and
+     majors open (`carried`). With no `test_command`, no fix is proven: set it, for example
+     `test_command: "pytest -q {files}"` or `"bash {files}"`. A final pass right after a not-proven round
+     checks again.
    - Repeat until a round exits 0. **There is no round cap.** Minors never trigger another round: they land
      in `follow-ups.md`.
 3. **Escalation (exit 4).** Tell the user which finding repeats and propose a redesign of that part. Continue
@@ -40,6 +47,13 @@ Tools: the `specclaw-review` MCP server (`review_run`, `review_verdict`, `memory
      pass at HEAD.
 5. Commit the round records (`.specclaw/changes/<change>/review/`, `follow-ups.md`) and the memory file
    (`git add .specclaw`). Then push **once**: `/specclaw:pr`.
+
+## Recall at plan and build
+
+The plugin's hook hands up to `review.recall_k` (default 3) past lessons to `/specclaw:plan <change>` and
+`/specclaw:build <change>` as yes/no checks: the change's own `lesson` lines first, then review memory for
+the files the change names, then similar lessons of other changes. Answer each. A "no" needs a task or a
+fix. A recall that fails says `recall unavailable`, and the work goes on.
 
 ## Rules
 
