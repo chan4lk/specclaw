@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# done-guard — Stop hook (change 060; ported from ION-TBML-SUITE's .claude/hooks/done-guard.sh).
+#
+# For each active change touched on this branch (since the merge-base with the base branch,
+# committed, uncommitted or untracked) whose tasks are all done, name each step still missing:
+# a PASS verify verdict, one not older than the last commit outside .specclaw/ (so it is for HEAD),
+# and, when specclaw-review is on PATH, a clean review verdict. What is missing goes to stderr
+# with exit 2, which keeps the turn going with it as the reason.
+#
+# A wrong guard traps the turn, so every other path exits 0: a Stop this hook already holds
+# (stop_hook_active), no .specclaw/config.yaml, and any internal error. Without a base to diff
+# against, every active change is checked (never fewer). Registered for Claude Code only, in
+# hooks/mod.json: nothing shows Codex accepts a Stop command hook in hooks/hooks.json.
+
+input="$(cat 2>/dev/null || true)"
+grep -qE '"stop_hook_active"[[:space:]]*:[[:space:]]*true' <<<"$input" && exit 0
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" || exit 0
+
+missing() (
+  set -euo pipefail
+  root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+  [ -f "$root/.specclaw/config.yaml" ] || exit 0
+  # shellcheck disable=SC1091  # sourced lib, resolved at runtime
+  . "$HERE/lib/base-ref.sh"
+  cd "$root"
+  mb="$(base_merge_base "$root")"
+  if [ -n "$mb" ]; then
+    touched="$({ git diff --name-only "$mb" -- .specclaw/changes; git ls-files --others --exclude-standard -- .specclaw/changes; } | cut -d/ -f3 | sort -u)"
+  else
+    touched="$(ls .specclaw/changes)"
+  fi
+  for name in $touched; do
+    dir=".specclaw/changes/$name"
+    [ "$name" != archive ] && [ -f "$dir/state.json" ] || continue
+    tasks="$dir/tasks.md"
+    [ -f "$tasks" ] || tasks="$dir/change.md"
+    [ -f "$tasks" ] || continue
+    read -r finished total _ deferred <<<"$("$HERE/bin/specclaw-parse-tasks" --count "$tasks")"
+    [ "$total" -gt 0 ] && [ $((finished + deferred)) -eq "$total" ] || continue
+    verify="$(grep -oE '"verify"[[:space:]]*:[[:space:]]*\{[^}]*\}' "$dir/state.json" || true)"
+    status="$(sed -nE 's/.*"status"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p' <<<"$verify")"
+    verdict="$(sed -nE 's/.*"verdict"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p' <<<"$verify")"
+    at="$(sed -nE 's/.*"at"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p' <<<"$verify")"
+    if [ -z "$verify" ]; then
+      echo "specclaw: $name has every task done, but no verify verdict. Run /specclaw:verify."
+    elif [ "$verdict" != PASS ] && { [ -n "$verdict" ] || { [ "$status" != passed ] && [ "$status" != "done" ]; }; }; then
+      echo "specclaw: $name has every task done, but its verify verdict is ${verdict:-$status}, not PASS. Fix it and re-run /specclaw:verify."
+    elif [ -n "$at" ] && late="$(git rev-list -1 --since="$at" HEAD -- . ':(exclude).specclaw')" && [ -n "$late" ]; then
+      echo "specclaw: $name has every task done, but code was committed after its verify (${late:0:10}). Re-run /specclaw:verify for HEAD."
+    fi
+    if command -v specclaw-review >/dev/null 2>&1; then
+      review="$(specclaw-review verdict --change "$name" 2>&1)" \
+        || echo "specclaw: $name has every task done, but its review is not clean: ${review:-no verdict}. Run the specclaw-review loop."
+    fi
+  done
+)
+
+report="$(missing 2>/dev/null)" || exit 0
+[ -n "$report" ] || exit 0
+printf '%s\n' "$report" >&2
+exit 2

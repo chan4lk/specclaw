@@ -82,12 +82,13 @@ for hooks_file in "$REPO_ROOT"/plugins/*/hooks/hooks.json; do
 done
 
 python3 - "$CLAUDE_MANIFEST" "$PLUGIN_DIR/hooks/mod.json" <<'PY' \
-  && pass "the Claude manifest loads the mod from hooks/mod.json" \
-  || fail "the Claude manifest loads the mod from hooks/mod.json"
+  && pass "the Claude manifest loads the mod and the Claude-only Stop done guard from hooks/mod.json" \
+  || fail "the Claude manifest loads the mod and the Claude-only Stop done guard from hooks/mod.json"
 import json, sys
 manifest, mod = (json.load(open(path)) for path in sys.argv[1:3])
 assert manifest.get("hooks") == "./hooks/mod.json", manifest.get("hooks")
-assert mod == {"modules": ["./register.tsx"]}, mod
+assert mod["modules"] == ["./register.tsx"], mod
+assert mod["hooks"]["Stop"][0]["hooks"][0]["command"].endswith('/hooks/done-guard"'), mod
 PY
 
 [ -f "$WORKFLOW_FILE" ] || fail "CI workflow exists"
