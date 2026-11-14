@@ -1,6 +1,6 @@
 {
   "name": "specclaw-dash",
-  "version": "0.9.8",
+  "version": "0.9.9",
   "description": "Read-only dashboard mod for specclaw in Claude Code: one /dash pane for the build, review and learning loops and token use (API-equivalent estimate).",
   "author": {
     "name": "Chandima Ranaweera",

@@ -1,6 +1,6 @@
 {
   "name": "specclaw-dash",
-  "version": "0.9.8",
+  "version": "0.9.9",
   "description": "Claude Code only: the /dash pane is a Claude Code mod. This Codex manifest carries no skills; it exists so every specclaw plugin ships both manifests.",
   "author": {
     "name": "Chandima Ranaweera",
