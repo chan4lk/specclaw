@@ -95,7 +95,7 @@ d="$(repo noconfig)"; change "$d" 002-x "$DONE"; rm "$d/.specclaw/config.yaml"
 check "no .specclaw/config.yaml exits 0" "$d" 0 ""
 
 d="$(repo broken)"; change "$d" 002-x "$DONE"; chmod 000 "$d/.specclaw/changes/002-x/tasks.md"
-check "an internal error exits 0" "$d" 0 ""
+check "an unreadable tasks file is skipped, exit 0" "$d" 0 ""
 
 (( fail == 0 )) && echo "R060 AC-3 the done guard holds only touched, all-done changes missing a step"
 exit "$fail"

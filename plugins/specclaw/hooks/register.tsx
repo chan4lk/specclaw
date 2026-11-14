@@ -38,7 +38,7 @@ export const register: Register = (on, options) => {
     if (mode === 'off') return next(e)
     const path = 'notebook_path' in e ? e.notebook_path : e.file_path
     const snapshot = await refresh($)
-    const onBase = await onBaseBranch($, await $.session.cwd()).catch(async () => {
+    const onBase = !snapshot.hasSpecclaw ? undefined : await onBaseBranch($, await $.session.cwd()).catch(async () => {
       await notify($, 'specclaw: the branch guard failed; the base-branch check was skipped.')
       return undefined
     })

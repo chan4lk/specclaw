@@ -8,7 +8,7 @@
 base_merge_base() {
   local root="$1" base ref
   base="$(awk '/^[a-zA-Z_]/ { g = ($0 ~ /^git:/); next } g && /^  base_branch:/ { sub(/^  base_branch:[[:space:]]*/, ""); print; exit }' \
-    "$root/.specclaw/config.yaml" 2>/dev/null | sed -E 's/[[:space:]]*#.*$//; s/[[:space:]]+$//; s/^"(.*)"$/\1/' || true)"
+    "$root/.specclaw/config.yaml" 2>/dev/null | sed -E 's/[[:space:]]*#.*$//; s/[[:space:]]+$//; s/^"(.*)"$/\1/'"; s/^'(.*)'$/\\1/" || true)"
   [ -n "$base" ] || base="$(git -C "$root" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||' || true)"
   [ -n "$base" ] || base=main
   for ref in "origin/$base" "$base"; do

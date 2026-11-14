@@ -578,7 +578,8 @@ cmd_size() {
   lines=$(awk -F'\t' -v n="$untracked" '$1 != "-" { n += $1 + $2 } END { print n + 0 }' <<<"$numstat")
   if [ "$lines" -gt "$cap" ]; then
     local waived
-    waived="$(grep -lE '^\**Size waiver:\**[[:space:]]+[^[:space:]]' "${change_dir}/proposal.md" "${change_dir}/change.md" 2>/dev/null | head -1 || true)"
+    # Any common spelling: a bullet, bold around the label or the colon, any case. A reason must follow.
+    waived="$(grep -liE '^[[:space:]]*([-*][[:space:]]+)?\**size waiver(\**:|:\**)\**[[:space:]]*[^[:space:]*]' "${change_dir}/proposal.md" "${change_dir}/change.md" 2>/dev/null | head -1 || true)"
     if [ -n "$waived" ]; then
       echo "size cap: ${lines} production lines, over the ${cap}-line cap, with the waiver in ${waived}"
       return 0

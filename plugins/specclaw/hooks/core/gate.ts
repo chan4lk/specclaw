@@ -60,7 +60,7 @@ export const isGateOpen = (snapshot: Snapshot) =>
 export const gateDecision = ({ root, changes, spelled, target, path, mode, snapshot, onBase }: GateInput): GateVerdict => {
   if (mode === 'off') return ALLOW
   const inProject = target === undefined ? undefined : relativeInside(root, target)
-  if (onBase !== undefined && inProject !== undefined && !EXEMPT.test(inProject)) return onBaseBranch(mode, onBase, inProject)
+  if (onBase !== undefined && snapshot.hasSpecclaw && inProject !== undefined && !EXEMPT.test(inProject)) return onBaseBranch(mode, onBase, inProject)
   if (isGateOpen(snapshot)) return ALLOW
   if (snapshot.isUnreadable || snapshot.changes.some(change => change.isUnreadable)) {
     throw new Error('specclaw: could not read every change')

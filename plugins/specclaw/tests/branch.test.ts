@@ -51,6 +51,7 @@ const CONFIGS: [string, string, boolean][] = [
   ['git.base_branch names the base', 'git:\n  strategy: x\n  base_branch: "develop"  # base\n', true],
   ['base_branch outside the git block is ignored', 'jira:\n  base_branch: develop\ngit:\n  strategy: x\n', false],
   ['an empty git.base_branch falls back to origin/HEAD', 'git:\n  base_branch: ""\n', false],
+  ['a single-quoted base after a column-0 comment', "git:\n# the trunk\n  base_branch: 'develop'\n", true],
 ]
 
 for (const [name, config, denied] of CONFIGS) {
@@ -74,3 +75,20 @@ for (const [name, config, denied] of CONFIGS) {
     expect(ran).toBe(!denied)
   })
 }
+
+test('AC2 a project without .specclaw/ is never branch-guarded, and git is not asked', { options: { gate: 'block' } }, async ($, on) => {
+  let ran = false
+  let gitCalls = 0
+  on('ui.toast', () => ({ value: undefined }))
+  on('ui.status', () => ({ value: undefined }))
+  on('session.cwd', () => ({ value: '/repo' }))
+  on('fs.exists', (_, e) => ({ value: ['/repo', '/repo/src'].includes(e.path) }))
+  on('fs.stat', (_, e) => ({ value: { kind: 'dir', size: 0, mtimeMs: 0, isLink: false, realPath: e.path } }))
+  on('process.run', () => {
+    gitCalls += 1
+    return { value: { exitCode: 0, stdout: 'main', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  on('tool.call', () => ((ran = true), { result: {} }))
+  await $.tool.call({ tool: 'Write', file_path: '/repo/src/a.ts', content: 'a' })
+  expect([ran, gitCalls]).toEqual([true, 0])
+})

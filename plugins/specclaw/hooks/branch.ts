@@ -1,7 +1,7 @@
 import type { EngineInterface } from 'claude-code'
 
-// git.base_branch, read only inside the top-level `git:` block, as lib/base-ref.sh reads it.
-const GIT_BLOCK = /^git:[^\n]*\n((?:[ \t]+[^\n]*\n?|\n)*)/m
+// git.base_branch, read only inside the top-level `git:` block (column-0 comments do not end it), as lib/base-ref.sh reads it.
+const GIT_BLOCK = /^git:[^\n]*\n((?:[ \t]+[^\n]*\n?|#[^\n]*\n?|\n)*)/m
 const BASE = /^  base_branch:[ \t]*["']?([^"'#\s]*)/m
 
 function run($: EngineInterface, cwd: string, args: string[]) {
