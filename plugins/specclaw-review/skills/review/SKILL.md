@@ -66,8 +66,9 @@ release_gate:
   Only `blocker` findings whose class is in `release_gate.block_on` must be fixed. Every other finding goes
   to `.specclaw/debt.md` through the review writer, never by hand. Tick an item (`- [x]`) when it is fixed.
 - **Class.** Each finding carries `class`: `law`, `security`, `data-loss` or `other`. A blocker or major
-  the reviewer left unlabelled is written as `unclassified`; it stays blocking in the round and at release
-  (fail closed). An unlabelled minor is `other`.
+  the reviewer left unlabelled is written as `unclassified` (fail closed): an unlabelled blocker keeps the
+  fast-track round open, and an unlabelled major goes to `debt.md` and blocks at release. An unlabelled minor
+  is `other`.
 - **Release gate.** `specclaw-sync release <base> <target>` (from specclaw-sync) lists every open
   `debt.md` and `follow-ups.md` item that the range adds. It exits 1 only when an item's class is in
   `block_on`, or is `unclassified`. Other debt is listed and released.
