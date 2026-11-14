@@ -34,12 +34,9 @@
 - **AC-2:** Installed plugin (on PATH, or next to core in the plugin cache) → no output; exit 0.
 - **AC-3:** Dismissed feature → no output. `--dismiss` is idempotent and creates the block when absent.
 - **AC-4:** Unknown feature, missing config, or `CODEX_THREAD_ID` set → no output; exit 0.
-- **AC-5:** `session-start` sources `lib/plugins.sh`, and `run-plugin-split-tests.sh` and
-  `run-bootstrap-hook-tests.sh` still pass.
-- **AC-6:** `specclaw-log-learning` appends one valid JSON `lesson` line with the given fields, and
-  `specclaw-timer report` prints no "unparseable" warning for it.
-- **AC-7:** The five skill call sites name `specclaw-suggest`; verify no longer says "skip silently" for the
-  missing review plugin; the lean skills stay within the 300-word cap.
+- **AC-5:** `session-start` sources `lib/plugins.sh`, and `run-plugin-split-tests.sh` and `run-bootstrap-hook-tests.sh` still pass.
+- **AC-6:** `specclaw-log-learning` appends one valid JSON `lesson` line with the given fields, and `specclaw-timer report` prints no "unparseable" warning for it.
+- **AC-7:** The five skill call sites name `specclaw-suggest`; verify no longer says "skip silently" for the missing review plugin; the lean skills stay within the 300-word cap.
 
 ## Approach
 

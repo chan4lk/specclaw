@@ -44,7 +44,7 @@ mkdir -p "$S/changes/001-x"
 check "AC-6 log-learning appends one lesson line with its fields" 'python3 -c "import json,sys; l=[json.loads(x) for x in open(sys.argv[1]) if \"lesson\" in x]; assert len(l)==1 and {k:l[0][k] for k in (\"kind\",\"category\",\"priority\",\"detail\",\"action\")}=={\"kind\":\"lesson\",\"category\":\"pattern\",\"priority\":\"high\",\"detail\":\"say \\\"hi\\\"\",\"action\":\"do it\"} and l[0][\"at\"]" "$S/changes/001-x/timeline.jsonl"'
 check "AC-6 timer report does not call the lesson line unparseable" '! "$BIN/specclaw-timer" report "$S" 001-x 2>&1 >/dev/null | grep -q unparseable'
 
-check "AC-7 every call site names specclaw-suggest" '(for f in skills/verify/SKILL.md references/full/verify.md skills/status/SKILL.md references/full/status.md skills/propose/SKILL.md references/full/propose.md skills/init/SKILL.md references/full/init.md; do grep -q "specclaw-suggest" "$PLUGIN_DIR/$f" || exit 1; done)'
+check "AC-7 every call site names specclaw-suggest, verify no longer skips silently" '(for f in skills/verify/SKILL.md references/full/verify.md skills/status/SKILL.md references/full/status.md skills/propose/SKILL.md references/full/propose.md skills/init/SKILL.md references/full/init.md; do grep -q "specclaw-suggest" "$PLUGIN_DIR/$f" || exit 1; done) && ! grep -qiE "skip(s)? (it )?silently" "$PLUGIN_DIR/skills/verify/SKILL.md" "$PLUGIN_DIR/references/full/verify.md"'
 
 echo
 [ "$FAILS" -eq 0 ] && echo "All suggest tests passed." || echo "$FAILS failure(s)."
