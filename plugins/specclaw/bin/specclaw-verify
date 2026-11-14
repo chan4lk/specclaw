@@ -569,9 +569,11 @@ cmd_size() {
   # Exit 2 = not counted, never read as under the cap (verify records it as a FAIL until it can count).
   [ -n "$mb" ] || { echo "size cap: not counted, no base branch to compare with"; return 2; }
   local numstat untracked
-  numstat="$(git -C "$root" diff --numstat --no-renames "$mb" -- "${specs[@]}")" \
-    && untracked="$(cd "$root" && git ls-files -z --others --exclude-standard -- "${specs[@]}" | xargs -0 cat 2>/dev/null | wc -l)" \
-    || { echo "size cap: not counted, git diff against ${mb:0:10} failed"; return 2; }
+  if ! numstat="$(git -C "$root" diff --numstat --no-renames "$mb" -- "${specs[@]}")" ||
+     ! untracked="$(cd "$root" && git ls-files -z --others --exclude-standard -- "${specs[@]}" | xargs -0 cat 2>/dev/null | wc -l)"; then
+    echo "size cap: not counted, git diff against ${mb:0:10} failed"
+    return 2
+  fi
   # Tracked lines against the merge-base (committed or not), plus every line of an untracked file.
   lines=$(awk -F'\t' -v n="$untracked" '$1 != "-" { n += $1 + $2 } END { print n + 0 }' <<<"$numstat")
   if [ "$lines" -gt "$cap" ]; then
