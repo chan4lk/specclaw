@@ -486,6 +486,34 @@ adoapi_get() {
   curl -sf "$url" -H "Authorization: Basic ${auth}"
 }
 
+# post_review_status <pr_id> <source_branch> — the clean-loop PR status branch
+# policy can require (change 064, ADR-0017 decision 59). Posts genre `specclaw`,
+# name `review-loop`, state succeeded, bound to the PR's latest iteration, only
+# when `specclaw-review verdict --head` confirms a clean final pass at exactly
+# that iteration's source commit. Binding to the iteration lets a "reset on
+# source update" policy drop it after a new push. Never fails: the PR exists.
+post_review_status() {
+  command -v specclaw-review >/dev/null 2>&1 || return 0
+  local pr_id="$1" branch="$2" it iter sha out body
+  it="$(adoapi_get "git/repositories/${AZDO_REPO}/pullRequests/${pr_id}/iterations?api-version=7.1" 2>/dev/null |
+    python3 -c 'import json,sys; v=json.load(sys.stdin)["value"][-1]; print(int(v["id"]), v["sourceRefCommit"]["commitId"])' 2>/dev/null)" || it=""
+  read -r iter sha <<<"$it"
+  if [[ -z "$sha" ]]; then
+    warn "could not read the PR's latest iteration — specclaw/review-loop status not posted"
+    return 0
+  fi
+  if ! out="$(specclaw-review verdict --change "$CHANGE_NAME" --head "$sha" 2>&1)"; then
+    echo "  specclaw/review-loop status not posted: ${out%%$'\n'*}"
+    return 0
+  fi
+  body="$(python3 -c 'import json,sys; print(json.dumps({"state": "succeeded", "description": "clean",
+    "context": {"genre": "specclaw", "name": "review-loop"}, "iterationId": int(sys.argv[1]), "targetUrl": sys.argv[2]}))' \
+    "$iter" "https://dev.azure.com/${AZDO_ORG}/${AZDO_PROJECT}/_git/${AZDO_REPO}?path=/$(sed -n 2p <<<"$out")&version=GB${branch}")"
+  adoapi_post "git/repositories/${AZDO_REPO}/pullRequests/${pr_id}/statuses?api-version=7.1" "$body" >/dev/null ||
+    { warn "posting the specclaw/review-loop status failed (PR ${pr_id} is live)"; return 0; }
+  echo "  specclaw/review-loop: clean posted on ${sha:0:10} (iteration ${iter})"
+}
+
 get_default_branch() {
   local result
   result="$(adoapi_get "git/repositories/${AZDO_REPO}?api-version=7.1" 2>/dev/null)" || true
@@ -646,6 +674,8 @@ main() {
   pr_commit_bookkeeping "$CHANGE_NAME" "$pr_url" \
     "$CHANGE_DIR/state.json" "$CHANGE_DIR/status.md" "$SPECCLAW_DIR/STATUS.md"
   echo "✅ ADO PR created: $pr_url"
+  # After the bookkeeping push, so the iteration checked is the head policy sees.
+  post_review_status "$pr_id" "$source_branch" || true
 
   # Auto-link PR → Azure Boards Work Item (if azdo.boards.sync is enabled and a
   # Work Item exists for this change). Failure is non-fatal — PR is already done.
