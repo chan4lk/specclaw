@@ -333,6 +333,10 @@ f = rc.calibrate(C(), [{"severity": "minor", "rule": "B1", "file": "x.py", "line
                        {"severity": "minor", "rule": "B3", "file": "z.py", "line": 1, "message": "c", "class": "style"},
                        {"severity": "minor", "rule": "B4", "file": "w.py", "line": 1, "message": "d", "class": "SECURITY"}])
 assert [x["class"] for x in f] == ["data-loss", "other", "other", "security"], [x["class"] for x in f]
+C.release_gate = {"block_on": ["crash", "Data Loss"]}
+assert C().block_on == ["crash", "data-loss"], C().block_on   # an unknown gate name never widens to `other`
+C.release_gate = {}
+assert C().block_on == ["law", "security", "data-loss"]
 PY'
 mkrepo "$TMP/c4"
 out_json '[{"severity":"minor","rule":"B10","file":"a.py","line":1,"message":"naming","class":"law","in_delta":true}]'

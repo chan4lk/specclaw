@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+"""specclaw-sync release <base> <target> — the release gate by severity (change 064, ADR-0017 decision 58).
+
+Lists every open item (a `- ` line that is not `- [x]`) in .specclaw/debt.md and in every
+.specclaw/changes/**/follow-ups.md at <target> that is not already at <base>. An item's class is the
+`class:<c>` in its trailing comment (written by specclaw-review), `other` when absent.
+
+Exit 1 only when a listed item's class is in release_gate.block_on, read from <target>'s
+.specclaw/config.yaml (default: law, security, data-loss). Exit 0 otherwise. Exit 2: usage or git error.
+"""
+import re
+import subprocess
+import sys
+
+DEFAULT_BLOCK_ON = ["law", "security", "data-loss"]
+LIST_RE = re.compile(r"^\.specclaw/(debt\.md|changes/(.+/)?follow-ups\.md)$")
+CLASS_RE = re.compile(r"<!--.*\bclass:([\w-]+).*-->")
+
+
+def git(*args):
+    r = subprocess.run(["git", *args], capture_output=True, text=True)
+    return r.returncode, r.stdout
+
+
+def show(ref, path):
+    code, out = git("show", f"{ref}:{path}")
+    return out if code == 0 else ""
+
+
+def norm(c):
+    return re.sub(r"[\s_]+", "-", str(c).strip().strip("\"'").lower())
+
+
+def block_on(config):
+    """release_gate.block_on from a config.yaml text: an inline [a, b] list or `- a` lines."""
+    m = re.search(r"^release_gate:[^\n]*\n((?:[ \t]+[^\n]*\n?|\n)*)", config, re.M)
+    if not m:
+        return DEFAULT_BLOCK_ON
+    lines = m.group(1).splitlines()
+    for i, ln in enumerate(lines):
+        k = re.match(r"^(\s+)block_on:\s*(.*?)\s*(#.*)?$", ln)
+        if not k:
+            continue
+        if k.group(2).startswith("["):
+            vals = k.group(2).strip("[]").split(",")
+        elif k.group(2):
+            vals = [k.group(2)]
+        else:
+            vals = []
+            for nxt in lines[i + 1:]:
+                item = re.match(r"^\s+-\s*(.+?)\s*(#.*)?$", nxt)
+                if not item or len(nxt) - len(nxt.lstrip()) <= len(k.group(1)):
+                    break
+                vals.append(item.group(1))
+        vals = [norm(v) for v in vals if v.strip()]
+        return vals or DEFAULT_BLOCK_ON
+    return DEFAULT_BLOCK_ON
+
+
+def open_items(text):
+    return [ln.rstrip() for ln in text.splitlines() if ln.startswith("- ") and not re.match(r"- \[[xX]\]", ln)]
+
+
+def release(base, target):
+    for ref in (base, target):
+        if git("rev-parse", "-q", "--verify", f"{ref}^{{commit}}")[0] != 0:
+            print(f"specclaw-sync: unknown ref '{ref}'", file=sys.stderr)
+            return 2
+    code, tree = git("ls-tree", "-r", "--name-only", target, "--", ".specclaw")
+    if code != 0:
+        print("specclaw-sync: git ls-tree failed", file=sys.stderr)
+        return 2
+    gate = block_on(show(target, ".specclaw/config.yaml"))
+    items = []
+    for path in sorted(p for p in tree.splitlines() if LIST_RE.match(p)):
+        before = set(open_items(show(base, path)))
+        for ln in open_items(show(target, path)):
+            if ln not in before:
+                m = CLASS_RE.search(ln)
+                items.append((norm(m.group(1)) if m else "other", path, ln))
+    blocking = [i for i in items if i[0] in gate]
+    print(f"release {base}..{target}: {len(items)} open item(s), {len(blocking)} blocking "
+          f"(block_on: {', '.join(gate)})")
+    for cls, path, ln in items:
+        print(f"{'BLOCK' if cls in gate else '     '} {cls:<9} {path}  {ln}")
+    return 1 if blocking else 0
+
+
+def main(argv):
+    if len(argv) != 3 or argv[0] != "release":
+        print("usage: specclaw-sync release <base> <target>", file=sys.stderr)
+        return 2
+    return release(argv[1], argv[2])
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

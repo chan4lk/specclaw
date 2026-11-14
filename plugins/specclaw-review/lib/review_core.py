@@ -173,7 +173,7 @@ class Config:
         """release_gate.block_on: the finding classes that block a fast-track round and a release."""
         v = self.release_gate.get("block_on")
         v = v if isinstance(v, list) else [v] if v else DEFAULT_BLOCK_ON
-        return [normalise_class(c) for c in v]
+        return [_class_token(c) for c in v]   # not normalise_class: an unknown name must not become `other`
 
     def fast_track(self, change):
         """review.fast_track: a list of change names, or `all`. Off by default."""
@@ -558,8 +558,12 @@ def _symbols(f):
     return {t for t in re.findall(r"`([A-Za-z_][\w.]{2,})", f.get("message") or "")}
 
 
+def _class_token(c):
+    return re.sub(r"[\s_]+", "-", str(c or "").strip().lower())
+
+
 def normalise_class(c):
-    c = re.sub(r"[\s_]+", "-", str(c or "").strip().lower())
+    c = _class_token(c)
     return c if c in CLASSES else "other"
 
 
