@@ -682,7 +682,7 @@ def fix_proof(cfg, base):
     if not cmd:
         return no("no review.test_command configured, so no test could prove the fix")
     try:
-        changed = git(cfg.root, "diff", "--name-only", "--diff-filter=AM", f"{base}..HEAD").splitlines()
+        changed = git(cfg.root, "diff", "--name-only", "--no-renames", "--diff-filter=AM", f"{base}..HEAD").splitlines()
     except ReviewError as e:
         return no(f"the pre-fix commit {base[:10]} cannot be read: {e}")
     pats = cfg.lst("test_paths") or DEFAULT_TEST_PATHS

@@ -24,7 +24,7 @@ def lessons(cdir):
     out = []
     try:
         fh = open(os.path.join(cdir, "timeline.jsonl"), encoding="utf-8")
-    except OSError:
+    except FileNotFoundError:
         return out
     with fh:
         for line in fh:
@@ -42,7 +42,7 @@ def read(cdir, *names):
     for n in names:
         try:
             parts.append(open(os.path.join(cdir, n), encoding="utf-8").read())
-        except OSError:
+        except FileNotFoundError:
             pass
     return "\n".join(parts)
 

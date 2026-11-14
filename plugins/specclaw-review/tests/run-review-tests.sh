@@ -363,6 +363,14 @@ fpround "$TMP/fp6" ""
 out_json '[]'; "$SR" run --change "$CH" >/dev/null; rc=$?
 check "AC-6 a round without --since after an open round runs no fix proof" '[ "$rc" = 0 ] && [ "$(proof 2 status)" = None ]'
 
+fpround "$TMP/fp9" "sh {files}"
+mkdir -p tests && printf '# shared setup line %s\n' 1 2 3 4 5 6 7 8 > tests/check_a.sh && echo 'grep -q "a + 2" a.py' >> tests/check_a.sh && fix
+out_json "$MAJOR"; "$SR" run --change "$CH" --since "$H1" >/dev/null; H2="$(git rev-parse HEAD)"
+git mv tests/check_a.sh tests/check_b.sh && sed -i.bak 's/a + 2/a + 3/' tests/check_b.sh && rm tests/check_b.sh.bak
+printf 'def helper_fn(a):\n    return a + 3\n' > a.py && git add -A && git commit -qm "move test"
+out_json '[]'; "$SR" run --change "$CH" --since "$H2" >/dev/null
+check "final-pass fix: a test the fix renamed and edited is collected for the proof" '[ "$(proof 2 status)" = proven ] && [ "$(proof 3 status)" = proven ] && proof 3 tests | grep -q check_b.sh'
+
 # 061 hand-over: a finding whose file is gone at HEAD (renamed or deleted) is carried in every later round,
 # in warn and block: the reviewer cannot re-report it on the old path, so silence would close it.
 for mode in block warn; do for kind in rename rename-edit delete; do
@@ -448,6 +456,8 @@ mkdir -p .specclaw/changes/012-lean && printf '# Change\nTouches `src/pay/export
 check "AC-1 a lean change (change.md only) recalls memory for the files it names" 'ctx "{\"prompt\":\"/specclaw:build 012-lean\",\"cwd\":\"$TMP/rc\"}" | grep -q "memory lesson for export"'
 mkdir -p .specclaw/changes/011-empty
 check "AC-2 no lessons is said, not silent" 'ctx "{\"prompt\":\"/specclaw:plan 011-empty\",\"cwd\":\"$TMP/rc\"}" | grep -q "no past lessons"'
+mkdir -p .specclaw/changes/012-locked && mkdir .specclaw/changes/012-locked/timeline.jsonl
+check "final-pass fix: an unreadable timeline says recall unavailable, never no past lessons" 'ctx "{\"prompt\":\"/specclaw:plan 012-locked\",\"cwd\":\"$TMP/rc\"}" | grep -q "recall unavailable"'
 check "AC-8 hooks.json registers recall on UserPromptSubmit and PostToolUse(Skill)" 'python3 - "$PLUGIN_DIR/hooks/hooks.json" <<"PY"
 import json, sys; h = json.load(open(sys.argv[1]))["hooks"]
 assert "hooks/recall" in h["UserPromptSubmit"][0]["hooks"][0]["command"]
