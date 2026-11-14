@@ -276,11 +276,12 @@ def committing(tool: object, tool_input: object) -> bool:
     if not isinstance(command, str):
         return False
     bare = re.sub(r"'[^']*'|\"(?:\\.|[^\"\\])*\"", "''", command)
-    # Every redirect with its target (2>&1, >&2, 2>/dev/null, &>log, &>>log, > out, < in) is not a command.
-    bare = re.sub(r"(\d*|&)(>>?|<)&?\s*[^\s;&|]+", " ", bare)
+    # Only fd duplication (2>&1, >&2) and output to /dev/null are dropped; any other redirect stays,
+    # and a part still holding < or > is denied below: block never lets a call write a file.
+    bare = re.sub(r"\d*>&\d+-?|(\d*|&)>>?\s*/dev/null(?=[\s;&|]|$)", " ", bare)
     parts = [part.strip() for part in re.split(r"&&|\|\||[;|&\n]", bare)]
     parts = [part for part in parts if part]
-    return bool(parts) and all(ALLOWED.match(part) for part in parts)
+    return bool(parts) and all(ALLOWED.match(part) and not re.search(r"[<>]", part) for part in parts)
 
 
 def decide(config: dict, event: dict, prompt: str, context: int) -> tuple[str | None, str, dict]:

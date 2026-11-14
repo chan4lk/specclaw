@@ -207,7 +207,8 @@ call's context, and compares it with the role's cap:
 - **At 90%:** `budget.gate: warn` (shipped) tells the agent and the user to commit and run
   `specclaw-budget handover`, and denies nothing. `block` denies every call except Bash whose
   every command is `git add/commit/status/diff/log`, `cd`, a read-only filter (`head` `tail` `wc` `grep` `sort` `cat`) or `specclaw-budget handover` (quoted
-  text is blanked first, so a commit message may hold anything). `off` reads nothing.
+  text is blanked first, so a commit message may hold anything; only fd duplication and `/dev/null`
+  redirects are allowed, so a call can never write a file). `off` reads nothing.
 
 It **fails open and loud** (decision 49): any exception exits 0 with a `systemMessage` and a line in
 `~/.claude/specclaw/gate.jsonl` (rotated past 1 MiB; ids and numbers only). A bad `budget:` value is
