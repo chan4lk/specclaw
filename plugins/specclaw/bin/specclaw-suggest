@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# specclaw-suggest — one install tip for an add-on plugin, at the moment it would help (change 059).
+#
+# Usage:
+#   specclaw-suggest <specclaw_dir> <feature>             feature: review fleet sync bf extras
+#   specclaw-suggest <specclaw_dir> --dismiss <feature>   never suggest it again
+#
+# Prints one line only when the feature's plugin is not installed and the feature
+# is not in config.yaml `plugins.dismissed`:
+#   Tip: <what it adds>. Install: /plugin install <plugin>@chan4lk (say "no" to never see this again)
+# Prints nothing on Codex: `/plugin install` is Claude Code syntax. Codex sets
+# CODEX_THREAD_ID (and CODEX_SANDBOX when sandboxed) in its shell tool environment.
+# The feature table and the install check are lib/plugins.sh, shared with hooks/session-start.
+#
+# Every path exits 0. A tip is never the reason a skill stops.
+
+set -u
+
+[ $# -ge 2 ] || exit 0
+CONFIG="$1/config.yaml"
+CORE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" || exit 0
+# shellcheck disable=SC2034  # read by lib/plugins.sh
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$CORE_DIR}"
+# shellcheck disable=SC1091  # sourced lib, resolved at runtime
+. "$CORE_DIR/lib/plugins.sh" 2>/dev/null || exit 0
+
+if [ "$2" = "--dismiss" ]; then
+  f="${3:-}"
+  plugin_feature "$f" >/dev/null || { echo "specclaw-suggest: unknown feature '$f'" >&2; exit 0; }
+  fail() { echo "specclaw-suggest: could not record dismissal of '$f' in $CONFIG" >&2; rm -f "${tmp:-}"; exit 0; }
+  [ -f "$CONFIG" ] || fail
+  plugin_dismissed "$f" && exit 0
+  list="$(plugins_dismissed | sed 's/ /, /g')"
+  list="${list:+$list, }$f"
+  # Atomic and link-safe: write a copy next to the real file (symlinks resolved), keep its
+  # mode, then rename over it. A read-only config is refused, not replaced.
+  target="$CONFIG"
+  while [ -L "$target" ]; do
+    l="$(readlink "$target")" || fail
+    case "$l" in /*) target="$l" ;; *) target="$(dirname "$target")/$l" ;; esac
+  done
+  [ -w "$target" ] || fail
+  tmp="$(mktemp "$target.XXXXXX")" || fail
+  cp -p "$target" "$tmp" || fail
+  awk -v line="  dismissed: [$list]" '
+    /^[a-zA-Z_]/ { if (inblk && !done) { print line; done = 1 } inblk = ($0 ~ /^plugins:/); skip = 0 }
+    inblk && /^  dismissed:/ { c = ""; if (match($0, /[[:space:]]+#.*$/)) c = substr($0, RSTART); if (!done) print line c; done = 1; skip = 1; next }
+    skip && /^[[:space:]]+-[[:space:]]/ { next }
+    skip && /^[[:space:]]*(#.*)?$/ { print; next }
+    { skip = 0; print }
+    END { if (inblk && !done) print line; else if (!done) printf "\nplugins:\n%s\n", line }
+  ' "$target" > "$tmp" 2>/dev/null || fail
+  mv "$tmp" "$target" || fail
+  exit 0
+fi
+
+[ -n "${CODEX_THREAD_ID:-}${CODEX_SANDBOX:-}" ] && exit 0
+[ -f "$CONFIG" ] || exit 0
+spec="$(plugin_feature "$2")" || exit 0
+IFS='|' read -r cmd plugin what <<<"$spec"
+plugin_dismissed "$2" && exit 0
+installed "$cmd" "$plugin" && exit 0
+echo "Tip: $what. Install: /plugin install $plugin@chan4lk (say \"no\" to never see this again)"
+exit 0

@@ -1,0 +1,28 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 0
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw/tests/run-suggest-tests.sh"
+ ],
+ "final": false,
+ "findings": [],
+ "head": "7bbc54516693f2603079c73d52da95efcae48fc7",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 12759,
+ "round": 5,
+ "since": "14d27c4",
+ "status": "clean",
+ "system_chars": 8961,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794632624,
+ "ts_start": 1794632617
+}

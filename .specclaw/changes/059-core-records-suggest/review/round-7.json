@@ -1,0 +1,58 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 1
+ },
+ "escalated": [
+  "9be9ca0a947e"
+ ],
+ "files": [
+  "plugins/specclaw/bin/specclaw-suggest",
+  "plugins/specclaw/tests/run-suggest-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/tests/run-suggest-tests.sh",
+   "fp": "9be9ca0a947e",
+   "in_delta": true,
+   "line": 58,
+   "message": "The B3 fix adds `|| fail` on five paths: missing config, mktemp, cp, awk and mv. The tests drive only two of them: no config, and a read-only directory that makes mktemp fail. The `cp -p ... || fail`, awk and `mv ... || fail` paths have no test. Add table-driven rows that reach them through the real script: an unreadable `config.yaml` (chmod 000, which makes `cp -p` fail), and a config whose directory turns read-only after mktemp. Each row should assert the stderr message, exit 0 and an unchanged config.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Delete `|| fail` after `cp -p \"$CONFIG\" \"$tmp\"`, or after `mv \"$tmp\" \"$CONFIG\"`. Run `--dismiss review` against a chmod 000 config. The script exits 0 with nothing on stderr, as in the original defect, and the suite stays green because only the mktemp and missing-config cases are exercised.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw/bin/specclaw-suggest",
+   "fp": "a6ad3095c59d",
+   "in_delta": true,
+   "line": 44,
+   "message": "Replacing the in-place `cat \"$tmp\" > \"$CONFIG\"` with `mv` changes how the write behaves. If `config.yaml` is a symlink or hard link, `mv` replaces it with a regular file, and the old code wrote through the link. A config the user made read-only now gets overwritten, because `mv` only needs a writable directory. Keep the in-place write, or resolve the link target before the move.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "`.specclaw/config.yaml` is a symlink to a shared config. Run `--dismiss review`. The symlink is replaced by a standalone file, so the shared config is no longer updated and the link is gone.",
+   "severity": "minor"
+  }
+ ],
+ "head": "f3c6cf774e890a634c47fe82366cefdde604a908",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 13581,
+ "round": 7,
+ "since": "7bbc545",
+ "status": "escalate",
+ "system_chars": 8932,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794633605,
+ "ts_start": 1794633581
+}

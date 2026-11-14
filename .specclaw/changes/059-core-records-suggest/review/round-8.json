@@ -1,0 +1,43 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 0
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw/bin/specclaw-suggest",
+  "plugins/specclaw/tests/run-suggest-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/bin/specclaw-suggest",
+   "fp": "9f34191a6af6",
+   "in_delta": true,
+   "line": 44,
+   "message": "The atomic `mv \"$tmp\" \"$CONFIG\"` was replaced by `cat \"$tmp\" > \"$CONFIG\"`. The shell truncates the config before cat writes anything, so a failure after that point (disk full, quota, I/O error) leaves a truncated or partial config. The script still says the dismissal failed and exits 0, so the user is told nothing was recorded while the real config has been damaged. The new tests only cover a read-only file, where the redirect fails before truncation, so they cannot show this. Fix: keep a rename-based write. After mktemp, apply the original mode with `chmod --reference` or `chmod \"$(stat -f %Lp \"$CONFIG\")\"`, then `mv`. If in-place writing is needed to preserve a symlink or ownership, write to the temp file first and verify the copy, or restore from a backup when cat fails.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B3",
+   "scenario": "The disk is full when `--dismiss review` runs. awk writes a small tmp file, or fails to. `cat \"$tmp\" > \"$CONFIG\"` truncates config.yaml to 0 bytes and then fails on write. `fail` prints 'could not record dismissal' and exits 0. config.yaml is now empty or partial, so the other settings (e.g. `github:`, `plugins:`) are lost. With the previous `mv`, the original file would have been untouched.",
+   "severity": "major"
+  }
+ ],
+ "head": "b7644df3a90f415e567f7259f155a556fefb0a00",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 13943,
+ "round": 8,
+ "since": "f3c6cf7",
+ "status": "open",
+ "system_chars": 8932,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794633663,
+ "ts_start": 1794633646
+}
