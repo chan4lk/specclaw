@@ -1,6 +1,6 @@
 {
   "change": "059-core-records-suggest",
-  "phase": "verify",
+  "phase": "pr",
   "branch": "claude/059-core-records-suggest",
   "size": "bounded",
   "phases": {
@@ -8,6 +8,7 @@
     "spec": {"status":"done","at":"2026-11-14T04:50:14Z"},
     "tasks": {"status":"done","at":"2026-11-14T04:50:15Z"},
     "build": {"status":"done","at":"2026-11-14T04:56:24Z","tasks":{"done":4,"total":4,"failed":0}},
-    "verify": {"status":"passed","at":"2026-11-14T06:31:22Z","verdict":"PASS"}
+    "verify": {"status":"passed","at":"2026-11-14T06:31:22Z","verdict":"PASS"},
+    "pr": {"status":"raised","at":"2026-11-14T06:32:03Z","url":"https://github.com/chan4lk/specclaw/pull/129"}
   }
 }
