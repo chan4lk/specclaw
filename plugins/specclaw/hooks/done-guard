@@ -31,17 +31,25 @@ missing() (
   fi
   for name in $touched; do
     dir=".specclaw/changes/$name"
-    [ "$name" != archive ] && [ -f "$dir/state.json" ] || continue
+    [ "$name" != archive ] || continue
     tasks="$dir/tasks.md"
     [ -f "$tasks" ] || tasks="$dir/change.md"
     [ -f "$tasks" ] || continue
     read -r finished total _ deferred <<<"$("$HERE/bin/specclaw-parse-tasks" --count "$tasks")"
     [ "$total" -gt 0 ] && [ $((finished + deferred)) -eq "$total" ] || continue
     # A real JSON read: state.json is pretty-printed by specclaw-set-phase, and a line grep is not a parser.
-    # Unreadable (no python3, bad JSON): skip the change, never report it as a bogus verdict.
-    fields="$(python3 -c 'import json, sys
-v = json.load(open(sys.argv[1])).get("phases", {}).get("verify") or {}
-print(*(v.get(k) or "-" for k in ("status", "verdict", "at")))' "$dir/state.json" 2>/dev/null)" && [ -n "$fields" ] || continue
+    # No state.json is "no verify verdict". One that cannot be read (bad JSON, wrong shape, no python3) is
+    # named with its last error line: never skipped in silence, never read as a verdict.
+    if [ ! -f "$dir/state.json" ]; then
+      fields="- - -"
+    elif ! fields="$(python3 -c 'import json, sys
+d = json.load(open(sys.argv[1]))
+v = d.get("phases", {}).get("verify") or {}
+if not isinstance(v, dict): sys.exit("phases.verify is not an object")
+print(*(v.get(k) or "-" for k in ("status", "verdict", "at")))' "$dir/state.json" 2>&1)"; then
+      echo "specclaw: $name has every task done, but its state.json could not be read (${fields##*$'\n'}). Fix it, then run /specclaw:verify."
+      continue
+    fi
     read -r status verdict at <<<"$fields"
     if [ "$status" = - ]; then
       echo "specclaw: $name has every task done, but no verify verdict. Run /specclaw:verify."

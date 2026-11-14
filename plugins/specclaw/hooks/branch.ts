@@ -5,7 +5,8 @@ const GIT_BLOCK = /^git:[^\n]*\n((?:[ \t]+[^\n]*\n?|\n)*)/m
 const BASE = /^  base_branch:[ \t]*["']?([^"'#\s]*)/m
 
 function run($: EngineInterface, cwd: string, args: string[]) {
-  return $.process.run(['git', '-C', cwd, ...args], { timeoutMs: 3000 })
+  // LC_ALL=C keeps git's "not a git repository" in English, whatever the user's locale.
+  return $.process.run(['git', '-C', cwd, ...args], { timeoutMs: 3000, env: { LC_ALL: 'C' } })
 }
 
 // stdout when git exits with one of `ok` (0 answers stdout, any other ok code ''); any other exit throws.

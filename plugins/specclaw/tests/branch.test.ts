@@ -2,18 +2,23 @@ import { expect, test } from 'claude-code/testing'
 
 const APPROVED = '{"phase":"build","phases":{"proposal":{"status":"approved"}}}'
 
-// exitCode -1: process.run throws (git missing). Only "not a git repository" and a detached HEAD skip quietly;
-// every other git failure must fail open with a toast.
-const ROWS: [string, string, number, string, boolean, boolean][] = [
-  ['on main with an approved change', 'main', 0, '', false, false],
-  ['on a change branch', 'claude/x', 0, '', true, false],
-  ['on a detached HEAD', '', 0, '', true, false],
-  ['outside git', 'main', 128, 'fatal: not a git repository (or any of the parent directories): .git', true, false],
-  ['when git refuses a dubious-ownership repo, with a toast', 'main', 128, 'fatal: detected dubious ownership in repository', true, true],
-  ['when git cannot run, with a toast', 'main', -1, '', true, true],
+// Exit codes per git call: [rev-parse --is-inside-work-tree, branch --show-current, symbolic-ref origin/HEAD].
+// -1: process.run throws (git missing). Only "not a git repository", a detached HEAD and an unset origin/HEAD
+// (symbolic-ref exits 1) pass quietly; every other git failure must fail open with a toast.
+const NOT_GIT = 'fatal: not a git repository (or any of the parent directories): .git'
+const ROWS: [string, string, number[], string, boolean, boolean][] = [
+  ['on main with an approved change', 'main', [0, 0, 0], '', false, false],
+  ['on main with no origin/HEAD (symbolic-ref exits 1), falling back to main', 'main', [0, 0, 1], '', false, false],
+  ['on a change branch', 'claude/x', [0, 0, 0], '', true, false],
+  ['on a detached HEAD', '', [0, 0, 0], '', true, false],
+  ['outside git', 'main', [128, 0, 0], NOT_GIT, true, false],
+  ['when git refuses a dubious-ownership repo, with a toast', 'main', [128, 0, 0], 'fatal: detected dubious ownership in repository', true, true],
+  ['when branch --show-current fails inside a repo, with a toast', 'main', [0, 128, 0], 'fatal: bad object HEAD', true, true],
+  ['when symbolic-ref fails hard, with a toast', 'main', [0, 0, 128], 'fatal: bad ref', true, true],
+  ['when git cannot run, with a toast', 'main', [-1, 0, 0], '', true, true],
 ]
 
-for (const [name, branch, exitCode, stderr, runs, toast] of ROWS) {
+for (const [name, branch, codes, stderr, runs, toast] of ROWS) {
   test(`AC2 a block-mode Write ${runs ? 'runs' : 'is denied'} ${name}`, { options: { gate: 'block' } }, async ($, on) => {
     let ran = false
     const toasts: string[] = []
@@ -25,10 +30,11 @@ for (const [name, branch, exitCode, stderr, runs, toast] of ROWS) {
     on('fs.read', () => ({ value: APPROVED }))
     on('fs.stat', (_, e) => ({ value: { kind: 'dir', size: 0, mtimeMs: 0, isLink: false, realPath: e.path } }))
     on('process.run', (_, e) => {
+      const call = ['rev-parse', 'branch', 'symbolic-ref'].indexOf(e.argv[3] ?? '')
+      const exitCode = codes[call] ?? 0
       if (exitCode === -1) throw new Error('spawn git ENOENT')
-      const args = e.argv.slice(3).join(' ')
-      const stdout = args === 'branch --show-current' ? branch : args.startsWith('symbolic-ref') ? 'origin/main' : 'true'
-      return { value: { exitCode, stdout, stderr, isStdoutTruncated: false, isStderrTruncated: false } }
+      const stdout = exitCode !== 0 ? '' : ['true', branch, 'origin/main'][call] ?? ''
+      return { value: { exitCode, stdout, stderr: exitCode === 0 ? '' : stderr, isStdoutTruncated: false, isStderrTruncated: false } }
     })
     on('tool.call', () => ((ran = true), { result: {} }))
     const out = await $.tool.call({ tool: 'Write', file_path: '/repo/src/a.ts', content: 'a' })

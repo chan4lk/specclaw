@@ -81,8 +81,15 @@ check "a clean review verdict and a PASS verify exit 0" "$d" 0 "" "{}" "$STUB:$B
 d="$(repo nobase nosuch)"; change "$d" 002-x "$DONE" passed PASS
 check "without a base every active change is checked" "$d" 2 "001-old has every task done, but no verify verdict"
 
-d="$(repo badjson)"; change "$d" 002-x "$DONE"; echo '{"phases": {' > "$d/.specclaw/changes/002-x/state.json"
-check "an unreadable state.json is skipped, never reported as a verdict" "$d" 0 ""
+for bad in '{"phases": {' '[]' '{"phases": {"verify": "PASS"}}'; do
+  d="$(repo "bad$RANDOM")"; change "$d" 002-x "$DONE"; printf '%s\n' "$bad" > "$d/.specclaw/changes/002-x/state.json"
+  check "an unreadable state.json ($bad) is named, never read as a verdict" "$d" 2 "002-x has every task done, but its state.json could not be read ("
+done
+d="$(repo nostate)"; change "$d" 002-x "$DONE"; rm "$d/.specclaw/changes/002-x/state.json"
+check "a missing state.json is no verify verdict" "$d" 2 "002-x has every task done, but no verify verdict"
+d="$(repo nopython)"; change "$d" 002-x "$DONE" passed PASS
+mkdir -p "$TMP/nopy"; for t in bash git dirname basename cut sort uniq ls grep sed awk tr cat wc head tail mkdir rm mktemp; do ln -sf "$(command -v $t)" "$TMP/nopy/$t"; done
+check "no python3 is named, never read as a verdict" "$d" 2 "python3: command not found" "{}" "$TMP/nopy"
 
 d="$(repo noconfig)"; change "$d" 002-x "$DONE"; rm "$d/.specclaw/config.yaml"
 check "no .specclaw/config.yaml exits 0" "$d" 0 ""
