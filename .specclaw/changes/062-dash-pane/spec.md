@@ -46,7 +46,8 @@
   the dearest listed one. A message id counts once in today's total across files.
 - **FR-6** A missing source shows an install card instead of its section:
   no `.specclaw/` → install specclaw; no fleet report → install specclaw-fleet / `specclaw-fleet report --save`;
-  no review rounds and the review MCP server unreachable → install specclaw-review; no transcript folder → a
+  no review rounds and the review MCP server not installed (`unlisted`) → install specclaw-review; any other
+  connect or call failure is an error line, not an install card; no transcript folder → a
   "no transcripts" card naming the folder.
 - **FR-7** A failed read shows an error line for that section and none of its numbers. A record that does not
   parse is counted (`n unreadable records`), never guessed at. A transcript over the 4 MiB read limit is skipped

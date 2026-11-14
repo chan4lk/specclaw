@@ -88,6 +88,8 @@ const USAGE = '"usage":{'
 const TITLE = 'Title":'
 
 // Parse the complete lines after `prev.offset`; a shorter file, or no previous scan, starts over.
+// shortcut: a file rewritten to the same or a larger size reads as appended; Claude Code transcripts are
+// append-only, so upgrade only if that changes.
 export const scanText = (prev: FileScan | undefined, text: string, size: number, mtimeMs: number): FileScan => {
   const resume = prev !== undefined && size >= prev.size && prev.offset <= text.length
   const scan: FileScan = resume ? { ...prev, calls: { ...prev.calls }, titles: { ...prev.titles } } : fresh()
@@ -117,7 +119,8 @@ const top = (rows: TokenRow[], n: number) => [...rows].sort((a, b) => b.usd - a.
 
 // Sum the scans. A message id counts once in today's and the week's totals (a forked session copies
 // earlier messages, ids and all); each session still counts its own copy in its own spend.
-export const summarize = (transcripts: Transcript[], dayStart: number, n = 5): Omit<TokenData, 'files' | 'skipped'> => {
+// Only calls at or after `weekStart` count anywhere: a recently touched file can hold older calls.
+export const summarize = (transcripts: Transcript[], dayStart: number, weekStart: number, n = 5): Omit<TokenData, 'files' | 'skipped'> => {
   let today = ZERO, week = ZERO, unreadable = 0
   const seen = new Set<string>()
   const sessions = new Map<string, TokenRow>(), roles = new Map<string, TokenRow>()
@@ -127,6 +130,7 @@ export const summarize = (transcripts: Transcript[], dayStart: number, n = 5): O
     const roleName = t.agent === null ? 'main' : (t.role ?? 'subagent')
     const role = roles.get(roleName) ?? { name: roleName, tokens: 0, usd: 0, context: null }
     for (const [id, call] of Object.entries(t.scan.calls)) {
+      if (call.at < weekStart) continue
       Object.assign(session, add(session, call))
       Object.assign(role, add(role, call))
       if (seen.has(id)) continue

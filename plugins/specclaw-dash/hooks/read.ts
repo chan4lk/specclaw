@@ -14,7 +14,7 @@ const MAX_READ = 4 * 1024 * 1024 // $.fs.read refuses more
 const WEEK = 7 * 86400 * 1000
 const CHANGE_DIR = /^\d{3}-/
 const ROUND = /^round-(\d+)\.json$/
-const REVIEW_MCP = 'plugin_specclaw-review_specclaw-review'
+const REVIEW_MCP = 'plugin:specclaw-review:specclaw-review'
 
 // The scan state: a reload starts it over, which is a full rescan.
 const scans = new Map<string, FileScan>()
@@ -47,15 +47,20 @@ async function readChange($: EngineInterface, root: string, name: string): Promi
 }
 
 async function proposed($: EngineInterface): Promise<Section<number>> {
-  let result
+  let answer: string
   try {
-    result = await $.mcp.call(REVIEW_MCP, 'learn_propose')
-  } catch {
-    return { kind: 'missing', card: 'Proposed rules: specclaw-review is not connected. Install: /plugin install specclaw-review@chan4lk' }
+    const link = await $.mcp.connect(REVIEW_MCP)
+    if (!link.isConnected && link.reason === 'unlisted') {
+      return { kind: 'missing', card: 'Proposed rules: specclaw-review is not installed. Install: /plugin install specclaw-review@chan4lk' }
+    }
+    if (!link.isConnected) return { kind: 'error', error: `specclaw-review not connected (${link.reason}): ${link.message}` }
+    const result = await $.mcp.call(link.server, 'learn_propose')
+    const first = result.content.find(b => b.type === 'text')
+    answer = first?.text ?? ''
+    if (result.isError) return { kind: 'error', error: `learn_propose failed: ${answer.split('\n')[0]}` }
+  } catch (error) {
+    return { kind: 'error', error: `learn_propose failed: ${message(error)}` }
   }
-  const first = result.content.find(b => b.type === 'text')
-  const answer = first && 'text' in first ? String(first.text) : ''
-  if (result.isError) return { kind: 'error', error: `learn_propose failed: ${answer.split('\n')[0]}` }
   try {
     return { kind: 'ok', data: proposedCount(answer) }
   } catch (error) {
@@ -144,7 +149,7 @@ async function readTokens($: EngineInterface, cwd: string, now: number): Promise
   }
   const day = new Date(now)
   const dayStart = Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate())
-  return { kind: 'ok', data: { ...summarize(transcripts, dayStart), files: recent.length, skipped } }
+  return { kind: 'ok', data: { ...summarize(transcripts, dayStart, now - WEEK), files: recent.length, skipped } }
 }
 
 const failed = (error: unknown): Section<never> => ({ kind: 'error', error: message(error) })

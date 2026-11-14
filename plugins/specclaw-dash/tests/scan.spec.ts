@@ -72,8 +72,8 @@ test('R062 AC-3 bad records are counted, never guessed at', () => {
 const t = (path: string, session: string, agent: string | null, role: string | null, text: string): Transcript =>
   ({ path, session, agent, role, scan: scanText(undefined, text, bytes(text), 1) })
 
-test('R062 AC-2 summary: today once per message id, sessions with their subagents, cost by role', () => {
-  const main = lines(title('custom-title', 'Build 062'), assistant('a', '2026-11-14T09:00:00Z', { input: 1000, output: 1000 }),
+test('R062 AC-2 summary: today once per message id, sessions with their subagents, cost by role, nothing before the week', () => {
+  const main = lines(assistant('ancient', '2026-11-01T09:00:00Z', { input: 9000, output: 9000 }), title('custom-title', 'Build 062'), assistant('a', '2026-11-14T09:00:00Z', { input: 1000, output: 1000 }),
     assistant('old', '2026-11-13T09:00:00Z', { input: 1000 }))
   const fork = lines(assistant('a', '2026-11-14T09:00:00Z', { input: 1000, output: 1000 }))
   const sub = lines(assistant('s1', '2026-11-14T09:30:00Z', { output: 1000, read: 5000 }, 'claude-sonnet-5-5'))
@@ -81,7 +81,7 @@ test('R062 AC-2 summary: today once per message id, sessions with their subagent
     t('/p/s1.jsonl', 's1', null, null, main),
     t('/p/s2.jsonl', 's2', null, null, fork),
     t('/p/s1/subagents/agent-x.jsonl', 's1', 'x', 'code-reviewer', sub),
-  ], DAY)
+  ], DAY, DAY - 6 * 86400 * 1000)
   const a = (4 * 1000 + 20 * 1000) / 1e6, old = 4 * 1000 / 1e6, s1 = (10 * 1000 + 0.1 * 5000) / 1e6
   expect(sum.today.usd).toBeCloseTo(a + s1, 10)
   expect(sum.today.tokens).toBe(2000 + 6000)

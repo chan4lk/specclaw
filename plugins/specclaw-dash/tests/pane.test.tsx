@@ -31,8 +31,11 @@ const seed = () => ({
 } as Record<string, string | null>)
 
 type Calls = { reads: string[]; writes: number; mcp: number }
+type Link = { isConnected: true; server: string } | { isConnected: false; reason: string; message: string }
+const LINKED: Link = { isConnected: true, server: 'plugin:specclaw-review:specclaw-review' }
 
-const engine = (on: Parameters<Parameters<typeof test>[1]>[1], files: Record<string, string | null>, statuses: (string | undefined)[], calls: Calls, mcp: () => unknown) => {
+const engine = (on: Parameters<Parameters<typeof test>[1]>[1], files: Record<string, string | null>, statuses: (string | undefined)[], calls: Calls, mcp: () => unknown, link: Link = LINKED) => {
+  on('mcp.connect', () => ({ value: link }))
   on('session.cwd', () => ({ value: '/x' }))
   on('clock.now', () => ({ value: NOW }))
   on('env.get', (_, e) => ({ value: e.name === 'HOME' ? '/h' : undefined }))
@@ -94,16 +97,27 @@ test('R062 AC-3 a second refresh with unchanged transcripts reads none of them a
   expect([first, calls.reads.filter(p => p.endsWith('.jsonl') && p.startsWith(T)).length]).toEqual([2, 2])
 })
 
-test('R062 AC-5 review not connected and no rounds: the install card', async ($, on) => {
-  const files = seed()
-  delete files[`${C}/review/round-1.json`]
-  engine(on, files, [], { reads: [], writes: 0, mcp: 0 }, () => { throw new Error('no such server') })
-  await $.command.run({ command: 'dash', args: '' })
-  const ui = await $.ui.mount(PANE)
-  expect((await ui.find({ type: 'Text', text: /Review loop/ }))?.text).toBe('  Review loop: no rounds yet. Install specclaw-review: /plugin install specclaw-review@chan4lk')
-  expect((await ui.find({ type: 'Text', text: /Proposed rules/ }))?.text).toMatch(/not connected/)
-  await ui.unmount()
-})
+const LINKS: [string, Link, () => unknown, RegExp, RegExp][] = [
+  ['not installed', { isConnected: false, reason: 'unlisted', message: 'no such server' }, RULES,
+    /^ {2}Review loop: no rounds yet\. Install specclaw-review/, /^ {2}Proposed rules: specclaw-review is not installed/],
+  ['failed to connect', { isConnected: false, reason: 'failed', message: 'crashed' }, RULES,
+    /^ {2}No review rounds in the active changes\./, /^ {2}error: specclaw-review not connected \(failed\): crashed/],
+  ['call throws (timeout)', LINKED, () => { throw new Error('timeout') }, /^ {2}No review rounds/, /^ {2}error: learn_propose failed/],
+  ['tool error', LINKED, () => ({ value: { content: [{ type: 'text', text: 'boom' }], isError: true } }), /^ {2}No review rounds/, /^ {2}error: learn_propose failed: boom/],
+]
+
+for (const [why, link, mcp, review, rules] of LINKS) {
+  test(`R062 AC-5 no rounds and specclaw-review ${why}: only "not installed" is an install card`, async ($, on) => {
+    const files = seed()
+    delete files[`${C}/review/round-1.json`]
+    engine(on, files, [], { reads: [], writes: 0, mcp: 0 }, mcp, link)
+    await $.command.run({ command: 'dash', args: '' })
+    const ui = await $.ui.mount(PANE)
+    expect((await ui.find({ type: 'Text', text: review }))?.text).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: rules }))?.text).toBeDefined()
+    await ui.unmount()
+  })
+}
 
 test('R062 AC-5 no .specclaw and no transcripts: install cards, no band', async ($, on) => {
   const statuses: (string | undefined)[] = []

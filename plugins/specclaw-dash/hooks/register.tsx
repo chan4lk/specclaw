@@ -23,7 +23,8 @@ export const register: Register = on => {
     return next(e)
   })
 
-  on('tool.call', async ($, e, next) => {
+  // Tools that can change .specclaw: a read never does, and turn.complete refreshes anyway.
+  on('tool.call', { tool: ['Bash', 'Edit', 'Write', 'NotebookEdit'] }, async ($, e, next) => {
     const ran = await next(e)
     if (/\.specclaw/i.test(JSON.stringify(e))) await refreshQuietly($)
     return ran

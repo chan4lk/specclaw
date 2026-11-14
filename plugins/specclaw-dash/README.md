@@ -50,4 +50,5 @@ bash plugins/specclaw-dash/tests/run-mod-tests.sh
 
 This runs the bun specs for `hooks/core/` (the scanner on small fixture transcripts, the loop parsers and the
 view), checks that the mod has no file write or process call, then runs `claude plugin validate` and
-`claude plugin test`. To try it in a session: `claude --plugin-dir plugins/specclaw-dash`.
+`claude plugin test`. Run the specs as `bun test ./tests/*.spec.ts`: a bare `bun test` also picks up
+`pane.test.tsx`, which only `claude plugin test` can run. To try it in a session: `claude --plugin-dir plugins/specclaw-dash`.
