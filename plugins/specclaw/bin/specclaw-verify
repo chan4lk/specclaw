@@ -555,7 +555,7 @@ SIZE_EXCLUDE=('.specclaw/**' '**/test/**' '**/tests/**' '**/spec/**' '**/specs/*
   '**/generated/**' '**/*.generated.*' '**/*.min.*')
 # CamelCase test names (FooTest.java, FooTests.cs, FooSpec.scala, src/integrationTest/) match
 # case-sensitively: ignoring case, *test.* would also leave out production files such as latest.ts.
-SIZE_EXCLUDE_CASED=('**/*Test.*' '**/*Tests.*' '**/*Spec.*' '**/*Test/**')
+SIZE_EXCLUDE_CASED=('**/*Test.*' '**/*Tests.*' '**/*Spec.*' '**/*Test/**' '**/*Tests/**')
 
 cmd_size() {
   local specclaw_dir="$1" change_name="$2"

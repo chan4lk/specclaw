@@ -109,6 +109,11 @@ src/androidTest/java/A.java|0
 src/testFixtures/A.java|0
 pkg/testdata/in.txt|0
 src/main/scala/FooSpec.scala|0
+UnitTests/A.cs|0
+IntegrationTests/A.cs|0
+src/E2ETests/a.ts|0
+ApiTests/a.ts|0
+src/Contests/a.ts|1
 src/latest.ts|1
 src/contest.py|1
 src/inspect.ts|1
@@ -129,7 +134,13 @@ done < "$(dirname "${BASH_SOURCE[0]}")/fixtures/base-branch.tsv"
 d="$(repo bash32 '  size_cap: 10
   size_exclude: ""')"; lines "$d/src/b.ts" 2
 out="$(cd "$d" && /bin/bash "$BIN" size .specclaw 001-x 2>&1)"; rc=$?
-[ "$rc" -eq 0 ] && grep -q "size cap: 2 production lines" <<<"$out" && echo "PASS: an empty size_exclude runs under /bin/bash ($(/bin/bash -c 'echo $BASH_VERSION'))" || { fail=1; echo "FAIL: /bin/bash run (exit $rc): $out"; }
+if ! /bin/bash -c '[ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -lt 44 ]'; then
+  echo "SKIP: an empty size_exclude under bash < 4.4 (not exercised: /bin/bash is $(/bin/bash -c 'echo $BASH_VERSION'))"
+elif [ "$rc" -eq 0 ] && grep -q "size cap: 2 production lines" <<<"$out"; then
+  echo "PASS: an empty size_exclude runs under /bin/bash $(/bin/bash -c 'echo $BASH_VERSION')"
+else
+  fail=1; echo "FAIL: /bin/bash run (exit $rc): $out"
+fi
 
 d="$(repo leadzero '  size_cap: 08')"; lines "$d/src/b.ts" 5
 check "a size_cap of 08 is eight, not a bad octal" "$d" 0 "(cap 8); over half the cap"
