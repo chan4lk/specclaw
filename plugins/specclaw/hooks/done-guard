@@ -37,15 +37,16 @@ missing() (
     [ -f "$tasks" ] || continue
     read -r finished total _ deferred <<<"$("$HERE/bin/specclaw-parse-tasks" --count "$tasks")"
     [ "$total" -gt 0 ] && [ $((finished + deferred)) -eq "$total" ] || continue
-    verify="$(grep -oE '"verify"[[:space:]]*:[[:space:]]*\{[^}]*\}' "$dir/state.json" || true)"
-    status="$(sed -nE 's/.*"status"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p' <<<"$verify")"
-    verdict="$(sed -nE 's/.*"verdict"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p' <<<"$verify")"
-    at="$(sed -nE 's/.*"at"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p' <<<"$verify")"
-    if [ -z "$verify" ]; then
+    # A real JSON read: state.json is pretty-printed by specclaw-set-phase, and a line grep is not a parser.
+    read -r status verdict at <<<"$(python3 -c 'import json, sys
+v = json.load(open(sys.argv[1])).get("phases", {}).get("verify") or {}
+print(*(v.get(k) or "-" for k in ("status", "verdict", "at")))' "$dir/state.json")"
+    if [ "$status" = - ]; then
       echo "specclaw: $name has every task done, but no verify verdict. Run /specclaw:verify."
-    elif [ "$verdict" != PASS ] && { [ -n "$verdict" ] || { [ "$status" != passed ] && [ "$status" != "done" ]; }; }; then
-      echo "specclaw: $name has every task done, but its verify verdict is ${verdict:-$status}, not PASS. Fix it and re-run /specclaw:verify."
-    elif [ -n "$at" ] && late="$(git rev-list -1 --since="$at" HEAD -- . ':(exclude).specclaw')" && [ -n "$late" ]; then
+    elif [ "$verdict" != PASS ] && { [ "$verdict" != - ] || { [ "$status" != passed ] && [ "$status" != "done" ]; }; }; then
+      [ "$verdict" = - ] && verdict="$status"
+      echo "specclaw: $name has every task done, but its verify verdict is $verdict, not PASS. Fix it and re-run /specclaw:verify."
+    elif [ "$at" != - ] && late="$(git rev-list -1 --since="$at" HEAD -- . ':(exclude).specclaw')" && [ -n "$late" ]; then
       echo "specclaw: $name has every task done, but code was committed after its verify (${late:0:10}). Re-run /specclaw:verify for HEAD."
     fi
     if command -v specclaw-review >/dev/null 2>&1; then

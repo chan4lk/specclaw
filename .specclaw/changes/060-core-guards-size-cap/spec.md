@@ -28,7 +28,8 @@
   `.specclaw/`, lockfiles and generated files, plus any git glob pathspecs in `pr.size_exclude` (space-separated).
   Over `pr.size_cap` (default 400; `0` = off) it exits 1, unless the change's `proposal.md` has a
   `Size waiver: <reason>` line; then it exits 0 naming the waiver. Over half the cap it prints a
-  "consider splitting" note. No base: it says so and exits 0.
+  "consider splitting" note. When it cannot count (no base branch, or git fails) it says so and exits 2, which
+  verify records as a FAIL, never as under the cap.
 - **FR-5:** the verify flow (lean and full) runs `specclaw-verify size`; exit 1 is a FAIL.
 
 ## Acceptance Criteria
@@ -41,7 +42,7 @@
   verify, code committed after verify, or a non-clean review stub; exit 0 for a PASS-at-HEAD change, an untouched
   change, a change with open tasks, `stop_hook_active: true`, no config, and a broken environment.
 - **AC-4:** `run-size-cap-tests.sh`: excluded paths are not counted, untracked files are, over the cap exits 1, a
-  waiver exits 0, over half prints the split note, `pr.size_cap: 0` is off, `pr.size_exclude` is honoured.
+  waiver exits 0, no base exits 2, over half prints the split note, `pr.size_cap: 0` is off, `pr.size_exclude` is honoured.
 - **AC-5:** `run-codex-plugin-tests.sh` passes with `hooks/hooks.json` unchanged and checks `mod.json` still loads
   `./register.tsx`; `run-mod-tests.sh` (bun, `claude plugin validate`, `claude plugin test`) passes.
 - **AC-6:** `MOD.md`, `plugins/specclaw/CLAUDE.md`, the verify skill and reference, and the config template describe

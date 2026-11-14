@@ -52,5 +52,8 @@ check "pr.size_exclude globs are not counted" "$d" 0 "size cap: 2 production lin
 d="$(repo deleted '  size_cap: 10')"; git -C "$d" rm -q src/a.ts
 check "deleted lines count" "$d" 0 "size cap: 1 production lines (cap 10)"
 
+d="$(repo nobase '  size_cap: 10')"; sed -i.bak 's/base_branch: main/base_branch: nosuch/' "$d/.specclaw/config.yaml"
+check "no base branch is not counted and exits 2, never a pass" "$d" 2 "size cap: not counted, no base branch"
+
 (( fail == 0 )) && echo "R060 AC-4 the size cap counts production lines and honours the waiver"
 exit "$fail"
