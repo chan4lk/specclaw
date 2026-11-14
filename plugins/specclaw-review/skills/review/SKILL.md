@@ -34,15 +34,16 @@ Tools: the `specclaw-review` MCP server (`review_run`, `review_verdict`, `memory
      `review.test_command` (`{files}` expands to them) in a clean checkout of the pre-fix commit, where they
      must fail, and of HEAD, where they must pass. Any other outcome is `not proven: <reason>`. Set
      `test_command`, for example `test_command: "pytest -q {files}"` or `"bash {files}"`.
-     - `block`: an unproven fix keeps the previous round's blockers and majors open (`carried`). A proven
-       round still carries a finding whose lines the fix did not change. A final pass right after a
-       not-proven round checks again.
-     - `warn`: the proof runs the same way, but an unproven finding may close. `not proven: <reason>`
+     - The proof is per round. The reviewer decides which findings are fixed: the `--since` re-review
+       re-reports a finding or does not.
+     - `block`: a not-proven round re-opens every blocker and major the reviewer closed in it
+       (`carried: fix not proven: <reason>`). A final pass right after a not-proven round checks again.
+     - `warn`: the proof runs the same way, but closed findings stay closed. `not proven: <reason>`
        (also for a missing `test_command`) is shown on the round file, in the CLI output
        (`fix-proof (warn): …`), in `review_run`'s `fix_proof_note` and in the verdict line.
      - `off`: no proof runs and nothing is recorded.
-     - In `warn` and `block`, a finding whose file was renamed or deleted in the fix range is always carried
-       (`file renamed or deleted`): its code may live on under another path.
+     - In `warn` and `block`, a finding whose file does not exist at HEAD (renamed or deleted) is carried
+       (`file renamed or deleted`) in every later round: the reviewer cannot re-report it on the old path.
      - Any other value is refused with an error.
    - Repeat until a round exits 0. **There is no round cap.** Minors never trigger another round: they land
      in `follow-ups.md`.

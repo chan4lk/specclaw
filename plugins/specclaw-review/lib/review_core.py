@@ -700,15 +700,6 @@ def fix_proof(cfg, base):
     return rec
 
 
-def _fix_touched(cfg, base, f):
-    """Did base..HEAD change the finding's file within 3 lines of its line (no line: anywhere in the file)?"""
-    out = git(cfg.root, "diff", "-U0", f"{base}..HEAD", "--", f["file"])
-    line = f.get("line") or 0
-    hunks = [(int(m[1]), int(m[2] if m[2] is not None else 1))
-             for m in re.finditer(r"^@@ -(\d+)(?:,(\d+))? ", out, re.M)]
-    return any(not line or start - 3 <= line <= start + max(n, 1) + 3 for start, n in hunks)
-
-
 GONE = "file renamed or deleted"
 FIX_PROOF_MODES = ("warn", "block", "off")
 
@@ -721,47 +712,34 @@ def fix_proof_mode(cfg):
     return m
 
 
-def _gone(cfg, base, f):
-    """Was the finding's file renamed or deleted since `base`? Its old path then diffs as a whole-file delete."""
-    return bool(git(cfg.root, "diff", "--name-only", "--no-renames", "--diff-filter=D", f"{base}..HEAD",
-                    "--", f["file"]).strip())
+def _gone(cfg, f):
+    """Is the finding's file missing at HEAD (renamed or deleted)? Its code may live on under another path."""
+    return subprocess.run(["git", "-C", cfg.root, "cat-file", "-e", f"HEAD:{f.get('file', '')}"],
+                          capture_output=True).returncode != 0
 
 
-def _carry(cfg, base, open_, proof, mode="block"):
-    """The open findings this round keeps, each with its reason; records on `proof` the ones it covers.
+def _carry(cfg, open_, proof, mode="block"):
+    """The previous round's blocker/major findings this round re-opens, each with its reason.
 
-    The proof is per round, not per finding, so a proven round clears only the findings whose lines the
-    fix changed: a second finding in the same file, or an edit elsewhere in it, is not a fix. A finding
-    whose file was renamed or deleted is always kept: its code may live on under another path. In `warn`
-    mode every other unproven finding may close; it is listed on the proof as `unproven` instead.
+    The reviewer decides which findings are fixed: the --since re-review re-reports a finding or does
+    not. The proof is per round, so it never picks findings. A finding whose file is gone at HEAD cannot
+    be re-reported, so it is always kept. In block mode a not-proven round re-opens every finding the
+    reviewer closed; warn only records the note on the proof.
     """
-    kept, proof["covers"] = [], []
+    kept = []
     for f in open_:
-        try:
-            if _gone(cfg, base, f):
-                kept.append(dict(f, carried=GONE))
-            elif proof["status"] != "proven":
-                kept.append(dict(f, carried="fix not proven"))
-            elif _fix_touched(cfg, base, f):
-                proof["covers"].append(f["fp"])
-            else:
-                kept.append(dict(f, carried="the fix did not change its lines since the pre-fix commit"))
-        except ReviewError as e:
-            kept.append(dict(f, carried=f"could not compare changed lines: {e}"))
-    if mode == "warn":
-        proof["unproven"] = [{"fp": f["fp"], "reason": f["carried"]} for f in kept if f["carried"] != GONE]
-        kept = [f for f in kept if f["carried"] == GONE]
+        if _gone(cfg, f):
+            kept.append(dict(f, carried=GONE))
+        elif mode == "block" and proof["status"] != "proven":
+            kept.append(dict(f, carried=f"fix not proven: {proof.get('reason', '')}"))
     return kept
 
 
 def proof_note(proof):
-    """'not proven: <reason>' for a proof that did not prove every finding it was asked to, else ''."""
-    if not proof:
+    """'not proven: <reason>' for a round whose fix was not proven, else ''."""
+    if not proof or proof.get("status") == "proven":
         return ""
-    if proof.get("status") != "proven":
-        return f"not proven: {proof.get('reason', '')}"
-    un = proof.get("unproven") or []
-    return "not proven: " + "; ".join(f"{u['fp']} {u['reason']}" for u in un) if un else ""
+    return f"not proven: {proof.get('reason', '')}"
 
 
 def _settle_round(cfg, cdir, change, rec, found, prev, n):
@@ -796,7 +774,7 @@ def run_round(cfg, change, since=None, final=False):
     base, carried = _proof_due(prev, since, final) if mode != "off" else (None, [])
     if base:
         rec["fix_proof"] = dict(fix_proof(cfg, base), mode=mode)
-        carried = _carry(cfg, base, carried, rec["fix_proof"], mode)
+        carried = _carry(cfg, carried, rec["fix_proof"], mode)
     try:
         if cls["tier"] == "skip":
             rec["status"] = "skipped"

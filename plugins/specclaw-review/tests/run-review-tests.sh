@@ -326,31 +326,19 @@ carried() { field "$RD/round-$1.json" "sum(1 for f in d[\"findings\"] if f.get(\
 
 fpround "$TMP/fp1" ""
 fix; out_json '[]'; out="$("$SR" run --change "$CH" --since "$H1")"; rc=$?
-check "AC-3 no test_command: not proven, the major is carried, exit 1" '[ "$rc" = 1 ] && [ "$(proof 2 status)" = not_proven ] && proof 2 reason | grep -q test_command && [ "$(carried 2)" = 1 ] && grep -q "fix-proof (block): not proven: " <<<"$out"'
+check "AC-3 no test_command: not proven, the major is carried, exit 1" '[ "$rc" = 1 ] && [ "$(proof 2 status)" = not_proven ] && proof 2 reason | grep -q test_command && [ "$(carried 2)" = 1 ] && field "$RD/round-2.json" "d[\"findings\"][0][\"carried\"]" | grep -q "^fix not proven: no review.test_command" && grep -q "fix-proof (block): not proven: " <<<"$out"'
 
 fpround "$TMP/fp2" "sh {files}"
 mkdir -p tests && echo 'grep -q "a + 2" a.py' > tests/check_fix.sh && fix
 out_json '[]'; "$SR" run --change "$CH" --since "$H1" >/dev/null; rc=$?
 check "AC-4 a test that fails on the pre-fix commit and passes on HEAD proves the fix; the round is clean" '[ "$rc" = 0 ] && [ "$(proof 2 status)" = proven ] && [ "$(proof 2 base)" = "$H1" ] && [ "$(carried 2)" = 0 ] && [ -z "$(git worktree list | sed 1d)" ]'
 
-fpround "$TMP/fp7" "sh {files}"
+fpround "$TMP/fp7" ""
 out_json '[{"severity":"major","rule":"B1","file":"a.py","line":2,"message":"off by one","scenario":"s","in_delta":true},{"severity":"major","rule":"B6","file":"b.py","line":2,"message":"unchecked call","scenario":"s","in_delta":true}]'
 "$SR" run --change "$CH" >/dev/null; H2="$(git rev-parse HEAD)"
-mkdir -p tests && echo 'grep -q "a + 2" a.py' > tests/check_fix.sh && fix
-out_json '[]'; "$SR" run --change "$CH" --since "$H2" >/dev/null; rc=$?
-check "AC-4 a proven fix still carries a finding whose lines it never touched" '[ "$rc" = 1 ] && [ "$(proof 3 status)" = proven ] && [ "$(field "$RD/round-3.json" "\",\".join(f[\"file\"] for f in d[\"findings\"] if f.get(\"carried\"))")" = b.py ]'
-
-fpround "$TMP/fp8" "sh {files}"
-out_json '[{"severity":"major","rule":"B1","file":"a.py","line":2,"message":"off by one","scenario":"s","in_delta":true},{"severity":"major","rule":"B6","file":"a.py","line":40,"message":"far away defect","scenario":"s","in_delta":true}]'
-"$SR" run --change "$CH" >/dev/null; H2="$(git rev-parse HEAD)"
-mkdir -p tests && echo 'grep -q "a + 2" a.py' > tests/check_fix.sh && fix
-out_json '[]'; "$SR" run --change "$CH" --since "$H2" >/dev/null; rc=$?
-check "AC-4 two findings in one file, one fixed: only the untouched one is carried; the proof names what it covers" '[ "$rc" = 1 ] && [ "$(field "$RD/round-3.json" "\",\".join(f[\"message\"] for f in d[\"findings\"] if f.get(\"carried\"))")" = "far away defect" ] && [ "$(field "$RD/round-3.json" "len(d[\"fix_proof\"][\"covers\"])")" = 1 ]'
-check "AC-5 a diff that cannot run carries the finding as could-not-compare, never as untouched" 'python3 - "$PLUGIN_DIR/lib" "$TMP/fp8" <<"PY"
-import sys; sys.path.insert(0, sys.argv[1]); import review_core as rc
-k = rc._carry(rc.Config(sys.argv[2]), "0" * 40, [{"file": "a.py", "line": 2, "fp": "x"}], {"status": "proven"})
-assert k[0]["carried"].startswith("could not compare"), k
-PY'
+fix; out_json '[{"severity":"major","rule":"B6","file":"b.py","line":2,"message":"unchecked call","scenario":"s","in_delta":true}]'
+"$SR" run --change "$CH" --since "$H2" >/dev/null; rc=$?
+check "redesign: block, not proven re-opens every major the reviewer closed; a re-reported one is not doubled" '[ "$rc" != 0 ] && [ "$(field "$RD/round-3.json" "len(d[\"findings\"])")" = 2 ] && [ "$(field "$RD/round-3.json" "\",\".join(f[\"file\"] for f in d[\"findings\"] if f.get(\"carried\", \"\").startswith(\"fix not proven: \"))")" = a.py ]'
 
 fpround "$TMP/fp3" "sh {files}"
 mkdir -p tests && echo 'exit 0' > tests/check_fix.sh && fix
@@ -375,10 +363,10 @@ fpround "$TMP/fp6" ""
 out_json '[]'; "$SR" run --change "$CH" >/dev/null; rc=$?
 check "AC-6 a round without --since after an open round runs no fix proof" '[ "$rc" = 0 ] && [ "$(proof 2 status)" = None ]'
 
-# 061 hand-over: a finding whose file was renamed or deleted since the pre-fix commit is carried, never cleared,
-# even by a proven fix (the old path diffs as a whole-file delete, which covers every line).
-for kind in rename rename-edit delete; do
-  fpround "$TMP/gone-$kind" "sh {files}"
+# 061 hand-over: a finding whose file is gone at HEAD (renamed or deleted) is carried in every later round,
+# in warn and block: the reviewer cannot re-report it on the old path, so silence would close it.
+for mode in block warn; do for kind in rename rename-edit delete; do
+  fpround "$TMP/gone-$mode-$kind" "sh {files}" "$mode"
   mkdir -p tests && echo 'grep -q "a + 2" a.py' > tests/check_fix.sh && fix
   case $kind in
     rename) git mv a.py c.py ;;
@@ -387,8 +375,10 @@ for kind in rename rename-edit delete; do
   esac
   git commit -qm "$kind"
   out_json '[]'; "$SR" run --change "$CH" --since "$H1" >/dev/null; rc=$?
-  check "fix proof: $kind of the finding's file carries it (file renamed or deleted)" '[ "$rc" = 1 ] && [ "$(field "$RD/round-2.json" "\",\".join(f[\"carried\"] for f in d[\"findings\"])")" = "file renamed or deleted" ]'
-done
+  H2="$(git rev-parse HEAD)"; echo '# later' >> b.py && git commit -qam later
+  "$SR" run --change "$CH" --since "$H2" >/dev/null; rc3=$?
+  check "fix proof $mode: $kind of the finding's file carries it in two later rounds (file renamed or deleted)" '[ "$rc" = 1 ] && [ "$rc3" != 0 ] && [ "$(field "$RD/round-2.json" "d[\"findings\"][0][\"carried\"]")|$(field "$RD/round-3.json" "\",\".join(f[\"carried\"] for f in d[\"findings\"])")" = "file renamed or deleted|file renamed or deleted" ]'
+done; done
 
 # review.fix_proof: warn (default) | block | off. Unknown values are refused.
 fpround "$TMP/fpw1" "" warn

@@ -25,9 +25,7 @@
 - **FR-5 Not proven keeps findings open.** Every other outcome is `not proven: <reason>`: no
   `test_command`, no changed test file, a checkout that fails, tests that pass on the pre-fix commit, tests
   that fail on HEAD, a timeout. The previous round's blocker/major findings are then carried into this round
-  (`carried: <reason>`), so the round is `open` (or `escalate`). A proven round still carries a finding whose
-  lines (±3) the fix did not change, and names the findings it covers: the proof is per round, so it cannot clear
-  lines it never touched. A diff that cannot run carries the finding as `could not compare`. The result is recorded as `fix_proof` in the round
+  (`carried: <reason>`), so the round is `open` (or `escalate`). See FR-10 for the redesign. The result is recorded as `fix_proof` in the round
   file, printed by the CLI and returned by `review_run`.
 - **FR-6** A `--final` pass right after a not-proven round runs the same check, so a final pass cannot clear an
   unproven fix.
@@ -43,8 +41,7 @@
   other prompts return nothing.
 - **AC-2:** A missing change returns `recall unavailable`, exit 0, valid JSON.
 - **AC-3:** A since round with an open major and no `test_command` → `not proven`, the major carried, exit 1.
-- **AC-4:** A test that fails on the pre-fix commit and passes on HEAD → `proven`, a clean round exits 0; a
-  finding whose lines the fix never touched is still carried.
+- **AC-4:** A test that fails on the pre-fix commit and passes on HEAD → `proven`, a clean round exits 0.
 - **AC-5:** A test that passes on the pre-fix commit, or fails on HEAD, or no changed test → `not proven`
   with that reason.
 - **AC-6:** After a not-proven round, a later test is checked against the first pre-fix commit; a `--final`
@@ -66,10 +63,14 @@ File map:
 
 ## Hand-over decisions (operator-approved after round 3 escalated on 6fc81ad5e3ab)
 
-- **FR-9 Renamed or deleted file.** A finding whose file was renamed or deleted in the fix range is carried
-  (`file renamed or deleted`), never cleared, in `warn` and `block`. No rename detection: the old path diffs
-  as a whole-file delete, which would otherwise count every line as touched.
-- **FR-10 `review.fix_proof: warn|block|off`, default `warn`.** `block` is FR-5. `warn` runs the proof when
-  `test_command` is set, and shows `not proven: <reason>` (also for no `test_command`) on the round, the CLI,
-  `review_run` (`fix_proof_note`) and the verdict line, but lets the finding close. `off` runs and records
-  nothing. Any other value is an error, never read as `off`. This repo sets `block`.
+- **FR-9 Renamed or deleted file.** A file is gone when it does not exist at HEAD (`git cat-file -e HEAD:<file>`
+  fails), not when the fix range deleted it. A finding on a gone file is carried (`file renamed or deleted`) in
+  every later round, in `warn` and `block`: the reviewer cannot re-report it on the old path. No rename detection.
+- **FR-10 `review.fix_proof: warn|block|off`, default `warn`.** The proof is per round only: did the fix add or
+  change tests that fail on the pre-fix commit and pass on HEAD. Which findings are fixed is decided by the
+  reviewer, as before 061: the `--since` re-review re-reports a finding or does not. There is no line-level
+  matching. `block`: a not-proven round re-opens every blocker or major the reviewer closed in that round, with
+  the reason `fix not proven: <reason>`. `warn` runs the proof when `test_command` is set, and shows
+  `not proven: <reason>` (also for no `test_command`) on the round, the CLI, `review_run` (`fix_proof_note`) and
+  the verdict line, but re-opens nothing. `off` runs and records nothing. Any other value is an error, never
+  read as `off`. This repo sets `block`. (Operator redesign after round 4 escalated on `6fc81ad5e3ab`.)
