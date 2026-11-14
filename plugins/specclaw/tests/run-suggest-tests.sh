@@ -134,6 +134,7 @@ check "063 AC-7 --undismiss removes one feature, keeps the rest and the comment"
 sug "$TMP/u" --undismiss review >/dev/null; sug "$TMP/u" --undismiss fleet >/dev/null; sug "$TMP/u" --undismiss fleet >/dev/null
 check "063 AC-7 undoing the last one leaves an empty list; undoing again is a no-op" 'grep -qE "^  dismissed: \[\]" "$TMP/u/config.yaml" && [ "$(sug "$TMP/u" --dismissed)" = "rc=0" ]'
 check "063 AC-7 --dismissed of an unreadable config or without its lib exits 1, never an empty list" 'mkdir -p "$TMP/ur" "$TMP/nolib/bin" && printf "plugins:\n  dismissed: [bf]\n" > "$TMP/ur/config.yaml" && chmod 000 "$TMP/ur/config.yaml" && grep -q "rc=1" <<<"$(sug "$TMP/ur" --dismissed 2>&1)" && chmod 644 "$TMP/ur/config.yaml" && cp "$BIN/specclaw-suggest" "$TMP/nolib/bin/" && grep -q "rc=1" <<<"$("$TMP/nolib/bin/specclaw-suggest" "$TMP/ur" --dismissed 2>&1; echo "rc=$?")"'
+check "063 AC-7 --dismiss without its lib says the dismissal was not recorded (exit 0, the 059 contract)" 'err="$("$TMP/nolib/bin/specclaw-suggest" "$TMP/ur" --dismiss fleet 2>&1; echo "rc=$?")"; grep -q "dismissal not recorded" <<<"$err" && grep -q "rc=0" <<<"$err" && ! grep -q fleet "$TMP/ur/config.yaml"'
 # Undo failures exit 1 (the dash shows the exit code) and leave the config as it was.
 check "063 AC-7 --undismiss of an unknown feature exits 1; --dismiss of one still exits 0" 'grep -q "rc=1" <<<"$(sug "$TMP/u" --undismiss nope 2>&1)" && grep -q "rc=0" <<<"$(sug "$TMP/u" --dismiss nope 2>&1)"'
 for row in none:- rodir:555 unreadable:000 rofile:444; do
