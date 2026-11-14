@@ -15,7 +15,7 @@ async function dryRun($: EngineInterface) {
   await act($, () => commands.dryRun(items), ran => {
     if (ran.code === null || ran.code === 127) return { plan: null }
     const { launchable, named } = dryRunResult(items, ran.out)
-    if (named === 0) ran.out = `${ran.out}\nFleet could not run. ${FLEET_SETUP}`
+    if (named === 0 && ran.code > 0) ran.out = `${ran.out}\nFleet could not run. ${FLEET_SETUP}` // not a timeout (-1)
     return { plan: { items, launchable } }
   })
 }
@@ -23,7 +23,8 @@ async function dryRun($: EngineInterface) {
 async function launch($: EngineInterface) {
   const { plan, selected } = await readActions($)
   if (!plan || plan.launchable.length === 0 || plan.items.join(' ') !== selected.join(' ')) return
-  await act($, () => commands.launch(plan.launchable), () => ({ selected: [], plan: null }))
+  await updateActions($, s => ({ ...s, selected: [], plan: null })) // first, so a second press cannot launch twice
+  await act($, () => commands.launch(plan.launchable))
 }
 
 const loadCaps = ($: EngineInterface) => specclawDir($).then(dir => act($, () => commands.caps(dir), ran => ({ caps: listSection(ran, parseCaps, CAPS_NOTE) }), true))

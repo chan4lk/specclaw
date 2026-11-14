@@ -14,7 +14,7 @@
 # CODEX_THREAD_ID (and CODEX_SANDBOX when sandboxed) in its shell tool environment.
 # The feature table and the install check are lib/plugins.sh, shared with hooks/session-start.
 #
-# Every path exits 0. A tip is never the reason a skill stops.
+# Every path exits 0, except a failed --undismiss (exit 1). A tip is never the reason a skill stops.
 
 set -u
 
@@ -34,9 +34,10 @@ fi
 if [ "$2" = "--dismiss" ] || [ "$2" = "--undismiss" ]; then
   f="${3:-}"
   plugin_feature "$f" >/dev/null || { echo "specclaw-suggest: unknown feature '$f'" >&2; exit 0; }
-  what=dismissal; [ "$2" = "--undismiss" ] && what="undo of dismissal"
-  fail() { echo "specclaw-suggest: could not record $what of '$f' in $CONFIG" >&2; rm -f "${tmp:-}"; exit 0; }
-  [ -f "$CONFIG" ] || fail
+  # A tip is never the reason a skill stops, so --dismiss fails with 0; the dash's Undo needs to see a failure.
+  what=dismissal rc=0; [ "$2" = "--undismiss" ] && what="undo of dismissal" rc=1
+  fail() { echo "specclaw-suggest: could not record $what of '$f' in $CONFIG" >&2; rm -f "${tmp:-}"; exit "$rc"; }
+  [ -f "$CONFIG" ] && [ -r "$CONFIG" ] || fail
   if [ "$2" = "--dismiss" ]; then
     plugin_dismissed "$f" && exit 0
     list="$(plugins_dismissed | sed 's/ /, /g')"

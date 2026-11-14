@@ -133,6 +133,17 @@ sug "$TMP/u" --undismiss bf >/dev/null
 check "063 AC-7 --undismiss removes one feature, keeps the rest and the comment" 'grep -qxE "  dismissed: \[review, fleet\][[:space:]]+# why" "$TMP/u/config.yaml" && grep -qx "next: 1" "$TMP/u/config.yaml" && [ "$(sug "$TMP/u" bf | head -1)" != "rc=0" ]'
 sug "$TMP/u" --undismiss review >/dev/null; sug "$TMP/u" --undismiss fleet >/dev/null; sug "$TMP/u" --undismiss fleet >/dev/null
 check "063 AC-7 undoing the last one leaves an empty list; undoing again is a no-op" 'grep -qE "^  dismissed: \[\]" "$TMP/u/config.yaml" && [ "$(sug "$TMP/u" --dismissed)" = "rc=0" ]'
+# Undo failures exit 1 (the dash shows the exit code) and leave the config as it was.
+for row in none:- rodir:555 unreadable:000 rofile:444; do
+  name="${row%%:*}"; mode="${row#*:}"; d="$TMP/uf-$name"
+  if [ "$mode" != - ]; then
+    mkdir -p "$d" && printf 'plugins:\n  dismissed: [review]\n' > "$d/config.yaml" && cp "$d/config.yaml" "$d.orig"
+    if [ "$name" = rodir ]; then chmod "$mode" "$d"; else chmod "$mode" "$d/config.yaml"; fi
+  fi
+  err="$(sug "$d" --undismiss review 2>&1)"
+  chmod 755 "$d" 2>/dev/null; chmod 644 "$d/config.yaml" 2>/dev/null
+  check "063 AC-7 --undismiss failure ($name) says so, exit 1, config unchanged" 'grep -q "could not record undo of dismissal of '"'"'review'"'"'" <<<"$err" && grep -q "rc=1" <<<"$err" && { [ "$mode" = - ] || cmp -s "$d/config.yaml" "$d.orig"; }'
+done
 
 echo
 [ "$FAILS" -eq 0 ] && echo "All suggest tests passed." || echo "$FAILS failure(s)."
