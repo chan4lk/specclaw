@@ -25,7 +25,7 @@ and docs.
 ### Wave 2 — Pane
 
 - [x] `T3` — Runner and ACTIONS part: buttons, inputs, confirm, prompt fallback; kit tests; AC-8 grep; README and manifests (AC-3, AC-4, AC-5, AC-8)
-  - Files: plugins/specclaw-dash/hooks/act.ts, plugins/specclaw-dash/hooks/register.tsx, plugins/specclaw-dash/hooks/read.ts, plugins/specclaw-dash/hooks/core/view.ts, plugins/specclaw-dash/tests/pane.test.tsx, plugins/specclaw-dash/tests/view.spec.ts, plugins/specclaw-dash/tests/run-mod-tests.sh, plugins/specclaw-dash/README.md, plugins/specclaw-dash/.claude-plugin/plugin.json, plugins/specclaw-dash/.codex-plugin/plugin.json
+  - Files: plugins/specclaw-dash/hooks/act.ts, plugins/specclaw-dash/hooks/register.tsx, plugins/specclaw-dash/hooks/read.ts, plugins/specclaw-dash/hooks/core/view.ts, plugins/specclaw-dash/tests/pane.test.tsx, plugins/specclaw-dash/tests/view.spec.ts, plugins/specclaw-dash/tests/run-mod-tests.sh, plugins/specclaw-dash/README.md, plugins/specclaw-dash/.claude-plugin/plugin.json, plugins/specclaw-dash/.codex-plugin/plugin.json, README.md, .claude-plugin/marketplace.json
   - Estimate: large
   - Kind: impl
   - Depends: T1, T2

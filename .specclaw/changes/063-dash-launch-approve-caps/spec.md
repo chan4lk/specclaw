@@ -74,4 +74,4 @@ Files: plugins/specclaw-dash/{hooks/core/actions.ts, hooks/act.ts, hooks/registe
 hooks/core/loops.ts, hooks/core/view.ts, types/index.d.ts, tests/*, README.md, .claude-plugin/plugin.json,
 .codex-plugin/plugin.json}; plugins/specclaw-review/{bin/specclaw-review, lib/review_core.py,
 lib/review_memory.py, tests/run-review-tests.sh}; plugins/specclaw/{bin/specclaw-suggest, lib/plugins.sh,
-tests/run-suggest-tests.sh}; version files.
+tests/run-suggest-tests.sh}; README.md and .claude-plugin/marketplace.json (the dash's description); version files.
