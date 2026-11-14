@@ -63,3 +63,13 @@ File map:
 - `plugins/specclaw-review/hooks/recall` (new), `hooks/hooks.json`; `bin/specclaw-review`, `mcp/server.py`
 - `plugins/specclaw-review/review-rules/base.md`; `skills/review/SKILL.md`, `skills/learn/SKILL.md`
 - `plugins/specclaw-review/tests/run-review-tests.sh`
+
+## Hand-over decisions (operator-approved after round 3 escalated on 6fc81ad5e3ab)
+
+- **FR-9 Renamed or deleted file.** A finding whose file was renamed or deleted in the fix range is carried
+  (`file renamed or deleted`), never cleared, in `warn` and `block`. No rename detection: the old path diffs
+  as a whole-file delete, which would otherwise count every line as touched.
+- **FR-10 `review.fix_proof: warn|block|off`, default `warn`.** `block` is FR-5. `warn` runs the proof when
+  `test_command` is set, and shows `not proven: <reason>` (also for no `test_command`) on the round, the CLI,
+  `review_run` (`fix_proof_note`) and the verdict line, but lets the finding close. `off` runs and records
+  nothing. Any other value is an error, never read as `off`. This repo sets `block`.

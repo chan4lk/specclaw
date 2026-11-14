@@ -95,3 +95,4 @@ plugin:
 review:
   timeout_seconds: 1800   # whole-change Opus final passes on large fleet diffs exceed 900 s
   test_command: 'sh -c "for f; do bash $f || exit 1; done" sh {files}'   # fix proof (061): each changed suite
+  fix_proof: block         # 061: an unproven fix keeps blockers and majors open

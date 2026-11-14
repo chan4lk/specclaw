@@ -54,6 +54,8 @@ def call(name, args):
     if name == "review_run":
         rec = rc.run_round(c, args["change"], args.get("since"), bool(args.get("final")))
         keep = {k: rec[k] for k in ("round", "status", "model", "head", "counts", "findings", "fix_proof", "error") if k in rec}
+        if rc.proof_note(rec.get("fix_proof")):
+            keep["fix_proof_note"] = rc.proof_note(rec["fix_proof"])
         return json.dumps(keep, indent=1)
     if name == "review_verdict":
         code, line = rc.verdict(c, args["change"])

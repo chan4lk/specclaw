@@ -709,26 +709,59 @@ def _fix_touched(cfg, base, f):
     return any(not line or start - 3 <= line <= start + max(n, 1) + 3 for start, n in hunks)
 
 
-def _carry(cfg, base, open_, proof):
+GONE = "file renamed or deleted"
+FIX_PROOF_MODES = ("warn", "block", "off")
+
+
+def fix_proof_mode(cfg):
+    """review.fix_proof: warn (default), block or off. An unknown value is an error, never read as off."""
+    m = str(cfg.get("fix_proof", "warn")).strip()
+    if m not in FIX_PROOF_MODES:
+        raise ReviewError(f"review.fix_proof must be one of {', '.join(FIX_PROOF_MODES)}, not {m!r}")
+    return m
+
+
+def _gone(cfg, base, f):
+    """Was the finding's file renamed or deleted since `base`? Its old path then diffs as a whole-file delete."""
+    return bool(git(cfg.root, "diff", "--name-only", "--no-renames", "--diff-filter=D", f"{base}..HEAD",
+                    "--", f["file"]).strip())
+
+
+def _carry(cfg, base, open_, proof, mode="block"):
     """The open findings this round keeps, each with its reason; records on `proof` the ones it covers.
 
     The proof is per round, not per finding, so a proven round clears only the findings whose lines the
-    fix changed: a second finding in the same file, or an edit elsewhere in it, is not a fix.
+    fix changed: a second finding in the same file, or an edit elsewhere in it, is not a fix. A finding
+    whose file was renamed or deleted is always kept: its code may live on under another path. In `warn`
+    mode every other unproven finding may close; it is listed on the proof as `unproven` instead.
     """
-    if proof["status"] != "proven":
-        return [dict(f, carried="fix not proven") for f in open_]
     kept, proof["covers"] = [], []
     for f in open_:
         try:
-            hit = _fix_touched(cfg, base, f)
+            if _gone(cfg, base, f):
+                kept.append(dict(f, carried=GONE))
+            elif proof["status"] != "proven":
+                kept.append(dict(f, carried="fix not proven"))
+            elif _fix_touched(cfg, base, f):
+                proof["covers"].append(f["fp"])
+            else:
+                kept.append(dict(f, carried="the fix did not change its lines since the pre-fix commit"))
         except ReviewError as e:
             kept.append(dict(f, carried=f"could not compare changed lines: {e}"))
-            continue
-        if hit:
-            proof["covers"].append(f["fp"])
-        else:
-            kept.append(dict(f, carried="the fix did not change its lines since the pre-fix commit"))
+    if mode == "warn":
+        proof["unproven"] = [{"fp": f["fp"], "reason": f["carried"]} for f in kept if f["carried"] != GONE]
+        kept = [f for f in kept if f["carried"] == GONE]
     return kept
+
+
+def proof_note(proof):
+    """'not proven: <reason>' for a proof that did not prove every finding it was asked to, else ''."""
+    if not proof:
+        return ""
+    if proof.get("status") != "proven":
+        return f"not proven: {proof.get('reason', '')}"
+    un = proof.get("unproven") or []
+    return "not proven: " + "; ".join(f"{u['fp']} {u['reason']}" for u in un) if un else ""
 
 
 def _settle_round(cfg, cdir, change, rec, found, prev, n):
@@ -759,10 +792,11 @@ def run_round(cfg, change, since=None, final=False):
     model = cfg.model("final" if final or cls["risky"] else "round")
     rec = {"round": n, "final": final, "since": since, "head": head(cfg.root), "model": model,
            "tier": cls["tier"], "files": cls["files"], "ts_start": int(time.time()), "findings": []}
-    base, carried = _proof_due(prev, since, final)
+    mode = fix_proof_mode(cfg)
+    base, carried = _proof_due(prev, since, final) if mode != "off" else (None, [])
     if base:
-        rec["fix_proof"] = fix_proof(cfg, base)
-        carried = _carry(cfg, base, carried, rec["fix_proof"])
+        rec["fix_proof"] = dict(fix_proof(cfg, base), mode=mode)
+        carried = _carry(cfg, base, carried, rec["fix_proof"], mode)
     try:
         if cls["tier"] == "skip":
             rec["status"] = "skipped"
@@ -827,6 +861,10 @@ def verdict(cfg, change):
     c = last.get("counts", {})
     line = (f"Review: {state}{note} — {len(rs)} rounds, final pass {final_txt}, models {rm}/{fm}; "
             f"last round {c.get('blocker',0)}/{c.get('major',0)}/{c.get('minor',0)} b/M/m")
+    proofs = [r["fix_proof"] for r in rs if r.get("fix_proof")]
+    note = proof_note(proofs[-1]) if proofs else ""
+    if note:
+        line += f"; fix proof {note}"
     return (0 if ok else 1), line
 
 

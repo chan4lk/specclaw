@@ -313,9 +313,11 @@ check "AC-26 over budget warns; --json is valid JSON" '"$SR" discover | grep -q 
 
 # 061 AC-3..AC-6: fix proof. The previous round's majors stay open unless the tests the fix added or changed
 # fail on the pre-fix commit and pass on HEAD, each run in a clean worktree.
-fpround() {  # $1 repo, $2 test_command ('' for none); leaves round 1 open on MAJOR at H1
+fpround() {  # $1 repo, $2 test_command ('' for none), $3 review.fix_proof (default block); leaves round 1 open on MAJOR at H1
   mkrepo "$1"
-  [ -n "$2" ] && printf '  test_command: "%s"\n' "$2" >> .specclaw/config.yaml && git commit -qam cfg
+  printf '  fix_proof: %s\n' "${3:-block}" >> .specclaw/config.yaml
+  [ -n "$2" ] && printf '  test_command: "%s"\n' "$2" >> .specclaw/config.yaml
+  git commit -qam cfg
   out_json "$MAJOR"; "$SR" run --change "$CH" >/dev/null; H1="$(git rev-parse HEAD)"
 }
 fix() { printf 'def helper_fn(a):\n    return a + 2\n' > a.py; git add -A; git commit -qm "fix"; }
@@ -324,7 +326,7 @@ carried() { field "$RD/round-$1.json" "sum(1 for f in d[\"findings\"] if f.get(\
 
 fpround "$TMP/fp1" ""
 fix; out_json '[]'; out="$("$SR" run --change "$CH" --since "$H1")"; rc=$?
-check "AC-3 no test_command: not proven, the major is carried, exit 1" '[ "$rc" = 1 ] && [ "$(proof 2 status)" = not_proven ] && proof 2 reason | grep -q test_command && [ "$(carried 2)" = 1 ] && grep -q "fix-proof: not proven: " <<<"$out"'
+check "AC-3 no test_command: not proven, the major is carried, exit 1" '[ "$rc" = 1 ] && [ "$(proof 2 status)" = not_proven ] && proof 2 reason | grep -q test_command && [ "$(carried 2)" = 1 ] && grep -q "fix-proof (block): not proven: " <<<"$out"'
 
 fpround "$TMP/fp2" "sh {files}"
 mkdir -p tests && echo 'grep -q "a + 2" a.py' > tests/check_fix.sh && fix
@@ -372,6 +374,46 @@ check "AC-6 a final pass right after a not-proven round carries the findings; ve
 fpround "$TMP/fp6" ""
 out_json '[]'; "$SR" run --change "$CH" >/dev/null; rc=$?
 check "AC-6 a round without --since after an open round runs no fix proof" '[ "$rc" = 0 ] && [ "$(proof 2 status)" = None ]'
+
+# 061 hand-over: a finding whose file was renamed or deleted since the pre-fix commit is carried, never cleared,
+# even by a proven fix (the old path diffs as a whole-file delete, which covers every line).
+for kind in rename rename-edit delete; do
+  fpround "$TMP/gone-$kind" "sh {files}"
+  mkdir -p tests && echo 'grep -q "a + 2" a.py' > tests/check_fix.sh && fix
+  case $kind in
+    rename) git mv a.py c.py ;;
+    rename-edit) git mv a.py c.py && printf '# moved\n' >> c.py && git add c.py ;;
+    delete) git rm -q a.py ;;
+  esac
+  git commit -qm "$kind"
+  out_json '[]'; "$SR" run --change "$CH" --since "$H1" >/dev/null; rc=$?
+  check "fix proof: $kind of the finding's file carries it (file renamed or deleted)" '[ "$rc" = 1 ] && [ "$(field "$RD/round-2.json" "\",\".join(f[\"carried\"] for f in d[\"findings\"])")" = "file renamed or deleted" ]'
+done
+
+# review.fix_proof: warn (default) | block | off. Unknown values are refused.
+fpround "$TMP/fpw1" "" warn
+fix; out_json '[]'; out="$("$SR" run --change "$CH" --since "$H1")"; rc=$?
+v="$("$SR" verdict --change "$CH")"
+check "fix_proof warn, no test_command: the finding closes, and not proven is on the round, the CLI and the verdict" '[ "$rc" = 0 ] && [ "$(carried 2)" = 0 ] && [ "$(proof 2 mode)" = warn ] && proof 2 reason | grep -q test_command && grep -q "fix-proof (warn): not proven: no review.test_command" <<<"$out" && grep -q "fix proof not proven: no review.test_command" <<<"$v"'
+fpround "$TMP/fpw2" "sh {files}" warn
+fix; out_json '[]'
+mcpout="$(python3 -c 'import sys, json; sys.path.insert(0, sys.argv[1]); import server; print(server.call("review_run", {"change": sys.argv[2], "since": sys.argv[3]}))' "$PLUGIN_DIR/mcp" "$CH" "$H1")"
+check "fix_proof warn, test_command set but no test: proof runs, finding closes, review_run names not proven" 'python3 - "$mcpout" <<"PY"
+import json, sys; r = json.loads(sys.argv[1])
+assert r["status"] == "clean", r
+assert r["fix_proof"]["status"] == "not_proven" and "no test file" in r["fix_proof"]["reason"], r
+assert r["fix_proof_note"].startswith("not proven: no test file"), r
+PY'
+fpround "$TMP/fpw3" "" off
+fix; out_json '[]'; out="$("$SR" run --change "$CH" --since "$H1")"; rc=$?
+check "fix_proof off: no proof run, nothing recorded, nothing carried" '[ "$rc" = 0 ] && [ "$(proof 2 status)" = None ] && ! grep -q fix-proof <<<"$out"'
+fpround "$TMP/fpw4" ""
+perl -pi -e 's/fix_proof: block/fix_proof: maybe/' .specclaw/config.yaml && git commit -qam maybe
+fix; out_json '[]'; err="$("$SR" run --change "$CH" --since "$H1" 2>&1)"; rc=$?
+check "fix_proof unknown value: refused with an error, no round written, never read as off" '[ "$rc" = 2 ] && grep -q "review.fix_proof must be one of warn, block, off" <<<"$err" && [ ! -f "$RD/round-2.json" ]'
+mkrepo "$TMP/fpw5"; out_json "$MAJOR"; "$SR" run --change "$CH" >/dev/null; H1="$(git rev-parse HEAD)"
+fix; out_json '[]'; "$SR" run --change "$CH" --since "$H1" >/dev/null; rc=$?
+check "fix_proof unset defaults to warn" '[ "$rc" = 0 ] && [ "$(proof 2 mode)" = warn ]'
 
 # 061 AC-7: promotion threshold — 3 changes by default, review.learn_threshold overrides.
 mkrepo "$TMP/lt"

@@ -74,7 +74,7 @@ def main(argv):
                   f"{c['blocker']}/{c['major']}/{c['minor']} b/M/m, head {rec['head'][:10]}")
             proof = rec.get("fix_proof")
             if proof:
-                print(f"  fix-proof: {'proven' if proof['status'] == 'proven' else 'not proven'}: {proof['reason']}")
+                print(f"  fix-proof ({proof.get('mode', 'block')}): {rc.proof_note(proof) or 'proven: ' + proof['reason']}")
             for f in rec["findings"]:
                 tag = " (pre-existing)" if f.get("pre_existing") else f" (carried: {f['carried']})" if f.get("carried") else ""
                 print(f"  {f['severity']}{tag} [{f.get('rule','')}] {f['file']}:{f['line']} {f.get('message','')}")
