@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+"""specclaw-budget: context caps by role, task sizing and the hand-off ledger (change 065).
+
+  specclaw-budget roles --json [<specclaw_dir>]           every role's cap, as one JSON object
+  specclaw-budget set <specclaw_dir> <role> <n>           write budget.roles.<role>.context
+  specclaw-budget estimate <specclaw_dir> <change>        each task's context; exit 1 over 60000
+  specclaw-budget brief <specclaw_dir> <change> <task>    the agent type and the budget line
+  specclaw-budget record <specclaw_dir> <change> <task> <agent_id>   estimate vs peak to timeline.jsonl
+  specclaw-budget handover <specclaw_dir> <change> <task> <next...>  the hand-off line to timeline.jsonl
+
+`roles` and `set` are a fixed contract with change 063's dash. Exit 1: refused; exit 2: usage.
+"""
+
+import json
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
+import budget  # noqa: E402
+
+
+def usage() -> int:
+    print(__doc__.strip().split("\n\n")[1], file=sys.stderr)
+    return 2
+
+
+def tasks_of(specclaw_dir: str, change: str) -> dict:
+    folder = Path(specclaw_dir) / "changes" / change
+    path = folder / "tasks.md" if (folder / "tasks.md").is_file() else folder / "change.md"
+    if not path.is_file():
+        raise ValueError(f"no tasks.md or change.md in {folder}")
+    return budget.tasks(path)
+
+
+def estimate(specclaw_dir: str, change: str) -> int:
+    root, over = Path(specclaw_dir).resolve().parent, []
+    for task, fields in tasks_of(specclaw_dir, change).items():
+        if not fields.get("Files"):
+            continue
+        read = budget.read_tokens(root, fields["Files"])
+        stated = fields.get("Context", "")
+        context = int(stated) if stated.isdigit() else read
+        print(f"{task} read={read} context={context}")
+        if context > budget.TASK_LIMIT:
+            over.append(task)
+    if over:
+        print(f"over {budget.TASK_LIMIT}: {', '.join(over)}; split it by module or file group, never into a test task and a code task")
+    return 1 if over else 0
+
+
+def brief(specclaw_dir: str, change: str, task: str) -> int:
+    fields = tasks_of(specclaw_dir, change).get(task)
+    if fields is None:
+        raise ValueError(f"no task {task} in {change}")
+    routing = budget.load(Path(specclaw_dir))["routing"]
+    agent = routing.get(fields.get("Kind", "").strip().lower(), routing["default"])
+    role = agent.rsplit(":", 1)[-1]
+    role = role if role in budget.ROLES else "general"
+    context = fields.get("Context", "")
+    print(f"subagent_type: {agent}")
+    print(f"specclaw budget: role={role}" + (f" context={context}" if context.isdigit() else ""))
+    return 0
+
+
+def record(specclaw_dir: str, change: str, task: str, agent: str) -> int:
+    if not budget.AGENT_ID.fullmatch(agent):
+        raise ValueError(f"agent id {agent!r} is not a plain id")
+    stated = tasks_of(specclaw_dir, change).get(task, {}).get("Context", "")
+    path = budget.find_transcript(agent)
+    peak = budget.peak_context(path) if path else None
+    budget.append(Path(specclaw_dir), change, {
+        "kind": "task_context", "task": task, "agent": agent,
+        "estimate": int(stated) if stated.isdigit() else None, "peak": peak,
+    })
+    print(f"{task}: estimate {stated or '-'}, peak {peak if peak is not None else '- (no transcript found)'}")
+    return 0
+
+
+def main(argv: list) -> int:
+    command, args = (argv[0], argv[1:]) if argv else ("", [])
+    if command == "roles" and args[:1] == ["--json"] and len(args) <= 2:
+        config = budget.load(Path(args[1] if len(args) == 2 else ".specclaw"))
+        for warning in config["warnings"]:
+            print(f"specclaw-budget: {warning}", file=sys.stderr)
+        print(json.dumps(budget.roles_json(config)))
+        return 0
+    if command == "set" and len(args) == 3:
+        if not args[2].isdigit():
+            return usage()
+        budget.set_context(Path(args[0]), args[1], int(args[2]))
+        return 0
+    if command == "estimate" and len(args) == 2:
+        return estimate(*args)
+    if command == "brief" and len(args) == 3:
+        return brief(*args)
+    if command == "record" and len(args) == 4:
+        return record(*args)
+    if command == "handover" and len(args) >= 4:
+        budget.append(Path(args[0]), args[1], {"kind": "handover", "task": args[2], "next": " ".join(args[3:])})
+        return 0
+    return usage()
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except (ValueError, OSError) as error:
+        print(f"specclaw-budget: {error}", file=sys.stderr)
+        sys.exit(1)

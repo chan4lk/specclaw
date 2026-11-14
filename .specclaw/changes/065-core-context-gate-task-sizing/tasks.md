@@ -12,7 +12,7 @@ One Python module and two entry points, then wiring into config, skills and agen
 
 ### Wave 1 — the module, the CLI and the hook
 
-- [ ] `T1` — lib/budget.py, specclaw-budget and the context-gate hook (AC-1..AC-8)
+- [x] `T1` — lib/budget.py, specclaw-budget and the context-gate hook (AC-1..AC-8)
   - Files: plugins/specclaw/lib/budget.py, plugins/specclaw/bin/specclaw-budget, plugins/specclaw/hooks/context-gate, plugins/specclaw/hooks/mod.json, plugins/specclaw/bin/specclaw-timer
   - Kind: impl
   - Context: 60000
