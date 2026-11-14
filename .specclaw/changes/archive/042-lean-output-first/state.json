@@ -1,0 +1,16 @@
+{
+  "change": "042-lean-output-first",
+  "phase": "archived",
+  "branch": "specclaw/042-lean-output-first",
+  "size": "architectural",
+  "phases": {
+    "proposal": {"status":"approved","at":"2026-10-11T11:18:57Z"},
+    "spec": {"status":"done","at":"2026-10-11T11:21:45Z"},
+    "design": {"status":"done","at":"2026-10-11T11:21:45Z"},
+    "tasks": {"status":"done","at":"2026-10-11T11:21:45Z"},
+    "build": {"status":"done","at":"2026-10-12T16:00:45Z","tasks":{"done":16,"total":16,"failed":0}},
+    "verify": {"status":"passed","at":"2026-10-12T16:00:45Z","verdict":"PASS"},
+    "pr": {"status":"raised","at":"2026-10-12T11:18:47Z","url":"https://github.com/chan4lk/specclaw/pull/93"},
+    "archived": {"status":"done","at":"2026-11-14T03:09:15Z"}
+  }
+}

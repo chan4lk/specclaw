@@ -1,0 +1,16 @@
+{
+  "change": "047-specclaw-mod",
+  "phase": "archived",
+  "branch": "specclaw/047-specclaw-mod",
+  "size": "architectural",
+  "phases": {
+    "proposal": {"status":"approved","at":"2026-11-02T12:33:49Z"},
+    "spec": {"status":"done","at":"2026-11-02T12:35:27Z"},
+    "design": {"status":"done","at":"2026-11-02T12:35:27Z"},
+    "tasks": {"status":"done","at":"2026-11-02T12:35:27Z"},
+    "build": {"status":"done","at":"2026-11-03T05:12:30Z","tasks":{"done":7,"total":7,"failed":0}},
+    "verify": {"status":"passed","at":"2026-11-02T16:29:43Z","verdict":"PASS"},
+    "pr": {"status":"raised","at":"2026-11-03T06:33:59Z","url":"https://github.com/chan4lk/specclaw/pull/105"},
+    "archived": {"status":"done","at":"2026-11-14T03:09:16Z"}
+  }
+}
