@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+"""context-gate: the PreToolUse command hook that holds a subagent to its context cap (change 065).
+
+Ported from ION-TBML-SUITE's .claude/hooks/dl-gate.py. A subagent cannot see its own token count,
+so only a hook can stop it (ADR-0017 decision 33). At 90% of its role's cap, `budget.gate: warn`
+(the default) puts the hand-off steps in front of the agent and the user; `block` denies every call
+but committing and writing the hand-off line. The main session is never capped.
+
+Fails open and loud (decision 49): any exception lets the call through, logs a line and prints one.
+Registered for Claude Code only, in hooks/mod.json: nothing shows Codex sends this event shape.
+"""
+
+import os
+import sys
+
+RAW = sys.stdin.buffer.read()
+# A main-session call has no agent_id: exit before json and the module load. Torn input fails loud below.
+if b'"agent_id"' not in RAW and RAW.rstrip().endswith(b"}"):
+    sys.exit(0)
+
+import json  # noqa: E402 - after the main-session exit above
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lib"))
+
+
+def answer(event: dict) -> int:
+    import budget
+
+    agent = event.get("agent_id")
+    if agent is None:
+        return 0
+    if not isinstance(agent, str) or not budget.AGENT_ID.fullmatch(agent):
+        raise ValueError("agent_id is not a plain id")
+    root = budget.project_root(event.get("cwd"))
+    if root is None:
+        return 0
+    config = budget.load(root / ".specclaw")
+    if config["gate"] == "off":
+        return 0
+    path = budget.transcript_of(event["transcript_path"], agent)
+    context = budget.last_context(path)
+    if context is None:
+        return 0
+    kind, text, fields = budget.decide(config, event, budget.first_prompt(path), context)
+    if kind is None:
+        return 0
+    warning = "; ".join(config["warnings"])
+    if kind == "deny":
+        print(text + (f"\nspecclaw config: {warning}" if warning else ""), file=sys.stderr)
+    else:
+        line = f"specclaw context gate: {fields['role']} agent {agent} at {context // 1000}k of {fields['cap'] // 1000}k; it was told to hand off"
+        print(json.dumps({
+            "systemMessage": line + (f" (config: {warning})" if warning else ""),
+            "hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": text},
+        }))
+    try:  # after the verdict is out: a log failure (full disk, a racing rotation) never changes it
+        budget.log({"session_id": event.get("session_id"), "agent_id": agent, "decision": kind, **fields})
+    except OSError:
+        pass
+    return 2 if kind == "deny" else 0
+
+
+def main() -> int:
+    event = None
+    try:
+        event = json.loads(RAW)
+        return answer(event)
+    except Exception as error:  # noqa: BLE001 - fail open, loud (decision 49)
+        print(json.dumps({"systemMessage": f"specclaw context gate error: {type(error).__name__}: {error}; the call went through"}))
+        try:
+            import budget
+
+            fields = event if isinstance(event, dict) else {}
+            agent = fields.get("agent_id")
+            budget.log({
+                "session_id": fields.get("session_id") if isinstance(fields.get("session_id"), str) else None,
+                "agent_id": agent if isinstance(agent, str) and budget.AGENT_ID.fullmatch(agent) else None,
+                "error": type(error).__name__,
+            })
+        except Exception:  # noqa: BLE001 - the printed line still shows
+            pass
+        return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

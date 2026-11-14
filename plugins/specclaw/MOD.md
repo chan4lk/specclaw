@@ -57,6 +57,8 @@ If the gate itself fails (for example, it cannot read `.specclaw/`), it allows t
 
 It exits 0 when a Stop is already held by it (`stop_hook_active`), when the project has no `.specclaw/config.yaml`, and on any internal error. An internal error is not silent: the guard prints a `systemMessage` naming it (`specclaw: the done guard did not run (<error>), so nothing was checked.`), which Claude Code shows without blocking the turn. A change the guard cannot check (for example, a tasks file it cannot count) goes through one `skip` function, which always names the change and the reason to the user: in that `systemMessage`, or on stderr next to the held steps when another change is held. It is not registered in `hooks/hooks.json`: Codex reads that file, and nothing shows that Codex accepts a `Stop` command hook.
 
+`hooks/context-gate` is a `PreToolUse` command hook, also registered in `hooks/mod.json` only (change 065). It holds a subagent to its role's context cap: at 90% it tells the agent to commit and hand off (`budget.gate: warn`, shipped) or denies all but committing (`block`). The main session is never capped, and any error lets the call through with a `systemMessage`. See `CLAUDE.md`, "The context gate".
+
 ## Development
 
 ```

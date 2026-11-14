@@ -1,0 +1,31 @@
+# Status: 065-core-context-gate-task-sizing
+
+**Change:** 065-core-context-gate-task-sizing
+**Started:** 2026-11-14
+**Last Updated:** 2026-11-14
+
+## Progress
+
+| Phase | Status | Notes |
+|-------|--------|-------|
+| Proposal | ✅ Approved |  |
+| Spec | ✅ Done |  |
+| Design | ✅ Done |  |
+| Tasks | ✅ Done |  |
+| Build | ✅ Done |  |
+| Verify | ✅ Passed | PASS |
+| PR | ✅ Raised | https://github.com/chan4lk/specclaw/pull/134 |
+
+## Task Progress
+
+**Completed:** 0 / 0
+**Failed:** 0
+**Deferred:** 0
+
+## Agent Runs
+
+| Task | Agent | Model | Status | Duration | Review |
+|------|-------|-------|--------|----------|--------|
+
+## Issues
+**GitHub Issue:** #127

@@ -1,0 +1,66 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 1
+ },
+ "escalated": [
+  "89d2746e5e32"
+ ],
+ "files": [
+  "plugins/specclaw/CLAUDE.md",
+  "plugins/specclaw/lib/budget.py",
+  "plugins/specclaw/templates/config.yaml",
+  "plugins/specclaw/tests/run-context-gate-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/lib/budget.py",
+   "fp": "89d2746e5e32",
+   "in_delta": true,
+   "line": 280,
+   "message": "The fix removes any redirect with any target, not just `&>`. Together with the new `cat`, `grep` and `sort` entries in ALLOWED, a call that overwrites an arbitrary file now passes in block mode. That contradicts the documented rule that block denies everything except commit, `cd`, read-only filters and the hand-off. The strip should only remove fd duplication (`N>&M`) and redirects to /dev/null or to a file under the `.specclaw` hand-off path. Any other file target should leave the redirect in place so the call is denied. Write redirects (`>` and `>>` to a real file) should also be tested as deny rows.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "At the cap in block mode, Bash `git log | cat > src/app.py` (or `grep x a.txt > src/app.py`). The strip turns `> src/app.py` into a space. Parts become `git log` and `cat`, both match ALLOWED, so `committing()` returns True and the call exits 0. The agent has written a source file after being told to stop, where the gate should deny it.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw/tests/run-context-gate-tests.sh",
+   "fp": "fb3ea5610b58",
+   "in_delta": true,
+   "line": 126,
+   "message": "The new regex handles `>`, `>>` and `<` with spaced and unspaced targets, fd-prefixed forms such as `1>f` and `2>>f`, and input redirects. The table only exercises `2>&1`, `/dev/null`, `>&2`, `&>` and `&>>`. Add pass rows for `git log < in`, `git status 1>out` and `git log 2>> e`. Add a deny row such as `git log > f; rm x`.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Rewrite the strip so `<` or a spaced `> target` is no longer removed. Every row in the table stays green, so a regression in those forms goes unnoticed.",
+   "severity": "minor"
+  }
+ ],
+ "head": "736db0000a5e102447453698a37ed2d8c79083fd",
+ "impact": [
+  "plugins/specclaw/bin/specclaw-init",
+  "plugins/specclaw/bin/specclaw-loop",
+  "plugins/specclaw/bin/specclaw-pr",
+  "plugins/specclaw/bin/specclaw-quality-scan",
+  "plugins/specclaw/hooks/context-gate"
+ ],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 16501,
+ "round": 3,
+ "since": "a8084c669a",
+ "status": "escalate",
+ "system_chars": 8886,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794657829,
+ "ts_start": 1794657801
+}

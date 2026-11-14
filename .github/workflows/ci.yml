@@ -96,6 +96,8 @@ jobs:
         run: bash plugins/specclaw/tests/run-done-guard-tests.sh
       - name: Run size-cap tests
         run: bash plugins/specclaw/tests/run-size-cap-tests.sh
+      - name: Run context-gate tests
+        run: bash plugins/specclaw/tests/run-context-gate-tests.sh
       - name: Run plugin-split tests
         run: bash plugins/specclaw/tests/run-plugin-split-tests.sh
       - name: Run preset-check tests

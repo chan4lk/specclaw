@@ -118,6 +118,27 @@ build:
     fable_max_fraction: 0.2                     # cap Fable share of tasks per build
     cache: true                                 # persist synthesized specs under changes/<change>/agents/
 
+# Context budget (change 065). A subagent cannot see its own token count, so the
+# PreToolUse hook hooks/context-gate (Claude Code only) checks it on every tool
+# call. At 90% of the agent's role cap:
+#   off    nothing is checked
+#   warn   the agent and the user are told to hand off; nothing is denied
+#   block  every call is denied except git add/commit/status/diff/log, cd,
+#          head, tail and `specclaw-budget handover` (no file redirects),
+#          until the agent stops
+# The main session is never capped. A subagent whose type names no role is
+# `general`. A prompt may open with `specclaw budget: role=<role> context=<n>`;
+# n is clamped to half..double the role's shipped default. Read and written
+# only through `specclaw-budget` (block-scoped, like party_val).
+budget:
+  gate: warn                       # off | warn | block
+  routing:                         # task Kind -> build agent type; `default` for any other Kind
+    frontend: specclaw:builder-frontend
+    docs: specclaw:builder-frontend
+    default: specclaw:builder-backend
+  roles: {}                        # set with `specclaw-budget set .specclaw <role> <n>`; see `roles --json`
+  # shipped: builder-backend 200000, builder-frontend 200000, code-reviewer 150000, general 200000
+
 # Brownfield (bf-*) command settings
 bf:
   # Narration agents — the bf spawns whose artifact is ALREADY FINAL before the
