@@ -14,6 +14,12 @@ import subprocess
 import sys
 
 DEFAULT_BLOCK_ON = ["law", "security", "data-loss"]
+CLASSES = ("law", "security", "data-loss", "other")   # the classes specclaw-review writes
+FP_RE = re.compile(r"<!--.*\bfp:([0-9a-f]+)")
+
+
+class GateError(Exception):
+    pass
 LIST_RE = re.compile(r"^\.specclaw/(debt\.md|changes/(.+/)?follow-ups\.md)$")
 CLASS_RE = re.compile(r"<!--.*\bclass:([\w-]+).*-->")
 
@@ -24,8 +30,13 @@ def git(*args):
 
 
 def show(ref, path):
+    """The file at ref, "" only when it is absent there. A failed read of a present file is an error, never empty."""
+    if git("cat-file", "-e", f"{ref}:{path}")[0] != 0:
+        return ""
     code, out = git("show", f"{ref}:{path}")
-    return out if code == 0 else ""
+    if code != 0:
+        raise GateError(f"could not read {ref}:{path}")
+    return out
 
 
 def norm(c):
@@ -50,10 +61,13 @@ def block_on(config):
             vals = []
             for nxt in lines[i + 1:]:
                 item = re.match(r"^\s+-\s*(.+?)\s*(#.*)?$", nxt)
-                if not item or len(nxt) - len(nxt.lstrip()) <= len(k.group(1)):
+                if not item or len(nxt) - len(nxt.lstrip()) < len(k.group(1)):
                     break
                 vals.append(item.group(1))
         vals = [norm(v) for v in vals if v.strip()]
+        bad = [v for v in vals if v not in CLASSES]
+        if bad:   # a typo would match no item and silently turn the gate off
+            raise GateError(f"release_gate.block_on: unknown class(es) {', '.join(bad)} (known: {', '.join(CLASSES)})")
         return vals or DEFAULT_BLOCK_ON
     return DEFAULT_BLOCK_ON
 
@@ -62,7 +76,22 @@ def open_items(text):
     return [ln.rstrip() for ln in text.splitlines() if ln.startswith("- ") and not re.match(r"- \[[xX]\]", ln)]
 
 
+def list_paths(ref):
+    code, tree = git("ls-tree", "-r", "--full-name", "--name-only", ref, "--", ".specclaw")
+    if code != 0:
+        raise GateError(f"git ls-tree {ref} failed")
+    return sorted(p for p in tree.splitlines() if LIST_RE.match(p))
+
+
 def release(base, target):
+    try:
+        return _release(base, target)
+    except GateError as e:
+        print(f"specclaw-sync: {e}", file=sys.stderr)
+        return 2
+
+
+def _release(base, target):
     code, top = git("rev-parse", "--show-toplevel")
     if code != 0:
         print("specclaw-sync: not inside a git repository", file=sys.stderr)
@@ -72,16 +101,16 @@ def release(base, target):
         if git("rev-parse", "-q", "--verify", f"{ref}^{{commit}}")[0] != 0:
             print(f"specclaw-sync: unknown ref '{ref}'", file=sys.stderr)
             return 2
-    code, tree = git("ls-tree", "-r", "--full-name", "--name-only", target, "--", ".specclaw")
-    if code != 0:
-        print("specclaw-sync: git ls-tree failed", file=sys.stderr)
-        return 2
     gate = block_on(show(target, ".specclaw/config.yaml"))
+    # Items open at base anywhere: keyed by fp, so moving a list (archiving a change) adds nothing.
+    before = [ln for path in list_paths(base) for ln in open_items(show(base, path))]
+    before_fps = {m.group(1) for m in map(FP_RE.search, before) if m}
+    before_lines = set(before)
     items = []
-    for path in sorted(p for p in tree.splitlines() if LIST_RE.match(p)):
-        before = set(open_items(show(base, path)))
+    for path in list_paths(target):
         for ln in open_items(show(target, path)):
-            if ln not in before:
+            fp = FP_RE.search(ln)
+            if (fp.group(1) not in before_fps) if fp else (ln not in before_lines):
                 m = CLASS_RE.search(ln)
                 items.append((norm(m.group(1)) if m else "other", path, ln))
     blocking = [i for i in items if i[0] in gate]

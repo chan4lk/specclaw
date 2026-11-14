@@ -172,7 +172,10 @@ class Config:
     def block_on(self):
         """release_gate.block_on: the finding classes that block a fast-track round and a release."""
         v = self.release_gate.get("block_on")
-        v = [_class_token(c) for c in (v if isinstance(v, list) else [v] if v else []) if str(c).strip()]
+        v = [_class_token(c).strip("\"'") for c in (v if isinstance(v, list) else [v] if v else []) if str(c).strip()]
+        bad = [c for c in v if c not in CLASSES]
+        if bad:   # a typo would match no finding and silently turn the gate off
+            raise ReviewError(f"release_gate.block_on: unknown class(es) {', '.join(bad)} (known: {', '.join(CLASSES)})")
         return v or DEFAULT_BLOCK_ON   # empty = the default, as in specclaw-sync; never "block nothing"
 
     def fast_track(self, change):
@@ -670,8 +673,9 @@ def _settle_round(cfg, cdir, change, rec, found, prev, n):
     rec["findings"] = found
     fast = cfg.fast_track(change)
     if fast:   # only gate-class blockers are fixed now; the rest is debt
+        gate = cfg.block_on   # read up front: a misspelt gate fails every fast-track round, not only one with a blocker
         block = [f for f in found if f["severity"] == "blocker" and not f.get("pre_existing")
-                 and (f["class"] in cfg.block_on or f.get("unclassified"))]
+                 and (f["class"] in gate or f.get("unclassified"))]
     else:
         block = blocking(found)
     seen = {}

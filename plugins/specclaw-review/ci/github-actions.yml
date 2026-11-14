@@ -25,7 +25,8 @@ jobs:
           echo "change=$CHANGE" >> "$GITHUB_OUTPUT"
           python3 path/to/specclaw-review/bin/specclaw-review verdict --change "$CHANGE" --check-head
       - name: specclaw/review-loop status (only when the final pass is exactly the PR head)
-        if: steps.verdict.outputs.change != ''
+        # a fork PR's token cannot write statuses, and its branch is not in this repo
+        if: steps.verdict.outputs.change != '' && github.event.pull_request.head.repo.full_name == github.repository
         env:
           GH_TOKEN: ${{ github.token }}
           CHANGE: ${{ steps.verdict.outputs.change }}

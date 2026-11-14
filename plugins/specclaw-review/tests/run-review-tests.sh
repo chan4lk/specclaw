@@ -333,8 +333,13 @@ f = rc.calibrate(C(), [{"severity": "minor", "rule": "B1", "file": "x.py", "line
                        {"severity": "minor", "rule": "B3", "file": "z.py", "line": 1, "message": "c", "class": "style"},
                        {"severity": "minor", "rule": "B4", "file": "w.py", "line": 1, "message": "d", "class": "SECURITY"}])
 assert [x["class"] for x in f] == ["data-loss", "other", "other", "security"], [x["class"] for x in f]
-C.release_gate = {"block_on": ["crash", "Data Loss"]}
-assert C().block_on == ["crash", "data-loss"], C().block_on   # an unknown gate name never widens to `other`
+C.release_gate = {"block_on": ["Data Loss", "'law'"]}
+assert C().block_on == ["data-loss", "law"], C().block_on
+C.release_gate = {"block_on": ["securty"]}
+try:
+    C().block_on; raise AssertionError("a misspelt gate class must be refused, not ignored")
+except rc.ReviewError:
+    pass
 C.release_gate = {}
 assert C().block_on == ["law", "security", "data-loss"]
 PY'
@@ -370,6 +375,9 @@ check "064 AC-5 a multi-line message is one debt line that keeps its class marke
 sed -i.bak "s/^- \[ \] \(.*leaks the token\)/- [x] \1/" .specclaw/debt.md && rm -f .specclaw/debt.md.bak
 "$SR" run --change "$CH" >/dev/null
 check "064 AC-5 a ticked item that recurs is listed again as open" '[ "$(grep -c "leaks the token" .specclaw/debt.md)" = 2 ] && grep -q "^- \[ \] .*leaks the token" .specclaw/debt.md'
+ftcfg all "$(printf 'release_gate:\n  block_on: [securty]\n')"
+"$SR" run --change "$CH" >/dev/null 2>&1; rc=$?
+check "064 AC-5 fast track with a misspelt block_on class refuses to run (exit 2)" '[ "$rc" = 2 ]'
 mkrepo "$TMP/ft2"
 ftcfg "[some-other-change]"
 out_json "$FT"; "$SR" run --change "$CH" >/dev/null; rc=$?

@@ -597,7 +597,9 @@ post_review_status() {
     warn "could not read the PR head — specclaw/review-loop status not posted"
     return 0
   fi
-  if ! out="$(specclaw-review verdict --change "$CHANGE_NAME" --head "$sha" 2>&1)"; then
+  # stdout only: line 2 is the round file, and a stderr line must not shift it
+  if ! out="$(specclaw-review verdict --change "$CHANGE_NAME" --head "$sha" 2>/dev/null)"; then
+    out="${out:-specclaw-review verdict failed}"
     echo "  specclaw/review-loop status not posted: ${out%%$'\n'*}"
     return 0
   fi

@@ -52,13 +52,30 @@ import importlib.machinery, importlib.util, sys
 ld = importlib.machinery.SourceFileLoader("sync", sys.argv[1])
 spec = importlib.util.spec_from_loader("sync", ld); sync = importlib.util.module_from_spec(spec); ld.exec_module(sync)
 sys.path.insert(0, sys.argv[2]); import review_core as rc
+def both(cfg):
+    c = rc.Config.__new__(rc.Config); c.release_gate = rc.parse_block(cfg, "release_gate")
+    out = []
+    for f in (lambda: c.block_on, lambda: sync.block_on(cfg)):
+        try:
+            out.append(f())
+        except (rc.ReviewError, sync.GateError):
+            out.append("refused")
+    return out
 for cfg in ["", "release_gate:\n  block_on: []\n", "release_gate:\n  block_on: [law]\n",
             "release_gate:\n  block_on:\n    - law\n    - data-loss\n", "release_gate:\n  block_on: [Data Loss, \"security\"]\n",
-            "release_gate:\n  block_on: crash\n", "review:\n  block_on: [law]\n"]:
-    r = rc.parse_block(cfg, "release_gate")
-    c = rc.Config.__new__(rc.Config); c.release_gate = r
-    assert c.block_on == sync.block_on(cfg), (cfg, c.block_on, sync.block_on(cfg))
+            "release_gate:\n  block_on:\n  - law\n  - security\n", "release_gate:\n  block_on: [law, \x27security\x27]  # gate\n",
+            "release_gate:\n  block_on:\n    - law  # note\n", "release_gate:\n  block_on: [law,]\n",
+            "release_gate:\n  block_on: crash\n", "release_gate:\n  block_on: [securty]\n", "review:\n  block_on: [law]\n"]:
+    a, b = both(cfg)
+    assert a == b, (cfg, a, b)
+assert both("release_gate:\n  block_on: crash\n") == ["refused", "refused"]
 PY'
+git checkout -q security && git tag -f pre-archive >/dev/null && mkdir -p .specclaw/changes/archive && git mv .specclaw/changes/001-a .specclaw/changes/archive/001-a && git commit -qm archive
+rel pre-archive HEAD; rc=$?
+check "AC-6 archiving a change (moving its follow-ups) adds no items" '[ "$rc" = 0 ] && grep -q "0 open item" "$TMP/out"'
+printf 'release_gate:\n  block_on: [securty]\n' > .specclaw/config.yaml && git add -A && git commit -qm typo
+rel base HEAD; rc=$?
+check "AC-6 a misspelt block_on class is refused (exit 2), not a silently open gate" '[ "$rc" = 2 ] && grep -q "unknown class" "$TMP/out"'
 rel base no-such-ref; rc=$?
 check "AC-6 an unknown ref exits 2" '[ "$rc" = 2 ]'
 rel base; rc=$?
