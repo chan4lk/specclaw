@@ -14,6 +14,7 @@
 | Tasks | ✅ Done |  |
 | Build | ✅ Done |  |
 | Verify | ✅ Passed | PASS |
+| PR | ✅ Raised | https://github.com/chan4lk/specclaw/pull/134 |
 
 ## Task Progress
 
