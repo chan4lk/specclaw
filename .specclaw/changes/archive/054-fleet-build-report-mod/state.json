@@ -1,0 +1,15 @@
+{
+  "change": "054-fleet-build-report-mod",
+  "phase": "archived",
+  "branch": "specclaw/054-fleet-build-report-mod",
+  "size": "architectural",
+  "phases": {
+    "proposal": {"status":"approved","at":"2026-11-09T16:08:08Z"},
+    "spec": {"status":"done","at":"2026-11-09T16:12:01Z"},
+    "design": {"status":"done","at":"2026-11-09T16:12:01Z"},
+    "tasks": {"status":"done","at":"2026-11-09T16:12:01Z"},
+    "build": {"status":"done","at":"2026-11-09T16:27:27Z"},
+    "verify": {"status":"done","at":"2026-11-10T07:04:21Z"},
+    "archived": {"status":"done","at":"2026-11-14T03:09:17Z"}
+  }
+}

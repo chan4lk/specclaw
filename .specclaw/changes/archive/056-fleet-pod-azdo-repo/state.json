@@ -1,0 +1,11 @@
+{
+  "change": "056-fleet-pod-azdo-repo",
+  "phase": "archived",
+  "branch": "",
+  "phases": {
+    "proposal": {"status":"approved","at":"2026-11-10T01:49:43Z"},
+    "tasks": {"status":"done","at":"2026-11-10T01:49:43Z"},
+    "build": {"status":"done","at":"2026-11-10T01:49:44Z"},
+    "archived": {"status":"done","at":"2026-11-14T03:18:04Z"}
+  }
+}
