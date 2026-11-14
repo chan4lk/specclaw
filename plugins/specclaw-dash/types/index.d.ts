@@ -11,6 +11,8 @@ export type ChangeRow = {
   verdict: string | null
   pr: string | null
   span: { label: string; since: number } | null
+  approved: boolean
+  feature: string | null
 }
 
 export type FleetLine = { running: number; prs_open: number; jobs: number; generated_at: string }
@@ -31,7 +33,10 @@ export type ReviewRow = {
 
 export type LessonRow = { change: string; category: string; priority: string; detail: string; at: string }
 
-export type LearningData = { lessons: LessonRow[]; byCategory: Record<string, number>; proposed: Section<number> }
+// One rule specclaw-review's learn_propose proposes, by its fingerprint.
+export type RuleRow = { fp: string; seen: number; lesson: string }
+
+export type LearningData = { lessons: LessonRow[]; byCategory: Record<string, number>; proposed: Section<RuleRow[]> }
 
 export type Spend = { tokens: number; usd: number }
 export type TokenRow = Spend & { name: string; context: number | null }
@@ -54,8 +59,22 @@ export type DashView = {
   tokens: Section<TokenData>
 }
 
+// A role's context cap as `specclaw-budget roles --json` prints it (change 065).
+export type CapRow = { role: string; context: number; default: number; min: number; max: number; source: string }
+
+// What the pane's actions hold: the launch selection, the dry run of exactly that selection, the last command
+// and what it printed (code null: it was put into the prompt, not run), and the caps and dismissed lists.
+export type Ran = { command: string; code: number | null; out: string }
+export type Actions = {
+  selected: string[]
+  plan: { items: string[]; launchable: string[] } | null
+  last: Ran | null
+  caps: Section<CapRow[]> | null
+  dismissed: Section<string[]> | null
+}
+
 declare module 'claude-code' {
   interface PluginState {
-    'specclaw-dash': { view: Shaped<DashView> }
+    'specclaw-dash': { view: Shaped<DashView>; actions: Shaped<Actions> }
   }
 }

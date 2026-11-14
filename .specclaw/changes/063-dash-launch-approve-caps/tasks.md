@@ -13,11 +13,11 @@ and docs.
 
 ### Wave 1 — Commands and mapping
 
-- [ ] `T1` — `specclaw-review learn --reject` and `specclaw-suggest --dismissed/--undismiss`, with tests (AC-6, AC-7)
+- [x] `T1` — `specclaw-review learn --reject` and `specclaw-suggest --dismissed/--undismiss`, with tests (AC-6, AC-7)
   - Files: plugins/specclaw-review/bin/specclaw-review, plugins/specclaw-review/lib/review_core.py, plugins/specclaw-review/lib/review_memory.py, plugins/specclaw-review/tests/run-review-tests.sh, plugins/specclaw/bin/specclaw-suggest, plugins/specclaw/tests/run-suggest-tests.sh
   - Estimate: small
   - Kind: impl
-- [ ] `T2` — Pure action mapping: commands, value patterns, dry-run/caps/dismissed/rules parsers, change approval and feature; bun specs (AC-1, AC-2)
+- [x] `T2` — Pure action mapping: commands, value patterns, dry-run/caps/dismissed/rules parsers, change approval and feature; bun specs (AC-1, AC-2)
   - Files: plugins/specclaw-dash/hooks/core/actions.ts, plugins/specclaw-dash/hooks/core/loops.ts, plugins/specclaw-dash/types/index.d.ts, plugins/specclaw-dash/tests/actions.spec.ts, plugins/specclaw-dash/tests/loops.spec.ts
   - Estimate: medium
   - Kind: impl
