@@ -565,32 +565,40 @@ cmd_size() {
   for glob in "${SIZE_EXCLUDE[@]}" "${extra[@]}"; do specs+=(":(exclude,glob)${glob}"); done
   # shellcheck disable=SC1091  # sourced lib, resolved at runtime
   . "${SCRIPT_DIR}/../lib/base-ref.sh"
-  mb="$(base_merge_base "$root")"
+  local base_name
+  read -r mb base_name <<<"$(base_merge_base "$root")"
   # Exit 2 = not counted, never read as under the cap (verify records it as a FAIL until it can count).
   [ -n "$mb" ] || { echo "size cap: not counted, no base branch to compare with"; return 2; }
-  local numstat untracked
-  if ! numstat="$(git -C "$root" diff --numstat --no-renames "$mb" -- "${specs[@]}")" ||
-     ! untracked="$(cd "$root" && git ls-files -z --others --exclude-standard -- "${specs[@]}" | xargs -0 cat 2>/dev/null | wc -l)"; then
+  # One count for tracked and untracked files alike: a throwaway index marks untracked files
+  # intent-to-add, so numstat counts them as new files (binaries as "-", skipped; a last line with
+  # no newline counted), and the real index is never touched.
+  local numstat index
+  index="$(mktemp)"
+  if ! cp "$(git -C "$root" rev-parse --path-format=absolute --git-path index)" "$index" ||
+     ! GIT_INDEX_FILE="$index" git -C "$root" add -N -- . ||
+     ! numstat="$(GIT_INDEX_FILE="$index" git -C "$root" diff --numstat --no-renames "$mb" -- "${specs[@]}")"; then
+    rm -f "$index"
     echo "size cap: not counted, git diff against ${mb:0:10} failed"
     return 2
   fi
-  # Tracked lines against the merge-base (committed or not), plus every line of an untracked file.
-  lines=$(awk -F'\t' -v n="$untracked" '$1 != "-" { n += $1 + $2 } END { print n + 0 }' <<<"$numstat")
+  rm -f "$index"
+  lines=$(awk -F'\t' '$1 != "-" { n += $1 + $2 } END { print n + 0 }' <<<"$numstat")
+  local against="against ${base_name} @ ${mb:0:10}"
   if [ "$lines" -gt "$cap" ]; then
     local waived
     # Any common spelling: a bullet, bold around the label or the colon, any case. A reason must follow.
     waived="$(grep -liE '^[[:space:]]*([-*][[:space:]]+)?\**size waiver(\**:|:\**)\**[[:space:]]*[^[:space:]*]' "${change_dir}/proposal.md" "${change_dir}/change.md" 2>/dev/null | head -1 || true)"
     if [ -n "$waived" ]; then
-      echo "size cap: ${lines} production lines, over the ${cap}-line cap, with the waiver in ${waived}"
+      echo "size cap: ${lines} production lines ${against}, over the ${cap}-line cap, with the waiver in ${waived}"
       return 0
     fi
-    echo "size cap: ${lines} production lines is over the ${cap}-line cap. Split the change, or add 'Size waiver: <reason>' to its proposal.md."
+    echo "size cap: ${lines} production lines ${against} is over the ${cap}-line cap. Split the change, or add 'Size waiver: <reason>' to its proposal.md."
     return 1
   fi
   if [ "$lines" -gt $((cap / 2)) ]; then
-    echo "size cap: ${lines} production lines (cap ${cap}); over half the cap, consider splitting."
+    echo "size cap: ${lines} production lines ${against} (cap ${cap}); over half the cap, consider splitting."
   else
-    echo "size cap: ${lines} production lines (cap ${cap})"
+    echo "size cap: ${lines} production lines ${against} (cap ${cap})"
   fi
 }
 

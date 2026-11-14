@@ -8,7 +8,8 @@
 # with exit 2, which keeps the turn going with it as the reason.
 #
 # A wrong guard traps the turn, so every other path exits 0: a Stop this hook already holds
-# (stop_hook_active), no .specclaw/config.yaml, and any internal error. Without a base to diff
+# (stop_hook_active), no .specclaw/config.yaml, and any internal error (which is shown to the
+# user as a systemMessage, never passed off as "nothing missing"). Without a base to diff
 # against, every active change is checked (never fewer). Registered for Claude Code only, in
 # hooks/mod.json: nothing shows Codex accepts a Stop command hook in hooks/hooks.json.
 
@@ -23,7 +24,7 @@ missing() (
   # shellcheck disable=SC1091  # sourced lib, resolved at runtime
   . "$HERE/lib/base-ref.sh"
   cd "$root"
-  mb="$(base_merge_base "$root")"
+  read -r mb _ <<<"$(base_merge_base "$root")"
   if [ -n "$mb" ]; then
     touched="$({ git diff --name-only "$mb" -- .specclaw/changes; git ls-files --others --exclude-standard -- .specclaw/changes; } | cut -d/ -f3 | sort -u)"
   else
@@ -66,7 +67,19 @@ print(*(v.get(k) or "-" for k in ("status", "verdict", "at")))' "$dir/state.json
   done
 )
 
-report="$(missing 2>/dev/null)" || exit 0
+# An internal error still exits 0 (never trap the turn), but says so: a systemMessage on stdout is shown
+# to the user without blocking, so "could not check" never reads as "nothing missing".
+err="$(mktemp 2>/dev/null)" || err=/dev/null
+# A plain assignment, not `if`/`||`: in a conditional context bash ignores set -e inside missing().
+report="$(missing 2>"$err")"
+rc=$?
+if [ "$rc" -ne 0 ]; then
+  last="$(tail -n 1 "$err" 2>/dev/null | tr -d '"\\\000-\037')"
+  [ "$err" = /dev/null ] || rm -f "$err"
+  printf '{"systemMessage": "specclaw: the done guard did not run (%s), so nothing was checked."}\n' "${last:-internal error}"
+  exit 0
+fi
+[ "$err" = /dev/null ] || rm -f "$err"
 [ -n "$report" ] || exit 0
 printf '%s\n' "$report" >&2
 exit 2

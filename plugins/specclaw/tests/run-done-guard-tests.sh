@@ -97,5 +97,13 @@ check "no .specclaw/config.yaml exits 0" "$d" 0 ""
 d="$(repo broken)"; change "$d" 002-x "$DONE"; chmod 000 "$d/.specclaw/changes/002-x/tasks.md"
 check "an unreadable tasks file is skipped, exit 0" "$d" 0 ""
 
+d="$(repo gitfail)"; change "$d" 002-x "$DONE"; echo garbage > "$d/.git/index"
+out="$(cd "$d" && printf '{}' | PATH="$BASE_PATH" "$GUARD" 2>/dev/null)"; rc=$?
+if [ "$rc" -eq 0 ] && python3 -c 'import json,sys; m=json.loads(sys.argv[1])["systemMessage"]; assert "done guard did not run (" in m and "nothing was checked" in m, m' "$out" 2>/dev/null; then
+  echo "PASS: an internal error (a real git failure) exits 0 and tells the user in a systemMessage"
+else
+  fail=1; echo "FAIL: internal error path (exit $rc): $out"
+fi
+
 (( fail == 0 )) && echo "R060 AC-3 the done guard holds only touched, all-done changes missing a step"
 exit "$fail"

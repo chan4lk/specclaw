@@ -22,6 +22,8 @@ repo() { # repo <name> <pr-block>: base main with one file; HEAD on feat with ch
 check() { # check <label> <repo> <want-exit> <want-substring>
   local out rc
   out="$(cd "$2" && "$BIN" size .specclaw 001-x 2>&1)"; rc=$?
+  BASE_SEEN="$out"
+  out="$(sed -E 's/ against [^ ]+ @ [0-9a-f]{10}//' <<<"$out")"
   if [ "$rc" -eq "$3" ] && grep -qF -- "$4" <<<"$out"; then echo "PASS: $1"; else fail=1; echo "FAIL: $1 (exit $rc): $out"; fi
 }
 
@@ -71,6 +73,13 @@ printf "git:\n# the integration branch\n  base_branch: 'trunk'  # quoted\npr:\n 
 git -C "$d" init -q -b trunk && git -C "$d" add -A && git -C "$d" commit -qm init && git -C "$d" checkout -q -b feat
 lines "$d/src/b.ts" 2
 check "a single-quoted git.base_branch after a comment line is read" "$d" 0 "size cap: 2 production lines (cap 10)"
+grep -qE "against trunk @ [0-9a-f]{10} " <<<"$BASE_SEEN" && echo "PASS: the count names the base and merge-base it was taken against" || { fail=1; echo "FAIL: base not named: $BASE_SEEN"; }
+
+# Untracked files are counted as git counts tracked ones: a binary is skipped, a last line with no newline counts.
+d="$(repo binary '  size_cap: 10')"
+printf '\000\001\n\n\n\n\n\n\n\n\n\n\n\n' > "$d/src/blob.bin"; printf 'a\nb' > "$d/src/nonl.ts"
+check "an untracked binary is skipped and a no-newline last line counts" "$d" 0 "size cap: 2 production lines (cap 10)"
+git -C "$d" status --porcelain | grep -q '^??' && echo "PASS: the real index is untouched" || { fail=1; echo "FAIL: the real index was changed"; }
 
 (( fail == 0 )) && echo "R060 AC-4 the size cap counts production lines and honours the waiver"
 exit "$fail"

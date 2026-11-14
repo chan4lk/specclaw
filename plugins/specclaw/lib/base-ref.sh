@@ -4,7 +4,8 @@
 
 # base_merge_base <root>
 # The base is git.base_branch, else origin/HEAD, else main; origin/<base> is preferred over a
-# local <base>, as in specclaw-check-staged. No network (no gh). Prints nothing when there is none.
+# local <base>, as in specclaw-check-staged. No network (no gh). Prints "<merge-base sha> <ref>",
+# or nothing when there is none.
 base_merge_base() {
   local root="$1" base ref
   base="$(awk '/^[a-zA-Z_]/ { g = ($0 ~ /^git:/); next } g && /^  base_branch:/ { sub(/^  base_branch:[[:space:]]*/, ""); print; exit }' \
@@ -13,7 +14,8 @@ base_merge_base() {
   [ -n "$base" ] || base=main
   for ref in "origin/$base" "$base"; do
     if git -C "$root" rev-parse --verify --quiet "$ref" >/dev/null 2>&1; then
-      git -C "$root" merge-base "$ref" HEAD 2>/dev/null || true
+      local sha
+      sha="$(git -C "$root" merge-base "$ref" HEAD 2>/dev/null)" && printf '%s %s\n' "$sha" "$ref"
       return 0
     fi
   done

@@ -55,7 +55,7 @@ If the gate itself fails (for example, it cannot read `.specclaw/`), it allows t
 - code outside `.specclaw/` committed after the verify verdict;
 - when `specclaw-review` is on PATH, a review verdict that is not clean.
 
-It exits 0 when a Stop is already held by it (`stop_hook_active`), when the project has no `.specclaw/config.yaml`, and on any internal error. It is not registered in `hooks/hooks.json`: Codex reads that file, and nothing shows that Codex accepts a `Stop` command hook.
+It exits 0 when a Stop is already held by it (`stop_hook_active`), when the project has no `.specclaw/config.yaml`, and on any internal error. An internal error is not silent: the guard prints a `systemMessage` naming it (`specclaw: the done guard did not run (<error>), so nothing was checked.`), which Claude Code shows without blocking the turn. It is not registered in `hooks/hooks.json`: Codex reads that file, and nothing shows that Codex accepts a `Stop` command hook.
 
 ## Development
 
