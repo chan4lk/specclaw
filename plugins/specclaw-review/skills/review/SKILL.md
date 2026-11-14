@@ -46,7 +46,7 @@ Tools: the `specclaw-review` MCP server (`review_run`, `review_verdict`, `memory
 `/specclaw:pr` (`specclaw-pr`) and `specclaw-azdo-pr` post a `specclaw/review-loop` status (`clean`) on the
 PR once it exists. Branch policy can require it. They post only when
 `specclaw-review verdict --change <change> --head <pr-head-sha>` exits 0: the verdict is clean **and** the
-final pass ran at that SHA, or every commit since the final pass touches only `.specclaw/` paths. So the round
+final pass ran at that SHA, or the net change from the final pass to that SHA touches only `.specclaw/` paths. So the round
 records (step 5) and the PR bookkeeping commit keep the status. A commit that touches any other path, docs
 included, gets no status. The `ci/` templates post the same status from the pipeline. Nothing here approves
 or merges a PR.

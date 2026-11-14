@@ -747,7 +747,9 @@ def _final_pass_drift(cfg, fsha, to="HEAD", allowed=None):
                                capture_output=True).returncode == 0
     if not reachable:
         return False, f" (the final pass is not in {to[:10]}'s history: rebased or shallow; run --final again)"
-    later = [f for f in git(cfg.root, "diff", "--name-only", f"{fsha}..{to}").splitlines() if f.strip()]
+    # --no-renames: a move lists both paths, so code moved into an allowed path is still seen leaving;
+    # -z: raw path bytes, so a non-ASCII record path is not quoted out of its prefix
+    later = [f for f in git(cfg.root, "diff", "--name-only", "--no-renames", "-z", f"{fsha}..{to}").split("\0") if f]
     if any(not allowed(f) for f in later):
         return False, " (code changed after the final pass)"
     return True, " (+ records-only commits)"

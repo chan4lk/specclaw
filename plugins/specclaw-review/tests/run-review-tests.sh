@@ -321,10 +321,18 @@ check "064 AC-1 --head at another SHA exits 1" '! "$SR" verdict --change "$CH" -
 git add .specclaw && git commit -qm records
 check "064 AC-1 .specclaw-only commits after the final pass: --head at the new HEAD exits 0" '"$SR" verdict --change "$CH" --head "$(git rev-parse HEAD)" >/dev/null'
 check "064 AC-1 a prefix of the head SHA is refused" '! "$SR" verdict --change "$CH" --head "$(git rev-parse --short=10 HEAD)" >/dev/null'
-check "064 AC-1 an option-looking head is refused" '! "$SR" verdict --change "$CH" --head "--output=$TMP/pwned" >/dev/null 2>&1 && [ ! -e "$TMP/pwned" ]'
+o="$("$SR" verdict --change "$CH" --head="--output=$TMP/pwned" 2>&1)"; rc=$?
+check "064 AC-1 an option-looking head reaches the gate and is refused as not a full commit id" '[ "$rc" = 1 ] && grep -q "not a full commit id" <<<"$o" && [ ! -e "$TMP/pwned" ]'
+check "064 AC-1 an uppercase SHA is refused" '! "$SR" verdict --change "$CH" --head "$(git rev-parse HEAD | tr a-f A-F)" >/dev/null'
 rec_head="$(git rev-parse HEAD)"
 echo "doc" > NOTES.md && git add NOTES.md && git commit -qm docs
 check "064 AC-1 a docs commit outside .specclaw: plain verdict OK, --head exits 1" '"$SR" verdict --change "$CH" >/dev/null && ! "$SR" verdict --change "$CH" --head "$(git rev-parse HEAD)" >/dev/null'
+git reset -q --hard "$rec_head"
+mkdir -p .specclaw/a/b && echo r > .specclaw/a/b/deep.md && echo r > ".specclaw/é.md" && git add .specclaw && git commit -qm nested
+check "064 AC-1 nested and non-ASCII .specclaw paths are records: --head exits 0" '"$SR" verdict --change "$CH" --head "$(git rev-parse HEAD)" >/dev/null'
+git reset -q --hard "$rec_head"
+git mv b.py .specclaw/b.py && git commit -qm move-into-records
+check "064 AC-1 code moved into .specclaw/ is seen leaving its path: --head exits 1" '! "$SR" verdict --change "$CH" --head "$(git rev-parse HEAD)" >/dev/null'
 git reset -q --hard "$rec_head"
 echo "x = 2" >> b.py && echo r > .specclaw/r.md && git add -A && git commit -qm mixed
 check "064 AC-1 a commit touching one code file and one .specclaw file: --head exits 1" '! "$SR" verdict --change "$CH" --head "$(git rev-parse HEAD)" >/dev/null'
