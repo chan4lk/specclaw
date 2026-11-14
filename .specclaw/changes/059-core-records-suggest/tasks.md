@@ -33,7 +33,7 @@ then the version bump.
 
 ### Wave 3 — Ship
 
-- [ ] `T4` — Bump all plugins to 0.9.7
+- [x] `T4` — Bump all plugins to 0.9.7
   - Files: .claude-plugin/marketplace.json, plugins/*/.claude-plugin/plugin.json, plugins/*/.codex-plugin/plugin.json
   - Estimate: small
   - Kind: config
