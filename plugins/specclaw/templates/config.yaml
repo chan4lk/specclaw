@@ -248,6 +248,15 @@ automation:
 
 # PR creation settings
 pr:
+  # PR size cap (change 060): `specclaw-verify size` counts production lines added
+  # and deleted against the merge-base with the base branch. Tests, .specclaw/,
+  # lockfiles and generated files are left out, plus the git glob pathspecs in
+  # size_exclude (space-separated, e.g. "docs/** **/*.md"). Over size_cap, verify
+  # FAILs unless the proposal has a `Size waiver: <reason>` line; over half, it
+  # suggests a split. 0 turns the cap off.
+  size_cap: 400
+  size_exclude: ""
+
   # Paths that are always fine undeclared — a CHANGELOG, a generated lockfile.
   # This wins over every other rule INCLUDING the junk patterns, so it is the
   # operator's escape hatch when a default misfires. It is not for silencing a
