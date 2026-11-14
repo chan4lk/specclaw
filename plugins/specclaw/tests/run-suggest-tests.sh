@@ -65,9 +65,20 @@ for row in none:- rodir:555 unreadable:000 rofile:444; do
   chmod 755 "$d" 2>/dev/null; chmod 644 "$d/config.yaml" 2>/dev/null
   check "AC-3 --dismiss write failure ($name) says so, exit 0, config unchanged" 'grep -q "could not record dismissal of '"'"'review'"'"'" <<<"$err" && grep -q "rc=0" <<<"$err" && { [ "$mode" = - ] || cmp -s "$d/config.yaml" "$d.orig"; } && ! ls "$d"/config.yaml.?????? >/dev/null 2>&1'
 done
-mkdir -p "$TMP/ln/real" && printf 'version: 1\n' > "$TMP/ln/real/config.yaml" && chmod 640 "$TMP/ln/real/config.yaml" && ln -s real/config.yaml "$TMP/ln/config.yaml"
-sug "$TMP/ln" --dismiss review >/dev/null
-check "AC-3 --dismiss writes through a symlinked config and keeps its mode" '[ -L "$TMP/ln/config.yaml" ] && grep -qx "  dismissed: \[review\]" "$TMP/ln/real/config.yaml" && [ "$(ls -l "$TMP/ln/real/config.yaml" | cut -c1-10)" = "-rw-r-----" ]'
+# The write is a rename onto the real file, never a truncate-and-rewrite of it: the real file's inode
+# changes (an in-place `cat >` keeps it), links stay links, the mode is kept. Relative, absolute and
+# chained symlinks.
+for kind in rel abs chain; do
+  d="$TMP/ln-$kind"; mkdir -p "$d/real" && printf 'version: 1\n' > "$d/real/config.yaml" && chmod 640 "$d/real/config.yaml"
+  case "$kind" in
+    rel)   ln -s real/config.yaml "$d/config.yaml" ;;
+    abs)   ln -s "$d/real/config.yaml" "$d/config.yaml" ;;
+    chain) ln -s config.yaml "$d/real/hop.yaml" && ln -s real/hop.yaml "$d/config.yaml" ;;
+  esac
+  ino="$(ls -i "$d/real/config.yaml" | awk '{print $1}')"
+  sug "$d" --dismiss review >/dev/null
+  check "AC-3 --dismiss ($kind symlink) renames onto the real file, keeps the link and mode" '[ -L "$d/config.yaml" ] && grep -qx "  dismissed: \[review\]" "$d/real/config.yaml" && [ "$(ls -i "$d/real/config.yaml" | awk "{print \$1}")" != "$ino" ] && [ "$(ls -l "$d/real/config.yaml" | cut -c1-10)" = "-rw-r-----" ]'
+done
 check "AC-4 unknown feature, missing config and Codex print nothing" '[ "$(sug "$S" nope 2>&1)" = "rc=0" ] && [ "$(sug "$TMP/none" review 2>&1)" = "rc=0" ] && [ "$(CODEX_THREAD_ID=t sug "$S" review 2>&1)" = "rc=0" ]'
 
 check "AC-5 session-start sources the shared lib, no copy of installed()" 'grep -q "lib/plugins.sh" "$PLUGIN_DIR/hooks/session-start" && ! grep -q "^installed()" "$PLUGIN_DIR/hooks/session-start"'
