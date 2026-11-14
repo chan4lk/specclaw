@@ -75,8 +75,11 @@ def main(argv):
             c = rec["counts"]
             print(f"round {rec['round']} ({'final, ' if rec['final'] else ''}{rec['model']}): {rec['status']} — "
                   f"{c['blocker']}/{c['major']}/{c['minor']} b/M/m, head {rec['head'][:10]}")
+            proof = rec.get("fix_proof")
+            if proof:
+                print(f"  fix-proof ({proof.get('mode', 'block')}): {rc.proof_note(proof) or 'proven: ' + proof['reason']}")
             for f in rec["findings"]:
-                tag = " (pre-existing)" if f.get("pre_existing") else ""
+                tag = " (pre-existing)" if f.get("pre_existing") else f" (carried: {f['carried']})" if f.get("carried") else ""
                 print(f"  {f['severity']}{tag} [{f.get('rule','')}] {f['file']}:{f['line']} {f.get('message','')}")
             if rec.get("error"):
                 print(f"  NOT RUN: {rec['error']}", file=sys.stderr)

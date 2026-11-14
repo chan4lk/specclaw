@@ -164,8 +164,8 @@ assert "off by one" in r[2]["result"]["content"][0]["text"] and r[2]["result"]["
 PY'
 
 # AC-13: learn is dry-run by default; --apply writes; --import needs --apply.
-mkdir -p .specclaw/changes/002-other
-out_json "$MAJOR"; "$SR" run --change 002-other >/dev/null   # the same lesson in a second change → a learn candidate
+mkdir -p .specclaw/changes/002-other .specclaw/changes/003-third
+out_json "$MAJOR"; "$SR" run --change 002-other >/dev/null; "$SR" run --change 003-third >/dev/null   # the same lesson in 3 changes → a learn candidate (061)
 "$SR" learn >/dev/null
 check "AC-13 learn dry-run writes nothing" '[ ! -f .specclaw/review/rules/learned.md ]'
 fp="$("$SR" learn | sed -nE 's/^- fp ([0-9a-f]+).*/\1/p' | head -1)"
@@ -310,6 +310,160 @@ PY'
 check "AC-25 severity flagged; suggested block names governance but not ADRs; nothing written" 'grep -q "defines severity" <<<"$disc" && grep -q "\"CLAUDE.md\"" <<<"$disc" && ! grep -q "\"docs/adr" <<<"$disc" && [ "$(git status --porcelain | wc -l)" = "$before" ]'
 printf 'presets: []\ngit:\n  base_branch: main\nreview:\n  governance_budget: 10\n' > .specclaw/config.yaml
 check "AC-26 over budget warns; --json is valid JSON" '"$SR" discover | grep -q WARNING && "$SR" discover --json | python3 -c "import json,sys; d=json.load(sys.stdin); assert d[\"over_budget\"] is True"'
+
+# 061 AC-3..AC-6: fix proof. The previous round's majors stay open unless the tests the fix added or changed
+# fail on the pre-fix commit and pass on HEAD, each run in a clean worktree.
+fpround() {  # $1 repo, $2 test_command ('' for none), $3 review.fix_proof (default block); leaves round 1 open on MAJOR at H1
+  mkrepo "$1"
+  printf '  fix_proof: %s\n' "${3:-block}" >> .specclaw/config.yaml
+  [ -n "$2" ] && printf '  test_command: "%s"\n' "$2" >> .specclaw/config.yaml
+  git commit -qam cfg
+  out_json "$MAJOR"; "$SR" run --change "$CH" >/dev/null; H1="$(git rev-parse HEAD)"
+}
+fix() { printf 'def helper_fn(a):\n    return a + 2\n' > a.py; git add -A; git commit -qm "fix"; }
+proof() { field "$RD/round-$1.json" "d.get(\"fix_proof\", {}).get(\"$2\")"; }
+carried() { field "$RD/round-$1.json" "sum(1 for f in d[\"findings\"] if f.get(\"carried\"))"; }
+
+fpround "$TMP/fp1" ""
+fix; out_json '[]'; out="$("$SR" run --change "$CH" --since "$H1")"; rc=$?
+check "AC-3 no test_command: not proven, the major is carried, exit 1" '[ "$rc" = 1 ] && [ "$(proof 2 status)" = not_proven ] && proof 2 reason | grep -q test_command && [ "$(carried 2)" = 1 ] && field "$RD/round-2.json" "d[\"findings\"][0][\"carried\"]" | grep -q "^fix not proven: no review.test_command" && grep -q "fix-proof (block): not proven: " <<<"$out"'
+
+fpround "$TMP/fp2" "sh {files}"
+mkdir -p tests && echo 'grep -q "a + 2" a.py' > tests/check_fix.sh && fix
+out_json '[]'; "$SR" run --change "$CH" --since "$H1" >/dev/null; rc=$?
+check "AC-4 a test that fails on the pre-fix commit and passes on HEAD proves the fix; the round is clean" '[ "$rc" = 0 ] && [ "$(proof 2 status)" = proven ] && [ "$(proof 2 base)" = "$H1" ] && [ "$(carried 2)" = 0 ] && [ -z "$(git worktree list | sed 1d)" ]'
+
+fpround "$TMP/fp7" ""
+out_json '[{"severity":"major","rule":"B1","file":"a.py","line":2,"message":"off by one","scenario":"s","in_delta":true},{"severity":"major","rule":"B6","file":"b.py","line":2,"message":"unchecked call","scenario":"s","in_delta":true}]'
+"$SR" run --change "$CH" >/dev/null; H2="$(git rev-parse HEAD)"
+fix; out_json '[{"severity":"major","rule":"B6","file":"b.py","line":2,"message":"unchecked call","scenario":"s","in_delta":true}]'
+"$SR" run --change "$CH" --since "$H2" >/dev/null; rc=$?
+check "redesign: block, not proven re-opens every major the reviewer closed; a re-reported one is not doubled" '[ "$rc" != 0 ] && [ "$(field "$RD/round-3.json" "len(d[\"findings\"])")" = 2 ] && [ "$(field "$RD/round-3.json" "\",\".join(f[\"file\"] for f in d[\"findings\"] if f.get(\"carried\", \"\").startswith(\"fix not proven: \"))")" = a.py ]'
+
+fpround "$TMP/fp3" "sh {files}"
+mkdir -p tests && echo 'exit 0' > tests/check_fix.sh && fix
+out_json '[]'; "$SR" run --change "$CH" --since "$H1" >/dev/null; rc=$?
+check "AC-5 a test that already passes on the pre-fix commit proves nothing" '[ "$rc" = 1 ] && proof 2 reason | grep -q "pass on the pre-fix commit" && [ "$(carried 2)" = 1 ]'
+echo 'exit 1' > tests/check_fix.sh && git commit -qam "test fails" && H2="$(git rev-parse HEAD)"
+"$SR" run --change "$CH" --since "$H2" >/dev/null; rc=$?
+check "AC-5 a test that fails on HEAD is not proven (and the pre-fix commit is still H1)" '[ "$rc" != 0 ] && proof 3 reason | grep -q "fail on HEAD" && [ "$(proof 3 base)" = "$H1" ]'
+fpround "$TMP/fp4" "sh {files}"
+fix; out_json '[]'; "$SR" run --change "$CH" --since "$H1" >/dev/null; rc=$?
+check "AC-5 no added or changed test file is not proven" '[ "$rc" = 1 ] && proof 2 reason | grep -q "no test file"'
+
+H2="$(git rev-parse HEAD)"
+mkdir -p tests && echo 'grep -q "a + 2" a.py' > tests/check_fix.sh && git add -A && git commit -qm "test"
+"$SR" run --change "$CH" --since "$H2" >/dev/null; rc=$?
+check "AC-6 a test added a round later is checked against the first pre-fix commit" '[ "$rc" = 0 ] && [ "$(proof 3 status)" = proven ] && [ "$(proof 3 base)" = "$H1" ]'
+fpround "$TMP/fp5" "sh {files}"
+fix; out_json '[]'; "$SR" run --change "$CH" --since "$H1" >/dev/null
+"$SR" run --change "$CH" --final >/dev/null; rc=$?
+check "AC-6 a final pass right after a not-proven round carries the findings; verdict not OK" '[ "$rc" != 0 ] && [ "$(carried 3)" = 1 ] && ! "$SR" verdict --change "$CH" >/dev/null'
+fpround "$TMP/fp6" ""
+out_json '[]'; "$SR" run --change "$CH" >/dev/null; rc=$?
+check "AC-6 a round without --since after an open round runs no fix proof" '[ "$rc" = 0 ] && [ "$(proof 2 status)" = None ]'
+
+fpround "$TMP/fp9" "sh {files}"
+mkdir -p tests && printf '# shared setup line %s\n' 1 2 3 4 5 6 7 8 > tests/check_a.sh && echo 'grep -q "a + 2" a.py' >> tests/check_a.sh && fix
+out_json "$MAJOR"; "$SR" run --change "$CH" --since "$H1" >/dev/null; H2="$(git rev-parse HEAD)"
+git mv tests/check_a.sh tests/check_b.sh && sed -i.bak 's/a + 2/a + 3/' tests/check_b.sh && rm tests/check_b.sh.bak
+printf 'def helper_fn(a):\n    return a + 3\n' > a.py && git add -A && git commit -qm "move test"
+out_json '[]'; "$SR" run --change "$CH" --since "$H2" >/dev/null
+check "final-pass fix: a test the fix renamed and edited is collected for the proof" '[ "$(proof 2 status)" = proven ] && [ "$(proof 3 status)" = proven ] && proof 3 tests | grep -q check_b.sh'
+
+# 061 hand-over: a finding whose file is gone at HEAD (renamed or deleted) is carried in every later round,
+# in warn and block: the reviewer cannot re-report it on the old path, so silence would close it.
+for mode in block warn; do for kind in rename rename-edit delete; do
+  fpround "$TMP/gone-$mode-$kind" "sh {files}" "$mode"
+  mkdir -p tests && echo 'grep -q "a + 2" a.py' > tests/check_fix.sh && fix
+  case $kind in
+    rename) git mv a.py c.py ;;
+    rename-edit) git mv a.py c.py && printf '# moved\n' >> c.py && git add c.py ;;
+    delete) git rm -q a.py ;;
+  esac
+  git commit -qm "$kind"
+  out_json '[]'; "$SR" run --change "$CH" --since "$H1" >/dev/null; rc=$?
+  H2="$(git rev-parse HEAD)"; echo '# later' >> b.py && git commit -qam later
+  "$SR" run --change "$CH" --since "$H2" >/dev/null; rc3=$?
+  check "fix proof $mode: $kind of the finding's file carries it in two later rounds (file renamed or deleted)" '[ "$rc" = 1 ] && [ "$rc3" != 0 ] && [ "$(field "$RD/round-2.json" "d[\"findings\"][0][\"carried\"]")|$(field "$RD/round-3.json" "\",\".join(f[\"carried\"] for f in d[\"findings\"])")" = "file renamed or deleted|file renamed or deleted" ]'
+done; done
+
+# review.fix_proof: warn (default) | block | off. Unknown values are refused.
+fpround "$TMP/fpw1" "" warn
+fix; out_json '[]'; out="$("$SR" run --change "$CH" --since "$H1")"; rc=$?
+v="$("$SR" verdict --change "$CH")"
+check "fix_proof warn, no test_command: the finding closes, and not proven is on the round, the CLI and the verdict" '[ "$rc" = 0 ] && [ "$(carried 2)" = 0 ] && [ "$(proof 2 mode)" = warn ] && proof 2 reason | grep -q test_command && grep -q "fix-proof (warn): not proven: no review.test_command" <<<"$out" && grep -q "fix proof not proven: no review.test_command" <<<"$v"'
+fpround "$TMP/fpw2" "sh {files}" warn
+fix; out_json '[]'
+mcpout="$(python3 -c 'import sys, json; sys.path.insert(0, sys.argv[1]); import server; print(server.call("review_run", {"change": sys.argv[2], "since": sys.argv[3]}))' "$PLUGIN_DIR/mcp" "$CH" "$H1")"
+check "fix_proof warn, test_command set but no test: proof runs, finding closes, review_run names not proven" 'python3 - "$mcpout" <<"PY"
+import json, sys; r = json.loads(sys.argv[1])
+assert r["status"] == "clean", r
+assert r["fix_proof"]["status"] == "not_proven" and "no test file" in r["fix_proof"]["reason"], r
+assert r["fix_proof_note"].startswith("not proven: no test file"), r
+PY'
+fpround "$TMP/fpw3" "" off
+fix; out_json '[]'; out="$("$SR" run --change "$CH" --since "$H1")"; rc=$?
+check "fix_proof off: no proof run, nothing recorded, nothing carried" '[ "$rc" = 0 ] && [ "$(proof 2 status)" = None ] && ! grep -q fix-proof <<<"$out"'
+fpround "$TMP/fpw4" ""
+perl -pi -e 's/fix_proof: block/fix_proof: maybe/' .specclaw/config.yaml && git commit -qam maybe
+fix; out_json '[]'; err="$("$SR" run --change "$CH" --since "$H1" 2>&1)"; rc=$?
+check "fix_proof unknown value: refused with an error, no round written, never read as off" '[ "$rc" = 2 ] && grep -q "review.fix_proof must be one of warn, block, off" <<<"$err" && [ ! -f "$RD/round-2.json" ]'
+mkrepo "$TMP/fpw5"; out_json "$MAJOR"; "$SR" run --change "$CH" >/dev/null; H1="$(git rev-parse HEAD)"
+fix; out_json '[]'; "$SR" run --change "$CH" --since "$H1" >/dev/null; rc=$?
+check "fix_proof unset defaults to warn" '[ "$rc" = 0 ] && [ "$(proof 2 mode)" = warn ]'
+
+# 061 AC-7: promotion threshold — 3 changes by default, review.learn_threshold overrides.
+mkrepo "$TMP/lt"
+out_json "$MAJOR"; for c in "$CH" 002-b; do mkdir -p ".specclaw/changes/$c"; "$SR" run --change "$c" >/dev/null; done
+check "AC-7 a lesson seen in 2 changes is not proposed by default" '"$SR" learn | grep -q "no recurring lessons"'
+printf '  learn_threshold: 2\n' >> .specclaw/config.yaml
+check "AC-7 learn_threshold: 2 proposes it" '"$SR" learn | grep -q "^- fp "'
+git checkout -q -- .specclaw/config.yaml
+mkdir -p .specclaw/changes/003-c; "$SR" run --change 003-c >/dev/null
+check "AC-7 a lesson seen in 3 changes is proposed" '"$SR" learn | grep -q "seen 3x"'
+
+# 061 AC-1/AC-2: recall hook at /specclaw:plan and /specclaw:build.
+RECALL="$PLUGIN_DIR/hooks/recall"
+mkrepo "$TMP/rc"
+mkdir -p .specclaw/changes/010-new .specclaw/changes/archive/009-old src
+printf '# Proposal\nRetry the payment export when the bank queue times out.\n\nFiles: `src/pay/export.py`\n' > .specclaw/changes/010-new/proposal.md
+printf '{"kind":"lesson","at":"t","category":"pattern","priority":"high","detail":"own older lesson","action":""}\n{"ev":"start","ts":1}\nnot json\n{"kind":"lesson","at":"t","category":"pattern","priority":"high","detail":"own newest lesson","action":""}\n' > .specclaw/changes/010-new/timeline.jsonl
+printf '{"kind":"lesson","at":"t","category":"pattern","priority":"low","detail":"bank queue export needs a timeout","action":""}\n{"kind":"lesson","at":"t","category":"pattern","priority":"low","detail":"unrelated lesson","action":""}\n' > .specclaw/changes/archive/009-old/timeline.jsonl
+python3 - "$PLUGIN_DIR/lib" "$TMP/rc" <<"PY"
+import sys; sys.path.insert(0, sys.argv[1]); import review_core as rc, review_memory as m
+c = rc.Config(sys.argv[2])
+m.put(c.mem_dir, [{"rule": "B3", "file": "src/pay/export.py", "message": "memory lesson for export", "severity": "major"},
+                  {"rule": "B1", "file": "web/ui.ts", "message": "memory lesson elsewhere", "severity": "blocker"}])
+PY
+hook() { printf '%s' "$1" | python3 "$RECALL"; }
+ctx() { hook "$1" | python3 -c 'import json,sys; print(json.load(sys.stdin)["hookSpecificOutput"]["additionalContext"])'; }
+p="$(ctx "{\"prompt\":\"/specclaw:plan 010-new\",\"cwd\":\"$TMP/rc/src\",\"hook_event_name\":\"UserPromptSubmit\"}")"
+check "AC-1 /specclaw:plan: own lessons newest first, then memory for the change's files, capped at 3, as yes/no checks" 'python3 - "$p" <<"PY"
+import sys; t = sys.argv[1]; L = [l for l in t.splitlines() if l.startswith("- ")]
+assert len(L) == 3, t
+assert "own newest lesson" in L[0] and "own older lesson" in L[1] and "memory lesson for export" in L[2], t
+assert all("yes/no" in l for l in L) and "elsewhere" not in t
+PY'
+printf '  recall_k: 5\n' >> .specclaw/config.yaml
+SKILL_EV="{\"tool_name\":\"Skill\",\"tool_input\":{\"skill\":\"specclaw:build\",\"args\":\"010-new\"},\"cwd\":\"$TMP/rc\",\"hook_event_name\":\"PostToolUse\"}"
+s="$(ctx "$SKILL_EV")"
+check "AC-1 a Skill call of specclaw:build recalls too; a similar lesson of another change follows memory" 'grep -q "bank queue export needs a timeout" <<<"$s" && ! grep -q "unrelated lesson" <<<"$s" && hook "$SKILL_EV" | grep -q "\"hookEventName\": \"PostToolUse\""'
+check "AC-1 other prompts and skills print nothing" '[ -z "$(hook "{\"prompt\":\"hello\",\"cwd\":\"$TMP/rc\"}")" ] && [ -z "$(hook "{\"tool_input\":{\"skill\":\"specclaw:verify\",\"args\":\"010-new\"},\"cwd\":\"$TMP/rc\"}")" ] && [ -z "$(hook "not json")" ]'
+u="$(ctx "{\"prompt\":\"/specclaw:build 404-none\",\"cwd\":\"$TMP/rc\",\"hook_event_name\":\"UserPromptSubmit\"}")"; urc=$?
+check "AC-2 a missing change says recall unavailable, exit 0" '[ "$urc" = 0 ] && grep -q "recall unavailable" <<<"$u"'
+mkdir -p .specclaw/changes/012-lean && printf '# Change\nTouches `src/pay/export.py`.\n' > .specclaw/changes/012-lean/change.md
+check "AC-1 a lean change (change.md only) recalls memory for the files it names" 'ctx "{\"prompt\":\"/specclaw:build 012-lean\",\"cwd\":\"$TMP/rc\"}" | grep -q "memory lesson for export"'
+mkdir -p .specclaw/changes/011-empty
+check "AC-2 no lessons is said, not silent" 'ctx "{\"prompt\":\"/specclaw:plan 011-empty\",\"cwd\":\"$TMP/rc\"}" | grep -q "no past lessons"'
+mkdir -p .specclaw/changes/012-locked && mkdir .specclaw/changes/012-locked/timeline.jsonl
+check "final-pass fix: an unreadable timeline says recall unavailable, never no past lessons" 'ctx "{\"prompt\":\"/specclaw:plan 012-locked\",\"cwd\":\"$TMP/rc\"}" | grep -q "recall unavailable"'
+check "AC-8 hooks.json registers recall on UserPromptSubmit and PostToolUse(Skill)" 'python3 - "$PLUGIN_DIR/hooks/hooks.json" <<"PY"
+import json, sys; h = json.load(open(sys.argv[1]))["hooks"]
+assert "hooks/recall" in h["UserPromptSubmit"][0]["hooks"][0]["command"]
+assert [x for x in h["PostToolUse"] if x["matcher"] == "Skill" and "hooks/recall" in x["hooks"][0]["command"]]
+PY'
+check "AC-8 the rulebook carries B11 and B12" '"$SR" rules 2>/dev/null | grep -q "B11 " && "$SR" rules 2>/dev/null | grep -q "B12 "'
 
 # 064 AC-1: verdict --head binds the clean verdict to one exact SHA (no records-only drift).
 mkrepo "$TMP/h1"

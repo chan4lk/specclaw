@@ -38,6 +38,10 @@ GITATTR_LINE = ".specclaw/review-memory/*.jsonl merge=union"
 CLASSES = ("law", "security", "data-loss", "other")
 DEFAULT_BLOCK_ON = ["law", "security", "data-loss"]
 
+# Test files a fix proof runs (review.test_paths replaces them): the common layouts across stacks.
+DEFAULT_TEST_PATHS = ["**/test_*.py", "**/*_test.py", "**/*_test.go", "**/*.test.*", "**/*.spec.*", "**/tests/**",
+                      "**/test/**", "**/__tests__/**", "**/*Tests.cs", "**/*Test.java"]
+
 
 class ReviewError(Exception):
     def __init__(self, msg, code=2):
@@ -670,6 +674,127 @@ def _run_passes(cfg, cls, rec, diff, model, prev, final):
     return raw
 
 
+# ─── fix proof ───────────────────────────────────────────────────────────────
+
+def _proof_due(prev, since, final):
+    """(pre-fix commit, open findings) when this round must prove the last round's fixes, else (None, []).
+
+    A --since round proves the fixes of the round before it; a final pass right after a not-proven
+    round proves them too, so a final pass never clears an unproven fix. Until a round proves them,
+    the pre-fix commit stays the one the findings were first open at.
+    """
+    last = prev[-1] if prev else {}
+    open_ = blocking(last.get("findings", []))
+    proof = last.get("fix_proof") or {}
+    unproven = proof.get("status") == "not_proven"
+    if not open_ or not (since or (final and unproven)):
+        return None, []
+    return (proof.get("base") if unproven else None) or last["head"], open_
+
+
+def _test_argv(cmd, tests):
+    parts = shlex.split(cmd)
+    if "{files}" not in parts:
+        parts.append("{files}")
+    return [x for a in parts for x in (tests if a == "{files}" else [a])]
+
+
+def _run_tests(cfg, sha, tests, cmd):
+    """(exit code, None), or (None, why it could not run): HEAD's tests on `sha`'s source, in a clean worktree."""
+    import tempfile
+    tmp = tempfile.mkdtemp(prefix="specclaw-fix-proof-")
+    wt = os.path.join(tmp, "wt")
+    now = head(cfg.root)
+    try:
+        git(cfg.root, "worktree", "add", "--detach", "--force", wt, sha)
+        if sha != now:
+            git(wt, "checkout", now, "--", *tests)
+        r = subprocess.run(_test_argv(cmd, tests), cwd=wt, capture_output=True, text=True,
+                           timeout=cfg.num("timeout_seconds", 900))
+        return r.returncode, None
+    except ReviewError as e:
+        return None, f"could not check out {sha[:10]}: {e}"
+    except subprocess.TimeoutExpired:
+        return None, f"the tests timed out at {sha[:10]}"
+    except (OSError, ValueError) as e:
+        return None, f"review.test_command did not start: {e}"
+    finally:
+        git(cfg.root, "worktree", "remove", "--force", wt, check=False)
+        shutil.rmtree(tmp, ignore_errors=True)
+        git(cfg.root, "worktree", "prune", check=False)
+
+
+def fix_proof(cfg, base):
+    """Do the tests added or changed since `base` fail there and pass on HEAD? Never a silent pass."""
+    rec = {"base": base, "tests": [], "status": "not_proven"}
+
+    def no(reason):
+        rec["reason"] = reason
+        return rec
+    cmd = str(cfg.get("test_command", "") or "")
+    if not cmd:
+        return no("no review.test_command configured, so no test could prove the fix")
+    try:
+        changed = git(cfg.root, "diff", "--name-only", "--no-renames", "--diff-filter=AM", f"{base}..HEAD").splitlines()
+    except ReviewError as e:
+        return no(f"the pre-fix commit {base[:10]} cannot be read: {e}")
+    pats = cfg.lst("test_paths") or DEFAULT_TEST_PATHS
+    rec["tests"] = [f for f in changed if f.strip() and not is_skip(cfg, f) and any(glob_match(f, p) for p in pats)]
+    if not rec["tests"]:
+        return no(f"no test file added or changed since the pre-fix commit {base[:10]}")
+    # HEAD first: tests that cannot pass here (a broken environment) prove nothing by failing on the base.
+    code, err = _run_tests(cfg, head(cfg.root), rec["tests"], cmd)
+    if err or code != 0:
+        return no(err or f"the changed tests fail on HEAD (exit {code})")
+    code, err = _run_tests(cfg, base, rec["tests"], cmd)
+    if err or code == 0:
+        return no(err or f"the changed tests pass on the pre-fix commit {base[:10]}, so none proves the fix")
+    rec.update(status="proven", reason=f"{len(rec['tests'])} test file(s) fail on {base[:10]} and pass on HEAD")
+    return rec
+
+
+GONE = "file renamed or deleted"
+FIX_PROOF_MODES = ("warn", "block", "off")
+
+
+def fix_proof_mode(cfg):
+    """review.fix_proof: warn (default), block or off. An unknown value is an error, never read as off."""
+    m = str(cfg.get("fix_proof", "warn")).strip()
+    if m not in FIX_PROOF_MODES:
+        raise ReviewError(f"review.fix_proof must be one of {', '.join(FIX_PROOF_MODES)}, not {m!r}")
+    return m
+
+
+def _gone(cfg, f):
+    """Is the finding's file missing at HEAD (renamed or deleted)? Its code may live on under another path."""
+    return subprocess.run(["git", "-C", cfg.root, "cat-file", "-e", f"HEAD:{f.get('file', '')}"],
+                          capture_output=True).returncode != 0
+
+
+def _carry(cfg, open_, proof, mode="block"):
+    """The previous round's blocker/major findings this round re-opens, each with its reason.
+
+    The reviewer decides which findings are fixed: the --since re-review re-reports a finding or does
+    not. The proof is per round, so it never picks findings. A finding whose file is gone at HEAD cannot
+    be re-reported, so it is always kept. In block mode a not-proven round re-opens every finding the
+    reviewer closed; warn only records the note on the proof.
+    """
+    kept = []
+    for f in open_:
+        if _gone(cfg, f):
+            kept.append(dict(f, carried=GONE))
+        elif mode == "block" and proof["status"] != "proven":
+            kept.append(dict(f, carried=f"fix not proven: {proof.get('reason', '')}"))
+    return kept
+
+
+def proof_note(proof):
+    """'not proven: <reason>' for a round whose fix was not proven, else ''."""
+    if not proof or proof.get("status") == "proven":
+        return ""
+    return f"not proven: {proof.get('reason', '')}"
+
+
 def _settle_round(cfg, cdir, change, rec, found, prev, n):
     """Judge the calibrated findings: status, escalation, lesson memory and follow-ups."""
     rec["findings"] = found
@@ -710,15 +835,24 @@ def run_round(cfg, change, since=None, final=False):
     model = cfg.model("final" if final or cls["risky"] else "round")
     rec = {"round": n, "final": final, "since": since, "head": head(cfg.root), "model": model,
            "tier": cls["tier"], "files": cls["files"], "ts_start": int(time.time()), "findings": []}
+    mode = fix_proof_mode(cfg)
+    base, carried = _proof_due(prev, since, final) if mode != "off" else (None, [])
+    if base:
+        rec["fix_proof"] = dict(fix_proof(cfg, base), mode=mode)
+        carried = _carry(cfg, carried, rec["fix_proof"], mode)
     try:
         if cls["tier"] == "skip":
             rec["status"] = "skipped"
+            if carried:
+                _settle_round(cfg, cdir, change, rec, carried, prev, n)
         else:
             diff = diff_text(cfg, cls["files"], since)
             if not diff.strip():
                 raise ReviewError("empty diff for a non-skip change", 3)
             raw = _run_passes(cfg, cls, rec, diff, model, prev, final)
-            _settle_round(cfg, cdir, change, rec, calibrate(cfg, raw), prev, n)
+            found = calibrate(cfg, raw)
+            fps = {f["fp"] for f in found}
+            _settle_round(cfg, cdir, change, rec, found + [f for f in carried if f["fp"] not in fps], prev, n)
     except ReviewError as e:
         if e.code != 3:
             raise
@@ -776,6 +910,10 @@ def verdict(cfg, change):
     c = last.get("counts", {})
     line = (f"Review: {state}{note} — {len(rs)} rounds, final pass {final_txt}, models {rm}/{fm}; "
             f"last round {c.get('blocker',0)}/{c.get('major',0)}/{c.get('minor',0)} b/M/m")
+    proofs = [r["fix_proof"] for r in rs if r.get("fix_proof")]
+    note = proof_note(proofs[-1]) if proofs else ""
+    if note:
+        line += f"; fix proof {note}"
     return (0 if ok else 1), line
 
 
@@ -837,13 +975,15 @@ def stats(cfg):
 # ─── learn ───────────────────────────────────────────────────────────────────
 
 def learn_candidates(cfg):
-    return [e for e in mem.load(cfg.mem_dir) if e.get("status") == "active" and int(e.get("count", 1)) >= 2]
+    """Active lessons seen review.learn_threshold (default 3) times; the review loop counts once per change."""
+    n = cfg.num("learn_threshold", 3)
+    return [e for e in mem.load(cfg.mem_dir) if e.get("status") == "active" and int(e.get("count", 1)) >= n]
 
 
 def learn_propose(cfg):
     cands = learn_candidates(cfg)
     if not cands:
-        return "no recurring lessons (count >= 2) to propose"
+        return f"no recurring lessons (seen {cfg.num('learn_threshold', 3)}+ times) to propose"
     out = [f"{len(cands)} proposed rule(s) for {os.path.relpath(cfg.rules_dir, cfg.root)}/learned.md "
            "(dry-run; apply with `learn --apply <fp>...` after a human approves):", ""]
     for e in cands:

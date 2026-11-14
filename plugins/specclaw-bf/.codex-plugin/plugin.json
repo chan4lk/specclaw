@@ -1,6 +1,6 @@
 {
   "name": "specclaw-bf",
-  "version": "0.9.7",
+  "version": "0.9.8",
   "description": "Brownfield rebuild add-on for specclaw: analyze, clarify, baseline, replay and rebuild a legacy app.",
   "author": {
     "name": "Chandima Ranaweera",
