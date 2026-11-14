@@ -547,10 +547,14 @@ cmd_report() {
 
 # ─── Subcommand: size (change 060) ───────────────────────────────────────────
 
-# Git glob pathspecs never counted as production lines; pr.size_exclude adds more.
-SIZE_EXCLUDE=('.specclaw/**' '**/tests/**' '**/test/**' '**/__tests__/**' '**/*.test.*' '**/*.spec.*'
-  '**/*_test.*' '**/test_*' '**/*.lock' '**/*.lockb' '**/package-lock.json' '**/pnpm-lock.yaml'
-  '**/go.sum' '**/generated/**' '**/*.generated.*' '**/*.min.*')
+# Git glob pathspecs never counted as production lines, matched ignoring case; pr.size_exclude adds more.
+SIZE_EXCLUDE=('.specclaw/**' '**/test/**' '**/tests/**' '**/spec/**' '**/specs/**' '**/__tests__/**'
+  '**/*.tests/**' '**/*.test.*' '**/*.spec.*' '**/*_test.*' '**/*_spec.*' '**/test_*'
+  '**/*.lock' '**/*.lockb' '**/package-lock.json' '**/pnpm-lock.yaml' '**/go.sum'
+  '**/generated/**' '**/*.generated.*' '**/*.min.*')
+# CamelCase test files (FooTest.java, FooTests.cs) match case-sensitively: ignoring case, *test.* would
+# also leave out production files such as latest.ts or contest.py.
+SIZE_EXCLUDE_CASED=('**/*Test.*' '**/*Tests.*')
 
 cmd_size() {
   local specclaw_dir="$1" change_name="$2"
@@ -559,16 +563,19 @@ cmd_size() {
   root="$(cd "${specclaw_dir}/.." && pwd)"
   cap="$(yaml_val "$config" pr.size_cap)"
   cap="${cap:-400}"
-  [[ "$cap" =~ ^[0-9]+$ ]] || die "pr.size_cap must be a whole number, got '${cap}'"
+  # A config error is "could not count" (2), never "over the cap" (1).
+  [[ "$cap" =~ ^[0-9]+$ ]] || { echo "size cap: not counted, pr.size_cap must be a whole number, got '${cap}'"; return 2; }
   [ "$cap" -eq 0 ] && { echo "size cap: off (pr.size_cap: 0)"; return 0; }
   read -ra extra <<<"$(yaml_val "$config" pr.size_exclude)"
-  for glob in "${SIZE_EXCLUDE[@]}" "${extra[@]}"; do specs+=(":(exclude,glob)${glob}"); done
+  for glob in "${SIZE_EXCLUDE[@]}"; do specs+=(":(exclude,glob,icase)${glob}"); done
+  for glob in "${SIZE_EXCLUDE_CASED[@]}" "${extra[@]}"; do specs+=(":(exclude,glob)${glob}"); done
   # shellcheck disable=SC1091  # sourced lib, resolved at runtime
   . "${SCRIPT_DIR}/../lib/base-ref.sh"
   local base_name
   read -r mb base_name <<<"$(base_merge_base "$root")"
   # Exit 2 = not counted, never read as under the cap (verify records it as a FAIL until it can count).
   [ -n "$mb" ] || { echo "size cap: not counted, no base branch to compare with"; return 2; }
+  [ "$mb" != - ] || { echo "size cap: not counted, no merge-base with ${base_name} (a shallow clone?)"; return 2; }
   # One count for tracked and untracked files alike: a throwaway index marks untracked files
   # intent-to-add, so numstat counts them as new files (binaries as "-", skipped; a last line with
   # no newline counted), and the real index is never touched.

@@ -81,5 +81,36 @@ printf '\000\001\n\n\n\n\n\n\n\n\n\n\n\n' > "$d/src/blob.bin"; printf 'a\nb' > "
 check "an untracked binary is skipped and a no-newline last line counts" "$d" 0 "size cap: 2 production lines (cap 10)"
 git -C "$d" status --porcelain | grep -q '^??' && echo "PASS: the real index is untouched" || { fail=1; echo "FAIL: the real index was changed"; }
 
+# Test layouts are left out whatever their case; CamelCase test files are matched by their capital T,
+# so production files that merely end in "test" (latest.ts, contest.py) still count.
+while IFS='|' read -r path counted; do
+  d="$(repo "x$RANDOM" '  size_cap: 100')"
+  mkdir -p "$d/$(dirname "$path")"; echo x > "$d/$path"
+  check "$path is $([ "$counted" = 1 ] && echo counted || echo 'left out')" "$d" 0 "size cap: $counted production lines (cap 100)"
+done <<'ROWS'
+spec/models/user_spec.rb|0
+Spec/a.rb|0
+specs/a.ts|0
+app/user_spec.rb|0
+src/a.spec.ts|0
+src/A.SPEC.ts|0
+src/FooTest.java|0
+src/FooTests.cs|0
+Foo.Tests/Bar.cs|0
+test/a.py|0
+Tests/a.py|0
+tests/a.py|0
+src/a.test.ts|0
+src/latest.ts|1
+src/contest.py|1
+src/inspect.ts|1
+ROWS
+
+d="$(repo unrelated '  size_cap: 10')"; git -C "$d" checkout -q --orphan lone && git -C "$d" commit -qm lone
+check "a base with no merge-base names that cause (exit 2)" "$d" 2 "no merge-base with main"
+
+d="$(repo badcap '  size_cap: lots')"
+check "a malformed pr.size_cap is not counted (exit 2), never read as over the cap" "$d" 2 "pr.size_cap must be a whole number"
+
 (( fail == 0 )) && echo "R060 AC-4 the size cap counts production lines and honours the waiver"
 exit "$fail"

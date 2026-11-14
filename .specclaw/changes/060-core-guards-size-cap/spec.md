@@ -15,16 +15,19 @@
   since the merge-base with the base branch (committed, uncommitted or untracked under `.specclaw/changes/<name>/`)
   whose tasks are all done (`specclaw-parse-tasks --count`: done + deferred = total > 0), it names each missing step:
   - the verify verdict is missing or not PASS (`state.json` `phases.verify`);
-  - code outside `.specclaw/` was committed after the verify verdict (it is not for HEAD);
+  - code outside `.specclaw/` was committed after the verify verdict, or the working tree has uncommitted or
+    untracked changes outside `.specclaw/` (it is not for HEAD); a verdict with no time is held too;
   - when `specclaw-review` is on PATH, `specclaw-review verdict --change <name>` exits non-zero.
   It prints them on stderr and exits 2. It exits 0 when nothing is missing, when the input has
-  `"stop_hook_active": true`, when there is no `.specclaw/config.yaml`, and on any internal error.
+  `"stop_hook_active": true`, when there is no `.specclaw/config.yaml`, and on any internal error, which it names in a `systemMessage`. A change it cannot check goes only through
+  `skip(change, reason)`, which always names the change and the reason to the user and still exits 0.
   Without a resolvable base it checks every active change (never fewer).
 - **FR-3 (registration):** Claude Code registers the done guard from `hooks/mod.json` (the file only the Claude
   manifest names). `hooks/hooks.json`, which Codex reads, stays unchanged: nothing in the repo shows Codex accepts
   a `Stop` command hook (change 048 proved only `SessionStart` and the `description`/`hooks` keys).
 - **FR-4 (size cap):** `specclaw-verify size <specclaw_dir> <change>` counts production lines (added + deleted)
-  between the merge-base with the base branch and the working tree, plus untracked files. It leaves out tests,
+  between the merge-base with the base branch and the working tree, plus untracked files. It leaves out tests (ignoring case: `test/`, `tests/`, `spec/`, `specs/`, `*.spec.*`, `*_spec.*`,
+  `*.test.*`, `*_test.*`; and CamelCase `*Test.*`, `*Tests.*` by their capital T),
   `.specclaw/`, lockfiles and generated files, plus any git glob pathspecs in `pr.size_exclude` (space-separated).
   Over `pr.size_cap` (default 400; `0` = off) it exits 1, unless the change's `proposal.md` has a
   `Size waiver: <reason>` line; then it exits 0 naming the waiver. Over half the cap it prints a

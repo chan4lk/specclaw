@@ -94,8 +94,38 @@ check "no python3 is named, never read as a verdict" "$d" 2 "python3: command no
 d="$(repo noconfig)"; change "$d" 002-x "$DONE"; rm "$d/.specclaw/config.yaml"
 check "no .specclaw/config.yaml exits 0" "$d" 0 ""
 
+# skip() is the only way a change goes unchecked, and it always tells the user (systemMessage, exit 0).
+says() { # says <label> <repo> <want-substring of systemMessage>
+  local out rc
+  out="$(cd "$2" && printf '{}' | PATH="$BASE_PATH" "$GUARD" 2>/dev/null)"; rc=$?
+  if [ "$rc" -eq 0 ] && python3 -c 'import json,sys; m=json.loads(sys.argv[1])["systemMessage"]; assert sys.argv[2] in m, m' "$out" "$3" 2>/dev/null; then
+    echo "PASS: $1"
+  else
+    fail=1; echo "FAIL: $1 (exit $rc): $out"
+  fi
+}
 d="$(repo broken)"; change "$d" 002-x "$DONE"; chmod 000 "$d/.specclaw/changes/002-x/tasks.md"
-check "an unreadable tasks file is skipped, exit 0" "$d" 0 ""
+says "an unreadable tasks file is skipped by name, and the user is told" "$d" "the done guard skipped 002-x: its tasks file could not be counted ("
+change "$d" 003-y "$DONE"
+check "a skip rides along on stderr when another change is held" "$d" 2 "the done guard skipped 002-x: its tasks file could not be counted"
+
+d="$(repo noat)"; change "$d" 002-x "$DONE" passed PASS
+python3 - "$d/.specclaw/changes/002-x/state.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1])); del d["phases"]["verify"]["at"]; json.dump(d, open(sys.argv[1], "w"))
+PY
+check "a PASS with no time cannot be tied to HEAD and is held" "$d" 2 "its verify verdict has no time"
+
+# Verify for HEAD also goes stale on uncommitted or untracked work outside .specclaw/.
+for dirt in modified untracked; do
+  d="$(repo "dirty-$dirt")"; change "$d" 002-x "$DONE" passed PASS
+  if [ "$dirt" = modified ]; then echo b > "$d/src/a.ts"; else echo n > "$d/src/new.ts"; fi
+  check "a $dirt file outside .specclaw/ after verify is held" "$d" 2 "uncommitted or untracked changes outside .specclaw/ since its verify"
+done
+
+d="$TMP/nochanges"; mkdir -p "$d/.specclaw"; printf 'git:\n  base_branch: nosuch\n' > "$d/.specclaw/config.yaml"; git -C "$d" init -q
+check "a project with no changes folder yet exits 0 in silence" "$d" 0 ""
+[ -z "$(cd "$d" && printf '{}' | "$GUARD" 2>/dev/null)" ] && echo "PASS: and prints no message" || { fail=1; echo "FAIL: a fresh project printed a message"; }
 
 d="$(repo gitfail)"; change "$d" 002-x "$DONE"; echo garbage > "$d/.git/index"
 out="$(cd "$d" && printf '{}' | PATH="$BASE_PATH" "$GUARD" 2>/dev/null)"; rc=$?

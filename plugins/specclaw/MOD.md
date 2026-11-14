@@ -52,10 +52,10 @@ If the gate itself fails (for example, it cannot read `.specclaw/`), it allows t
 `hooks/done-guard` is a `Stop` command hook, registered in `hooks/mod.json`, so it runs in Claude Code only. For each active change touched on this branch (since the merge-base with the base branch) whose tasks are all done, it names each missing step on stderr and exits 2, which keeps the turn going:
 
 - no verify verdict, or one that is not PASS;
-- code outside `.specclaw/` committed after the verify verdict;
+- code outside `.specclaw/` committed after the verify verdict, or uncommitted or untracked changes outside `.specclaw/` (a verdict with no time cannot be tied to HEAD either);
 - when `specclaw-review` is on PATH, a review verdict that is not clean.
 
-It exits 0 when a Stop is already held by it (`stop_hook_active`), when the project has no `.specclaw/config.yaml`, and on any internal error. An internal error is not silent: the guard prints a `systemMessage` naming it (`specclaw: the done guard did not run (<error>), so nothing was checked.`), which Claude Code shows without blocking the turn. It is not registered in `hooks/hooks.json`: Codex reads that file, and nothing shows that Codex accepts a `Stop` command hook.
+It exits 0 when a Stop is already held by it (`stop_hook_active`), when the project has no `.specclaw/config.yaml`, and on any internal error. An internal error is not silent: the guard prints a `systemMessage` naming it (`specclaw: the done guard did not run (<error>), so nothing was checked.`), which Claude Code shows without blocking the turn. A change the guard cannot check (for example, a tasks file it cannot count) goes through one `skip` function, which always names the change and the reason to the user: in that `systemMessage`, or on stderr next to the held steps when another change is held. It is not registered in `hooks/hooks.json`: Codex reads that file, and nothing shows that Codex accepts a `Stop` command hook.
 
 ## Development
 
