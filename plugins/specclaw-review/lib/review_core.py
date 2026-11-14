@@ -35,6 +35,12 @@ PASS_PROMPTS = {
                "(not just code that looks correct)? Start each message with \"[design] \"."),
 }
 GITATTR_LINE = ".specclaw/review-memory/*.jsonl merge=union"
+CLASSES = ("law", "security", "data-loss", "other")
+DEFAULT_BLOCK_ON = ["law", "security", "data-loss"]
+
+# Test files a fix proof runs (review.test_paths replaces them): the common layouts across stacks.
+DEFAULT_TEST_PATHS = ["**/test_*.py", "**/*_test.py", "**/*_test.go", "**/*.test.*", "**/*.spec.*", "**/tests/**",
+                      "**/test/**", "**/__tests__/**", "**/*Tests.cs", "**/*Test.java"]
 
 
 class ReviewError(Exception):
@@ -142,6 +148,7 @@ class Config:
         self.review = parse_block(text, "review")
         self.top = parse_block(text, None)
         self.git = parse_block(text, "git")
+        self.release_gate = parse_block(text, "release_gate")
 
     def get(self, key, default=None):
         v = self.review.get(key)
@@ -164,6 +171,21 @@ class Config:
 
     def path(self, key, default):
         return os.path.join(self.root, str(self.get(key, default)))
+
+    @property
+    def block_on(self):
+        """release_gate.block_on: the finding classes that block a fast-track round and a release."""
+        v = self.release_gate.get("block_on")
+        v = [_class_token(c).strip("\"'") for c in (v if isinstance(v, list) else [v] if v else []) if str(c).strip()]
+        bad = [c for c in v if c not in CLASSES]
+        if bad:   # a typo would match no finding and silently turn the gate off
+            raise ReviewError(f"release_gate.block_on: unknown class(es) {', '.join(bad)} (known: {', '.join(CLASSES)})")
+        return v or DEFAULT_BLOCK_ON   # empty = the default, as in specclaw-sync; never "block nothing"
+
+    def fast_track(self, change):
+        """review.fast_track: a list of change names, or `all`. Off by default."""
+        ft = [str(x) for x in self.lst("fast_track")]
+        return "all" in ft or change in ft
 
     @property
     def rules_dir(self):
@@ -418,7 +440,8 @@ def rounds(cdir):
 OUTPUT_CONTRACT = """Return ONLY a JSON array, no prose. One object per finding:
 [{"severity":"blocker|major|minor","rule":"<rule id, e.g. B1>","file":"<path>","line":<int>,
   "message":"<the defect and the fix>","scenario":"<concrete input -> wrong result; REQUIRED for blocker/major>",
-  "in_delta":<true if the defect is in lines this diff adds or changes, else false>}]
+  "in_delta":<true if the defect is in lines this diff adds or changes, else false>,
+  "class":"law|security|data-loss|other"}]
 Return [] when there is nothing to report. A blocker/major without a concrete scenario will be downgraded."""
 PROJECT_CONTRACT = OUTPUT_CONTRACT.replace("REQUIRED for blocker/major", "when you can give one").replace(
     " A blocker/major without a concrete scenario will be downgraded.", "")
@@ -542,9 +565,20 @@ def _symbols(f):
     return {t for t in re.findall(r"`([A-Za-z_][\w.]{2,})", f.get("message") or "")}
 
 
+def _class_token(c):
+    return re.sub(r"[\s_]+", "-", str(c or "").strip().lower())
+
+
+def normalise_class(c):
+    c = _class_token(c)
+    return c if c in CLASSES else "other"
+
+
 def calibrate(cfg, findings):
     out = []
     for f in findings:
+        f["unclassified"] = _class_token(f.get("class")) not in CLASSES   # fast track keeps such a blocker blocking
+        f["class"] = normalise_class(f.get("class"))
         f["original_severity"] = f["severity"]
         if f["severity"] in ("blocker", "major") and not project_severity(cfg) and not str(f.get("scenario") or "").strip():
             f["severity"] = "minor"
@@ -581,19 +615,42 @@ def blocking(findings):
     return [f for f in findings if f["severity"] in ("blocker", "major") and not f.get("pre_existing")]
 
 
-def append_follow_ups(cdir, findings, round_no):
-    path = os.path.join(cdir, "follow-ups.md")
+def _append_items(path, header, findings, line):
+    """Append `line(f)` for each finding whose fingerprint is not in the file yet: the one writer of both lists."""
     existing = open(path, encoding="utf-8").read() if os.path.exists(path) else ""
-    new = [f for f in findings if (f["severity"] == "minor" or f.get("pre_existing")) and f"fp:{f['fp']}" not in existing]
+    still_open = "\n".join(ln for ln in existing.splitlines() if not re.match(r"- \[[xX]\]", ln))
+    new = [f for f in findings if f"fp:{f['fp']}" not in still_open]   # a ticked item that recurs is listed again
     if not new:
         return 0
     with open(path, "a", encoding="utf-8") as fh:
         if not existing:
-            fh.write("# Follow-ups\n\nDeferred by the review loop: minors and pre-existing findings.\n\n")
+            fh.write(header)
         for f in new:
-            fh.write(f"- [{f['severity']} {f.get('rule','')}] `{f['file']}:{f['line']}` {f.get('message','')} "
-                     f"(round {round_no}) <!-- fp:{f['fp']} -->\n")
+            # one physical line, or the class marker drifts off the item and the release gate misreads it
+            # an unlabelled blocker/major is `unclassified`, which the release gate blocks on (fail closed, as the round does)
+            cls = "unclassified" if f.get("unclassified") and f["severity"] != "minor" else f.get("class", "other")
+            fh.write(" ".join(line(f).split()) + f" <!-- fp:{f['fp']} class:{cls} -->\n")
     return len(new)
+
+
+def append_follow_ups(cdir, findings, round_no):
+    return _append_items(
+        os.path.join(cdir, "follow-ups.md"),
+        "# Follow-ups\n\nDeferred by the review loop: minors and pre-existing findings.\n\n",
+        [f for f in findings if f["severity"] == "minor" or f.get("pre_existing")],
+        lambda f: f"- [{f['severity']} {f.get('rule','')}] `{f['file']}:{f['line']}` {f.get('message','')} (round {round_no})")
+
+
+def append_debt(cfg, change, findings, round_no):
+    """Fast track (review.fast_track): every finding not fixed now is open debt in .specclaw/debt.md."""
+    return _append_items(
+        os.path.join(cfg.sc, "debt.md"),
+        "# Debt\n\nFindings the fast track deferred (`review.fast_track`). Written by specclaw-review, never by hand. "
+        "Tick an item (`- [x]`) when it is fixed. `specclaw-sync release` blocks on open items whose class is in "
+        "`release_gate.block_on`.\n\n",
+        findings,
+        lambda f: (f"- [ ] [{f['class']} {f['severity']} {f.get('rule','')}] `{f['file']}:{f['line']}` "
+                   f"{f.get('message','')} (change {change}, round {round_no})"))
 
 
 def _run_passes(cfg, cls, rec, diff, model, prev, final):
@@ -617,10 +674,137 @@ def _run_passes(cfg, cls, rec, diff, model, prev, final):
     return raw
 
 
+# ─── fix proof ───────────────────────────────────────────────────────────────
+
+def _proof_due(prev, since, final):
+    """(pre-fix commit, open findings) when this round must prove the last round's fixes, else (None, []).
+
+    A --since round proves the fixes of the round before it; a final pass right after a not-proven
+    round proves them too, so a final pass never clears an unproven fix. Until a round proves them,
+    the pre-fix commit stays the one the findings were first open at.
+    """
+    last = prev[-1] if prev else {}
+    open_ = blocking(last.get("findings", []))
+    proof = last.get("fix_proof") or {}
+    unproven = proof.get("status") == "not_proven"
+    if not open_ or not (since or (final and unproven)):
+        return None, []
+    return (proof.get("base") if unproven else None) or last["head"], open_
+
+
+def _test_argv(cmd, tests):
+    parts = shlex.split(cmd)
+    if "{files}" not in parts:
+        parts.append("{files}")
+    return [x for a in parts for x in (tests if a == "{files}" else [a])]
+
+
+def _run_tests(cfg, sha, tests, cmd):
+    """(exit code, None), or (None, why it could not run): HEAD's tests on `sha`'s source, in a clean worktree."""
+    import tempfile
+    tmp = tempfile.mkdtemp(prefix="specclaw-fix-proof-")
+    wt = os.path.join(tmp, "wt")
+    now = head(cfg.root)
+    try:
+        git(cfg.root, "worktree", "add", "--detach", "--force", wt, sha)
+        if sha != now:
+            git(wt, "checkout", now, "--", *tests)
+        r = subprocess.run(_test_argv(cmd, tests), cwd=wt, capture_output=True, text=True,
+                           timeout=cfg.num("timeout_seconds", 900))
+        return r.returncode, None
+    except ReviewError as e:
+        return None, f"could not check out {sha[:10]}: {e}"
+    except subprocess.TimeoutExpired:
+        return None, f"the tests timed out at {sha[:10]}"
+    except (OSError, ValueError) as e:
+        return None, f"review.test_command did not start: {e}"
+    finally:
+        git(cfg.root, "worktree", "remove", "--force", wt, check=False)
+        shutil.rmtree(tmp, ignore_errors=True)
+        git(cfg.root, "worktree", "prune", check=False)
+
+
+def fix_proof(cfg, base):
+    """Do the tests added or changed since `base` fail there and pass on HEAD? Never a silent pass."""
+    rec = {"base": base, "tests": [], "status": "not_proven"}
+
+    def no(reason):
+        rec["reason"] = reason
+        return rec
+    cmd = str(cfg.get("test_command", "") or "")
+    if not cmd:
+        return no("no review.test_command configured, so no test could prove the fix")
+    try:
+        changed = git(cfg.root, "diff", "--name-only", "--no-renames", "--diff-filter=AM", f"{base}..HEAD").splitlines()
+    except ReviewError as e:
+        return no(f"the pre-fix commit {base[:10]} cannot be read: {e}")
+    pats = cfg.lst("test_paths") or DEFAULT_TEST_PATHS
+    rec["tests"] = [f for f in changed if f.strip() and not is_skip(cfg, f) and any(glob_match(f, p) for p in pats)]
+    if not rec["tests"]:
+        return no(f"no test file added or changed since the pre-fix commit {base[:10]}")
+    # HEAD first: tests that cannot pass here (a broken environment) prove nothing by failing on the base.
+    code, err = _run_tests(cfg, head(cfg.root), rec["tests"], cmd)
+    if err or code != 0:
+        return no(err or f"the changed tests fail on HEAD (exit {code})")
+    code, err = _run_tests(cfg, base, rec["tests"], cmd)
+    if err or code == 0:
+        return no(err or f"the changed tests pass on the pre-fix commit {base[:10]}, so none proves the fix")
+    rec.update(status="proven", reason=f"{len(rec['tests'])} test file(s) fail on {base[:10]} and pass on HEAD")
+    return rec
+
+
+GONE = "file renamed or deleted"
+FIX_PROOF_MODES = ("warn", "block", "off")
+
+
+def fix_proof_mode(cfg):
+    """review.fix_proof: warn (default), block or off. An unknown value is an error, never read as off."""
+    m = str(cfg.get("fix_proof", "warn")).strip()
+    if m not in FIX_PROOF_MODES:
+        raise ReviewError(f"review.fix_proof must be one of {', '.join(FIX_PROOF_MODES)}, not {m!r}")
+    return m
+
+
+def _gone(cfg, f):
+    """Is the finding's file missing at HEAD (renamed or deleted)? Its code may live on under another path."""
+    return subprocess.run(["git", "-C", cfg.root, "cat-file", "-e", f"HEAD:{f.get('file', '')}"],
+                          capture_output=True).returncode != 0
+
+
+def _carry(cfg, open_, proof, mode="block"):
+    """The previous round's blocker/major findings this round re-opens, each with its reason.
+
+    The reviewer decides which findings are fixed: the --since re-review re-reports a finding or does
+    not. The proof is per round, so it never picks findings. A finding whose file is gone at HEAD cannot
+    be re-reported, so it is always kept. In block mode a not-proven round re-opens every finding the
+    reviewer closed; warn only records the note on the proof.
+    """
+    kept = []
+    for f in open_:
+        if _gone(cfg, f):
+            kept.append(dict(f, carried=GONE))
+        elif mode == "block" and proof["status"] != "proven":
+            kept.append(dict(f, carried=f"fix not proven: {proof.get('reason', '')}"))
+    return kept
+
+
+def proof_note(proof):
+    """'not proven: <reason>' for a round whose fix was not proven, else ''."""
+    if not proof or proof.get("status") == "proven":
+        return ""
+    return f"not proven: {proof.get('reason', '')}"
+
+
 def _settle_round(cfg, cdir, change, rec, found, prev, n):
     """Judge the calibrated findings: status, escalation, lesson memory and follow-ups."""
     rec["findings"] = found
-    block = blocking(found)
+    fast = cfg.fast_track(change)
+    if fast:   # only gate-class blockers are fixed now; the rest is debt
+        gate = cfg.block_on
+        block = [f for f in found if f["severity"] == "blocker" and not f.get("pre_existing")
+                 and (f["class"] in gate or f.get("unclassified"))]
+    else:
+        block = blocking(found)
     seen = {}
     for r in prev:
         for f in blocking(r.get("findings", [])):
@@ -631,7 +815,10 @@ def _settle_round(cfg, cdir, change, rec, found, prev, n):
     # a lesson counts once per change: a finding still open next round is not a recurrence
     known = {g.get("fp") for r in prev for g in r.get("findings", [])}
     mem.put(cfg.mem_dir, [dict(f, lesson=f.get("message")) for f in block if f["fp"] not in known], change)
-    append_follow_ups(cdir, found, n)
+    if fast:
+        append_debt(cfg, change, [f for f in found if f not in block], n)
+    else:
+        append_follow_ups(cdir, found, n)
 
 
 def run_round(cfg, change, since=None, final=False):
@@ -639,21 +826,33 @@ def run_round(cfg, change, since=None, final=False):
     ensure(cfg)
     prev = rounds(cdir)
     n = len(prev) + 1
+    final = final or cfg.fast_track(change)   # fast track: the one round is the final pass
+    if cfg.fast_track(change):
+        cfg.block_on   # a misspelt gate refuses before any model call is spent
     if final:
         since = None
     cls = classify(cfg, since)
     model = cfg.model("final" if final or cls["risky"] else "round")
     rec = {"round": n, "final": final, "since": since, "head": head(cfg.root), "model": model,
            "tier": cls["tier"], "files": cls["files"], "ts_start": int(time.time()), "findings": []}
+    mode = fix_proof_mode(cfg)
+    base, carried = _proof_due(prev, since, final) if mode != "off" else (None, [])
+    if base:
+        rec["fix_proof"] = dict(fix_proof(cfg, base), mode=mode)
+        carried = _carry(cfg, carried, rec["fix_proof"], mode)
     try:
         if cls["tier"] == "skip":
             rec["status"] = "skipped"
+            if carried:
+                _settle_round(cfg, cdir, change, rec, carried, prev, n)
         else:
             diff = diff_text(cfg, cls["files"], since)
             if not diff.strip():
                 raise ReviewError("empty diff for a non-skip change", 3)
             raw = _run_passes(cfg, cls, rec, diff, model, prev, final)
-            _settle_round(cfg, cdir, change, rec, calibrate(cfg, raw), prev, n)
+            found = calibrate(cfg, raw)
+            fps = {f["fp"] for f in found}
+            _settle_round(cfg, cdir, change, rec, found + [f for f in carried if f["fp"] not in fps], prev, n)
     except ReviewError as e:
         if e.code != 3:
             raise
@@ -672,14 +871,20 @@ EXIT_BY_STATUS = {"clean": 0, "skipped": 0, "open": 1, "not_run": 3, "escalate":
 
 # ─── verdict ─────────────────────────────────────────────────────────────────
 
-def _final_pass_drift(cfg, fsha):
-    """(still_ok, note) for a final pass that is not HEAD: only records-only commits may follow it."""
-    reachable = subprocess.run(["git", "-C", cfg.root, "merge-base", "--is-ancestor", fsha, "HEAD"],
+def _final_pass_drift(cfg, fsha, to="HEAD", allowed=None):
+    """(still_ok, note) for a final pass that is not `to`: only records-only commits may follow it.
+
+    `allowed(path)` decides what counts as a record; the default is `is_skip` (records, docs, generated).
+    """
+    allowed = allowed or (lambda f: is_skip(cfg, f))
+    reachable = subprocess.run(["git", "-C", cfg.root, "merge-base", "--is-ancestor", fsha, to],
                                capture_output=True).returncode == 0
     if not reachable:
-        return False, " (the final pass is not in HEAD's history: rebased or shallow; run --final again)"
-    later = [f for f in git(cfg.root, "diff", "--name-only", f"{fsha}..HEAD").splitlines() if f.strip()]
-    if any(not is_skip(cfg, f) for f in later):
+        return False, f" (the final pass is not in {to[:10]}'s history: rebased or shallow; run --final again)"
+    # --no-renames: a move lists both paths, so code moved into an allowed path is still seen leaving;
+    # -z: raw path bytes, so a non-ASCII record path is not quoted out of its prefix
+    later = [f for f in git(cfg.root, "diff", "--name-only", "--no-renames", "-z", f"{fsha}..{to}").split("\0") if f]
+    if any(not allowed(f) for f in later):
         return False, " (code changed after the final pass)"
     return True, " (+ records-only commits)"
 
@@ -705,7 +910,34 @@ def verdict(cfg, change):
     c = last.get("counts", {})
     line = (f"Review: {state}{note} — {len(rs)} rounds, final pass {final_txt}, models {rm}/{fm}; "
             f"last round {c.get('blocker',0)}/{c.get('major',0)}/{c.get('minor',0)} b/M/m")
+    proofs = [r["fix_proof"] for r in rs if r.get("fix_proof")]
+    note = proof_note(proofs[-1]) if proofs else ""
+    if note:
+        line += f"; fix proof {note}"
     return (0 if ok else 1), line
+
+
+def verdict_at(cfg, change, sha):
+    """(code, line, round_file): 0 only when the verdict is clean AND its final pass ran at exactly `sha`.
+
+    The gate for the clean-loop PR status. `sha` must be a full commit id. Commits between the final pass
+    and `sha` are allowed only when every path they touch is under `.specclaw/` (operator decision, change
+    064): the plain verdict's drift rule, narrowed, because it also lets docs through.
+    """
+    code, line = verdict(cfg, change)
+    cdir = change_dir(cfg, change)
+    rs = rounds(cdir)
+    last = rs[-1] if rs else {}
+    fsha = str(last.get("head"))
+    if code == 0 and not re.fullmatch(r"[0-9a-f]{40}([0-9a-f]{24})?", sha):   # no prefix, never an option
+        code, line = 1, f"{line} (head {sha[:12]!r} is not a full commit id)"
+    elif code == 0 and fsha != sha:
+        ok, note = _final_pass_drift(cfg, fsha, sha, lambda f: f.startswith(".specclaw/"))
+        if not ok:
+            code, line = 1, f"{line} (final pass {fsha[:10]} does not cover head {sha[:10]}:{note.strip(' ()')})"
+    if code:
+        return code, line, None
+    return code, line, os.path.relpath(os.path.join(cdir, "review", f"round-{last['round']}.json"), cfg.root)
 
 
 # ─── stats ───────────────────────────────────────────────────────────────────
@@ -743,13 +975,15 @@ def stats(cfg):
 # ─── learn ───────────────────────────────────────────────────────────────────
 
 def learn_candidates(cfg):
-    return [e for e in mem.load(cfg.mem_dir) if e.get("status") == "active" and int(e.get("count", 1)) >= 2]
+    """Active lessons seen review.learn_threshold (default 3) times; the review loop counts once per change."""
+    n = cfg.num("learn_threshold", 3)
+    return [e for e in mem.load(cfg.mem_dir) if e.get("status") == "active" and int(e.get("count", 1)) >= n]
 
 
 def learn_propose(cfg):
     cands = learn_candidates(cfg)
     if not cands:
-        return "no recurring lessons (count >= 2) to propose"
+        return f"no recurring lessons (seen {cfg.num('learn_threshold', 3)}+ times) to propose"
     out = [f"{len(cands)} proposed rule(s) for {os.path.relpath(cfg.rules_dir, cfg.root)}/learned.md "
            "(dry-run; apply with `learn --apply <fp>...` after a human approves):", ""]
     for e in cands:

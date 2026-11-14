@@ -1,17 +1,44 @@
 # specclaw-review — CI side. Reviews run locally; CI only confirms that the reviewed commit is HEAD.
-# No model call and no token here.
+# No model call and no review token here.
+# When the clean final pass ran at exactly the PR head, it also posts the `specclaw/review-loop` commit
+# status that branch protection can require (any other head gets no status).
 name: review-verdict
 on: pull_request
+permissions:
+  contents: read
+  statuses: write
 jobs:
   verdict:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
+        with: { fetch-depth: 0, ref: "${{ github.event.pull_request.head.sha }}" }   # the PR head, not the merge commit
       - name: specclaw-review verdict
+        id: verdict
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
           set -euo pipefail
-          CHANGE="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" \
+          CHANGE="$(git diff --name-only "origin/${BASE_REF}...HEAD" \
             | sed -nE 's#^\.specclaw/changes/([^/]+)/review/round-[0-9]+\.json$#\1#p' | sort -u | head -1)"
           if [ -z "$CHANGE" ]; then echo "::warning::no local review rounds in this PR"; exit 0; fi
+          echo "change=$CHANGE" >> "$GITHUB_OUTPUT"
           python3 path/to/specclaw-review/bin/specclaw-review verdict --change "$CHANGE" --check-head
+      - name: specclaw/review-loop status (only when the final pass is exactly the PR head)
+        # a fork PR's token cannot write statuses, and its branch is not in this repo
+        if: steps.verdict.outputs.change != '' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHANGE: ${{ steps.verdict.outputs.change }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REF: ${{ github.head_ref }}
+          REPO: ${{ github.repository }}
+          SERVER: ${{ github.server_url }}
+        run: |
+          set -euo pipefail
+          if OUT="$(python3 path/to/specclaw-review/bin/specclaw-review verdict --change "$CHANGE" --head "$HEAD_SHA")"; then
+            gh api "repos/$REPO/statuses/$HEAD_SHA" -f state=success -f context=specclaw/review-loop \
+              -f description=clean -f target_url="$SERVER/$REPO/blob/$HEAD_REF/$(sed -n 2p <<<"$OUT")"
+          else
+            echo "::notice::specclaw/review-loop not posted: $(head -1 <<<"$OUT")"
+          fi

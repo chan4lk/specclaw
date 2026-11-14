@@ -28,6 +28,14 @@ defects left by a fix that patched only the case the reviewer named.
   a sibling change are **majors**. Compare against both parents.
 - **B10 Scope.** Do not ask for features, refactors or renames outside the diff. Anything pre-existing
   and outside the diff is reported with `in_delta: false`.
+- **B11 Unneeded code.** An abstraction, option, wrapper or layer nobody asked for, dead or unreachable
+  code, and a speculative feature "for later" are a **major**: name what to delete. The smallest change that
+  fully solves the task wins.
+- **B12 Error handling.** Check each changed path for: a swallowed failure (an empty `except`/`catch`, an
+  ignored exit code or error return); an external call with no timeout; a race between a check and its use
+  or between two writers; a write that a crash can leave half done (write a temp file, then rename); and a
+  retry or re-run that is not idempotent (it doubles a charge, a row or a message). Each that a concrete
+  scenario shows is a **major**.
 
 ### Severity calibration
 

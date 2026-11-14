@@ -84,7 +84,8 @@ def put(mem_dir, items, change=""):
     return {"added": added, "bumped": bumped, "total": len(entries)}
 
 
-def _score(e, files):
+def _overlap(e, files):
+    """3 a shared file, 2 a shared folder, 1 a shared top folder, 0 none."""
     s = 0
     for f in files:
         d = os.path.dirname(f)
@@ -96,7 +97,11 @@ def _score(e, files):
                 s = max(s, 2)
             elif g.split("/")[0] == top:
                 s = max(s, 1)
-    return s + SEV_WEIGHT.get(e.get("severity"), 0) + math.log2(max(1, int(e.get("count", 1))))
+    return s
+
+
+def _score(e, files):
+    return _overlap(e, files) + SEV_WEIGHT.get(e.get("severity"), 0) + math.log2(max(1, int(e.get("count", 1))))
 
 
 def render(e):
@@ -120,6 +125,12 @@ def query(mem_dir, files, budget=1500, k=10):
         lines.append(line)
         used += cost
     return "\n".join(lines)
+
+
+def closest(mem_dir, files, k):
+    """The k active entries that share a file, folder or top folder with `files`, in memory_query's order."""
+    hits = [e for e in load(mem_dir) if e.get("status") == "active" and _overlap(e, files)]
+    return sorted(hits, key=lambda e: (-_score(e, files), e["fp"]))[:k]
 
 
 def compact(mem_dir, root, decay_days=180, max_entries=2000):

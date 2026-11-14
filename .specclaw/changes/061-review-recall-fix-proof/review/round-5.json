@@ -1,0 +1,72 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 2,
+  "minor": 0
+ },
+ "escalated": [
+  "7eb75e14e8ad",
+  "f49834c4ae63"
+ ],
+ "files": [
+  "plugins/specclaw-review/lib/review_core.py",
+  "plugins/specclaw-review/skills/review/SKILL.md",
+  "plugins/specclaw-review/tests/run-review-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw-review/lib/review_core.py",
+   "fp": "7eb75e14e8ad",
+   "in_delta": true,
+   "line": 722,
+   "message": "The redesign hands the clearing decision to the reviewer, but the `--since` diff does not contain the files of findings the fix never touched, so the reviewer cannot re-report them. In `warn` mode and in a proven `block` round, `_carry` keeps only GONE findings and drops every other open finding, so silence closes them. This brings back the earlier defect that one proven test clears every carried blocker and major. The old test 'a proven fix still carries a finding whose lines it never touched' was deleted and nothing replaces it. Fix: carry each open finding unless the reviewer re-reports it or the fix changed its file and lines (without relying on the touched-hunk logic that treated a rename as a whole-file delete). Add a table-driven test for a proven round with an untouched-file finding in both `block` and `warn`.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "Round 1 reports majors in a.py and b.py. The fix edits only a.py and adds a test that passes. The `--since` diff shows only a.py, the model returns [], and the proof is proven. `_carry` returns [] because neither file is gone, so round 2 exits 0 and the b.py major is closed although b.py was never changed.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-review/lib/review_core.py",
+   "fp": "f49834c4ae63",
+   "in_delta": true,
+   "line": 715,
+   "message": "A finding whose file is missing at HEAD is carried by `_gone` forever, and nothing can clear it. The reviewer cannot re-report an old path, and the current path is never resolved, which the previous round asked for (`git diff -M --name-status`). Deleting or moving the file as the fix for the finding leaves the loop at exit 1 with no round cap, in `warn` mode too, which is meant not to block. Fix: map the old path to its new path with rename detection and have the reviewer re-check the finding there. For a deletion, treat the finding as resolved or surface it as needing a human decision. Add a test where the finding is genuinely fixed by the rename or delete and the loop can end.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "A major is reported in a.py:2. The fix moves the code to c.py and corrects the bug, and the proof is proven. Rounds 2, 3 and 4 each carry the finding as 'file renamed or deleted', so every round exits non-zero and the change can never pass review.",
+   "severity": "major"
+  }
+ ],
+ "fix_proof": {
+  "base": "430401f8aca90bad012b857462efd70e9a72967c",
+  "mode": "block",
+  "reason": "1 test file(s) fail on 430401f8ac and pass on HEAD",
+  "status": "proven",
+  "tests": [
+   "plugins/specclaw-review/tests/run-review-tests.sh"
+  ]
+ },
+ "head": "9fbb98492d828beddb144cf4243106ac747e8918",
+ "impact": [
+  "plugins/specclaw-review/bin/specclaw-review",
+  "plugins/specclaw-review/mcp/server.py"
+ ],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 26247,
+ "round": 5,
+ "since": "430401f8aca90bad012b857462efd70e9a72967c",
+ "status": "escalate",
+ "system_chars": 9639,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794641260,
+ "ts_start": 1794641195
+}

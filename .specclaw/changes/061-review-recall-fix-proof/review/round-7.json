@@ -1,0 +1,115 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 4,
+  "minor": 0
+ },
+ "escalated": [
+  "a9fd689163c9",
+  "08cdf72c9175",
+  "6b39fb09d912"
+ ],
+ "files": [
+  "plugins/specclaw-review/bin/specclaw-review",
+  "plugins/specclaw-review/hooks/hooks.json",
+  "plugins/specclaw-review/hooks/recall",
+  "plugins/specclaw-review/lib/review_core.py",
+  "plugins/specclaw-review/lib/review_memory.py",
+  "plugins/specclaw-review/mcp/server.py",
+  "plugins/specclaw-review/review-rules/base.md",
+  "plugins/specclaw-review/skills/learn/SKILL.md",
+  "plugins/specclaw-review/skills/review/SKILL.md",
+  "plugins/specclaw-review/tests/run-review-tests.sh"
+ ],
+ "final": true,
+ "findings": [
+  {
+   "file": "plugins/specclaw-review/lib/review_core.py",
+   "fp": "a9fd689163c9",
+   "in_delta": true,
+   "line": 731,
+   "message": "Gone findings can never be cleared. `_carry` keeps every finding whose file is missing at HEAD, in every later round, whatever the reviewer says and even when the fix proof is `proven`. Deleting or moving the file is often the correct fix, and B11 asks for exactly that. Such a change can now never reach a clean round or an OK verdict. A renamed file also gets the finding twice: once carried under the old path, and again under a new fp when the reviewer re-reports it on the new path. Fix: resolve the current path with `git diff -M --name-status <base>..HEAD`. A rename re-points the finding to the new path, so the reviewer sees that file and decides. A deletion counts as fixed when the proof is proven, or in warn mode, instead of being carried forever.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "Set fix_proof: block. Round 1 raises a B11 major 'helper.py is dead code, delete it'. The fix runs `git rm helper.py` and adds a test that fails on H1 and passes on HEAD, so the proof is `proven`. Round 2 with --since H1 carries the finding as 'file renamed or deleted' and exits 1. Every later round and the final pass do the same, so verdict never goes OK and the loop escalates instead of closing.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-review/lib/review_core.py",
+   "fp": "08cdf72c9175",
+   "in_delta": true,
+   "line": 639,
+   "message": "A plain round erases block mode. `_proof_due` only proves fixes in a `--since` round, or in a final pass whose *immediately previous* round is `not_proven`. Put one plain `run --change X` (no --since, no --final) after a not-proven round: it runs no proof and carries nothing, so the reviewer's silence closes the findings. The final pass then sees a previous round with no `fix_proof` and also skips the proof. The block guarantee only covers one ordering of commands. Fix: decide whether a proof is due from the latest round that has `fix_proof`/carried findings, not just `prev[-1]`, and require the proof in any non-skip round that follows unproven open findings.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "Set fix_proof: block. Round 1 raises a major at H1. Round 2 `--since H1` is not proven, the major is carried, exit 1. Round 3 `run --change X`: the reviewer returns [], no proof runs, status clean. Round 4 `--final` returns [], no proof runs. `verdict` exits 0 although no test ever proved the fix.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-review/lib/review_core.py",
+   "fp": "6b39fb09d912",
+   "in_delta": true,
+   "line": 685,
+   "message": "`--diff-filter=AM` drops renamed and copied test files. git diff detects renames by default (diff.renames), so a test file that the fix moved and edited shows as status R and is never collected. The round then reads 'no test file added or changed' even though a changed test exists. Fix: add `--no-renames` (so the move shows as delete plus add), or use `--diff-filter=AMRC`. Add test rows for a renamed+edited test and a copied test.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "Round 1 raises a major at H1. The fix does `git mv tests/test_old.py tests/test_export.py` and adds an assertion that fails on H1 and passes on HEAD; the content is similar enough to be detected as a rename. Round 2 --since H1 gives fix_proof not_proven 'no test file added or changed since the pre-fix commit'. In block mode the major is carried and the round exits 1.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-review/hooks/recall",
+   "fp": "893d88fc11e3",
+   "in_delta": true,
+   "line": 27,
+   "message": "`lessons()` and `read()` catch every OSError and treat it as 'file not there'. A timeline.jsonl or change.md/proposal.md that exists but cannot be read is passed over silently, and the hook then reports 'no past lessons for <change>', which reads as a clean recall. That breaks the hook's own contract that 'a recall that fails says so'. Fix: catch only FileNotFoundError as absent. Let any other OSError propagate to main's 'recall unavailable' path, including for other changes' timelines in the glob loop.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B3",
+   "scenario": "Make .specclaw/changes/010-new/timeline.jsonl unreadable (it has lessons, chmod 000, or the path is a directory). Then `/specclaw:plan 010-new` returns 'specclaw-review recall: no past lessons for 010-new.' instead of 'recall unavailable: PermissionError \u2026'.",
+   "severity": "major"
+  }
+ ],
+ "head": "58aa7c3db7c21309ff3fdc6cc2318c782485755f",
+ "impact": [
+  ".github/workflows/ci.yml",
+  ".github/workflows/fleet-image.yml",
+  "plugins/specclaw-bf/bin/specclaw-bf-domain-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-replay",
+  "plugins/specclaw-bf/tests/run-narration-gate-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-byte-identity-tests.sh",
+  "plugins/specclaw-bf/tests/run-quality-tests.sh",
+  "plugins/specclaw-fleet/lib/dispatch.sh",
+  "plugins/specclaw-fleet/lib/feature-run.sh",
+  "plugins/specclaw-fleet/lib/trigger.sh",
+  "plugins/specclaw-fleet/pipelines/dispatch-hosted.yml",
+  "plugins/specclaw-fleet/pipelines/dispatch.yml",
+  "plugins/specclaw-fleet/tests/cases/ac10_pipeline_refs.sh",
+  "plugins/specclaw-fleet/tests/cases/ac10_pipeline_script.sh",
+  "plugins/specclaw-fleet/tests/cases/ac11_config.sh",
+  "plugins/specclaw-fleet/tests/cases/ac15_delivery.sh",
+  "plugins/specclaw-fleet/tests/cases/ac17_trigger.sh",
+  "plugins/specclaw-fleet/tests/cases/ac18_gate_parity.sh",
+  "plugins/specclaw-fleet/tests/cases/ac22_settings.sh"
+ ],
+ "model": "opus",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 56201,
+ "round": 7,
+ "since": null,
+ "status": "escalate",
+ "system_chars": 9632,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794642279,
+ "ts_start": 1794642199
+}

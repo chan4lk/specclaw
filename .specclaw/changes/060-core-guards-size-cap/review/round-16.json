@@ -1,0 +1,56 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 0
+ },
+ "error": "backend output holds no JSON array of findings",
+ "files": [
+  "plugins/specclaw/bin/specclaw-verify",
+  "plugins/specclaw/hooks/core/base.ts",
+  "plugins/specclaw/hooks/done-guard",
+  "plugins/specclaw/lib/base-ref.sh",
+  "plugins/specclaw/references/full/verify.md",
+  "plugins/specclaw/templates/config.yaml",
+  "plugins/specclaw/tests/base.spec.ts",
+  "plugins/specclaw/tests/fixtures/base-branch.tsv",
+  "plugins/specclaw/tests/run-done-guard-tests.sh"
+ ],
+ "final": false,
+ "findings": [],
+ "head": "c25b50cb9f19b8b608c644630268326d64868b0c",
+ "impact": [
+  ".github/ISSUE_TEMPLATE/bug_report.yml",
+  "plugins/specclaw-bf/bin/specclaw-bf-analyze-codebase",
+  "plugins/specclaw-bf/bin/specclaw-bf-baseline",
+  "plugins/specclaw-bf/bin/specclaw-bf-blueprint",
+  "plugins/specclaw-bf/bin/specclaw-bf-bootstrap",
+  "plugins/specclaw-bf/bin/specclaw-bf-clarify",
+  "plugins/specclaw-bf/bin/specclaw-bf-domain-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-e2e-run",
+  "plugins/specclaw-bf/bin/specclaw-bf-prototype",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-render",
+  "plugins/specclaw-bf/bin/specclaw-bf-rebuild-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-replay",
+  "plugins/specclaw-bf/bin/specclaw-bf-status",
+  "plugins/specclaw-bf/bin/specclaw-bf-ui",
+  "plugins/specclaw-bf/lib/gm-paths.jq",
+  "plugins/specclaw-bf/tests/run-bf-collect-tests.sh",
+  "plugins/specclaw-bf/tests/run-bf-e2e-run-tests.sh",
+  "plugins/specclaw-bf/tests/run-item-split-tests.sh",
+  "plugins/specclaw/hooks/branch.ts"
+ ],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "round": 16,
+ "since": "d38ec3d572f8dece5a302bb03282759d47759a5c",
+ "status": "not_run",
+ "system_chars": 8866,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794639930,
+ "ts_start": 1794639907
+}

@@ -39,6 +39,13 @@ Subcommands:
   report        <specclaw_dir> <change_name>
                 Read verify-report.md and output verdict summary.
 
+  size          <specclaw_dir> <change_name>
+                Count production lines changed against the merge-base with the
+                base branch (tests, .specclaw/, lockfiles, generated files and
+                pr.size_exclude globs left out). Exit 1 over pr.size_cap
+                (default 400, 0 = off) unless the proposal has a
+                'Size waiver: <reason>' line; exit 2 when it cannot count.
+
   update-status <specclaw_dir> <change_name> <verdict>
                 Record the verify phase via specclaw-set-phase (state.json +
                 the Verify row in status.md).
@@ -538,6 +545,75 @@ cmd_report() {
   echo "Issues: ${issues}"
 }
 
+# ─── Subcommand: size (change 060) ───────────────────────────────────────────
+
+# Git glob pathspecs never counted as production lines, matched ignoring case. This default is fixed:
+# projects extend it for their own test layouts with pr.size_exclude.
+SIZE_EXCLUDE=('.specclaw/**' '**/test/**' '**/tests/**' '**/spec/**' '**/specs/**' '**/__tests__/**'
+  '**/testdata/**' '**/testfixtures/**' '**/*.*tests/**' '**/*.test/**'
+  '**/*.test.*' '**/*.spec.*' '**/*_test.*' '**/*_spec.*' '**/test_*'
+  '**/*.lock' '**/*.lockb' '**/package-lock.json' '**/pnpm-lock.yaml' '**/go.sum'
+  '**/generated/**' '**/*.generated.*' '**/*.min.*')
+# CamelCase test names (FooTest.java, FooTests.cs, FooSpec.scala, src/integrationTest/) match
+# case-sensitively: ignoring case, *test.* would also leave out production files such as latest.ts.
+SIZE_EXCLUDE_CASED=('**/*Test.*' '**/*Tests.*' '**/*Spec.*' '**/*Test/**' '**/*Tests/**')
+
+cmd_size() {
+  local specclaw_dir="$1" change_name="$2"
+  local config="${specclaw_dir}/config.yaml" change_dir="${specclaw_dir}/changes/${change_name}"
+  local root cap mb lines glob extra=() specs=(.)
+  root="$(cd "${specclaw_dir}/.." && pwd)"
+  [ -d "$change_dir" ] || { echo "size cap: not counted, no change folder ${change_dir}"; return 2; }
+  cap="$(yaml_val "$config" pr.size_cap)"
+  cap="${cap:-400}"
+  # A config error is "could not count" (2), never "over the cap" (1).
+  [[ "$cap" =~ ^[0-9]+$ ]] || { echo "size cap: not counted, pr.size_cap must be a whole number, got '${cap}'"; return 2; }
+  cap=$((10#$cap))   # 08 is eight, not a bad octal
+  [ "$cap" -eq 0 ] && { echo "size cap: off (pr.size_cap: 0)"; return 0; }
+  read -ra extra <<<"$(yaml_val "$config" pr.size_exclude)"
+  for glob in "${SIZE_EXCLUDE[@]}"; do specs+=(":(exclude,glob,icase)${glob}"); done
+  # ${extra[@]+...}: an empty array under set -u aborts bash before 4.4 (stock macOS /bin/bash is 3.2).
+  for glob in "${SIZE_EXCLUDE_CASED[@]}" ${extra[@]+"${extra[@]}"}; do specs+=(":(exclude,glob)${glob}"); done
+  # shellcheck disable=SC1091  # sourced lib, resolved at runtime
+  . "${SCRIPT_DIR}/../lib/base-ref.sh"
+  local base_name
+  read -r mb base_name <<<"$(base_merge_base "$root")"
+  # Exit 2 = not counted, never read as under the cap (verify records it as a FAIL until it can count).
+  [ -n "$mb" ] || { echo "size cap: not counted, no base branch to compare with"; return 2; }
+  [ "$mb" != - ] || { echo "size cap: not counted, no merge-base with ${base_name} (a shallow clone?)"; return 2; }
+  # One count for tracked and untracked files alike: a throwaway index marks untracked files
+  # intent-to-add, so numstat counts them as new files (binaries as "-", skipped; a last line with
+  # no newline counted), and the real index is never touched.
+  local numstat index
+  index="$(mktemp)"
+  if ! cp "$(git -C "$root" rev-parse --path-format=absolute --git-path index)" "$index" ||
+     ! GIT_INDEX_FILE="$index" git -C "$root" add -N -- . ||
+     ! numstat="$(GIT_INDEX_FILE="$index" git -C "$root" diff --numstat --no-renames "$mb" -- "${specs[@]}")"; then
+    rm -f "$index"
+    echo "size cap: not counted, git diff against ${mb:0:10} failed"
+    return 2
+  fi
+  rm -f "$index"
+  lines=$(awk -F'\t' '$1 != "-" { n += $1 + $2 } END { print n + 0 }' <<<"$numstat")
+  local against="against ${base_name} @ ${mb:0:10}"
+  if [ "$lines" -gt "$cap" ]; then
+    local waived
+    # Any common spelling: a bullet, bold around the label or the colon, any case. A reason must follow.
+    waived="$(grep -liE '^[[:space:]]*([-*][[:space:]]+)?\**size waiver(\**:|:\**)\**[[:space:]]*[^[:space:]*]' "${change_dir}/proposal.md" "${change_dir}/change.md" 2>/dev/null | head -1 || true)"
+    if [ -n "$waived" ]; then
+      echo "size cap: ${lines} production lines ${against}, over the ${cap}-line cap, with the waiver in ${waived}"
+      return 0
+    fi
+    echo "size cap: ${lines} production lines ${against} is over the ${cap}-line cap. Split the change, or add 'Size waiver: <reason>' to its proposal.md."
+    return 1
+  fi
+  if [ "$lines" -gt $((cap / 2)) ]; then
+    echo "size cap: ${lines} production lines ${against} (cap ${cap}); over half the cap, consider splitting."
+  else
+    echo "size cap: ${lines} production lines ${against} (cap ${cap})"
+  fi
+}
+
 # ─── Subcommand: update-status ───────────────────────────────────────────────
 
 cmd_update_status() {
@@ -598,6 +674,10 @@ case "${1:-}" in
   report)
     [ $# -ge 3 ] || die "Usage: specclaw-verify report <specclaw_dir> <change_name>"
     cmd_report "$2" "$3"
+    ;;
+  size)
+    [ $# -ge 3 ] || die "Usage: specclaw-verify size <specclaw_dir> <change_name>"
+    cmd_size "$2" "$3"
     ;;
   update-status)
     [ $# -ge 4 ] || die "Usage: specclaw-verify update-status <specclaw_dir> <change_name> <verdict>"

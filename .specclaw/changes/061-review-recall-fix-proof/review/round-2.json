@@ -1,0 +1,87 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 1
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw-review/bin/specclaw-review",
+  "plugins/specclaw-review/hooks/recall",
+  "plugins/specclaw-review/lib/review_core.py",
+  "plugins/specclaw-review/tests/run-review-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw-review/lib/review_core.py",
+   "fp": "55bfc4c258fe",
+   "in_delta": true,
+   "line": 737,
+   "message": "This is still an instance fix. The proof is a per-round yes/no, and a finding is now cleared whenever its file appears in `git diff --name-only base..HEAD`. A touched file does not mean that finding was fixed, and the proven test is still not tied to any finding. Several findings in one file, or an unrelated edit to that file, clear every finding there. A rename also breaks the check: the finding's old path is not in `touched`, so it is carried with the wrong reason. Carry a finding unless the fix touched its location (the finding's line range or hunk), or unless a proven test is explicitly tied to it. At minimum, record which findings the proof covers. Add test rows for: two findings in one touched file with only one fixed, an unrelated edit to the finding's file, and a renamed file.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "Round 1 reports two majors in a.py: B1 at line 2 and B6 at line 10. The fix edits only line 2 of a.py and adds a test that passes. The proof is 'proven' and a.py is in `touched`, so both findings are dropped and the round exits 0. The B6 finding at line 10 was never fixed and is lost.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-review/lib/review_core.py",
+   "fp": "b8979d3cb765",
+   "in_delta": true,
+   "line": 736,
+   "message": "`git(..., check=False)` returns an empty string when the diff fails (bad base ref, git error). `touched` is then empty, so every finding is carried with the reason 'its file did not change since the pre-fix commit'. That is a conservative outcome, but the reason is false: the check did not run. Detect a failed diff and label the carry 'could not compare changed files'.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B3",
+   "scenario": "`git diff --name-only` exits non-zero (for example the base object is pruned). The round output says each finding's file 'did not change', although nothing was compared.",
+   "severity": "minor"
+  }
+ ],
+ "fix_proof": {
+  "base": "3bb6c575172fc01a4435c6a98a09dddf622c514f",
+  "reason": "1 test file(s) fail on 3bb6c57517 and pass on HEAD",
+  "status": "proven",
+  "tests": [
+   "plugins/specclaw-review/tests/run-review-tests.sh"
+  ]
+ },
+ "head": "9fe0a904236858c1fa256dfee0b31788466b27be",
+ "impact": [
+  ".github/workflows/ci.yml",
+  ".github/workflows/fleet-image.yml",
+  "plugins/specclaw-bf/bin/specclaw-bf-domain-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-replay",
+  "plugins/specclaw-bf/tests/run-narration-gate-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-byte-identity-tests.sh",
+  "plugins/specclaw-bf/tests/run-quality-tests.sh",
+  "plugins/specclaw-fleet/lib/dispatch.sh",
+  "plugins/specclaw-fleet/lib/feature-run.sh",
+  "plugins/specclaw-fleet/lib/trigger.sh",
+  "plugins/specclaw-fleet/pipelines/dispatch-hosted.yml",
+  "plugins/specclaw-fleet/pipelines/dispatch.yml",
+  "plugins/specclaw-fleet/tests/cases/ac10_pipeline_refs.sh",
+  "plugins/specclaw-fleet/tests/cases/ac10_pipeline_script.sh",
+  "plugins/specclaw-fleet/tests/cases/ac11_config.sh",
+  "plugins/specclaw-fleet/tests/cases/ac15_delivery.sh",
+  "plugins/specclaw-fleet/tests/cases/ac17_trigger.sh",
+  "plugins/specclaw-fleet/tests/cases/ac18_gate_parity.sh",
+  "plugins/specclaw-fleet/tests/cases/ac22_settings.sh"
+ ],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 21728,
+ "round": 2,
+ "since": "3bb6c57517",
+ "status": "open",
+ "system_chars": 9638,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794638670,
+ "ts_start": 1794638623
+}

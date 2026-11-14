@@ -248,6 +248,19 @@ automation:
 
 # PR creation settings
 pr:
+  # PR size cap (change 060): `specclaw-verify size` counts production lines added
+  # and deleted against the merge-base with the base branch. Tests (test/, tests/,
+  # spec/, specs/, __tests__/, testdata/ and the usual test file names, any case,
+  # except CamelCase FooTest.*/FooSpec.* which match case-sensitively; the list is
+  # SIZE_EXCLUDE in bin/specclaw-verify), .specclaw/,
+  # lockfiles and generated files are left out, plus the git glob pathspecs in
+  # size_exclude (space-separated, e.g. "docs/** **/*.md"). Over size_cap, verify
+  # FAILs unless the proposal has a `Size waiver: <reason>` line; over half, it
+  # suggests a split; when it cannot count (no base or merge-base, a malformed size_cap, or git fails), it exits 2. 0 turns the cap off.
+  # The default test list is fixed; extend it for your layout (conftest.py, e2e/, ...) with size_exclude.
+  size_cap: 400
+  size_exclude: ""
+
   # Paths that are always fine undeclared — a CHANGELOG, a generated lockfile.
   # This wins over every other rule INCLUDING the junk patterns, so it is the
   # operator's escape hatch when a default misfires. It is not for silencing a
