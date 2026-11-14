@@ -12,7 +12,7 @@
 | Spec | ✅ Done |  |
 | Design | ✅ Done |  |
 | Tasks | ✅ Done |  |
-| Build | ⏳ Pending | |
+| Build | ✅ Done |  |
 | Verify | ⏳ Pending | |
 
 ## Task Progress

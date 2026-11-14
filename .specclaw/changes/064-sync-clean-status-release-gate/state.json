@@ -1,12 +1,13 @@
 {
   "change": "064-sync-clean-status-release-gate",
-  "phase": "tasks",
+  "phase": "build",
   "branch": "",
   "size": "architectural",
   "phases": {
     "proposal": {"status":"approved","at":"2026-11-14T04:47:17Z"},
     "spec": {"status":"done","at":"2026-11-14T04:52:24Z"},
     "design": {"status":"done","at":"2026-11-14T04:52:24Z"},
-    "tasks": {"status":"done","at":"2026-11-14T04:52:24Z"}
+    "tasks": {"status":"done","at":"2026-11-14T04:52:24Z"},
+    "build": {"status":"done","at":"2026-11-14T05:03:30Z"}
   }
 }
