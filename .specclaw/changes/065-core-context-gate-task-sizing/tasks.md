@@ -25,7 +25,7 @@ One Python module and two entry points, then wiring into config, skills and agen
   - Context: 55000
   - Depends: T1
 
-- [ ] `T3` — run-context-gate-tests.sh and CI registration (AC-1..AC-9)
+- [x] `T3` — run-context-gate-tests.sh and CI registration (AC-1..AC-9)
   - Files: plugins/specclaw/tests/run-context-gate-tests.sh, .github/workflows/ci.yml
   - Kind: test
   - Context: 50000
