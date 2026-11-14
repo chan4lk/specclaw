@@ -700,6 +700,37 @@ def fix_proof(cfg, base):
     return rec
 
 
+def _fix_touched(cfg, base, f):
+    """Did base..HEAD change the finding's file within 3 lines of its line (no line: anywhere in the file)?"""
+    out = git(cfg.root, "diff", "-U0", f"{base}..HEAD", "--", f["file"])
+    line = f.get("line") or 0
+    hunks = [(int(m[1]), int(m[2] if m[2] is not None else 1))
+             for m in re.finditer(r"^@@ -(\d+)(?:,(\d+))? ", out, re.M)]
+    return any(not line or start - 3 <= line <= start + max(n, 1) + 3 for start, n in hunks)
+
+
+def _carry(cfg, base, open_, proof):
+    """The open findings this round keeps, each with its reason; records on `proof` the ones it covers.
+
+    The proof is per round, not per finding, so a proven round clears only the findings whose lines the
+    fix changed: a second finding in the same file, or an edit elsewhere in it, is not a fix.
+    """
+    if proof["status"] != "proven":
+        return [dict(f, carried="fix not proven") for f in open_]
+    kept, proof["covers"] = [], []
+    for f in open_:
+        try:
+            hit = _fix_touched(cfg, base, f)
+        except ReviewError as e:
+            kept.append(dict(f, carried=f"could not compare changed lines: {e}"))
+            continue
+        if hit:
+            proof["covers"].append(f["fp"])
+        else:
+            kept.append(dict(f, carried="the fix did not change its lines since the pre-fix commit"))
+    return kept
+
+
 def _settle_round(cfg, cdir, change, rec, found, prev, n):
     """Judge the calibrated findings: status, escalation, lesson memory and follow-ups."""
     rec["findings"] = found
@@ -731,11 +762,7 @@ def run_round(cfg, change, since=None, final=False):
     base, carried = _proof_due(prev, since, final)
     if base:
         rec["fix_proof"] = fix_proof(cfg, base)
-        proven = rec["fix_proof"]["status"] == "proven"
-        # A proof is per round, not per finding: a finding whose file the fix never touched stays open anyway.
-        touched = set(git(cfg.root, "diff", "--name-only", f"{base}..HEAD", check=False).splitlines())
-        carried = [dict(f, carried="its file did not change since the pre-fix commit" if proven else "fix not proven")
-                   for f in carried if not proven or f["file"] not in touched]
+        carried = _carry(cfg, base, carried, rec["fix_proof"])
     try:
         if cls["tier"] == "skip":
             rec["status"] = "skipped"

@@ -26,7 +26,8 @@
   `test_command`, no changed test file, a checkout that fails, tests that pass on the pre-fix commit, tests
   that fail on HEAD, a timeout. The previous round's blocker/major findings are then carried into this round
   (`carried: <reason>`), so the round is `open` (or `escalate`). A proven round still carries a finding whose
-  file did not change since the pre-fix commit: the proof is per round, so it cannot clear a file it never touched. The result is recorded as `fix_proof` in the round
+  lines (±3) the fix did not change, and names the findings it covers: the proof is per round, so it cannot clear
+  lines it never touched. A diff that cannot run carries the finding as `could not compare`. The result is recorded as `fix_proof` in the round
   file, printed by the CLI and returned by `review_run`.
 - **FR-6** A `--final` pass right after a not-proven round runs the same check, so a final pass cannot clear an
   unproven fix.
@@ -43,7 +44,7 @@
 - **AC-2:** A missing change returns `recall unavailable`, exit 0, valid JSON.
 - **AC-3:** A since round with an open major and no `test_command` → `not proven`, the major carried, exit 1.
 - **AC-4:** A test that fails on the pre-fix commit and passes on HEAD → `proven`, a clean round exits 0; a
-  finding in a file the fix never touched is still carried.
+  finding whose lines the fix never touched is still carried.
 - **AC-5:** A test that passes on the pre-fix commit, or fails on HEAD, or no changed test → `not proven`
   with that reason.
 - **AC-6:** After a not-proven round, a later test is checked against the first pre-fix commit; a `--final`

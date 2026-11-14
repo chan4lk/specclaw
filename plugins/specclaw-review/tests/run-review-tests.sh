@@ -336,7 +336,19 @@ out_json '[{"severity":"major","rule":"B1","file":"a.py","line":2,"message":"off
 "$SR" run --change "$CH" >/dev/null; H2="$(git rev-parse HEAD)"
 mkdir -p tests && echo 'grep -q "a + 2" a.py' > tests/check_fix.sh && fix
 out_json '[]'; "$SR" run --change "$CH" --since "$H2" >/dev/null; rc=$?
-check "AC-4 a proven fix still carries a finding whose file it never touched" '[ "$rc" = 1 ] && [ "$(proof 3 status)" = proven ] && [ "$(field "$RD/round-3.json" "\",\".join(f[\"file\"] for f in d[\"findings\"] if f.get(\"carried\"))")" = b.py ]'
+check "AC-4 a proven fix still carries a finding whose lines it never touched" '[ "$rc" = 1 ] && [ "$(proof 3 status)" = proven ] && [ "$(field "$RD/round-3.json" "\",\".join(f[\"file\"] for f in d[\"findings\"] if f.get(\"carried\"))")" = b.py ]'
+
+fpround "$TMP/fp8" "sh {files}"
+out_json '[{"severity":"major","rule":"B1","file":"a.py","line":2,"message":"off by one","scenario":"s","in_delta":true},{"severity":"major","rule":"B6","file":"a.py","line":40,"message":"far away defect","scenario":"s","in_delta":true}]'
+"$SR" run --change "$CH" >/dev/null; H2="$(git rev-parse HEAD)"
+mkdir -p tests && echo 'grep -q "a + 2" a.py' > tests/check_fix.sh && fix
+out_json '[]'; "$SR" run --change "$CH" --since "$H2" >/dev/null; rc=$?
+check "AC-4 two findings in one file, one fixed: only the untouched one is carried; the proof names what it covers" '[ "$rc" = 1 ] && [ "$(field "$RD/round-3.json" "\",\".join(f[\"message\"] for f in d[\"findings\"] if f.get(\"carried\"))")" = "far away defect" ] && [ "$(field "$RD/round-3.json" "len(d[\"fix_proof\"][\"covers\"])")" = 1 ]'
+check "AC-5 a diff that cannot run carries the finding as could-not-compare, never as untouched" 'python3 - "$PLUGIN_DIR/lib" "$TMP/fp8" <<"PY"
+import sys; sys.path.insert(0, sys.argv[1]); import review_core as rc
+k = rc._carry(rc.Config(sys.argv[2]), "0" * 40, [{"file": "a.py", "line": 2, "fp": "x"}], {"status": "proven"})
+assert k[0]["carried"].startswith("could not compare"), k
+PY'
 
 fpround "$TMP/fp3" "sh {files}"
 mkdir -p tests && echo 'exit 0' > tests/check_fix.sh && fix
