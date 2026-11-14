@@ -675,7 +675,7 @@ def _settle_round(cfg, cdir, change, rec, found, prev, n):
     rec["findings"] = found
     fast = cfg.fast_track(change)
     if fast:   # only gate-class blockers are fixed now; the rest is debt
-        gate = cfg.block_on   # read up front: a misspelt gate fails every fast-track round, not only one with a blocker
+        gate = cfg.block_on
         block = [f for f in found if f["severity"] == "blocker" and not f.get("pre_existing")
                  and (f["class"] in gate or f.get("unclassified"))]
     else:
@@ -702,6 +702,8 @@ def run_round(cfg, change, since=None, final=False):
     prev = rounds(cdir)
     n = len(prev) + 1
     final = final or cfg.fast_track(change)   # fast track: the one round is the final pass
+    if cfg.fast_track(change):
+        cfg.block_on   # a misspelt gate refuses before any model call is spent
     if final:
         since = None
     cls = classify(cfg, since)

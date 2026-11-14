@@ -6,7 +6,8 @@ Lists every open item (a `- ` line that is not `- [x]`) in .specclaw/debt.md and
 `class:<c>` in its trailing comment (written by specclaw-review), `other` when absent.
 
 Exit 1 only when a listed item's class is in release_gate.block_on, read from <target>'s
-.specclaw/config.yaml (default: law, security, data-loss). Exit 0 otherwise. Exit 2: usage or git error.
+.specclaw/config.yaml (default: law, security, data-loss), or is `unclassified` (a blocker or major the
+reviewer gave no class: fail closed). Exit 0 otherwise. Exit 2: usage, git error, or an unreadable list.
 """
 import os
 import re
@@ -30,8 +31,11 @@ def git(*args):
 
 
 def show(ref, path):
-    """The file at ref, "" only when it is absent there. A failed read of a present file is an error, never empty."""
-    if git("cat-file", "-e", f"{ref}:{path}")[0] != 0:
+    """The file at ref, "" only when its tree does not list it. A failed read of a listed file is an error, never empty."""
+    code, listed = git("ls-tree", "--name-only", ref, "--", path)   # reads trees only, never the blob
+    if code != 0:
+        raise GateError(f"git ls-tree {ref} -- {path} failed")
+    if not listed.strip():
         return ""
     code, out = git("show", f"{ref}:{path}")
     if code != 0:

@@ -86,5 +86,19 @@ check "AC-6 an unknown ref exits 2" '[ "$rc" = 2 ]'
 rel base; rc=$?
 check "AC-6 a missing argument exits 2" '[ "$rc" = 2 ]'
 
+# A listed list or config whose blob cannot be read is an error (exit 2), never "nothing there".
+i=0
+for path in .specclaw/debt.md .specclaw/changes/001-a/follow-ups.md; do
+  i=$((i + 1))
+  git checkout -q -f security && git checkout -q -b "broken-$i" && echo "- [ ] x <!-- fp:9$i class:other -->" >> "$path" && git commit -qam broken
+  blob="$(git rev-parse "HEAD:$path")"; rm -f ".git/objects/${blob:0:2}/${blob:2}"
+  rel base HEAD; rc=$?
+  check "AC-6 an unreadable listed $path exits 2" '[ "$rc" = 2 ] && grep -q "could not read" "$TMP/out"'
+done
+git checkout -q -f security && git checkout -q -b broken-config && printf 'release_gate:\n  block_on: [law]\n' > .specclaw/config.yaml && git add -A && git commit -qm cfg
+blob="$(git rev-parse HEAD:.specclaw/config.yaml)"; rm -f ".git/objects/${blob:0:2}/${blob:2}"
+rel base HEAD; rc=$?
+check "AC-6 an unreadable listed config.yaml exits 2, not the default gate" '[ "$rc" = 2 ]'
+
 (( FAILS == 0 )) && echo "All release tests passed." || echo "$FAILS failed."
 exit $(( FAILS > 0 ))
