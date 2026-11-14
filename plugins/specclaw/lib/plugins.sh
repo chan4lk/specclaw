@@ -20,6 +20,7 @@ plugin_feature() {
 # the next key; blank and comment lines inside it do not end it. specclaw-suggest --dismiss uses the same rule.
 plugins_dismissed() {
   awk '
+    { sub(/\r$/, "") }
     /^[a-zA-Z_]/ { inblk = ($0 ~ /^plugins:/); inlist = 0; next }
     !inblk { next }
     /^  dismissed:/ { v = $0; sub(/^  dismissed:[[:space:]]*/, "", v); sub(/[[:space:]]*#.*$/, "", v); out = out " " v; inlist = 1; next }

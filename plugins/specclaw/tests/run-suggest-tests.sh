@@ -28,9 +28,10 @@ check "AC-2 installed in the plugin cache prints nothing" '[ "$(sug "$S" fleet)"
 check "AC-2 installed on PATH prints nothing" '[ "$(PATH="$TMP/onpath:/usr/bin:/bin" CLAUDE_PLUGIN_ROOT="$ROOT" "$BIN/specclaw-suggest" "$S" sync; echo "rc=$?")" = "rc=0" ]'
 
 sug "$S" --dismiss review >/dev/null; sug "$S" --dismiss review >/dev/null; sug "$S" --dismiss bf >/dev/null
-check "AC-3 dismissed feature prints nothing, list is idempotent" '[ "$(sug "$S" review)" = "rc=0" ] && grep -qx "  dismissed: \[review, bf\]" "$S/config.yaml" && [ "$(grep -c "^plugins:" "$S/config.yaml")" = 1 ]'
+check "AC-3 dismissed feature prints nothing, list is idempotent" '[ "$(sug "$S" review)" = "rc=0" ] && grep -qE "^  dismissed: \[review, bf\]( |$)" "$S/config.yaml" && [ "$(grep -c "^plugins:" "$S/config.yaml")" = 1 ]'
 mkdir -p "$TMP/bare" && printf 'version: 1\nproject:\n  name: x\n' > "$TMP/bare/config.yaml"
 sug "$TMP/bare" --dismiss sync >/dev/null
+check "AC-3 --dismiss keeps the template's comment on the dismissed line" 'grep -qE "^  dismissed: \[review, bf\][[:space:]]+# any of:" "$S/config.yaml"'
 check "AC-3 --dismiss creates the plugins block" 'grep -qx "plugins:" "$TMP/bare/config.yaml" && grep -qx "  dismissed: \[sync\]" "$TMP/bare/config.yaml" && [ "$(sug "$TMP/bare" sync)" = "rc=0" ]'
 # Block-list variants: each row is a plugins block; review must read as dismissed, and --dismiss bf
 # must leave exactly one inline list ending in bf with no stray items and the sibling key intact.
@@ -39,13 +40,15 @@ while IFS= read -r row; do
   n=$((n + 1)); d="$TMP/blk$n"; mkdir -p "$d"; printf "$row" > "$d/config.yaml"
   check "AC-3 block list row $n: dismissal honoured" '[ "$(sug "$d" review)" = "rc=0" ]'
   sug "$d" --dismiss bf >/dev/null
-  check "AC-3 block list row $n: folded into one inline list" 'grep -qxE "  dismissed: \[(fleet, )?review(, fleet)?, bf\]" "$d/config.yaml" && ! grep -qE "^[[:space:]]+- " "$d/config.yaml" && { ! grep -q "other:" <<<"$row" || grep -qx "  other: 1" "$d/config.yaml"; } && { ! grep -q "next:" <<<"$row" || grep -qx "next: 1" "$d/config.yaml"; }'
+  check "AC-3 block list row $n: folded into one inline list" 'tr -d "\r" < "$d/config.yaml" | grep -qxE "  dismissed: \[(fleet, )?review(, fleet)?, bf\]" && ! grep -qE "^[[:space:]]+- " "$d/config.yaml" && { ! grep -q "other:" <<<"$row" || tr -d "\r" < "$d/config.yaml" | grep -qx "  other: 1"; } && { ! grep -q "next:" <<<"$row" || grep -qx "next: 1" "$d/config.yaml"; }'
 done <<'ROWS'
 plugins:\n  dismissed:\n    - review\n  other: 1\n
 plugins:\n  dismissed:\n    - fleet\n\n    # note\n    - review\n  other: 1\n
 plugins:\n  dismissed:\n    - "review"\n    - 'fleet'\n
 plugins:\n  dismissed:\n    - review  # why\n  other: 1\n
 plugins:\n  dismissed:\n  - review\nnext: 1\n
+plugins:\r\n  dismissed:\r\n    - review\r\n  other: 1\r\n
+plugins:\r\n  dismissed: [review]\r\n
 ROWS
 mkdir -p "$TMP/hb/.specclaw" && printf 'github:\n  sync: true\nplugins:\n  dismissed:\n    - sync\n' > "$TMP/hb/.specclaw/config.yaml"
 hb="$(cd "$TMP/hb" && PATH="/usr/bin:/bin" CLAUDE_PLUGIN_ROOT="$ROOT" bash "$PLUGIN_DIR/hooks/session-start")"

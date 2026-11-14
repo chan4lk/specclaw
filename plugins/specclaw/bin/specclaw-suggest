@@ -44,7 +44,7 @@ if [ "$2" = "--dismiss" ]; then
   cp -p "$target" "$tmp" || fail
   awk -v line="  dismissed: [$list]" '
     /^[a-zA-Z_]/ { if (inblk && !done) { print line; done = 1 } inblk = ($0 ~ /^plugins:/); skip = 0 }
-    inblk && /^  dismissed:/ { if (!done) print line; done = 1; skip = 1; next }
+    inblk && /^  dismissed:/ { c = ""; if (match($0, /[[:space:]]+#.*$/)) c = substr($0, RSTART); if (!done) print line c; done = 1; skip = 1; next }
     skip && /^[[:space:]]+-[[:space:]]/ { next }
     skip && /^[[:space:]]*(#.*)?$/ { print; next }
     { skip = 0; print }
