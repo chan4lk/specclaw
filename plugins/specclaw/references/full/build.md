@@ -72,7 +72,14 @@ Prints one integer — `min(parallel_tasks, memory_budget)`. Use it as the concu
    ```bash
    specclaw-build-context .specclaw <change> <TASK_ID>
    ```
-3. Spawn a coding agent with that payload as the task. Run independent tasks in parallel up to the memory-aware budget from step **b'** (≤ `parallel_tasks`). Calibrate delegation: spawn agents for tasks that are parallel, isolated, or independent workstreams; for a trivial sequential edit where spawning costs more than doing, apply the change directly and record it against the task as usual.
+3. **Pick the agent and its budget (change 065):** `specclaw-budget brief .specclaw <change> <TASK_ID>`
+   prints `subagent_type: <agent>` (from the task's `Kind` through `budget.routing`: Sonnet's
+   `builder-frontend` or Opus's `builder-backend`) and a `specclaw budget: role=<role> context=<n>`
+   line. Spawn that agent type with the budget line as the first line of its prompt and the payload
+   below it. The model comes from the agent type, never from the dispatcher's choice. When the agent
+   reports `handover`, read the task's last `handover` line in `timeline.jsonl` and spawn a fresh
+   agent on the same task with that line added to the payload.
+   Spawn the coding agent with that payload as the task. Run independent tasks in parallel up to the memory-aware budget from step **b'** (≤ `parallel_tasks`). Calibrate delegation: spawn agents for tasks that are parallel, isolated, or independent workstreams; for a trivial sequential edit where spawning costs more than doing, apply the change directly and record it against the task as usual.
 
    **Dynamic subagents (`build.dynamic_agents.enabled: true`):** instead of the generic coder with `models.coding`, synthesize a bespoke agent per task:
    1. Synthesize the scaffold:
@@ -85,7 +92,7 @@ Prints one integer — `min(parallel_tasks, memory_budget)`. Use it as the concu
    4. **Provenance:** record the task's `role` and `model` in `status.md`'s Agent Runs table.
    5. **Fallback:** if synthesis fails (helper error, malformed JSON), fall back to the generic coder with `models.coding` for that task and continue — never block the build.
 
-   When `build.dynamic_agents.enabled: false` (default), skip all of the above and use the generic coder exactly as before — no synthesis, no `agents/` directory.
+   When `build.dynamic_agents.enabled: false` (default), skip all of the above and dispatch the agent `specclaw-budget brief` names — no synthesis, no `agents/` directory.
 
 **c'.** If `spec.md` has a `## Dependency Bypass`, `## Item Split` or `## Resumes Split` section, the specclaw-bf plugin's `references/carry-through.md` (Build) applies here.
 
@@ -126,6 +133,8 @@ every 60s is never "no reply for 13 min" — which is the teardown this exists t
       the single most common way a build ends green and broken, and this is the only place a script
       can catch it. Do not paraphrase the check's verdict, and never mark a task complete on a report
       it rejected.
+   0b. **Record the estimate against the peak:** `specclaw-budget record .specclaw <change> <TASK_ID> <agentId> || true`
+      (the agent id the Agent tool returned). It appends a `task_context` line to `timeline.jsonl`.
    1. Mark complete: `specclaw-update-task-status .specclaw/changes/<change>/tasks.md <TASK_ID> complete`. If the task previously failed, run `specclaw-log-error .specclaw <change> --resolve <TASK_ID>`.
    2. Commit: `specclaw-build commit .specclaw <change> <TASK_ID> "<title>" <files...>`.
    2b. **Per-task review — only when `build.task_review` is `spec` or `full`** (it ships `off`, in

@@ -43,7 +43,15 @@ Turn an approved proposal into an executable plan.
      - **Otherwise:** generate `spec.md` directly using `$CLAUDE_PLUGIN_ROOT/templates/spec.md` as a starting template (single-shot, no dialogue).
      - **If `spec.md` already exists** (e.g. authored previously via `/specclaw-extras:author-spec`): do not overwrite it; skip the spec step and proceed to `design.md` / `tasks.md`.
    - `design.md` — technical approach, architecture, file changes map, key decisions, risks. Template: `$CLAUDE_PLUGIN_ROOT/templates/design.md`. **When discovery produced docs, add a "Grounding sources" section** listing the discovered files you actually used — each entry cites the path plus the specific convention or quoted line applied. The paper trail for what informed the design, backed by quotable evidence rather than vague attribution.
-   - `tasks.md` — ordered tasks grouped into waves with dependencies. Template: `$CLAUDE_PLUGIN_ROOT/templates/tasks.md`. **Tag each task with an optional `Kind:` hint** (`docs | test | config | refactor | impl | migration`) inferred from what the task does — it lets `build.dynamic_agents` (when enabled) synthesize a specialized subagent with the right role, minimal tools, and cost-appropriate model. When a task's nature is genuinely mixed or unclear, omit `Kind` and build will classify heuristically (default `impl`).
+   - `tasks.md` — ordered tasks grouped into waves with dependencies. Template: `$CLAUDE_PLUGIN_ROOT/templates/tasks.md`. **Tag each task with an optional `Kind:` hint** (`frontend | backend | docs | test | config | refactor | impl | migration`) inferred from what the task does — it lets `build.dynamic_agents` (when enabled) synthesize a specialized subagent with the right role, minimal tools, and cost-appropriate model. When a task's nature is genuinely mixed or unclear, omit `Kind` and build will classify heuristically (default `impl`).
+4b. **Size each task by context (change 065).** A single-job agent peaks far below one that bundles
+   several, and quality falls long before the window is full. Run
+   `specclaw-budget estimate .specclaw <change>`: it prints `<id> read=<n> context=<n>` per task with
+   `Files:` (read = 26000 tokens of start-up plus the files at 2.2 characters a token). Add the
+   diff the task will type (about 60 tokens a line) and write the total as `- Context: <n>` under
+   the task. Split any task over 60000 by module or file group, never into a test task and a code
+   task, and re-run until it exits 0. Tag UI tasks `Kind: frontend` and server tasks
+   `Kind: backend`: the kind picks the build agent, and so its model (`budget.routing`).
 5. Record each phase as its file lands — one call per artifact, immediately after writing it:
    ```bash
    specclaw-set-phase .specclaw <change> spec done

@@ -19,7 +19,7 @@ One Python module and two entry points, then wiring into config, skills and agen
 
 ### Wave 2 — wiring
 
-- [ ] `T2` — builder agents, config template, tasks template, plan and build references (AC-9)
+- [x] `T2` — builder agents, config template, tasks template, plan and build references (AC-9)
   - Files: plugins/specclaw/agents/builder-backend.md, plugins/specclaw/agents/builder-frontend.md, plugins/specclaw/templates/config.yaml, plugins/specclaw/templates/tasks.md, plugins/specclaw/references/full/plan.md, plugins/specclaw/references/full/build.md
   - Kind: docs
   - Context: 55000
