@@ -32,7 +32,7 @@ BLOCK, LIMIT, LOG_MAX = 1 << 20, 64 << 20, 1 << 20
 AGENT_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
 STATED = re.compile(r"specclaw budget:(.*)")
 ALLOWED = re.compile(
-    r"(cd|head|tail|wc|grep|sort|cat|git(\s+-C\s+\S+)?\s+(add|commit|status|diff|log))(\s|$)|(\S*/)?specclaw-budget\s+handover(\s|$)"
+    r"(cd|head|tail|git(\s+-C\s+\S+)?\s+(add|commit|status|diff|log))(\s|$)|(\S*/)?specclaw-budget\s+handover(\s|$)"
 )
 HAND_OFF = (
     "specclaw context gate: this {role} agent is at {used}k of its {cap}k context cap. Hand off now: "
@@ -213,19 +213,21 @@ def last_context(path: Path) -> int | None:
     return None
 
 
-def peak_context(path: Path) -> int | None:
-    """The largest context over a transcript's assistant calls; unparsable lines are skipped."""
-    peak = None
+def peak_context(path: Path) -> tuple[int | None, int]:
+    """The largest context over a transcript's assistant calls, and how many usage lines were
+    unreadable and skipped (a peak over a partly corrupt transcript may be understated)."""
+    peak, skipped = None, 0
     with path.open("rb") as handle:
         for raw in handle:
             if b'"usage"' in raw:
                 try:
                     context = _context(json.loads(raw))
                 except (ValueError, KeyError, TypeError):
+                    skipped += 1
                     continue
                 if context is not None:
                     peak = max(peak or 0, context)
-    return peak
+    return peak, skipped
 
 
 def first_prompt(path: Path) -> str:
@@ -252,24 +254,30 @@ def stated(prompt: str) -> tuple[str | None, int | None]:
     match = STATED.match(prompt.lstrip().split("\n", 1)[0])
     fields = dict(re.findall(r"(\w+)=(\S+)", match.group(1))) if match else {}
     context = fields.get("context", "")
-    return fields.get("role"), int(context) if context.isdigit() else None
+    if context and not context.isdigit():  # a typo must not quietly fall back to the role default
+        raise ValueError(f"the budget line's context={context!r} is not a whole number of tokens")
+    return fields.get("role"), int(context) if context else None
+
+
+def role_of(agent_type: object) -> str:
+    """The agent type after its last `:` when it names a role, else general (decision 42)."""
+    role = agent_type.rsplit(":", 1)[-1] if isinstance(agent_type, str) else ""
+    return role if role in ROLES else "general"
 
 
 def role_and_cap(config: dict, agent_type: object, prompt: str) -> tuple[str, int]:
-    """A known stated role, else the agent type after its last `:` when it names a role, else general;
-    the cap is the stated context clamped into the role's range, else the role's context."""
+    """A known stated role, else role_of the agent type; the cap is the stated context clamped into
+    the role's range, else the role's context."""
     role, context = stated(prompt)
     if role not in ROLES:
-        role = agent_type.rsplit(":", 1)[-1] if isinstance(agent_type, str) else ""
-        role = role if role in ROLES else "general"
+        role = role_of(agent_type)
     default = ROLES[role]
     cap = min(max(context, default // 2), default * 2) if context is not None else config["roles"][role][0]
     return role, cap
 
 
 def committing(tool: object, tool_input: object) -> bool:
-    """A Bash call whose every command commits or writes the hand-off (cd and the read-only filters
-    head, tail, wc, grep, sort and cat may join it). Quoted text is blanked first,
+    """A Bash call whose every command commits or writes the hand-off (cd, head and tail may join it). Quoted text is blanked first,
     so a commit message may hold anything. shortcut: an unquoted $(...) is not inspected; the gate is
     a quality cap on a cooperative agent, not a sandbox."""
     command = tool_input.get("command") if tool == "Bash" and isinstance(tool_input, dict) else None
@@ -281,7 +289,7 @@ def committing(tool: object, tool_input: object) -> bool:
     bare = re.sub(r"(\d*>&\d+-?|(\d*|&)>>?\s*/dev/null)(?=[\s;&|]|$)", " ", bare)
     parts = [part.strip() for part in re.split(r"&&|\|\||[;|&\n]", bare)]
     parts = [part for part in parts if part]
-    return bool(parts) and all(ALLOWED.match(part) and not re.search(r"[<>]", part) for part in parts)
+    return bool(parts) and all(ALLOWED.match(part) and not re.search(r"[<>]|--output", part) for part in parts)
 
 
 def decide(config: dict, event: dict, prompt: str, context: int) -> tuple[str | None, str, dict]:
@@ -333,6 +341,14 @@ def tasks(path: Path) -> dict[str, dict]:
         if current is not None and field:
             current[field.group(1)] = field.group(2).strip()
     return found
+
+
+def task_context(fields: dict) -> int | None:
+    """A task's `Context:` as a whole number of tokens; absent is None, anything else refused."""
+    value = fields.get("Context", "")
+    if value and not value.isdigit():
+        raise ValueError(f"Context: {value!r} is not a whole number of tokens")
+    return int(value) if value else None
 
 
 def read_tokens(root: Path, files: str) -> int:

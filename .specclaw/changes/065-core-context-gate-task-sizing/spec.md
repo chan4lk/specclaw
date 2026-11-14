@@ -45,7 +45,7 @@ only; `specclaw-budget` is a fixed contract for change 063.
   - at or over 90%, `warn`: exit 0 with one `systemMessage` line and an `additionalContext` naming
     the hand-off steps; never denies. A line is logged.
   - at or over 90%, `block`: a Bash call whose every command is `git add`, `git commit`,
-    `git status`, `git diff`, `git log`, `cd`, a read-only filter (`head` `tail` `wc` `grep` `sort` `cat`) or `specclaw-budget handover` passes (only fd duplication and `/dev/null` redirects; any other redirect is denied) with the same
+    `git status`, `git diff`, `git log`, `cd`, `head`, `tail` or `specclaw-budget handover` passes (only fd duplication and `/dev/null` redirects; any other redirect, or `--output`, is denied) with the same
     note; any other call is denied (exit 2, reason on stderr naming the hand-off steps). Logged.
 - **FR-6 Fail open, loud** (decision 49). Any exception: exit 0, one `systemMessage` line saying
   the call went through, and a line in the log. The log is

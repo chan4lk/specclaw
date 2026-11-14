@@ -123,10 +123,10 @@ else no "warn: $RC $OUT $ERR"; fi
 gate block
 run a1 general-purpose Bash 'git add -A && git commit -m "fix: a; b && rm -rf c"'; [ "$RC" -eq 0 ] && has "hand off" && ok "block: git add && git commit (a message holding ; && rm) passes with the note" || no "block commit: $RC $OUT $ERR"
 run a1 general-purpose Bash 'specclaw-budget handover .specclaw 001-x T1 finish the tests'; [ "$RC" -eq 0 ] && ok "block: specclaw-budget handover passes" || no "block handover: $RC $ERR"
-for c in 'git commit -m x 2>&1' 'git status 2>/dev/null' 'git log --oneline | head -5' 'git diff >&2' 'git commit -m x &>/dev/null' 'git add -A 2>> /dev/null' 'git log 2>&1 | grep fix | wc -l' 'git status | sort | cat' 'cd /tmp && git -C /tmp add -A'; do
-  run a1 general-purpose Bash "$c"; [ "$RC" -eq 0 ] && ok "block: '$c' passes (fd duplication, /dev/null and the filter list)" || no "block $c: $RC $ERR"
+for c in 'git commit -m x 2>&1' 'git status 2>/dev/null' 'git log --oneline | head -5' 'git diff >&2' 'git commit -m x &>/dev/null' 'git add -A 2>> /dev/null' 'git log 2>&1 | head -5' 'git status | tail -3' 'cd /tmp && git -C /tmp add -A'; do
+  run a1 general-purpose Bash "$c"; [ "$RC" -eq 0 ] && ok "block: '$c' passes (fd duplication, /dev/null, head and tail)" || no "block $c: $RC $ERR"
 done
-for c in Edit 'Bash:rm -rf x' 'Bash:git add . && rm x' 'Bash:git commit -m ok; curl x' 'Bash:git add -A &>/dev/null & rm x' 'Bash:git log | xargs rm' 'Bash:git log > f' 'Bash:git status 1>out' 'Bash:git log 2>> e' 'Bash:cat < in' 'Bash:git commit -m x &>/tmp/c.log' 'Bash:git log > f; rm x' 'Bash:git log >/dev/nullx' 'Bash:git log >&2x' 'Bash:git log 2>&1x' 'Bash:git log >&file'; do
+for c in Edit 'Bash:rm -rf x' 'Bash:git add . && rm x' 'Bash:git commit -m ok; curl x' 'Bash:git add -A &>/dev/null & rm x' 'Bash:git log | xargs rm' 'Bash:git log > f' 'Bash:git status 1>out' 'Bash:git log 2>> e' 'Bash:cat < in' 'Bash:git commit -m x &>/tmp/c.log' 'Bash:git log > f; rm x' 'Bash:git log >/dev/nullx' 'Bash:git log >&2x' 'Bash:git log 2>&1x' 'Bash:git log >&file' 'Bash:git log | sort -o f' 'Bash:git diff --output=f' 'Bash:git log --output f' 'Bash:git log | grep x' 'Bash:cat f'; do
   case "$c" in Bash:*) run a1 general-purpose Bash "${c#Bash:}" ;; *) run a1 general-purpose "$c" x ;; esac
   [ "$RC" -eq 2 ] && [[ "$ERR" == *"specclaw-budget handover"* ]] && ok "block denies '$c' with exit 2 and the hand-off steps" || no "block $c: $RC $OUT $ERR"
 done
@@ -141,6 +141,8 @@ do T1'
 run a3 general-purpose Edit x; [ "$RC" -eq 2 ] && [[ "$ERR" == *"builder-backend agent is at 170k of its 100k"* ]] && ok "a stated context=20000 is clamped up to the role's minimum 100k, and the stated role wins" || no "clamp low: $RC $ERR"
 transcript a3 170000 'specclaw budget: role=builder-frontend context=900000'
 run a3 general-purpose Edit x; [ "$RC" -eq 0 ] && [ -z "$OUT" ] && ok "a stated context=900000 is clamped down to 400k (170k passes)" || no "clamp high: $RC $OUT $ERR"
+transcript a3 170000 'specclaw budget: role=builder-backend context=70k'
+run a3 general-purpose Edit x; [ "$RC" -eq 0 ] && has "context='70k' is not a whole number" && ok "a malformed stated context fails loud, never falls back in silence" || no "bad stated: $RC $OUT $ERR"
 
 # ── AC-7 fail open ────────────────────────────────────────────────────────────────────────────
 rm -rf "$SPECCLAW_GATE_LOG_DIR"
@@ -182,13 +184,20 @@ if [ "$b1" = "$(printf 'subagent_type: specclaw:builder-frontend\nspecclaw budge
   ok "brief routes Kind frontend to builder-frontend, anything else to builder-backend, with the budget line"
 else no "brief: $b1 / $b2"; fi
 "$BUDGET" brief "$P/.specclaw" 001-x T9 2>/dev/null; [ $? -eq 1 ] && ok "brief of an unknown task exits 1" || no "brief unknown task"
+"$BUDGET" record "$P/.specclaw" 001-x T9 a1 2>/dev/null; [ $? -eq 1 ] && ok "record of an unknown task exits 1" || no "record unknown task"
+"$BUDGET" roles --json "$TMP/nowhere" >/dev/null 2>&1; [ $? -eq 1 ] && ok "roles --json with no config.yaml exits 1, never defaults passed off as a read" || no "roles no config"
+mkdir -p "$P/.specclaw/changes/002-y"; printf -- '- [ ] `T1` — a\n  - Files: src/big.ts\n  - Context: 70,000\n' > "$P/.specclaw/changes/002-y/tasks.md"
+out="$("$BUDGET" estimate "$P/.specclaw" 002-y 2>&1)"; rc=$?; out2="$("$BUDGET" brief "$P/.specclaw" 002-y T1 2>&1)"; rc2=$?
+[ "$rc$rc2" = 11 ] && [[ "$out" == *"T1: Context: '70,000' is not a whole number"* ]] && [[ "$out2" == *"not a whole number"* ]] \
+  && ok "a malformed Context: is refused by estimate (naming the task) and brief, never read as absent" || no "bad Context ($rc$rc2): $out / $out2"
 "$BUDGET" record "$P/.specclaw" 001-x T2 a1 >/dev/null && "$BUDGET" record "$P/.specclaw" 001-x T1 zz >/dev/null \
   && "$BUDGET" handover "$P/.specclaw" 001-x T2 finish the parser tests
 TL="$P/.specclaw/changes/001-x/timeline.jsonl"
 if python3 -c 'import json, sys; rows = [json.loads(l) for l in open(sys.argv[1])]
 assert [r["kind"] for r in rows] == ["task_context", "task_context", "handover"], rows
 assert rows[0]["estimate"] == 70000 and rows[0]["peak"] == 195000 and rows[0]["agent"] == "a1", rows[0]
-assert rows[1]["estimate"] is None and rows[1]["peak"] is None, rows[1]
+assert rows[0]["transcript"] == "found" and rows[0]["skipped"] == 0, rows[0]
+assert rows[1]["estimate"] is None and rows[1]["peak"] is None and rows[1]["transcript"] == "missing", rows[1]
 assert rows[2]["task"] == "T2" and rows[2]["next"] == "finish the parser tests" and "at" in rows[2], rows[2]' "$TL"; then
   ok "record appends estimate vs transcript peak (null when none), handover appends its line"
 else no "timeline: $(cat "$TL")"; fi

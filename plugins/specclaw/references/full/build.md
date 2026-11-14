@@ -78,10 +78,9 @@ Prints one integer — `min(parallel_tasks, memory_budget)`. Use it as the concu
    line. Spawn that agent type with the budget line as the first line of its prompt and the payload
    below it. The model comes from the agent type, never from the dispatcher's choice. When the agent
    reports `handover`, read the task's last `handover` line in `timeline.jsonl` and spawn a fresh
-   agent on the same task with that line added to the payload.
-   Spawn the coding agent with that payload as the task. Run independent tasks in parallel up to the memory-aware budget from step **b'** (≤ `parallel_tasks`). Calibrate delegation: spawn agents for tasks that are parallel, isolated, or independent workstreams; for a trivial sequential edit where spawning costs more than doing, apply the change directly and record it against the task as usual.
+   agent on the same task with that line added to the payload. Run independent tasks in parallel up to the memory-aware budget from step **b'** (≤ `parallel_tasks`). Calibrate delegation: spawn agents for tasks that are parallel, isolated, or independent workstreams; for a trivial sequential edit where spawning costs more than doing, apply the change directly and record it against the task as usual.
 
-   **Dynamic subagents (`build.dynamic_agents.enabled: true`):** instead of the generic coder with `models.coding`, synthesize a bespoke agent per task:
+   **Dynamic subagents (`build.dynamic_agents.enabled: true`):** instead of the agent `specclaw-budget brief` names, synthesize a bespoke agent per task:
    1. Synthesize the scaffold:
       ```bash
       specclaw-build synth-agent .specclaw <change> <TASK_ID>
