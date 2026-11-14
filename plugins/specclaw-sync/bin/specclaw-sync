@@ -8,6 +8,7 @@ Lists every open item (a `- ` line that is not `- [x]`) in .specclaw/debt.md and
 Exit 1 only when a listed item's class is in release_gate.block_on, read from <target>'s
 .specclaw/config.yaml (default: law, security, data-loss). Exit 0 otherwise. Exit 2: usage or git error.
 """
+import os
 import re
 import subprocess
 import sys
@@ -62,11 +63,16 @@ def open_items(text):
 
 
 def release(base, target):
+    code, top = git("rev-parse", "--show-toplevel")
+    if code != 0:
+        print("specclaw-sync: not inside a git repository", file=sys.stderr)
+        return 2
+    os.chdir(top.strip())   # `.specclaw` paths are root-relative
     for ref in (base, target):
         if git("rev-parse", "-q", "--verify", f"{ref}^{{commit}}")[0] != 0:
             print(f"specclaw-sync: unknown ref '{ref}'", file=sys.stderr)
             return 2
-    code, tree = git("ls-tree", "-r", "--name-only", target, "--", ".specclaw")
+    code, tree = git("ls-tree", "-r", "--full-name", "--name-only", target, "--", ".specclaw")
     if code != 0:
         print("specclaw-sync: git ls-tree failed", file=sys.stderr)
         return 2

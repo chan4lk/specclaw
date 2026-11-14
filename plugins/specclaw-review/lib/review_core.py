@@ -172,8 +172,8 @@ class Config:
     def block_on(self):
         """release_gate.block_on: the finding classes that block a fast-track round and a release."""
         v = self.release_gate.get("block_on")
-        v = v if isinstance(v, list) else [v] if v else DEFAULT_BLOCK_ON
-        return [_class_token(c) for c in v]   # not normalise_class: an unknown name must not become `other`
+        v = [_class_token(c) for c in (v if isinstance(v, list) else [v] if v else []) if str(c).strip()]
+        return v or DEFAULT_BLOCK_ON   # empty = the default, as in specclaw-sync; never "block nothing"
 
     def fast_track(self, change):
         """review.fast_track: a list of change names, or `all`. Off by default."""
@@ -570,6 +570,7 @@ def normalise_class(c):
 def calibrate(cfg, findings):
     out = []
     for f in findings:
+        f["unclassified"] = _class_token(f.get("class")) not in CLASSES   # fast track keeps such a blocker blocking
         f["class"] = normalise_class(f.get("class"))
         f["original_severity"] = f["severity"]
         if f["severity"] in ("blocker", "major") and not project_severity(cfg) and not str(f.get("scenario") or "").strip():
@@ -610,14 +611,16 @@ def blocking(findings):
 def _append_items(path, header, findings, line):
     """Append `line(f)` for each finding whose fingerprint is not in the file yet: the one writer of both lists."""
     existing = open(path, encoding="utf-8").read() if os.path.exists(path) else ""
-    new = [f for f in findings if f"fp:{f['fp']}" not in existing]
+    still_open = "\n".join(ln for ln in existing.splitlines() if not re.match(r"- \[[xX]\]", ln))
+    new = [f for f in findings if f"fp:{f['fp']}" not in still_open]   # a ticked item that recurs is listed again
     if not new:
         return 0
     with open(path, "a", encoding="utf-8") as fh:
         if not existing:
             fh.write(header)
         for f in new:
-            fh.write(line(f) + f" <!-- fp:{f['fp']} class:{f.get('class', 'other')} -->\n")
+            # one physical line, or the class marker drifts off the item and the release gate misreads it
+            fh.write(" ".join(line(f).split()) + f" <!-- fp:{f['fp']} class:{f.get('class', 'other')} -->\n")
     return len(new)
 
 
@@ -667,7 +670,8 @@ def _settle_round(cfg, cdir, change, rec, found, prev, n):
     rec["findings"] = found
     fast = cfg.fast_track(change)
     if fast:   # only gate-class blockers are fixed now; the rest is debt
-        block = [f for f in found if f["severity"] == "blocker" and f["class"] in cfg.block_on]
+        block = [f for f in found if f["severity"] == "blocker" and not f.get("pre_existing")
+                 and (f["class"] in cfg.block_on or f.get("unclassified"))]
     else:
         block = blocking(found)
     seen = {}
@@ -765,7 +769,9 @@ def verdict_at(cfg, change, sha):
     """(code, line, round_file): 0 only when the verdict is clean AND its final pass ran at exactly `sha`.
 
     The gate for the clean-loop PR status: a records-only commit after the final pass, which the plain
-    verdict accepts, is still a different head here.
+    verdict accepts, is still a different head here. Strict by operator decision (change 064): the status
+    posts only for a PR whose head is the final pass's commit, so committing the round records afterwards
+    means no status. Relaxing this to records-only drift is a separate, explicit decision.
     """
     code, line = verdict(cfg, change)
     cdir = change_dir(cfg, change)

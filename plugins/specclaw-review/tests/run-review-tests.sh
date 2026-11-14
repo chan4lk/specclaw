@@ -361,6 +361,15 @@ check "064 AC-5 fast track: a security blocker exits 1 and is not written to deb
 ftcfg all "$(printf 'release_gate:\n  block_on: [law]\n')"
 "$SR" run --change "$CH" >/dev/null; rc=$?
 check "064 AC-5 release_gate.block_on: [law] makes a security blocker debt, not a block" '[ "$rc" = 0 ] && grep -q "sql injection" .specclaw/debt.md'
+out_json '[{"severity":"blocker","rule":"B7","file":"a.py","line":2,"message":"unlabelled crash","scenario":"s","in_delta":true}]'
+"$SR" run --change "$CH" >/dev/null; rc=$?
+check "064 AC-5 fast track: a blocker with no class stays blocking" '[ "$rc" = 1 ] && ! grep -q "unlabelled crash" .specclaw/debt.md'
+out_json '[{"severity":"major","rule":"S9","file":"a.py","line":2,"message":"leaks\n\n  the token","scenario":"s","class":"security","in_delta":true}]'
+"$SR" run --change "$CH" >/dev/null
+check "064 AC-5 a multi-line message is one debt line that keeps its class marker" 'grep -q "^- \[ \] \[security major S9\] .*leaks the token .*class:security -->$" .specclaw/debt.md'
+sed -i.bak "s/^- \[ \] \(.*leaks the token\)/- [x] \1/" .specclaw/debt.md && rm -f .specclaw/debt.md.bak
+"$SR" run --change "$CH" >/dev/null
+check "064 AC-5 a ticked item that recurs is listed again as open" '[ "$(grep -c "leaks the token" .specclaw/debt.md)" = 2 ] && grep -q "^- \[ \] .*leaks the token" .specclaw/debt.md'
 mkrepo "$TMP/ft2"
 ftcfg "[some-other-change]"
 out_json "$FT"; "$SR" run --change "$CH" >/dev/null; rc=$?

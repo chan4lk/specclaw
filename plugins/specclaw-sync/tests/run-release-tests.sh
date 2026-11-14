@@ -45,6 +45,20 @@ printf 'release_gate:\n  block_on: [Data Loss, security]\n' > .specclaw/config.y
 rel base HEAD; rc=$?
 check "AC-6 block_on values are normalised like finding classes" '[ "$rc" = 1 ] && grep -q "block_on: data-loss, security" "$TMP/out"'
 
+(cd .specclaw/changes && "$BIN" release base HEAD > "$TMP/out" 2>&1); rc=$?
+check "AC-6 run from a subdirectory: same items, same exit" '[ "$rc" = 1 ] && grep -q "token in log" "$TMP/out"'
+check "AC-6 block_on parses the same in specclaw-review and specclaw-sync" 'python3 - "$BIN" "$(dirname "$BIN")/../../specclaw-review/lib" <<"PY"
+import importlib.machinery, importlib.util, sys
+ld = importlib.machinery.SourceFileLoader("sync", sys.argv[1])
+spec = importlib.util.spec_from_loader("sync", ld); sync = importlib.util.module_from_spec(spec); ld.exec_module(sync)
+sys.path.insert(0, sys.argv[2]); import review_core as rc
+for cfg in ["", "release_gate:\n  block_on: []\n", "release_gate:\n  block_on: [law]\n",
+            "release_gate:\n  block_on:\n    - law\n    - data-loss\n", "release_gate:\n  block_on: [Data Loss, \"security\"]\n",
+            "release_gate:\n  block_on: crash\n", "review:\n  block_on: [law]\n"]:
+    r = rc.parse_block(cfg, "release_gate")
+    c = rc.Config.__new__(rc.Config); c.release_gate = r
+    assert c.block_on == sync.block_on(cfg), (cfg, c.block_on, sync.block_on(cfg))
+PY'
 rel base no-such-ref; rc=$?
 check "AC-6 an unknown ref exits 2" '[ "$rc" = 2 ]'
 rel base; rc=$?
