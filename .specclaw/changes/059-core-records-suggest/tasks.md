@@ -13,12 +13,12 @@ then the version bump.
 
 ### Wave 1 — Scripts
 
-- [ ] `T1` — `lib/plugins.sh`, `specclaw-suggest`, `session-start` sourcing the lib, config template, suggest tests (AC-1…AC-5)
+- [x] `T1` — `lib/plugins.sh`, `specclaw-suggest`, `session-start` sourcing the lib, config template, suggest tests (AC-1…AC-5)
   - Files: plugins/specclaw/lib/plugins.sh, plugins/specclaw/bin/specclaw-suggest, plugins/specclaw/hooks/session-start, plugins/specclaw/templates/config.yaml, plugins/specclaw/tests/run-suggest-tests.sh, .github/workflows/ci.yml
   - Estimate: small
   - Kind: impl
 
-- [ ] `T2` — `lesson` line from `specclaw-log-learning`; `specclaw-timer` skips it quietly (AC-6)
+- [x] `T2` — `lesson` line from `specclaw-log-learning`; `specclaw-timer` skips it quietly (AC-6)
   - Files: plugins/specclaw/bin/specclaw-log-learning, plugins/specclaw/bin/specclaw-timer, plugins/specclaw/tests/run-suggest-tests.sh
   - Estimate: small
   - Kind: impl

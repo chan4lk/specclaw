@@ -281,4 +281,19 @@ $ACTION_TEXT
 ---
 EOF
 
+# The same lesson as one record in the change's append-only ledger (change 059),
+# for readers that want structure rather than prose. No "ev" and no "ts": it is
+# not a span, and update-status reads elapsed time from the first and last "ts".
+json_esc() {
+  local s="$1"
+  s="${s//\\/\\\\}"; s="${s//\"/\\\"}"
+  s="${s//$'\n'/ }"; s="${s//$'\t'/ }"
+  printf '%s' "$s"
+}
+if [[ -d "$SPECCLAW_DIR/changes/$CHANGE_NAME" ]]; then
+  printf '{"kind":"lesson","at":"%s","category":"%s","priority":"%s","detail":"%s","action":"%s"}\n' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$CATEGORY" "$PRIORITY" "$(json_esc "$DETAIL")" "$(json_esc "$ACTION")" \
+    >> "$SPECCLAW_DIR/changes/$CHANGE_NAME/timeline.jsonl" || true
+fi
+
 echo "Logged $ID: $CATEGORY ($PRIORITY) — $SHORT_TITLE"
