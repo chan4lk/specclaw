@@ -16,7 +16,8 @@ plugin_feature() {
 }
 
 # plugins_dismissed — the features in config.yaml `plugins.dismissed`, space-separated.
-# Reads an inline list (`dismissed: [a, b]`) and a block list (`- a` lines under it).
+# Reads an inline list (`dismissed: [a, b]`) and a block list (`- a` lines under it). The list ends at
+# the next key; blank and comment lines inside it do not end it. specclaw-suggest --dismiss uses the same rule.
 plugins_dismissed() {
   awk '
     /^[a-zA-Z_]/ { inblk = ($0 ~ /^plugins:/); inlist = 0; next }

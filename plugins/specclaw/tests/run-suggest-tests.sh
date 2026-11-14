@@ -32,10 +32,24 @@ check "AC-3 dismissed feature prints nothing, list is idempotent" '[ "$(sug "$S"
 mkdir -p "$TMP/bare" && printf 'version: 1\nproject:\n  name: x\n' > "$TMP/bare/config.yaml"
 sug "$TMP/bare" --dismiss sync >/dev/null
 check "AC-3 --dismiss creates the plugins block" 'grep -qx "plugins:" "$TMP/bare/config.yaml" && grep -qx "  dismissed: \[sync\]" "$TMP/bare/config.yaml" && [ "$(sug "$TMP/bare" sync)" = "rc=0" ]'
-mkdir -p "$TMP/blk" && printf 'plugins:\n  dismissed:\n    - review\n  other: 1\n' > "$TMP/blk/config.yaml"
-check "AC-3 a block-list dismissal is honoured" '[ "$(sug "$TMP/blk" review)" = "rc=0" ]'
-sug "$TMP/blk" --dismiss bf >/dev/null
-check "AC-3 --dismiss folds a block list into one inline list" '[ "$(cat "$TMP/blk/config.yaml")" = "$(printf "plugins:\n  dismissed: [review, bf]\n  other: 1")" ]'
+# Block-list variants: each row is a plugins block; review must read as dismissed, and --dismiss bf
+# must leave exactly one inline list ending in bf with no stray items and the sibling key intact.
+n=0
+while IFS= read -r row; do
+  n=$((n + 1)); d="$TMP/blk$n"; mkdir -p "$d"; printf "$row" > "$d/config.yaml"
+  check "AC-3 block list row $n: dismissal honoured" '[ "$(sug "$d" review)" = "rc=0" ]'
+  sug "$d" --dismiss bf >/dev/null
+  check "AC-3 block list row $n: folded into one inline list" 'grep -qxE "  dismissed: \[(fleet, )?review(, fleet)?, bf\]" "$d/config.yaml" && ! grep -qE "^[[:space:]]+- " "$d/config.yaml" && { ! grep -q "other:" <<<"$row" || grep -qx "  other: 1" "$d/config.yaml"; }'
+done <<'ROWS'
+plugins:\n  dismissed:\n    - review\n  other: 1\n
+plugins:\n  dismissed:\n    - fleet\n\n    # note\n    - review\n  other: 1\n
+plugins:\n  dismissed:\n    - "review"\n    - 'fleet'\n
+plugins:\n  dismissed:\n    - review  # why\n  other: 1\n
+plugins:\n  dismissed:\n  - review\nnext: 1\n
+ROWS
+mkdir -p "$TMP/hb/.specclaw" && printf 'github:\n  sync: true\nplugins:\n  dismissed:\n    - sync\n' > "$TMP/hb/.specclaw/config.yaml"
+hb="$(cd "$TMP/hb" && PATH="/usr/bin:/bin" CLAUDE_PLUGIN_ROOT="$ROOT" bash "$PLUGIN_DIR/hooks/session-start")"
+check "AC-5 hook honours a block-list dismissal" '! grep -q "install specclaw-sync@chan4lk" <<<"$hb"'
 
 check "AC-4 unknown feature, missing config and Codex print nothing" '[ "$(sug "$S" nope 2>&1)" = "rc=0" ] && [ "$(sug "$TMP/none" review 2>&1)" = "rc=0" ] && [ "$(CODEX_THREAD_ID=t sug "$S" review 2>&1)" = "rc=0" ]'
 
