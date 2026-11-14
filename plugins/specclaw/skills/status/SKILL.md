@@ -11,3 +11,4 @@ description: Use when the user asks where changes stand or what is next.
 3. For one change, run `specclaw-validate-change .specclaw <change> status`.
 4. If `specclaw-check-update .specclaw` prints a line, show it verbatim.
 5. **Tip:** when two or more approved changes are not built yet, run `specclaw-suggest .specclaw fleet` and show any line it prints, at most once per session; if the user says no, run `specclaw-suggest .specclaw --dismiss fleet`.
+6. **Tip:** when a change is in `build` or `verify`, run `specclaw-suggest .specclaw dash` and show any line it prints, at most once per session; if the user says no, run `specclaw-suggest .specclaw --dismiss dash`.

@@ -43,9 +43,9 @@ session.start / /dash / turn.complete / tool.call(.specclaw)
    unreachable server with no review rounds is the install card.
 6. **HEAD** is resolved from files: `.git` (dir, or `gitdir:` file for a worktree, with `commondir`), `HEAD`,
    the loose ref, then `packed-refs`. Pure resolver over a read function, so it is tested without git.
-7. **Install check by folder (D-3).** `installed()` in `lib/plugins.sh` also accepts
-   `<plugin>/.claude-plugin/plugin.json` beside core (checkout) or `<cache>/<owner>/<plugin>/*/` (cache). The
-   `dash` row has an empty command field.
+7. **Install check by folder (D-3).** The `dash` row in `lib/plugins.sh` has an empty command field. For such a
+   row, `installed()` looks for `<plugin>/.claude-plugin/plugin.json` beside core (checkout) or in
+   `<cache>/<owner>/<plugin>/*/` (cache). Rows with a command keep the command checks unchanged.
 
 ## File changes
 

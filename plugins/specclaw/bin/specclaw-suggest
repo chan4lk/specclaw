@@ -2,7 +2,7 @@
 # specclaw-suggest — one install tip for an add-on plugin, at the moment it would help (change 059).
 #
 # Usage:
-#   specclaw-suggest <specclaw_dir> <feature>             feature: review fleet sync bf extras
+#   specclaw-suggest <specclaw_dir> <feature>             feature: review fleet sync bf extras dash
 #   specclaw-suggest <specclaw_dir> --dismiss <feature>   never suggest it again
 #
 # Prints one line only when the feature's plugin is not installed and the feature

@@ -9,9 +9,10 @@
 - **D-1 Incremental scan.** Transcripts are scanned incrementally by file offset (open question 1).
 - **D-2 Tokens and cost.** The pane shows tokens **and** an API-equivalent cost, always labelled
   "API-equivalent estimate" (open question 2).
-- **D-3 Install check.** `specclaw-dash` ships no command. The core install check also finds a plugin by its
-  folder (`<plugin>/.claude-plugin/plugin.json` next to core, or in the plugin cache). This is smaller than
-  shipping a `bin/specclaw-dash` that nothing else needs.
+- **D-3 Install check.** `specclaw-dash` ships no command. The core install check finds a plugin that ships no
+  command by its manifest (`<plugin>/.claude-plugin/plugin.json` next to core, or in the plugin cache); a plugin
+  with a command is still found by its command. This is smaller than shipping a `bin/specclaw-dash` that
+  nothing else needs.
 - **D-4 Claude Code only.** Mods do not run in Codex, so `specclaw-dash` has no Codex manifest and no entry in
   `.agents/plugins/marketplace.json`.
 

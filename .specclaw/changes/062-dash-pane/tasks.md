@@ -33,7 +33,7 @@ then the 059 follow-up for `dash`.
 
 ### Wave 3 — 059 follow-up
 
-- [ ] `T4` — `dash` feature row, install check by folder, status-skill call sites, suggest tests (AC-8)
+- [x] `T4` — `dash` feature row, install check by folder, status-skill call sites, suggest tests (AC-8)
   - Files: plugins/specclaw/lib/plugins.sh, plugins/specclaw/bin/specclaw-suggest, plugins/specclaw/skills/status/SKILL.md, plugins/specclaw/references/full/status.md, plugins/specclaw/tests/run-suggest-tests.sh
   - Estimate: small
   - Kind: impl

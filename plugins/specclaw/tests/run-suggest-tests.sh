@@ -109,6 +109,17 @@ check "AC-6 log-learning appends one lesson line, control characters blanked" '[
 check "AC-6 the action field is escaped too" 'grep -qF '"'"'"category":"spec_gap","priority":"low","detail":"d","action":"q\" s\\ b  f  x  end"}'"'"' "$S/changes/001-x/timeline.jsonl"'
 check "AC-6 timer report does not call the lesson line unparseable" '! "$BIN/specclaw-timer" report "$S" 001-x 2>&1 >/dev/null | grep -q unparseable'
 
+# 062 AC-8: specclaw-dash ships no command; it is found by its manifest, next to core or in the cache.
+check "062 AC-8 dash missing prints the dash tip" '[ "$(sug "$S" dash)" = "Tip: a /dash pane shows builds, review rounds, lessons and token use in one place. Install: /plugin install specclaw-dash@chan4lk (say \"no\" to never see this again)
+rc=0" ]'
+mkdir -p "$TMP/cache/chan4lk/specclaw-dash/0.9.8/.claude-plugin" && : > "$TMP/cache/chan4lk/specclaw-dash/0.9.8/.claude-plugin/plugin.json"
+check "062 AC-8 dash in the plugin cache prints nothing" '[ "$(sug "$S" dash)" = "rc=0" ]'
+mkdir -p "$TMP/co/specclaw" "$TMP/co/specclaw-dash/.claude-plugin" && : > "$TMP/co/specclaw-dash/.claude-plugin/plugin.json"
+check "062 AC-8 dash beside core in a checkout prints nothing" '[ "$(PATH="/usr/bin:/bin" CLAUDE_PLUGIN_ROOT="$TMP/co/specclaw" "$BIN/specclaw-suggest" "$S" dash; echo "rc=$?")" = "rc=0" ]'
+mkdir -p "$TMP/cache/chan4lk/specclaw-review/0.9.8/.claude-plugin" && : > "$TMP/cache/chan4lk/specclaw-review/0.9.8/.claude-plugin/plugin.json"
+check "062 AC-8 a plugin that ships a command needs the command, not just its manifest" '[ "$(sug "$TMP/bare" review | head -1)" != "rc=0" ]'
+check "062 AC-8 both status skills name the dash call" 'grep -q "specclaw-suggest .specclaw dash" "$PLUGIN_DIR/skills/status/SKILL.md" && grep -q "specclaw-suggest .specclaw dash" "$PLUGIN_DIR/references/full/status.md"'
+
 check "AC-7 every call site names specclaw-suggest, verify no longer skips silently" '(for f in skills/verify/SKILL.md references/full/verify.md skills/status/SKILL.md references/full/status.md skills/propose/SKILL.md references/full/propose.md skills/init/SKILL.md references/full/init.md; do grep -q "specclaw-suggest" "$PLUGIN_DIR/$f" || exit 1; done) && ! grep -qiE "skip(s)? (it )?silently" "$PLUGIN_DIR/skills/verify/SKILL.md" "$PLUGIN_DIR/references/full/verify.md"'
 
 echo
