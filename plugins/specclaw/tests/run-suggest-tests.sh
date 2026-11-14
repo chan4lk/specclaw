@@ -123,6 +123,17 @@ check "062 AC-8 both status skills name the dash call" 'grep -q "specclaw-sugges
 
 check "AC-7 every call site names specclaw-suggest, verify no longer skips silently" '(for f in skills/verify/SKILL.md references/full/verify.md skills/status/SKILL.md references/full/status.md skills/propose/SKILL.md references/full/propose.md skills/init/SKILL.md references/full/init.md; do grep -q "specclaw-suggest" "$PLUGIN_DIR/$f" || exit 1; done) && ! grep -qiE "skip(s)? (it )?silently" "$PLUGIN_DIR/skills/verify/SKILL.md" "$PLUGIN_DIR/references/full/verify.md"'
 
+# 063 AC-7: the dash's dismissed list and its undo.
+mkdir -p "$TMP/u" && printf 'plugins:\n  dismissed: [review, bf, fleet]  # why\nnext: 1\n' > "$TMP/u/config.yaml"
+check "063 AC-7 --dismissed prints one feature per line" '[ "$(sug "$TMP/u" --dismissed)" = "review
+bf
+fleet
+rc=0" ]'
+sug "$TMP/u" --undismiss bf >/dev/null
+check "063 AC-7 --undismiss removes one feature, keeps the rest and the comment" 'grep -qxE "  dismissed: \[review, fleet\][[:space:]]+# why" "$TMP/u/config.yaml" && grep -qx "next: 1" "$TMP/u/config.yaml" && [ "$(sug "$TMP/u" bf | head -1)" != "rc=0" ]'
+sug "$TMP/u" --undismiss review >/dev/null; sug "$TMP/u" --undismiss fleet >/dev/null; sug "$TMP/u" --undismiss fleet >/dev/null
+check "063 AC-7 undoing the last one leaves an empty list; undoing again is a no-op" 'grep -qE "^  dismissed: \[\]" "$TMP/u/config.yaml" && [ "$(sug "$TMP/u" --dismissed)" = "rc=0" ]'
+
 echo
 [ "$FAILS" -eq 0 ] && echo "All suggest tests passed." || echo "$FAILS failure(s)."
 exit $((FAILS > 0))

@@ -422,6 +422,11 @@ check "AC-7 learn_threshold: 2 proposes it" '"$SR" learn | grep -q "^- fp "'
 git checkout -q -- .specclaw/config.yaml
 mkdir -p .specclaw/changes/003-c; "$SR" run --change 003-c >/dev/null
 check "AC-7 a lesson seen in 3 changes is proposed" '"$SR" learn | grep -q "seen 3x"'
+fp="$("$SR" learn | sed -nE 's/^- fp ([0-9a-f]+).*/\1/p' | head -1)"
+"$SR" learn --reject "$fp" >/dev/null; rc=$?
+check "063 AC-6 learn --reject stops proposing the lesson and keeps it for recall" '[ "$rc" = 0 ] && [ -n "$fp" ] && "$SR" learn | grep -q "no recurring lessons" && "$SR" memory query --files x | grep -q .'
+"$SR" learn --reject "$fp" >/dev/null 2>&1; rc=$?
+check "063 AC-6 rejecting a lesson that is not proposed exits 2" '[ "$rc" = 2 ]'
 
 # 061 AC-1/AC-2: recall hook at /specclaw:plan and /specclaw:build.
 RECALL="$PLUGIN_DIR/hooks/recall"

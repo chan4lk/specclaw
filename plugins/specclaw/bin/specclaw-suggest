@@ -4,6 +4,8 @@
 # Usage:
 #   specclaw-suggest <specclaw_dir> <feature>             feature: review fleet sync bf extras dash
 #   specclaw-suggest <specclaw_dir> --dismiss <feature>   never suggest it again
+#   specclaw-suggest <specclaw_dir> --undismiss <feature> suggest it again (undo; change 063)
+#   specclaw-suggest <specclaw_dir> --dismissed           print the dismissed features, one per line
 #
 # Prints one line only when the feature's plugin is not installed and the feature
 # is not in config.yaml `plugins.dismissed`:
@@ -24,14 +26,25 @@ PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$CORE_DIR}"
 # shellcheck disable=SC1091  # sourced lib, resolved at runtime
 . "$CORE_DIR/lib/plugins.sh" 2>/dev/null || exit 0
 
-if [ "$2" = "--dismiss" ]; then
+if [ "$2" = "--dismissed" ]; then
+  plugins_dismissed | tr ' ' '\n' | sed '/^$/d'
+  exit 0
+fi
+
+if [ "$2" = "--dismiss" ] || [ "$2" = "--undismiss" ]; then
   f="${3:-}"
   plugin_feature "$f" >/dev/null || { echo "specclaw-suggest: unknown feature '$f'" >&2; exit 0; }
-  fail() { echo "specclaw-suggest: could not record dismissal of '$f' in $CONFIG" >&2; rm -f "${tmp:-}"; exit 0; }
+  what=dismissal; [ "$2" = "--undismiss" ] && what="undo of dismissal"
+  fail() { echo "specclaw-suggest: could not record $what of '$f' in $CONFIG" >&2; rm -f "${tmp:-}"; exit 0; }
   [ -f "$CONFIG" ] || fail
-  plugin_dismissed "$f" && exit 0
-  list="$(plugins_dismissed | sed 's/ /, /g')"
-  list="${list:+$list, }$f"
+  if [ "$2" = "--dismiss" ]; then
+    plugin_dismissed "$f" && exit 0
+    list="$(plugins_dismissed | sed 's/ /, /g')"
+    list="${list:+$list, }$f"
+  else
+    plugin_dismissed "$f" || exit 0
+    list="$(plugins_dismissed | tr ' ' '\n' | grep -vx "$f" | paste -sd, - | sed 's/,/, /g')"
+  fi
   # Atomic and link-safe: write a copy next to the real file (symlinks resolved), keep its
   # mode, then rename over it. A read-only config is refused, not replaced.
   target="$CONFIG"

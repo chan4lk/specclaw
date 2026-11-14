@@ -14,6 +14,7 @@
 #   specclaw-review memory query --files <f>... [--budget N] [--k N]
 #   specclaw-review memory compact
 #   specclaw-review learn [--apply <fp>...] [--import <file>... [--apply]]
+#   specclaw-review learn --reject <fp>...            never propose these lessons as rules again
 #   specclaw-review stats
 #   specclaw-review discover [--json]                  read-only scan: governance files, suggested config
 #   specclaw-review init                               lazy dirs + .claude/rules guard file
@@ -51,6 +52,7 @@ def main(argv):
     m.add_argument("--k", type=int)
     learn = sub.add_parser("learn")
     learn.add_argument("--apply", nargs="*")
+    learn.add_argument("--reject", nargs="+")
     learn.add_argument("--import", dest="imports", nargs="+")
     sub.add_parser("stats")
     dsc = sub.add_parser("discover")
@@ -102,7 +104,9 @@ def main(argv):
                 res = mem.compact(cfg.mem_dir, cfg.root, cfg.num("decay_days", 180), cfg.num("max_entries", 2000))
                 print(f"memory: {res['before']} -> {res['after']} entries")
         elif a.cmd == "learn":
-            if a.imports:
+            if a.reject:
+                print(rc.learn_reject(cfg, a.reject))
+            elif a.imports:
                 print(rc.learn_import(cfg, a.imports, apply=a.apply is not None))
             elif a.apply:
                 print(rc.learn_apply(cfg, a.apply))
