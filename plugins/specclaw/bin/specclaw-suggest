@@ -33,7 +33,6 @@ if [ "$2" = "--dismiss" ]; then
   list="$(plugins_dismissed | sed 's/ /, /g')"
   list="${list:+$list, }$f"
   tmp="$(mktemp "$CONFIG.XXXXXX")" || fail
-  cp -p "$CONFIG" "$tmp" || fail
   awk -v line="  dismissed: [$list]" '
     /^[a-zA-Z_]/ { if (inblk && !done) { print line; done = 1 } inblk = ($0 ~ /^plugins:/); skip = 0 }
     inblk && /^  dismissed:/ { if (!done) print line; done = 1; skip = 1; next }
@@ -42,7 +41,8 @@ if [ "$2" = "--dismiss" ]; then
     { skip = 0; print }
     END { if (inblk && !done) print line; else if (!done) printf "\nplugins:\n%s\n", line }
   ' "$CONFIG" > "$tmp" 2>/dev/null || fail
-  mv "$tmp" "$CONFIG" || fail
+  cat "$tmp" > "$CONFIG" || fail
+  rm -f "$tmp"
   exit 0
 fi
 

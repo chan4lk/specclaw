@@ -53,10 +53,18 @@ mkdir -p "$TMP/hc/.specclaw" && printf 'github:\n  sync: true\n' > "$TMP/hc/.spe
 hc="$(cd "$TMP/hc" && PATH="/usr/bin:/bin" CLAUDE_PLUGIN_ROOT="$ROOT" bash "$PLUGIN_DIR/hooks/session-start")"
 check "AC-5 hook honours a block-list dismissal (control run without it shows the notice)" 'grep -q "install specclaw-sync@chan4lk" <<<"$hc" && grep -q "hookSpecificOutput" <<<"$hb" && ! grep -q "install specclaw-sync@chan4lk" <<<"$hb"'
 
-mkdir -p "$TMP/ro" && printf 'version: 1\n' > "$TMP/ro/config.yaml" && chmod 555 "$TMP/ro"
-roerr="$(sug "$TMP/ro" --dismiss review 2>&1)"; chmod 755 "$TMP/ro"
-check "AC-3 a dismissal that cannot be written says so, still exit 0" 'grep -q "could not record dismissal of '"'"'review'"'"'" <<<"$roerr" && grep -q "rc=0" <<<"$roerr" && ! grep -q dismissed "$TMP/ro/config.yaml"'
-check "AC-3 a dismissal with no config says so" 'grep -q "could not record dismissal" <<<"$(sug "$TMP/none" --dismiss review 2>&1)"'
+# Every write-failure path of --dismiss: no config, temp file (read-only dir), reading the config
+# (unreadable file), writing it back (read-only file). Each must say so on stderr, exit 0, change nothing.
+for row in none:- rodir:555 unreadable:000 rofile:444; do
+  name="${row%%:*}"; mode="${row#*:}"; d="$TMP/w-$name"
+  if [ "$mode" != - ]; then
+    mkdir -p "$d" && printf 'version: 1\n' > "$d/config.yaml" && cp "$d/config.yaml" "$d.orig"
+    if [ "$name" = rodir ]; then chmod "$mode" "$d"; else chmod "$mode" "$d/config.yaml"; fi
+  fi
+  err="$(sug "$d" --dismiss review 2>&1)"
+  chmod 755 "$d" 2>/dev/null; chmod 644 "$d/config.yaml" 2>/dev/null
+  check "AC-3 --dismiss write failure ($name) says so, exit 0, config unchanged" 'grep -q "could not record dismissal of '"'"'review'"'"'" <<<"$err" && grep -q "rc=0" <<<"$err" && { [ "$mode" = - ] || cmp -s "$d/config.yaml" "$d.orig"; } && ! ls "$d"/config.yaml.?????? >/dev/null 2>&1'
+done
 check "AC-4 unknown feature, missing config and Codex print nothing" '[ "$(sug "$S" nope 2>&1)" = "rc=0" ] && [ "$(sug "$TMP/none" review 2>&1)" = "rc=0" ] && [ "$(CODEX_THREAD_ID=t sug "$S" review 2>&1)" = "rc=0" ]'
 
 check "AC-5 session-start sources the shared lib, no copy of installed()" 'grep -q "lib/plugins.sh" "$PLUGIN_DIR/hooks/session-start" && ! grep -q "^installed()" "$PLUGIN_DIR/hooks/session-start"'

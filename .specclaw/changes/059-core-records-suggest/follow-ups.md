@@ -22,3 +22,8 @@
   line, so a trailing comment on it is lost.
 - [minor B1, final pass] `plugins/specclaw/bin/specclaw-log-learning:287` Bytes that are not valid UTF-8 pass
   through `json_esc`, so a strict JSON reader can reject that lesson line.
+- [minor B1] `plugins/specclaw/bin/specclaw-suggest:44` Replacing the in-place `cat "$tmp" > "$CONFIG"` with `mv` changes how the write behaves. If `config.yaml` is a symlink or hard link, `mv` replaces it with a regular file, and the old code wrote through the link. A config the user made read-only now gets overwritten, because `mv` only needs a writable directory. Keep the in-place write, or resolve the link target before the move. (round 7) <!-- fp:a6ad3095c59d -->
+- [minor B6, final pass; kept by choice in round 7] `plugins/specclaw/bin/specclaw-suggest` `--dismiss` writes
+  `config.yaml` in place (`cat tmp > config.yaml`), so it writes through a symlink and respects a read-only
+  file. The cost: a write that fails partway (disk full) can leave the config short. A `mv` swap fixes that but
+  replaces links and overrides a read-only file, which round 7 rejected.
