@@ -33,7 +33,7 @@ One Python module and two entry points, then wiring into config, skills and agen
 
 ### Wave 3 — docs
 
-- [ ] `T4` — CLAUDE.md gate section and tests row, MOD.md hook note
+- [x] `T4` — CLAUDE.md gate section and tests row, MOD.md hook note
   - Files: plugins/specclaw/CLAUDE.md, plugins/specclaw/MOD.md
   - Kind: docs
   - Context: 40000
