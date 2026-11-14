@@ -76,13 +76,19 @@ export const reviewRow = (name: string, rounds: { n: number; text: string }[], h
   return { name, rounds: docs.length, status: str(last.status) ?? '?', blocker: num(counts.blocker), major: num(counts.major), minor: num(counts.minor), escalated, finalHead, atHead }
 }
 
+const FLEET_TOTALS = ['wall_s', 'jobs', 'agent_s', 'hosted_s', 'review_rounds', 'commits', 'cost_usd', 'running', 'prs_open', 'unknown']
+
 export const parseFleet = (text: string | undefined): Section<FleetLine> => {
   if (text === undefined) return { kind: 'missing', card: 'fleet: no report. Install specclaw-fleet (/plugin install specclaw-fleet@chan4lk), then run specclaw-fleet report --save' }
   const doc = json(text)
   const totals = isObject(doc) && isObject(doc.totals) ? doc.totals : undefined
-  // The same validity check as specclaw-fleet's hooks/core/report.ts parseReport (plugins cannot import each other).
-  if (!isObject(doc) || doc.version !== 1 || !Array.isArray(doc.rows) || typeof doc.generated_at !== 'string' || Number.isNaN(Date.parse(doc.generated_at)) || totals === undefined
-    || !['running', 'prs_open', 'jobs'].every(k => typeof totals[k] === 'number')) return { kind: 'error', error: 'fleet report unreadable' }
+  // The same validity check as specclaw-fleet's hooks/core/report.ts parseReport (plugins cannot import each
+  // other): rows a list, every total a number, wall_s and cost_usd also allowed to be null.
+  if (!isObject(doc) || doc.version !== 1 || !Array.isArray(doc.rows) || typeof doc.generated_at !== 'string'
+    || Number.isNaN(Date.parse(doc.generated_at)) || totals === undefined
+    || !FLEET_TOTALS.every(k => typeof totals[k] === 'number' || ((k === 'wall_s' || k === 'cost_usd') && totals[k] === null))) {
+    return { kind: 'error', error: 'fleet report unreadable' }
+  }
   return { kind: 'ok', data: { running: num(totals.running), prs_open: num(totals.prs_open), jobs: num(totals.jobs), generated_at: doc.generated_at } }
 }
 

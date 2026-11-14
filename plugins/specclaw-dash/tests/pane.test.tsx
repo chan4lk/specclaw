@@ -148,17 +148,49 @@ test('R062 AC-5 a failed read shows an error line, never numbers', async ($, on)
   await ui.unmount()
 })
 
-test('R062 AC-2 a subagent meta that is missing at first is read again, never cached as "subagent"', async ($, on) => {
+const META = `${T}/s1/subagents/agent-a1.meta.json`
+const GOOD = JSON.stringify({ agentType: 'code-reviewer', description: 'r' })
+const roleLine = async (ui: { find: (q: object) => Promise<{ text?: string } | undefined> }) => (await ui.find({ type: 'Text', text: /by role/ }))?.text
+const turn = { answer: 'a', durationMs: 1, isAborted: false, turnId: 't', reason: 'answer' } as const
+
+// Each bad meta reads as "subagent" and is asked again: once it is good, the next refresh shows its type.
+const METAS: [string, (files: Record<string, string | null>) => void][] = [
+  ['absent', files => { delete files[META] }],
+  ['a read that throws', files => { files[META] = null }],
+  ['malformed JSON', files => { files[META] = '{' }],
+  ['JSON without agentType', files => { files[META] = '{"description":"r"}' }],
+]
+for (const [why, spoil] of METAS) {
+  test(`R062 AC-2 a subagent meta that is ${why} is read again, never cached as "subagent"`, async ($, on) => {
+    const files = seed()
+    spoil(files)
+    engine(on, files, [], { reads: [], writes: 0, mcp: 0 }, RULES)
+    on('turn.complete', (_, e) => ({ text: e.answer }))
+    await $.command.run({ command: 'dash', args: '' })
+    const ui = await $.ui.mount(PANE)
+    expect(await roleLine(ui)).toBe('  by role: main $0.02 · subagent $0.01')
+    files[META] = GOOD
+    await $.turn.complete(turn)
+    expect(await roleLine(ui)).toBe('  by role: main $0.02 · code-reviewer $0.01')
+    await ui.unmount()
+  })
+}
+
+test('R062 AC-2 a parsed role is not read again; a transcript that leaves and returns is asked again', async ($, on) => {
   const files = seed()
-  const meta = files[`${T}/s1/subagents/agent-a1.meta.json`]!
-  delete files[`${T}/s1/subagents/agent-a1.meta.json`]
-  engine(on, files, [], { reads: [], writes: 0, mcp: 0 }, RULES)
+  const calls: Calls = { reads: [], writes: 0, mcp: 0 }
+  engine(on, files, [], calls, RULES)
   on('turn.complete', (_, e) => ({ text: e.answer }))
   await $.command.run({ command: 'dash', args: '' })
+  await $.turn.complete(turn)
+  expect(calls.reads.filter(p => p === META).length).toBe(1)
+  const sub = files[`${T}/s1/subagents/agent-a1.jsonl`]!
+  delete files[`${T}/s1/subagents/agent-a1.jsonl`]
+  await $.turn.complete(turn)
+  files[`${T}/s1/subagents/agent-a1.jsonl`] = sub
+  files[META] = JSON.stringify({ agentType: 'explorer' })
+  await $.turn.complete(turn)
   const ui = await $.ui.mount(PANE)
-  expect((await ui.find({ type: 'Text', text: /by role/ }))?.text).toBe('  by role: main $0.02 · subagent $0.01')
-  files[`${T}/s1/subagents/agent-a1.meta.json`] = meta
-  await $.turn.complete({ answer: 'a', durationMs: 1, isAborted: false, turnId: 't', reason: 'answer' })
-  expect((await ui.find({ type: 'Text', text: /by role/ }))?.text).toBe('  by role: main $0.02 · code-reviewer $0.01')
+  expect(await roleLine(ui)).toBe('  by role: main $0.02 · explorer $0.01')
   await ui.unmount()
 })

@@ -47,13 +47,31 @@ test('R062 AC-4 review row: last round counts, escalations as a list or a number
   expect(() => reviewRow('059-x', [{ n: 1, text: '{nope' }], null)).toThrow()
 })
 
-test('R062 AC-5 fleet report: totals, missing, unreadable', () => {
-  const ok = JSON.stringify({ version: 1, generated_at: '2026-11-14T11:58:00Z', rows: [], totals: { running: 2, prs_open: 1, jobs: 3 } })
-  expect(parseFleet(ok)).toEqual({ kind: 'ok', data: { running: 2, prs_open: 1, jobs: 3, generated_at: '2026-11-14T11:58:00Z' } })
+const TOTALS = { wall_s: null, jobs: 3, agent_s: 0, hosted_s: 0, review_rounds: 0, commits: 0, cost_usd: null, running: 2, prs_open: 1, unknown: 0 }
+const report = (o: object = {}, totals: object = {}) => JSON.stringify({ version: 1, generated_at: '2026-11-14T11:58:00Z', rows: [], totals: { ...TOTALS, ...totals }, ...o })
+
+test('R062 AC-5 fleet report: totals and missing', () => {
+  expect(parseFleet(report())).toEqual({ kind: 'ok', data: { running: 2, prs_open: 1, jobs: 3, generated_at: '2026-11-14T11:58:00Z' } })
+  expect(parseFleet(report({}, { wall_s: 60, cost_usd: 1.5 })).kind).toBe('ok')
   expect(parseFleet(undefined).kind).toBe('missing')
-  expect(parseFleet('{nope')).toEqual({ kind: 'error', error: 'fleet report unreadable' })
-  expect(parseFleet(JSON.stringify({ version: 2, generated_at: 'x', totals: {} })).kind).toBe('error')
 })
+
+// The rows of specclaw-fleet's report.spec 'unreadable' cases, plus the ones its parser shares with dash.
+const UNREADABLE: [string, string][] = [
+  ['not JSON', '{nope'],
+  ['wrong version', report({ version: 2 })],
+  ['generated_at not a date', report({ generated_at: 'soon' })],
+  ['rows missing', report({ rows: undefined })],
+  ['rows not a list', report({ rows: {} })],
+  ['a total missing', report({}, { commits: undefined })],
+  ['a total not a number', report({}, { running: '2' })],
+  ['jobs null', report({}, { jobs: null })],
+]
+for (const [why, text] of UNREADABLE) {
+  test(`R062 AC-5 fleet report unreadable: ${why}`, () => {
+    expect(parseFleet(text)).toEqual({ kind: 'error', error: 'fleet report unreadable' })
+  })
+}
 
 test('R062 AC-4 proposed rules from learn_propose, anything else is an error', () => {
   expect(proposedCount('3 proposed rule(s) for .specclaw/review/rules/learned.md (dry-run…')).toBe(3)

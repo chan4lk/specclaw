@@ -12,7 +12,12 @@ fi
 (cd "$PLUGIN_DIR" && bun test ./tests/*.spec.ts) || FAILS=$((FAILS + 1))
 
 # AC-7: the pane is read only. The mod may call only the read methods of $.fs, and never $.process.
-if grep -rnoE '\$\.(fs\.[a-zA-Z]+|process)' "$PLUGIN_DIR/hooks" | grep -vE '\$\.fs\.(exists|read|list|stat)$'; then
+# A grep that finds no $.fs call at all means the check did not run, which is a failure, not a pass.
+calls="$(grep -rnoE '\$\.(fs\.[a-zA-Z]+|process)' "$PLUGIN_DIR/hooks" 2>/dev/null)"
+if [ -z "$calls" ]; then
+  echo "FAIL: AC-7 found no \$.fs call in $PLUGIN_DIR/hooks: the check did not run"
+  FAILS=$((FAILS + 1))
+elif grep -vE '\$\.fs\.(exists|read|list|stat)$' <<<"$calls"; then
   echo "FAIL: AC-7 the mod calls a non-read \$.fs method or \$.process"
   FAILS=$((FAILS + 1))
 else
