@@ -123,7 +123,8 @@ build:
 # call. At 90% of the agent's role cap:
 #   off    nothing is checked
 #   warn   the agent and the user are told to hand off; nothing is denied
-#   block  every call is denied except git add/commit/status/diff/log and
+#   block  every call is denied except git add/commit/status/diff/log, cd,
+#          the read-only filters head/tail/wc/grep/sort/cat, and
 #          `specclaw-budget handover`, until the agent stops
 # The main session is never capped. A subagent whose type names no role is
 # `general`. A prompt may open with `specclaw budget: role=<role> context=<n>`;

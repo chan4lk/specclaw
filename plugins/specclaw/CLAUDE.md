@@ -206,7 +206,7 @@ call's context, and compares it with the role's cap:
   `code-reviewer` 150000).
 - **At 90%:** `budget.gate: warn` (shipped) tells the agent and the user to commit and run
   `specclaw-budget handover`, and denies nothing. `block` denies every call except Bash whose
-  every command is `git add/commit/status/diff/log`, `cd` or `specclaw-budget handover` (quoted
+  every command is `git add/commit/status/diff/log`, `cd`, a read-only filter (`head` `tail` `wc` `grep` `sort` `cat`) or `specclaw-budget handover` (quoted
   text is blanked first, so a commit message may hold anything). `off` reads nothing.
 
 It **fails open and loud** (decision 49): any exception exits 0 with a `systemMessage` and a line in

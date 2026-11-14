@@ -32,7 +32,7 @@ BLOCK, LIMIT, LOG_MAX = 1 << 20, 64 << 20, 1 << 20
 AGENT_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
 STATED = re.compile(r"specclaw budget:(.*)")
 ALLOWED = re.compile(
-    r"(cd|head|tail|git(\s+-C\s+\S+)?\s+(add|commit|status|diff|log))(\s|$)|(\S*/)?specclaw-budget\s+handover(\s|$)"
+    r"(cd|head|tail|wc|grep|sort|cat|git(\s+-C\s+\S+)?\s+(add|commit|status|diff|log))(\s|$)|(\S*/)?specclaw-budget\s+handover(\s|$)"
 )
 HAND_OFF = (
     "specclaw context gate: this {role} agent is at {used}k of its {cap}k context cap. Hand off now: "
@@ -268,14 +268,16 @@ def role_and_cap(config: dict, agent_type: object, prompt: str) -> tuple[str, in
 
 
 def committing(tool: object, tool_input: object) -> bool:
-    """A Bash call whose every command commits or writes the hand-off. Quoted text is blanked first,
+    """A Bash call whose every command commits or writes the hand-off (cd and the read-only filters
+    head, tail, wc, grep, sort and cat may join it). Quoted text is blanked first,
     so a commit message may hold anything. shortcut: an unquoted $(...) is not inspected; the gate is
     a quality cap on a cooperative agent, not a sandbox."""
     command = tool_input.get("command") if tool == "Bash" and isinstance(tool_input, dict) else None
     if not isinstance(command, str):
         return False
     bare = re.sub(r"'[^']*'|\"(?:\\.|[^\"\\])*\"", "''", command)
-    bare = re.sub(r"\d*>&\d*-?|\d*>>?\s*/dev/null", " ", bare)  # 2>&1, >&2, 2>/dev/null are not commands
+    # Every redirect with its target (2>&1, >&2, 2>/dev/null, &>log, &>>log, > out, < in) is not a command.
+    bare = re.sub(r"(\d*|&)(>>?|<)&?\s*[^\s;&|]+", " ", bare)
     parts = [part.strip() for part in re.split(r"&&|\|\||[;|&\n]", bare)]
     parts = [part for part in parts if part]
     return bool(parts) and all(ALLOWED.match(part) for part in parts)

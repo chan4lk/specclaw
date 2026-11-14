@@ -123,10 +123,10 @@ else no "warn: $RC $OUT $ERR"; fi
 gate block
 run a1 general-purpose Bash 'git add -A && git commit -m "fix: a; b && rm -rf c"'; [ "$RC" -eq 0 ] && has "hand off" && ok "block: git add && git commit (a message holding ; && rm) passes with the note" || no "block commit: $RC $OUT $ERR"
 run a1 general-purpose Bash 'specclaw-budget handover .specclaw 001-x T1 finish the tests'; [ "$RC" -eq 0 ] && ok "block: specclaw-budget handover passes" || no "block handover: $RC $ERR"
-for c in 'git commit -m x 2>&1' 'git status 2>/dev/null' 'git log --oneline | head -5' 'git diff >&2' 'cd /tmp && git -C /tmp add -A'; do
+for c in 'git commit -m x 2>&1' 'git status 2>/dev/null' 'git log --oneline | head -5' 'git diff >&2' 'git commit -m x &>/tmp/c.log' 'git add -A &>> /tmp/c.log' 'git log 2>&1 | grep fix | wc -l' 'git status | sort | cat' 'cd /tmp && git -C /tmp add -A'; do
   run a1 general-purpose Bash "$c"; [ "$RC" -eq 0 ] && ok "block: '$c' passes (redirects and a head pipe are not commands)" || no "block $c: $RC $ERR"
 done
-for c in Edit 'Bash:rm -rf x' 'Bash:git add . && rm x' 'Bash:git commit -m ok; curl x'; do
+for c in Edit 'Bash:rm -rf x' 'Bash:git add . && rm x' 'Bash:git commit -m ok; curl x' 'Bash:git add -A &>/dev/null & rm x' 'Bash:git log | xargs rm'; do
   case "$c" in Bash:*) run a1 general-purpose Bash "${c#Bash:}" ;; *) run a1 general-purpose "$c" x ;; esac
   [ "$RC" -eq 2 ] && [[ "$ERR" == *"specclaw-budget handover"* ]] && ok "block denies '$c' with exit 2 and the hand-off steps" || no "block $c: $RC $OUT $ERR"
 done

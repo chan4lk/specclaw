@@ -1,0 +1,93 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 1
+ },
+ "escalated": [],
+ "files": [
+  ".claude-plugin/marketplace.json",
+  "plugins/specclaw-bf/.claude-plugin/plugin.json",
+  "plugins/specclaw-bf/.codex-plugin/plugin.json",
+  "plugins/specclaw-dash/.claude-plugin/plugin.json",
+  "plugins/specclaw-dash/.codex-plugin/plugin.json",
+  "plugins/specclaw-extras/.claude-plugin/plugin.json",
+  "plugins/specclaw-extras/.codex-plugin/plugin.json",
+  "plugins/specclaw-fleet/.claude-plugin/plugin.json",
+  "plugins/specclaw-fleet/.codex-plugin/plugin.json",
+  "plugins/specclaw-review/.claude-plugin/plugin.json",
+  "plugins/specclaw-review/.codex-plugin/plugin.json",
+  "plugins/specclaw-sync/.claude-plugin/plugin.json",
+  "plugins/specclaw-sync/.codex-plugin/plugin.json",
+  "plugins/specclaw/.claude-plugin/plugin.json",
+  "plugins/specclaw/.codex-plugin/plugin.json",
+  "plugins/specclaw/bin/specclaw-budget",
+  "plugins/specclaw/lib/budget.py",
+  "plugins/specclaw/tests/run-context-gate-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/lib/budget.py",
+   "fp": "c0559902c6c7",
+   "in_delta": true,
+   "line": 278,
+   "message": "The redirect strip covers `N>&M` and redirects to /dev/null. It does not cover the bash `&>file` and `&>>file` forms, or a redirect to a real file written with `&>`. The `&` in `&>` is still treated as a command separator, so the leftover fragment (`>/tmp/c.log`) matches nothing in ALLOWED. Strip `&>>?\\s*\\S+` before splitting, add the same `&>` form for /dev/null, and add rows to the test table.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "Block mode, subagent at its cap runs `git commit -m x &>/tmp/c.log`. The `&>` is not stripped, so the split yields the parts `git commit -m ''  x` and `>/tmp/c.log`. The second part fails ALLOWED, so committing() returns False and the commit is denied with exit 2. That is the same good-faith-commit denial the previous round reported for `2>&1`.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw/lib/budget.py",
+   "fp": "345b72d2887c",
+   "in_delta": true,
+   "line": 34,
+   "message": "The pipe fix allows only `head` and `tail` as extra commands. Other read-only filters on the same pipeline (`wc`, `grep`, `cat`, `sort`) are still denied in block mode, so the fix covers the named example and not the class. Either decide on a deliberate filter list and test it, or document that only head and tail are accepted.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "Block mode, `git diff --stat | wc -l` or `git log --oneline | grep fix`: the second part is not in ALLOWED, so the whole command is denied with exit 2. `git log | head -5` passes.",
+   "severity": "minor"
+  }
+ ],
+ "head": "a8084c669a6e308b9707d2d6dee8746bfc66fb0a",
+ "impact": [
+  ".github/workflows/ci.yml",
+  "plugins/specclaw-bf/bin/specclaw-bf-baseline",
+  "plugins/specclaw-bf/bin/specclaw-bf-bootstrap",
+  "plugins/specclaw-bf/bin/specclaw-bf-prototype",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-rebuild-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-replay",
+  "plugins/specclaw-bf/tests/run-narration-gate-tests.sh",
+  "plugins/specclaw-dash/hooks/core/view.ts",
+  "plugins/specclaw-dash/tests/pane.test.tsx",
+  "plugins/specclaw-dash/tests/view.spec.ts",
+  "plugins/specclaw-fleet/hooks/core/view.ts",
+  "plugins/specclaw-fleet/lib/report-render.sh",
+  "plugins/specclaw-fleet/lib/report.html",
+  "plugins/specclaw-fleet/tests/cases/ac26_skills.sh",
+  "plugins/specclaw-fleet/tests/cases/ac36_report_output.sh",
+  "plugins/specclaw-fleet/tests/report.spec.ts",
+  "plugins/specclaw/bin/specclaw-build",
+  "plugins/specclaw/bin/specclaw-build-context",
+  "plugins/specclaw/bin/specclaw-parse-tasks"
+ ],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 37139,
+ "round": 2,
+ "since": "7dbd991614",
+ "status": "open",
+ "system_chars": 8944,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794657778,
+ "ts_start": 1794657737
+}
