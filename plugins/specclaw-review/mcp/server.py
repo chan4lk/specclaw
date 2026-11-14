@@ -53,7 +53,7 @@ def call(name, args):
         return json.dumps(rc.classify(c, args.get("since")), indent=1)
     if name == "review_run":
         rec = rc.run_round(c, args["change"], args.get("since"), bool(args.get("final")))
-        keep = {k: rec[k] for k in ("round", "status", "model", "head", "counts", "findings", "error") if k in rec}
+        keep = {k: rec[k] for k in ("round", "status", "model", "head", "counts", "findings", "fix_proof", "error") if k in rec}
         return json.dumps(keep, indent=1)
     if name == "review_verdict":
         code, line = rc.verdict(c, args["change"])

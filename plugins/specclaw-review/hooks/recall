@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+# recall — UserPromptSubmit and PostToolUse(Skill) hook: past lessons at /specclaw:plan and /specclaw:build.
+#
+# On a typed `/specclaw:plan <change>` or `/specclaw:build <change>`, or a Skill call of either, hands
+# the model up to review.recall_k (default 3) lessons as yes/no checks in additionalContext: the change's
+# own `lesson` lines (timeline.jsonl) first, then review memory for the files the change names, then
+# similar lessons of other changes. Anything else: no output. It never blocks, and a recall that fails
+# says so to the model.
+import glob
+import json
+import os
+import re
+import sys
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
+RUN = re.compile(r"/?specclaw:(plan|build)(?:\s+(.*))?", re.S)
+PATH = re.compile(r"[\w.-]+(?:/[\w.-]+)+|[\w-]+\.[A-Za-z]{1,5}\b")
+WORD = re.compile(r"[a-z]{4,}")
+
+
+def lessons(cdir):
+    """A change's `lesson` lines, newest first. Other timeline lines are not lessons and are passed over."""
+    out = []
+    try:
+        fh = open(os.path.join(cdir, "timeline.jsonl"), encoding="utf-8")
+    except OSError:
+        return out
+    with fh:
+        for line in fh:
+            try:
+                e = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(e, dict) and e.get("kind") == "lesson" and str(e.get("detail") or "").strip():
+                out.append(str(e["detail"]))
+    return out[::-1]
+
+
+def read(cdir, *names):
+    parts = []
+    for n in names:
+        try:
+            parts.append(open(os.path.join(cdir, n), encoding="utf-8").read())
+        except OSError:
+            pass
+    return "\n".join(parts)
+
+
+def recall(root, change, verb):
+    import review_core as rc
+    import review_memory as mem
+    cfg = rc.Config(root)
+    cdir = rc.change_dir(cfg, change)
+    k = cfg.num("recall_k", 3)
+    files = sorted(set(PATH.findall(read(cdir, "tasks.md", "spec.md", "proposal.md"))))
+    checks = [(lesson, "this change") for lesson in lessons(cdir)]
+    checks += [(e.get("lesson", ""), "review memory") for e in mem.closest(cfg.mem_dir, files, k)]
+    words = set(WORD.findall(read(cdir, "proposal.md").lower()))
+    others = []
+    for d in glob.glob(os.path.join(glob.escape(cfg.sc), "changes", "*")) + \
+            glob.glob(os.path.join(glob.escape(cfg.sc), "changes", "archive", "*")):
+        if os.path.realpath(d) == os.path.realpath(cdir):
+            continue
+        for lesson in lessons(d):
+            shared = len(words & set(WORD.findall(lesson.lower())))
+            if shared >= 2:
+                others.append((-shared, os.path.basename(d), lesson))
+    checks += [(lesson, name) for _, name, lesson in sorted(others)]
+    seen, picked = set(), []
+    for lesson, src in checks:
+        lesson = " ".join(lesson.split())
+        if lesson and lesson not in seen and len(picked) < k:
+            seen.add(lesson)
+            picked.append(f"- Does this {verb} avoid this past lesson: {lesson[:300]}? Answer yes/no. (from {src})")
+    if not picked:
+        return f"specclaw-review recall: no past lessons for {change}."
+    return "\n".join([f"specclaw-review recall for {change}: check each before you {verb}; a 'no' needs a "
+                      "task or a fix."] + picked)
+
+
+def main():
+    try:
+        event = json.load(sys.stdin)
+    except ValueError:
+        return 0
+    if not isinstance(event, dict):
+        return 0
+    tool = event.get("tool_input") if isinstance(event.get("tool_input"), dict) else {}
+    text = event.get("prompt") or f"{tool.get('skill', '')} {tool.get('args', '')}"
+    run = RUN.fullmatch(str(text).strip())
+    change = next((w for w in ((run and run[2]) or "").split() if not w.startswith("-")), None)
+    if not change:
+        return 0
+    try:
+        here = os.path.realpath(event.get("cwd") or os.getcwd())
+        root = here
+        while not os.path.isdir(os.path.join(root, ".specclaw", "changes")):
+            if os.path.dirname(root) == root:
+                raise LookupError(f"no .specclaw/changes at or above {here}")
+            root = os.path.dirname(root)
+        context = recall(root, change, run[1])
+    except Exception as e:  # noqa: BLE001  said to the model, never a silent hook and never a block
+        context = f"specclaw-review recall unavailable: {type(e).__name__}: {e}"
+    print(json.dumps({"hookSpecificOutput": {"hookEventName": event.get("hook_event_name") or "UserPromptSubmit",
+                                             "additionalContext": context}}))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

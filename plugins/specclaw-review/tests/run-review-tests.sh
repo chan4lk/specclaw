@@ -164,8 +164,8 @@ assert "off by one" in r[2]["result"]["content"][0]["text"] and r[2]["result"]["
 PY'
 
 # AC-13: learn is dry-run by default; --apply writes; --import needs --apply.
-mkdir -p .specclaw/changes/002-other
-out_json "$MAJOR"; "$SR" run --change 002-other >/dev/null   # the same lesson in a second change → a learn candidate
+mkdir -p .specclaw/changes/002-other .specclaw/changes/003-third
+out_json "$MAJOR"; "$SR" run --change 002-other >/dev/null; "$SR" run --change 003-third >/dev/null   # the same lesson in 3 changes → a learn candidate (061)
 "$SR" learn >/dev/null
 check "AC-13 learn dry-run writes nothing" '[ ! -f .specclaw/review/rules/learned.md ]'
 fp="$("$SR" learn | sed -nE 's/^- fp ([0-9a-f]+).*/\1/p' | head -1)"
@@ -310,6 +310,97 @@ PY'
 check "AC-25 severity flagged; suggested block names governance but not ADRs; nothing written" 'grep -q "defines severity" <<<"$disc" && grep -q "\"CLAUDE.md\"" <<<"$disc" && ! grep -q "\"docs/adr" <<<"$disc" && [ "$(git status --porcelain | wc -l)" = "$before" ]'
 printf 'presets: []\ngit:\n  base_branch: main\nreview:\n  governance_budget: 10\n' > .specclaw/config.yaml
 check "AC-26 over budget warns; --json is valid JSON" '"$SR" discover | grep -q WARNING && "$SR" discover --json | python3 -c "import json,sys; d=json.load(sys.stdin); assert d[\"over_budget\"] is True"'
+
+# 061 AC-3..AC-6: fix proof. The previous round's majors stay open unless the tests the fix added or changed
+# fail on the pre-fix commit and pass on HEAD, each run in a clean worktree.
+fpround() {  # $1 repo, $2 test_command ('' for none); leaves round 1 open on MAJOR at H1
+  mkrepo "$1"
+  [ -n "$2" ] && printf '  test_command: "%s"\n' "$2" >> .specclaw/config.yaml && git commit -qam cfg
+  out_json "$MAJOR"; "$SR" run --change "$CH" >/dev/null; H1="$(git rev-parse HEAD)"
+}
+fix() { printf 'def helper_fn(a):\n    return a + 2\n' > a.py; git add -A; git commit -qm "fix"; }
+proof() { field "$RD/round-$1.json" "d.get(\"fix_proof\", {}).get(\"$2\")"; }
+carried() { field "$RD/round-$1.json" "sum(1 for f in d[\"findings\"] if f.get(\"carried\"))"; }
+
+fpround "$TMP/fp1" ""
+fix; out_json '[]'; out="$("$SR" run --change "$CH" --since "$H1")"; rc=$?
+check "AC-3 no test_command: not proven, the major is carried, exit 1" '[ "$rc" = 1 ] && [ "$(proof 2 status)" = not_proven ] && proof 2 reason | grep -q test_command && [ "$(carried 2)" = 1 ] && grep -q "fix-proof: not proven: " <<<"$out"'
+
+fpround "$TMP/fp2" "sh {files}"
+mkdir -p tests && echo 'grep -q "a + 2" a.py' > tests/check_fix.sh && fix
+out_json '[]'; "$SR" run --change "$CH" --since "$H1" >/dev/null; rc=$?
+check "AC-4 a test that fails on the pre-fix commit and passes on HEAD proves the fix; the round is clean" '[ "$rc" = 0 ] && [ "$(proof 2 status)" = proven ] && [ "$(proof 2 base)" = "$H1" ] && [ "$(carried 2)" = 0 ] && [ -z "$(git worktree list | sed 1d)" ]'
+
+fpround "$TMP/fp3" "sh {files}"
+mkdir -p tests && echo 'exit 0' > tests/check_fix.sh && fix
+out_json '[]'; "$SR" run --change "$CH" --since "$H1" >/dev/null; rc=$?
+check "AC-5 a test that already passes on the pre-fix commit proves nothing" '[ "$rc" = 1 ] && proof 2 reason | grep -q "pass on the pre-fix commit" && [ "$(carried 2)" = 1 ]'
+echo 'exit 1' > tests/check_fix.sh && git commit -qam "test fails" && H2="$(git rev-parse HEAD)"
+"$SR" run --change "$CH" --since "$H2" >/dev/null; rc=$?
+check "AC-5 a test that fails on HEAD is not proven (and the pre-fix commit is still H1)" '[ "$rc" != 0 ] && proof 3 reason | grep -q "fail on HEAD" && [ "$(proof 3 base)" = "$H1" ]'
+fpround "$TMP/fp4" "sh {files}"
+fix; out_json '[]'; "$SR" run --change "$CH" --since "$H1" >/dev/null; rc=$?
+check "AC-5 no added or changed test file is not proven" '[ "$rc" = 1 ] && proof 2 reason | grep -q "no test file"'
+
+H2="$(git rev-parse HEAD)"
+mkdir -p tests && echo 'grep -q "a + 2" a.py' > tests/check_fix.sh && git add -A && git commit -qm "test"
+"$SR" run --change "$CH" --since "$H2" >/dev/null; rc=$?
+check "AC-6 a test added a round later is checked against the first pre-fix commit" '[ "$rc" = 0 ] && [ "$(proof 3 status)" = proven ] && [ "$(proof 3 base)" = "$H1" ]'
+fpround "$TMP/fp5" "sh {files}"
+fix; out_json '[]'; "$SR" run --change "$CH" --since "$H1" >/dev/null
+"$SR" run --change "$CH" --final >/dev/null; rc=$?
+check "AC-6 a final pass right after a not-proven round carries the findings; verdict not OK" '[ "$rc" != 0 ] && [ "$(carried 3)" = 1 ] && ! "$SR" verdict --change "$CH" >/dev/null'
+fpround "$TMP/fp6" ""
+out_json '[]'; "$SR" run --change "$CH" >/dev/null; rc=$?
+check "AC-6 a round without --since after an open round runs no fix proof" '[ "$rc" = 0 ] && [ "$(proof 2 status)" = None ]'
+
+# 061 AC-7: promotion threshold — 3 changes by default, review.learn_threshold overrides.
+mkrepo "$TMP/lt"
+out_json "$MAJOR"; for c in "$CH" 002-b; do mkdir -p ".specclaw/changes/$c"; "$SR" run --change "$c" >/dev/null; done
+check "AC-7 a lesson seen in 2 changes is not proposed by default" '"$SR" learn | grep -q "no recurring lessons"'
+printf '  learn_threshold: 2\n' >> .specclaw/config.yaml
+check "AC-7 learn_threshold: 2 proposes it" '"$SR" learn | grep -q "^- fp "'
+git checkout -q -- .specclaw/config.yaml
+mkdir -p .specclaw/changes/003-c; "$SR" run --change 003-c >/dev/null
+check "AC-7 a lesson seen in 3 changes is proposed" '"$SR" learn | grep -q "seen 3x"'
+
+# 061 AC-1/AC-2: recall hook at /specclaw:plan and /specclaw:build.
+RECALL="$PLUGIN_DIR/hooks/recall"
+mkrepo "$TMP/rc"
+mkdir -p .specclaw/changes/010-new .specclaw/changes/archive/009-old src
+printf '# Proposal\nRetry the payment export when the bank queue times out.\n\nFiles: `src/pay/export.py`\n' > .specclaw/changes/010-new/proposal.md
+printf '{"kind":"lesson","at":"t","category":"pattern","priority":"high","detail":"own older lesson","action":""}\n{"ev":"start","ts":1}\nnot json\n{"kind":"lesson","at":"t","category":"pattern","priority":"high","detail":"own newest lesson","action":""}\n' > .specclaw/changes/010-new/timeline.jsonl
+printf '{"kind":"lesson","at":"t","category":"pattern","priority":"low","detail":"bank queue export needs a timeout","action":""}\n{"kind":"lesson","at":"t","category":"pattern","priority":"low","detail":"unrelated lesson","action":""}\n' > .specclaw/changes/archive/009-old/timeline.jsonl
+python3 - "$PLUGIN_DIR/lib" "$TMP/rc" <<"PY"
+import sys; sys.path.insert(0, sys.argv[1]); import review_core as rc, review_memory as m
+c = rc.Config(sys.argv[2])
+m.put(c.mem_dir, [{"rule": "B3", "file": "src/pay/export.py", "message": "memory lesson for export", "severity": "major"},
+                  {"rule": "B1", "file": "web/ui.ts", "message": "memory lesson elsewhere", "severity": "blocker"}])
+PY
+hook() { printf '%s' "$1" | python3 "$RECALL"; }
+ctx() { hook "$1" | python3 -c 'import json,sys; print(json.load(sys.stdin)["hookSpecificOutput"]["additionalContext"])'; }
+p="$(ctx "{\"prompt\":\"/specclaw:plan 010-new\",\"cwd\":\"$TMP/rc/src\",\"hook_event_name\":\"UserPromptSubmit\"}")"
+check "AC-1 /specclaw:plan: own lessons newest first, then memory for the change's files, capped at 3, as yes/no checks" 'python3 - "$p" <<"PY"
+import sys; t = sys.argv[1]; L = [l for l in t.splitlines() if l.startswith("- ")]
+assert len(L) == 3, t
+assert "own newest lesson" in L[0] and "own older lesson" in L[1] and "memory lesson for export" in L[2], t
+assert all("yes/no" in l for l in L) and "elsewhere" not in t
+PY'
+printf '  recall_k: 5\n' >> .specclaw/config.yaml
+SKILL_EV="{\"tool_name\":\"Skill\",\"tool_input\":{\"skill\":\"specclaw:build\",\"args\":\"010-new\"},\"cwd\":\"$TMP/rc\",\"hook_event_name\":\"PostToolUse\"}"
+s="$(ctx "$SKILL_EV")"
+check "AC-1 a Skill call of specclaw:build recalls too; a similar lesson of another change follows memory" 'grep -q "bank queue export needs a timeout" <<<"$s" && ! grep -q "unrelated lesson" <<<"$s" && hook "$SKILL_EV" | grep -q "\"hookEventName\": \"PostToolUse\""'
+check "AC-1 other prompts and skills print nothing" '[ -z "$(hook "{\"prompt\":\"hello\",\"cwd\":\"$TMP/rc\"}")" ] && [ -z "$(hook "{\"tool_input\":{\"skill\":\"specclaw:verify\",\"args\":\"010-new\"},\"cwd\":\"$TMP/rc\"}")" ] && [ -z "$(hook "not json")" ]'
+u="$(ctx "{\"prompt\":\"/specclaw:build 404-none\",\"cwd\":\"$TMP/rc\",\"hook_event_name\":\"UserPromptSubmit\"}")"; urc=$?
+check "AC-2 a missing change says recall unavailable, exit 0" '[ "$urc" = 0 ] && grep -q "recall unavailable" <<<"$u"'
+mkdir -p .specclaw/changes/011-empty
+check "AC-2 no lessons is said, not silent" 'ctx "{\"prompt\":\"/specclaw:plan 011-empty\",\"cwd\":\"$TMP/rc\"}" | grep -q "no past lessons"'
+check "AC-8 hooks.json registers recall on UserPromptSubmit and PostToolUse(Skill)" 'python3 - "$PLUGIN_DIR/hooks/hooks.json" <<"PY"
+import json, sys; h = json.load(open(sys.argv[1]))["hooks"]
+assert "hooks/recall" in h["UserPromptSubmit"][0]["hooks"][0]["command"]
+assert [x for x in h["PostToolUse"] if x["matcher"] == "Skill" and "hooks/recall" in x["hooks"][0]["command"]]
+PY'
+check "AC-8 the rulebook carries B11 and B12" '"$SR" rules 2>/dev/null | grep -q "B11 " && "$SR" rules 2>/dev/null | grep -q "B12 "'
 
 echo
 [ "$FAILS" -eq 0 ] && echo "All specclaw-review tests passed." || echo "$FAILS failure(s)."
