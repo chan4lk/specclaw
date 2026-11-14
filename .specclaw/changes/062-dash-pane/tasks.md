@@ -13,7 +13,7 @@ then the 059 follow-up for `dash`.
 
 ### Wave 1 — Pure logic
 
-- [ ] `T1` — Transcript scanner and the loops/view functions with bun specs over fixtures (AC-2, AC-3, AC-4, AC-5)
+- [x] `T1` — Transcript scanner and the loops/view functions with bun specs over fixtures (AC-2, AC-3, AC-4, AC-5)
   - Files: plugins/specclaw-dash/hooks/core/scan.ts, plugins/specclaw-dash/hooks/core/loops.ts, plugins/specclaw-dash/hooks/core/view.ts, plugins/specclaw-dash/types/index.d.ts, plugins/specclaw-dash/tests/scan.spec.ts, plugins/specclaw-dash/tests/loops.spec.ts, plugins/specclaw-dash/tests/view.spec.ts, plugins/specclaw-dash/tests/fixtures.ts
   - Estimate: large
   - Kind: impl

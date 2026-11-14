@@ -1,2 +1,4 @@
 {"ev":"start","span":"plan","kind":"phase","label":"plan","at":"2026-11-14T06:35:04Z","ts":1794638104}
 {"ev":"stop","span":"plan","at":"2026-11-14T06:36:44Z","ts":1794638204,"status":"ok"}
+{"ev":"start","span":"W1","kind":"wave","label":"wave 1","at":"2026-11-14T06:37:01Z","ts":1794638221}
+{"ev":"stop","span":"W1","at":"2026-11-14T06:40:09Z","ts":1794638409,"status":"ok"}
