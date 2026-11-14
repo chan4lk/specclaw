@@ -69,3 +69,18 @@ for (const [raw, want] of MODE_ROWS) {
     expect(gateMode(raw)).toEqual(want)
   })
 }
+
+test('AC1 the base branch holds project edits, even with an approved change, and leaves .specclaw/ and .git/ alone', () => {
+  const onMain = (target: string, mode: GateMode = 'block', state: Snapshot = snapshot(FULL)) =>
+    gateDecision({ root: '/repo', target, path: target, mode, snapshot: state, onBase: 'main' })
+  expect(onMain('/repo/src/a.ts')).toEqual({
+    action: 'deny',
+    message: 'specclaw: main is the base branch. Create a change branch first before editing src/a.ts.',
+  })
+  expect(onMain('/repo/src/a.ts', 'warn').action).toBe('warn')
+  expect(onMain('/repo/src/a.ts', 'off').action).toBe('allow')
+  expect(onMain('/repo/src/a.ts', 'block', NONE).action).toBe('deny')
+  expect([onMain('/repo/.specclaw/changes/x/spec.md'), onMain('/repo/.git/config'), onMain('/elsewhere/a.ts')].map(v => v.action))
+    .toEqual(['allow', 'allow', 'allow'])
+  expect(gateDecision({ root: '/repo', target: '/repo/src/a.ts', path: 'a', mode: 'block', snapshot: snapshot(FULL) }).action).toBe('allow')
+})
