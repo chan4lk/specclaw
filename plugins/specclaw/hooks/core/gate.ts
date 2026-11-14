@@ -23,6 +23,7 @@ export type GateInput = {
   path: string
   mode: GateMode
   snapshot: Snapshot
+  onBase?: string
 }
 
 const ALLOW: GateVerdict = { action: 'allow' }
@@ -48,11 +49,19 @@ const held = (mode: GateMode, file: string): GateVerdict => ({
 const isStateFile = (changes: string | undefined, target: string) =>
   changes !== undefined && CHANGE_STATE.test(relativeInside(changes, target) ?? '')
 
+const onBaseBranch = (mode: GateMode, branch: string, file: string): GateVerdict => ({
+  action: mode === 'warn' ? 'warn' : 'deny',
+  message: `specclaw: ${branch} is the base branch. Create a change branch first before editing ${file}.`,
+})
+
 export const isGateOpen = (snapshot: Snapshot) =>
   !snapshot.hasSpecclaw || active(snapshot.changes).some(change => change.approved)
 
-export const gateDecision = ({ root, changes, spelled, target, path, mode, snapshot }: GateInput): GateVerdict => {
-  if (mode === 'off' || isGateOpen(snapshot)) return ALLOW
+export const gateDecision = ({ root, changes, spelled, target, path, mode, snapshot, onBase }: GateInput): GateVerdict => {
+  if (mode === 'off') return ALLOW
+  const inProject = target === undefined ? undefined : relativeInside(root, target)
+  if (onBase !== undefined && snapshot.hasSpecclaw && inProject !== undefined && !EXEMPT.test(inProject)) return onBaseBranch(mode, onBase, inProject)
+  if (isGateOpen(snapshot)) return ALLOW
   if (snapshot.isUnreadable || snapshot.changes.some(change => change.isUnreadable)) {
     throw new Error('specclaw: could not read every change')
   }

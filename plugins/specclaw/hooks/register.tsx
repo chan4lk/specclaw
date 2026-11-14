@@ -1,6 +1,7 @@
 import type { Register } from 'claude-code'
 import { gateDecision, gateMode, isGateOpen } from './core/gate.ts'
 import { bandText, paneLines } from './core/view.ts'
+import { onBaseBranch } from './branch.ts'
 import { placeInCwd } from './place.ts'
 import { notify, readView, refresh, refreshQuietly } from './refresh.ts'
 
@@ -37,8 +38,12 @@ export const register: Register = (on, options) => {
     if (mode === 'off') return next(e)
     const path = 'notebook_path' in e ? e.notebook_path : e.file_path
     const snapshot = await refresh($)
-    const placed = isGateOpen(snapshot) ? { root: '/', target: path } : await placeInCwd($, path)
-    const verdict = gateDecision({ ...placed, path, mode, snapshot })
+    const onBase = !snapshot.hasSpecclaw ? undefined : await onBaseBranch($, await $.session.cwd()).catch(async () => {
+      await notify($, 'specclaw: the branch guard failed; the base-branch check was skipped.')
+      return undefined
+    })
+    const placed = isGateOpen(snapshot) && onBase === undefined ? { root: '/', target: path } : await placeInCwd($, path)
+    const verdict = gateDecision({ ...placed, path, mode, snapshot, onBase })
     if (verdict.action === 'deny') return { deny: verdict.message }
     if (verdict.action === 'warn') await notify($, verdict.message)
     return next(e)

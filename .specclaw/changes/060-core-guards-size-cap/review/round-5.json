@@ -1,0 +1,63 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 1
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw/tests/branch.test.ts"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/tests/branch.test.ts",
+   "fp": "49d749ed35aa",
+   "in_delta": true,
+   "line": 33,
+   "message": "The new comment says env is 'merged over the host env per ProcessRunInit.env', but nothing in the diff shows that, and the mock cannot check it. The earlier finding asked for this to be confirmed. If `$.process.run` replaces the environment instead of merging, PATH is lost and git cannot be found. Confirm the merge semantics against the SDK type or implementation and cite it, or add a test of the real runner. Also note that the thrown assertion error is caught by the gate (R2) as a toast and fails open. Rows that already expect an error toast, such as the ENOENT row, would stay green if `env` were removed.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "If `$.process.run` replaces the environment, `env: { LC_ALL: 'C' }` drops PATH. In production git is not found, every edit toasts and fails open, and the mock-based test stays green.",
+   "severity": "minor"
+  }
+ ],
+ "head": "dd946668888915de92e388d7a951f62b2169e89d",
+ "impact": [
+  "plugins/specclaw-bf/bin/specclaw-bf-baseline",
+  "plugins/specclaw-bf/bin/specclaw-bf-domain-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-prototype",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-replay",
+  "plugins/specclaw-bf/bin/specclaw-bf-status",
+  "plugins/specclaw-bf/tests/run-baseline-collect-tests.sh",
+  "plugins/specclaw-bf/tests/run-bf-collect-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-brief-contract-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-checklist-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-readiness-scope-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-status-machine-tests.sh",
+  "plugins/specclaw-extras/bin/specclaw-party",
+  "plugins/specclaw-extras/tests/run-party-tests.sh",
+  "plugins/specclaw-fleet/hooks/register.tsx",
+  "plugins/specclaw-fleet/tests/cases/ac16_doctor.sh",
+  "plugins/specclaw-fleet/tests/cases/ac17_trigger.sh",
+  "plugins/specclaw-fleet/tests/cases/ac20_context_resume.sh",
+  "plugins/specclaw-fleet/tests/cases/ac24_status.sh",
+  "plugins/specclaw-fleet/tests/cases/ac39_first_line_sites.sh"
+ ],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 15737,
+ "round": 5,
+ "since": "a448b39714",
+ "status": "clean",
+ "system_chars": 8953,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794633145,
+ "ts_start": 1794633131
+}

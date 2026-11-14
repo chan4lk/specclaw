@@ -1,5 +1,17 @@
 {
   "modules": [
     "./register.tsx"
-  ]
+  ],
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/done-guard\""
+          }
+        ]
+      }
+    ]
+  }
 }
