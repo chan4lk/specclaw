@@ -41,7 +41,7 @@ a mod can call `$.process.run` (a raw host process), `$.command.run` (a slash co
 - **FR-4 Caps.** **Show caps** runs `specclaw-budget roles --json <specclaw_dir>` and lists each role's
   context cap, range, default and source, with an input per role; Enter runs `specclaw-budget set
   <specclaw_dir> <role> <n>` and reloads. The pane never writes `config.yaml` itself. `specclaw-budget` not
-  found shows one line, `Caps need specclaw ≥ the context-gate release (065).`, and no controls.
+  found shows one line, `Caps need specclaw ≥ the context-gate release (065): specclaw-budget is not installed.`, and no controls.
 - **FR-5 Dismissed suggestions.** **Show dismissed** runs `specclaw-suggest <specclaw_dir> --dismissed` and
   lists each feature with **Undo** (`specclaw-suggest <specclaw_dir> --undismiss <feature>`).
 - **FR-6 Safety.** Every value put into a command (change, module, fingerprint, role, number, feature) must
