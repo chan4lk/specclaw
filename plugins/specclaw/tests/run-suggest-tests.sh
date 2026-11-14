@@ -68,17 +68,25 @@ done
 # The write is a rename onto the real file, never a truncate-and-rewrite of it: the real file's inode
 # changes (an in-place `cat >` keeps it), links stay links, the mode is kept. Relative, absolute and
 # chained symlinks.
-for kind in rel abs chain; do
+for kind in rel abs chain up dirlink; do
   d="$TMP/ln-$kind"; mkdir -p "$d/real" && printf 'version: 1\n' > "$d/real/config.yaml" && chmod 640 "$d/real/config.yaml"
   case "$kind" in
     rel)   ln -s real/config.yaml "$d/config.yaml" ;;
     abs)   ln -s "$d/real/config.yaml" "$d/config.yaml" ;;
     chain) ln -s config.yaml "$d/real/hop.yaml" && ln -s real/hop.yaml "$d/config.yaml" ;;
+    up)    mkdir -p "$d/sib" && ln -s ../real/config.yaml "$d/sib/config.yaml" && ln -s sib/config.yaml "$d/config.yaml" ;;
+    dirlink) rm -rf "$d.dir" && mv "$d/real" "$d.dir" && ln -s "$d.dir" "$d/real" && ln -s real/config.yaml "$d/config.yaml" ;;
   esac
-  ino="$(ls -i "$d/real/config.yaml" | awk '{print $1}')"
+  ino="$(ls -iL "$d/real/config.yaml" | awk '{print $1}')"
   sug "$d" --dismiss review >/dev/null
-  check "AC-3 --dismiss ($kind symlink) renames onto the real file, keeps the link and mode" '[ -L "$d/config.yaml" ] && grep -qx "  dismissed: \[review\]" "$d/real/config.yaml" && [ "$(ls -i "$d/real/config.yaml" | awk "{print \$1}")" != "$ino" ] && [ "$(ls -l "$d/real/config.yaml" | cut -c1-10)" = "-rw-r-----" ]'
+  check "AC-3 --dismiss ($kind symlink) renames onto the real file, keeps the link and mode" '[ -L "$d/config.yaml" ] && grep -qx "  dismissed: \[review\]" "$d/real/config.yaml" && [ "$(ls -iL "$d/real/config.yaml" | awk "{print \$1}")" != "$ino" ] && [ "$(ls -lL "$d/real/config.yaml" | cut -c1-10)" = "-rw-r-----" ]'
 done
+# A late failure: the temp copy exists and the rename onto the real file fails (mv stubbed to fail).
+# The original bytes survive and no temp file is left behind.
+d="$TMP/late"; mkdir -p "$d" "$TMP/failmv" && printf 'version: 1\n' > "$d/config.yaml" && cp "$d/config.yaml" "$d.orig"
+printf '#!/bin/sh\nexit 1\n' > "$TMP/failmv/mv" && chmod +x "$TMP/failmv/mv"
+err="$(PATH="$TMP/failmv:/usr/bin:/bin" CLAUDE_PLUGIN_ROOT="$ROOT" "$BIN/specclaw-suggest" "$d" --dismiss review 2>&1; echo "rc=$?")"
+check "AC-3 --dismiss late rename failure keeps the original and cleans up" 'grep -q "could not record dismissal" <<<"$err" && grep -q "rc=0" <<<"$err" && cmp -s "$d/config.yaml" "$d.orig" && ! ls "$d"/config.yaml.?????? >/dev/null 2>&1'
 check "AC-4 unknown feature, missing config and Codex print nothing" '[ "$(sug "$S" nope 2>&1)" = "rc=0" ] && [ "$(sug "$TMP/none" review 2>&1)" = "rc=0" ] && [ "$(CODEX_THREAD_ID=t sug "$S" review 2>&1)" = "rc=0" ]'
 
 check "AC-5 session-start sources the shared lib, no copy of installed()" 'grep -q "lib/plugins.sh" "$PLUGIN_DIR/hooks/session-start" && ! grep -q "^installed()" "$PLUGIN_DIR/hooks/session-start"'
