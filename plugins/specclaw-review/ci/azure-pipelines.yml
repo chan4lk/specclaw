@@ -19,8 +19,8 @@ steps:
       fi
       API="${COLLECTION}${PROJECT}/_apis/git/repositories/${REPO_ID}/pullRequests/${PR_ID}"
       ITER="$(curl -sf -H "Authorization: Bearer $SYSTEM_ACCESSTOKEN" "$API/iterations?api-version=7.1" \
-        | python3 -c 'import json,sys; v=json.load(sys.stdin)["value"][-1]; print(v["id"] if v["sourceRefCommit"]["commitId"]==sys.argv[1] else "")' "$HEAD_SHA")"
-      if [ -z "$ITER" ]; then echo "##vso[task.logissue type=warning]latest iteration is not $HEAD_SHA; status not posted"; exit 0; fi
+        | python3 -c 'import json,sys; v=json.load(sys.stdin)["value"][-1]; print(v["id"] if v["sourceRefCommit"]["commitId"]==sys.argv[1] else "")' "$HEAD_SHA")" || ITER=""
+      if [ -z "$ITER" ]; then echo "##vso[task.logissue type=warning]latest iteration unreadable or not $HEAD_SHA; status not posted"; exit 0; fi
       python3 -c 'import json,sys; print(json.dumps({"state":"succeeded","description":"clean","iterationId":int(sys.argv[1]),
         "context":{"genre":"specclaw","name":"review-loop"}}))' "$ITER" \
         | curl -sf -X POST -H "Authorization: Bearer $SYSTEM_ACCESSTOKEN" -H "Content-Type: application/json" \

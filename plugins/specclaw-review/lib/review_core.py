@@ -623,7 +623,9 @@ def _append_items(path, header, findings, line):
             fh.write(header)
         for f in new:
             # one physical line, or the class marker drifts off the item and the release gate misreads it
-            fh.write(" ".join(line(f).split()) + f" <!-- fp:{f['fp']} class:{f.get('class', 'other')} -->\n")
+            # an unlabelled blocker/major is `unclassified`, which the release gate blocks on (fail closed, as the round does)
+            cls = "unclassified" if f.get("unclassified") and f["severity"] != "minor" else f.get("class", "other")
+            fh.write(" ".join(line(f).split()) + f" <!-- fp:{f['fp']} class:{cls} -->\n")
     return len(new)
 
 

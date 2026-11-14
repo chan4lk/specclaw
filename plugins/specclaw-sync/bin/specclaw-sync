@@ -16,12 +16,12 @@ import sys
 DEFAULT_BLOCK_ON = ["law", "security", "data-loss"]
 CLASSES = ("law", "security", "data-loss", "other")   # the classes specclaw-review writes
 FP_RE = re.compile(r"<!--.*\bfp:([0-9a-f]+)")
+LIST_RE = re.compile(r"^\.specclaw/(debt\.md|changes/(.+/)?follow-ups\.md)$")
+CLASS_RE = re.compile(r"<!--.*\bclass:([\w-]+).*-->")
 
 
 class GateError(Exception):
     pass
-LIST_RE = re.compile(r"^\.specclaw/(debt\.md|changes/(.+/)?follow-ups\.md)$")
-CLASS_RE = re.compile(r"<!--.*\bclass:([\w-]+).*-->")
 
 
 def git(*args):
@@ -113,11 +113,11 @@ def _release(base, target):
             if (fp.group(1) not in before_fps) if fp else (ln not in before_lines):
                 m = CLASS_RE.search(ln)
                 items.append((norm(m.group(1)) if m else "other", path, ln))
-    blocking = [i for i in items if i[0] in gate]
+    blocking = [i for i in items if i[0] in gate or i[0] == "unclassified"]   # unlabelled blocker/major: fail closed
     print(f"release {base}..{target}: {len(items)} open item(s), {len(blocking)} blocking "
           f"(block_on: {', '.join(gate)})")
     for cls, path, ln in items:
-        print(f"{'BLOCK' if cls in gate else '     '} {cls:<9} {path}  {ln}")
+        print(f"{'BLOCK' if (cls, path, ln) in blocking else '     '} {cls:<12} {path}  {ln}")
     return 1 if blocking else 0
 
 

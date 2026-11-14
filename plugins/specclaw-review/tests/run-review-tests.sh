@@ -369,6 +369,9 @@ check "064 AC-5 release_gate.block_on: [law] makes a security blocker debt, not 
 out_json '[{"severity":"blocker","rule":"B7","file":"a.py","line":2,"message":"unlabelled crash","scenario":"s","in_delta":true}]'
 "$SR" run --change "$CH" >/dev/null; rc=$?
 check "064 AC-5 fast track: a blocker with no class stays blocking" '[ "$rc" = 1 ] && ! grep -q "unlabelled crash" .specclaw/debt.md'
+out_json '[{"severity":"major","rule":"B8","file":"a.py","line":2,"message":"unlabelled major","scenario":"s","in_delta":true}]'
+"$SR" run --change "$CH" >/dev/null
+check "064 AC-5 an unlabelled major goes to debt as class:unclassified, for the release gate to block" 'grep -q "unlabelled major.*class:unclassified -->" .specclaw/debt.md'
 out_json '[{"severity":"major","rule":"S9","file":"a.py","line":2,"message":"leaks\n\n  the token","scenario":"s","class":"security","in_delta":true}]'
 "$SR" run --change "$CH" >/dev/null
 check "064 AC-5 a multi-line message is one debt line that keeps its class marker" 'grep -q "^- \[ \] \[security major S9\] .*leaks the token .*class:security -->$" .specclaw/debt.md'

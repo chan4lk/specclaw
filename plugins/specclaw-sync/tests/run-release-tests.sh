@@ -33,6 +33,10 @@ printf -- '- [ ] [security major S2] `e.py:5` token in log (change 001-a, round 
 git add -A && git commit -qm security && git tag security
 rel base security; rc=$?
 check "AC-6 a security item in range: exit 1 and it is marked BLOCK" '[ "$rc" = 1 ] && grep -q "^BLOCK .*token in log" "$TMP/out"'
+git checkout -q -b unclassified security && printf -- '- [ ] [unclassified major B8] `f.py:6` unlabelled (change 001-a, round 1) <!-- fp:fff class:unclassified -->\n' >> .specclaw/debt.md && git commit -qam unclassified
+rel security HEAD; rc=$?
+check "AC-6 an unclassified (unlabelled blocker/major) item blocks the release" '[ "$rc" = 1 ] && grep -q "^BLOCK unclassified" "$TMP/out"'
+git checkout -q main
 rel security security; rc=$?
 check "AC-6 an empty range lists nothing, exit 0" '[ "$rc" = 0 ] && grep -q "0 open item" "$TMP/out"'
 
@@ -69,6 +73,7 @@ for cfg in ["", "release_gate:\n  block_on: []\n", "release_gate:\n  block_on: [
     a, b = both(cfg)
     assert a == b, (cfg, a, b)
 assert both("release_gate:\n  block_on: crash\n") == ["refused", "refused"]
+assert sync.CLASSES == rc.CLASSES and sync.DEFAULT_BLOCK_ON == rc.DEFAULT_BLOCK_ON
 PY'
 git checkout -q security && git tag -f pre-archive >/dev/null && mkdir -p .specclaw/changes/archive && git mv .specclaw/changes/001-a .specclaw/changes/archive/001-a && git commit -qm archive
 rel pre-archive HEAD; rc=$?
