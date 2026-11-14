@@ -45,13 +45,18 @@ HAND_OFF = (
 
 def _block(lines: list[str]) -> tuple[int | None, int]:
     """Return the column-0 `budget:` line's index and the end of its block (the next column-0 key)."""
-    start = next((i for i, line in enumerate(lines) if re.match(r"budget:\s*(#.*)?$", line)), None)
+    start = next((i for i, line in enumerate(lines) if re.match(r"budget\s*:", line)), None)
     if start is None:
         return None, len(lines)
     end = start + 1
     while end < len(lines) and not re.match(r"[^\s#]", lines[end]):
         end += 1
     return start, end
+
+
+def _inline(line: str) -> bool:
+    """The column-0 `budget:` line holds a value of its own (a flow map), not a block."""
+    return re.sub(r"\s+#.*$", "", line.split(":", 1)[1]).strip() not in ("", "{}")
 
 
 def _parse(lines: list[str]) -> dict:
@@ -82,8 +87,11 @@ def load(specclaw_dir: Path) -> dict:
     path = Path(specclaw_dir) / "config.yaml"
     lines = path.read_text("utf-8").splitlines() if path.is_file() else []
     start, end = _block(lines)
-    raw = _parse(lines[start + 1:end]) if start is not None else {}
     warnings: list[str] = []
+    raw = _parse(lines[start + 1:end]) if start is not None else {}
+    if start is not None and _inline(lines[start]):
+        warnings.append("budget: is not an indented map; running on the defaults")
+        raw = {}
     gate = raw.get("gate", "warn")
     if gate not in GATES:
         warnings.append(f"budget.gate {gate!r} is not off, warn or block; running on warn")
@@ -96,7 +104,9 @@ def load(specclaw_dir: Path) -> dict:
         value = fields.get("context") if isinstance(fields, dict) else None
         if name not in ROLES:
             warnings.append(f"budget.roles.{name} is not a role ({', '.join(ROLES)}); ignored")
-        elif value is not None:
+        elif not isinstance(fields, dict) or "context" not in fields:
+            warnings.append(f"budget.roles.{name} is not an indented map with a context: key; using the default")
+        else:
             if isinstance(value, str) and value.isdigit() and ROLES[name] // 2 <= int(value) <= ROLES[name] * 2:
                 roles[name] = (int(value), "config")
             else:
@@ -105,6 +115,8 @@ def load(specclaw_dir: Path) -> dict:
     for kind, agent in (raw.get("routing") if isinstance(raw.get("routing"), dict) else {}).items():
         if isinstance(agent, str) and agent:
             routing[kind] = agent
+        else:
+            warnings.append(f"budget.routing.{kind} is not an agent type; using {routing.get(kind, routing['default'])}")
     return {"gate": gate, "roles": roles, "routing": routing, "warnings": warnings}
 
 
@@ -129,6 +141,8 @@ def set_context(specclaw_dir: Path, role: str, value: int) -> None:
     if lines and not lines[-1].endswith("\n"):
         lines[-1] += "\n"
     start, end = _block([line.rstrip("\n") for line in lines])
+    if start is not None and _inline(lines[start]):
+        raise ValueError("budget: holds an inline value; write it as an indented map first")
     if start is None:
         lines += ["budget:\n", "  roles:\n", f"    {role}:\n", f"      context: {value}\n"]
     else:
@@ -303,6 +317,7 @@ def committing(tool: object, tool_input: object) -> bool:
     command = tool_input.get("command") if tool == "Bash" and isinstance(tool_input, dict) else None
     if not isinstance(command, str):
         return False
+    command = re.sub(r"([\"'])[^\"']*/specclaw-budget\1", "specclaw-budget", command)  # a quoted plugin path
     bare = re.sub(r"'[^']*'|\"(?:\\.|[^\"\\])*\"", "''", command)
     # Only fd duplication (2>&1, >&2) and output to /dev/null are dropped; any other redirect stays,
     # and a part still holding < or > is denied below: block never lets a call write a file.

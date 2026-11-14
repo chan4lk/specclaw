@@ -198,8 +198,9 @@ command hook in `hooks/mod.json`, so Claude Code only. For a subagent call it re
 transcript (`<transcript_path minus .jsonl>/subagents/agent-<agent_id>.jsonl`) backwards for the last
 call's context, and compares it with the role's cap:
 
-- **Role:** a known `role=` on the prompt's first line `specclaw budget: role=<role> context=<n>`,
+- **Role:** the `role=` on the prompt's first line `specclaw budget: role=<role> context=<n>`,
   else the agent type after its last `:` when the table names it, else `general` (decision 42).
+  A stated role or context that does not parse is an error: the call goes through, loudly.
   The main session is never capped.
 - **Cap:** the stated `context=` clamped to half..double the role's *shipped* default, else
   `budget.roles.<role>.context`, else the default (`builder-*` and `general` 200000,

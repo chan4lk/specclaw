@@ -42,13 +42,15 @@ def tasks_of(specclaw_dir: str, change: str) -> dict:
 
 
 def estimate(specclaw_dir: str, change: str) -> int:
-    root, over = Path(specclaw_dir).resolve().parent, []
+    root, over, unsized = Path(specclaw_dir).resolve().parent, [], []
     for task, fields in tasks_of(specclaw_dir, change).items():
         try:
             stated = budget.task_context(fields)
         except ValueError as error:
             raise ValueError(f"{task}: {error}") from None
         if not fields.get("Files") and stated is None:
+            print(f"{task} unsized")
+            unsized.append(task)
             continue
         read = budget.read_tokens(root, fields.get("Files", ""))
         context = read if stated is None else stated
@@ -57,7 +59,9 @@ def estimate(specclaw_dir: str, change: str) -> int:
             over.append(task)
     if over:
         print(f"over {budget.TASK_LIMIT}: {', '.join(over)}; split it by module or file group, never into a test task and a code task")
-    return 1 if over else 0
+    if unsized:
+        print(f"unsized: {', '.join(unsized)}; give each a Files: or a Context: line")
+    return 1 if over or unsized else 0
 
 
 def brief(specclaw_dir: str, change: str, task: str) -> int:

@@ -50,7 +50,7 @@ Turn an approved proposal into an executable plan.
    `Files:` (read = 26000 tokens of start-up plus the files at 2.2 characters a token). Add the
    diff the task will type (about 60 tokens a line) and write the total as `- Context: <n>` under
    the task. Split any task over 60000 by module or file group, never into a test task and a code
-   task, and re-run until it exits 0. Tag UI tasks `Kind: frontend` and server tasks
+   task, and re-run until it exits 0 (an `unsized` task, with neither line, also fails it). Tag UI tasks `Kind: frontend` and server tasks
    `Kind: backend`: the kind picks the build agent, and so its model (`budget.routing`).
 5. Record each phase as its file lands — one call per artifact, immediately after writing it:
    ```bash

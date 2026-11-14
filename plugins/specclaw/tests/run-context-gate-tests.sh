@@ -98,6 +98,13 @@ if [ "$(cat "$F/config.yaml")" = "$(printf 'budget:\n    gate: warn\n    roles:\
    && "$BUDGET" roles --json "$F" | grep -q '"code-reviewer": {"context": 100000'; then
   ok "set on a four-space config writes at the indentation the block uses"
 else no "four-space set: $(cat "$F/config.yaml")"; fi
+for cfg in 'budget: {gate: block}' 'budget:\n  roles:\n    general: 150000' 'budget:\n  roles:\n    general:\n      contxt: 150000' 'budget:\n  routing:\n    frontend:'; do
+  printf "$cfg\n" > "$F/config.yaml"
+  r="$("$BUDGET" roles --json "$F" 2>"$TMP/err")"
+  [ -s "$TMP/err" ] && [[ "$r" == *'"general": {"context": 200000'* ]] && ok "'${cfg//\\n/ }' is a warning and the defaults stand" || no "silent bad config '$cfg': $r"
+done
+printf 'budget: {gate: block}\n' > "$F/config.yaml"; "$BUDGET" set "$F" general 160000 2>/dev/null; [ $? -eq 1 ] && [ "$(cat "$F/config.yaml")" = 'budget: {gate: block}' ] \
+  && ok "set refuses an inline budget: map rather than add a second budget: key" || no "inline budget set: $(cat "$F/config.yaml")"
 printf 'budget:\n  roles: {general: {context: 150000}}\n  routing: x\n' > "$F/config.yaml"; cp "$F/config.yaml" "$TMP/before"
 "$BUDGET" roles --json "$F" 2>"$TMP/err" >/dev/null; "$BUDGET" set "$F" general 160000 2>/dev/null; rc=$?
 grep -q 'budget.roles is not an indented map' "$TMP/err" && grep -q 'budget.routing is not an indented map' "$TMP/err" && [ "$rc" -eq 1 ] && cmp -s "$TMP/before" "$F/config.yaml" \
@@ -132,7 +139,9 @@ else no "warn: $RC $OUT $ERR"; fi
 # ── AC-5 block ────────────────────────────────────────────────────────────────────────────────
 gate block
 run a1 general-purpose Bash 'git add -A && git commit -m "fix: a; b && rm -rf c"'; [ "$RC" -eq 0 ] && has "hand off" && ok "block: git add && git commit (a message holding ; && rm) passes with the note" || no "block commit: $RC $OUT $ERR"
-run a1 general-purpose Bash 'specclaw-budget handover .specclaw 001-x T1 finish the tests'; [ "$RC" -eq 0 ] && ok "block: specclaw-budget handover passes" || no "block handover: $RC $ERR"
+for c in 'specclaw-budget handover .specclaw 001-x T1 finish the tests' '"$CLAUDE_PLUGIN_ROOT/bin/specclaw-budget" handover .specclaw 001-x T1 "finish it"' "'/p/bin/specclaw-budget' handover .specclaw 001-x T1 x"; do
+  run a1 general-purpose Bash "$c"; [ "$RC" -eq 0 ] && ok "block: $c passes" || no "block handover $c: $RC $ERR"
+done
 for c in 'git commit -m x 2>&1' 'git status 2>/dev/null' 'git log --oneline | head -5' 'git diff >&2' 'git commit -m x &>/dev/null' 'git add -A 2>> /dev/null' 'git log 2>&1 | head -5' 'git status | tail -3' 'cd /tmp && git -C /tmp add -A'; do
   run a1 general-purpose Bash "$c"; [ "$RC" -eq 0 ] && ok "block: '$c' passes (fd duplication, /dev/null, head and tail)" || no "block $c: $RC $ERR"
 done
@@ -200,8 +209,8 @@ cat > "$P/.specclaw/changes/001-x/tasks.md" <<'EOF'
 EOF
 out="$("$BUDGET" estimate "$P/.specclaw" 001-x)"; rc=$?
 if [ "$rc" -eq 1 ] && [ "$(printf '%s\n' "$out" | head -2)" = "$(printf 'T1 read=36000 context=36000\nT2 read=36000 context=70000')" ] \
-   && [[ "$out" == *"over 60000: T2, T4; split it"* ]]; then
-  ok "estimate: read = 26000 + chars/2.2 (a missing file counts 0), Context: wins, exit 1 naming T2 and T4 (sized with no Files:)"
+   && [[ "$out" == *"over 60000: T2, T4; split it"* ]] && [[ "$out" == *$'T3 unsized'* ]] && [[ "$out" == *"unsized: T3;"* ]]; then
+  ok "estimate: read = 26000 + chars/2.2 (a missing file counts 0), Context: wins, exit 1 naming T2 and T4 (sized with no Files:) and T3 unsized"
 else no "estimate ($rc): $out"; fi
 b1="$("$BUDGET" brief "$P/.specclaw" 001-x T1)"; b2="$("$BUDGET" brief "$P/.specclaw" 001-x T2)"
 if [ "$b1" = "$(printf 'subagent_type: specclaw:builder-frontend\nspecclaw budget: role=builder-frontend')" ] \
