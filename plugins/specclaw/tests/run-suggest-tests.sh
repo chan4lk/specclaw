@@ -84,9 +84,9 @@ done
 # A late failure: the temp copy exists and the rename onto the real file fails (mv stubbed to fail).
 # The original bytes survive and no temp file is left behind.
 d="$TMP/late"; mkdir -p "$d" "$TMP/failmv" && printf 'version: 1\n' > "$d/config.yaml" && cp "$d/config.yaml" "$d.orig"
-printf '#!/bin/sh\nexit 1\n' > "$TMP/failmv/mv" && chmod +x "$TMP/failmv/mv"
+printf '#!/bin/sh\n[ -f "$1" ] && grep -qx "  dismissed: \\\\[review\\\\]" "$1" && echo called >> "%s"\nexit 1\n' "$TMP/mv-called" > "$TMP/failmv/mv" && chmod +x "$TMP/failmv/mv"
 err="$(PATH="$TMP/failmv:/usr/bin:/bin" CLAUDE_PLUGIN_ROOT="$ROOT" "$BIN/specclaw-suggest" "$d" --dismiss review 2>&1; echo "rc=$?")"
-check "AC-3 --dismiss late rename failure keeps the original and cleans up" 'grep -q "could not record dismissal" <<<"$err" && grep -q "rc=0" <<<"$err" && cmp -s "$d/config.yaml" "$d.orig" && ! ls "$d"/config.yaml.?????? >/dev/null 2>&1'
+check "AC-3 --dismiss late rename failure keeps the original and cleans up" '[ "$(cat "$TMP/mv-called" 2>/dev/null)" = called ] && grep -q "could not record dismissal" <<<"$err" && grep -q "rc=0" <<<"$err" && cmp -s "$d/config.yaml" "$d.orig" && ! ls "$d"/config.yaml.?????? >/dev/null 2>&1'
 check "AC-4 unknown feature, missing config and Codex print nothing" '[ "$(sug "$S" nope 2>&1)" = "rc=0" ] && [ "$(sug "$TMP/none" review 2>&1)" = "rc=0" ] && [ "$(CODEX_THREAD_ID=t sug "$S" review 2>&1)" = "rc=0" ]'
 
 check "AC-5 session-start sources the shared lib, no copy of installed()" 'grep -q "lib/plugins.sh" "$PLUGIN_DIR/hooks/session-start" && ! grep -q "^installed()" "$PLUGIN_DIR/hooks/session-start"'
