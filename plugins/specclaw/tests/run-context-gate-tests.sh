@@ -126,7 +126,7 @@ run a1 general-purpose Bash 'specclaw-budget handover .specclaw 001-x T1 finish 
 for c in 'git commit -m x 2>&1' 'git status 2>/dev/null' 'git log --oneline | head -5' 'git diff >&2' 'git commit -m x &>/dev/null' 'git add -A 2>> /dev/null' 'git log 2>&1 | grep fix | wc -l' 'git status | sort | cat' 'cd /tmp && git -C /tmp add -A'; do
   run a1 general-purpose Bash "$c"; [ "$RC" -eq 0 ] && ok "block: '$c' passes (fd duplication, /dev/null and the filter list)" || no "block $c: $RC $ERR"
 done
-for c in Edit 'Bash:rm -rf x' 'Bash:git add . && rm x' 'Bash:git commit -m ok; curl x' 'Bash:git add -A &>/dev/null & rm x' 'Bash:git log | xargs rm' 'Bash:git log > f' 'Bash:git status 1>out' 'Bash:git log 2>> e' 'Bash:cat < in' 'Bash:git commit -m x &>/tmp/c.log' 'Bash:git log > f; rm x' 'Bash:git log >/dev/nullx'; do
+for c in Edit 'Bash:rm -rf x' 'Bash:git add . && rm x' 'Bash:git commit -m ok; curl x' 'Bash:git add -A &>/dev/null & rm x' 'Bash:git log | xargs rm' 'Bash:git log > f' 'Bash:git status 1>out' 'Bash:git log 2>> e' 'Bash:cat < in' 'Bash:git commit -m x &>/tmp/c.log' 'Bash:git log > f; rm x' 'Bash:git log >/dev/nullx' 'Bash:git log >&2x' 'Bash:git log 2>&1x' 'Bash:git log >&file'; do
   case "$c" in Bash:*) run a1 general-purpose Bash "${c#Bash:}" ;; *) run a1 general-purpose "$c" x ;; esac
   [ "$RC" -eq 2 ] && [[ "$ERR" == *"specclaw-budget handover"* ]] && ok "block denies '$c' with exit 2 and the hand-off steps" || no "block $c: $RC $OUT $ERR"
 done

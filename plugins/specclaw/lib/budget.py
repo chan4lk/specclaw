@@ -278,7 +278,7 @@ def committing(tool: object, tool_input: object) -> bool:
     bare = re.sub(r"'[^']*'|\"(?:\\.|[^\"\\])*\"", "''", command)
     # Only fd duplication (2>&1, >&2) and output to /dev/null are dropped; any other redirect stays,
     # and a part still holding < or > is denied below: block never lets a call write a file.
-    bare = re.sub(r"\d*>&\d+-?|(\d*|&)>>?\s*/dev/null(?=[\s;&|]|$)", " ", bare)
+    bare = re.sub(r"(\d*>&\d+-?|(\d*|&)>>?\s*/dev/null)(?=[\s;&|]|$)", " ", bare)
     parts = [part.strip() for part in re.split(r"&&|\|\||[;|&\n]", bare)]
     parts = [part for part in parts if part]
     return bool(parts) and all(ALLOWED.match(part) and not re.search(r"[<>]", part) for part in parts)
