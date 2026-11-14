@@ -268,10 +268,14 @@ test('R063 AC-3 fleet not installed or not set up: setup steps, no Confirm', asy
   await ui.press({ key: 'dry-run' })
   expect((await ui.find({ type: 'Text', text: /Set up fleet/ }))?.text).toBe('    Set up fleet: /plugin install specclaw-fleet@chan4lk, then /specclaw-fleet:setup')
   expect(await ui.find({ key: 'confirm-launch' })).toBeUndefined()
-  out = 'specclaw-fleet: could not read the identity behind AZDO_TOKEN (check .specclaw/.env)\n__dash_exit=1\n'
-  await ui.press({ key: 'dry-run' })
-  expect((await ui.find({ type: 'Text', text: /Fleet could not run/ }))?.text).toContain('/specclaw-fleet:setup')
-  expect(await ui.find({ key: 'confirm-launch' })).toBeUndefined()
+  // No item named: exit 1 (no token) and exit 0 (unknown output) point at setup; a cut-off run (no exit mark) says so.
+  for (const [o, said] of [['no token\n__dash_exit=1\n', /Fleet could not run/], ['changed format\n__dash_exit=0\n', /Fleet could not run/],
+    ['cut off', /did not finish \(timeout or cut-off output\)/]] as const) {
+    out = o
+    await ui.press({ key: 'dry-run' })
+    expect((await ui.find({ type: 'Text', text: said }))?.text).toBeDefined()
+    expect(await ui.find({ key: 'confirm-launch' })).toBeUndefined()
+  }
   await ui.unmount()
 })
 
