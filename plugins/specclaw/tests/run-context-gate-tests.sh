@@ -92,6 +92,16 @@ if [ "$(sed -n '/^budget:/,/^[a-z]/p' "$T/config.yaml" | grep -A2 '^  roles:  *#
    && [ -z "$(find "$T" -name '.config.yaml.*')" ]; then
   ok "set on the shipped template turns roles: {} into a map, keeps its comment, leaves no temp file"
 else no "set on the template: $(sed -n '/^budget:/,/^# Brown/p' "$T/config.yaml")"; fi
+F="$TMP/four/.specclaw"; mkdir -p "$F"; printf 'budget:\n    gate: warn\n    roles:\n        general:\n            context: 150000\nreview:\n  x: 1\n' > "$F/config.yaml"
+"$BUDGET" set "$F" code-reviewer 100000 && "$BUDGET" set "$F" general 160000
+if [ "$(cat "$F/config.yaml")" = "$(printf 'budget:\n    gate: warn\n    roles:\n        general:\n            context: 160000\n        code-reviewer:\n            context: 100000\nreview:\n  x: 1')" ] \
+   && "$BUDGET" roles --json "$F" | grep -q '"code-reviewer": {"context": 100000'; then
+  ok "set on a four-space config writes at the indentation the block uses"
+else no "four-space set: $(cat "$F/config.yaml")"; fi
+printf 'budget:\n  roles: {general: {context: 150000}}\n  routing: x\n' > "$F/config.yaml"; cp "$F/config.yaml" "$TMP/before"
+"$BUDGET" roles --json "$F" 2>"$TMP/err" >/dev/null; "$BUDGET" set "$F" general 160000 2>/dev/null; rc=$?
+grep -q 'budget.roles is not an indented map' "$TMP/err" && grep -q 'budget.routing is not an indented map' "$TMP/err" && [ "$rc" -eq 1 ] && cmp -s "$TMP/before" "$F/config.yaml" \
+  && ok "a flow-map roles: or a scalar routing: is a warning, and set refuses rather than drop the inline value" || no "flow map ($rc): $(cat "$TMP/err")"
 Q="$TMP/noblock/.specclaw"; mkdir -p "$Q"; printf 'models:\n  coding: x' > "$Q/config.yaml"
 "$BUDGET" set "$Q" general 150000
 if [ "$(cat "$Q/config.yaml")" = "$(printf 'models:\n  coding: x\nbudget:\n  roles:\n    general:\n      context: 150000')" ]; then
@@ -141,6 +151,10 @@ do T1'
 run a3 general-purpose Edit x; [ "$RC" -eq 2 ] && [[ "$ERR" == *"builder-backend agent is at 170k of its 100k"* ]] && ok "a stated context=20000 is clamped up to the role's minimum 100k, and the stated role wins" || no "clamp low: $RC $ERR"
 transcript a3 170000 'specclaw budget: role=builder-frontend context=900000'
 run a3 general-purpose Edit x; [ "$RC" -eq 0 ] && [ -z "$OUT" ] && ok "a stated context=900000 is clamped down to 400k (170k passes)" || no "clamp high: $RC $OUT $ERR"
+for v in 'builder_backend' 'Builder-Backend' ''; do
+  transcript a3 170000 "specclaw budget: role=$v context=150000"
+  run a3 general-purpose Edit x; [ "$RC" -eq 0 ] && has "role='$v' is not a role" && ok "a stated role='$v' fails loud, never falls back to the agent type" || no "bad role '$v': $RC $OUT $ERR"
+done
 for v in '70k' '70,000' '~70000' '7e4' '70000tokens'; do
   transcript a3 170000 "specclaw budget: role=builder-backend context=$v"
   run a3 general-purpose Edit x; [ "$RC" -eq 0 ] && has "context='$v' is not a whole number" && ok "a stated context=$v fails loud, never falls back in silence" || no "bad stated $v: $RC $OUT $ERR"
@@ -153,6 +167,15 @@ OUT="$(printf '{"agent_id": "a1", "session_' | "$GATE" 2>/dev/null)"; RC=$?
 printf '{"type":"assistant","message":{"usage":{"input_tokens":"x"}}}\n{"type":"user"}\n' > "$SPECCLAW_TRANSCRIPTS/p/sess/subagents/agent-a4.jsonl"
 run a4 general-purpose Edit x; [ "$RC" -eq 0 ] && has "TypeError" && has "the call went through" && ok "an unreadable transcript fails open and loud" || no "bad transcript: $RC $OUT $ERR"
 run '../x' general-purpose Edit x; [ "$RC" -eq 0 ] && has "not a plain id" && ok "an agent_id that is not a plain id fails open" || no "agent id: $RC $OUT"
+BIG="$SPECCLAW_TRANSCRIPTS/p/sess/subagents/agent-a5.jsonl"
+{ printf '{"type":"assistant","message":{"usage":{"input_tokens":199000}}}\n'; yes '{"type":"user","message":{"content":"x"}}' | head -c 68000000; printf '\n'; } > "$BIG"
+run a5 general-purpose Edit x; [ "$RC" -eq 0 ] && has "no assistant call in the last 64 MiB" && ok "a transcript past the 64 MiB read limit fails loud, never reads as no call yet" || no "64 MiB: $RC $OUT $ERR"
+{ head -c 1100000 /dev/zero | tr '\0' a; printf '\n{"type":"assistant","message":{"usage":{"input_tokens":199000}}}\n'; } > "$BIG"
+run a5 general-purpose Edit x; [ "$RC" -eq 0 ] && has "first transcript line is over 1 MiB" && ok "a first line over 1 MiB fails loud, never reads as no budget line" || no "1 MiB prompt: $RC $OUT $ERR"
+rm -f "$BIG"
+gate block
+SPECCLAW_GATE_LOG_DIR="$TMP/proj/.specclaw/config.yaml" run a1 general-purpose Edit x
+[ "$RC" -eq 2 ] && [[ "$ERR" == *"Hand off now"* ]] && [ -z "$OUT" ] && ok "an unwritable log never turns a deny into the fail-open error" || no "log failure: $RC $OUT $ERR"
 gate bogus
 run a1 general-purpose Edit x; [ "$RC" -eq 0 ] && has "running on warn" && ok "a bad gate value runs on warn and says so" || no "bad gate: $RC $OUT $ERR"
 gate warn

@@ -88,6 +88,9 @@ def load(specclaw_dir: Path) -> dict:
     if gate not in GATES:
         warnings.append(f"budget.gate {gate!r} is not off, warn or block; running on warn")
         gate = "warn"
+    for key in ("roles", "routing"):
+        if key in raw and not isinstance(raw[key], dict):
+            warnings.append(f"budget.{key} is not an indented map; ignored")
     roles = {name: (cap, "default") for name, cap in ROLES.items()}
     for name, fields in (raw.get("roles") if isinstance(raw.get("roles"), dict) else {}).items():
         value = fields.get("context") if isinstance(fields, dict) else None
@@ -129,7 +132,9 @@ def set_context(specclaw_dir: Path, role: str, value: int) -> None:
     if start is None:
         lines += ["budget:\n", "  roles:\n", f"    {role}:\n", f"      context: {value}\n"]
     else:
-        lines[start + 1:end] = _set_in(lines[start + 1:end], ["roles", role, "context"], str(value), 2)
+        body = [line for line in lines[start + 1:end] if line.strip() and not line.lstrip().startswith("#")]
+        step = _indent(body[0]) if body else 2
+        lines[start + 1:end] = _set_in(lines[start + 1:end], ["roles", role, "context"], str(value), 0, step)
     handle, tmp = tempfile.mkstemp(dir=path.parent, prefix=".config.yaml.")
     try:  # a unique temp file, the original's mode, one atomic replace; a failed write leaves nothing
         with os.fdopen(handle, "w", encoding="utf-8") as out:
@@ -141,31 +146,40 @@ def set_context(specclaw_dir: Path, role: str, value: int) -> None:
         raise
 
 
-def _set_in(lines: list[str], keys: list[str], value: str, indent: int) -> list[str]:
-    """Set keys[...] = value in a block's lines (children at `indent`), adding missing maps."""
+def _indent(line: str) -> int:
+    return len(line) - len(line.lstrip(" "))
+
+
+def _set_in(lines: list[str], keys: list[str], value: str, parent: int, step: int) -> list[str]:
+    """Set keys[...] = value among a map's child lines, at the indentation they already use (else
+    parent + step), adding missing maps. A key holding an inline value is refused, never dropped."""
+    content = [line for line in lines if line.strip() and not line.lstrip().startswith("#")]
+    indent = _indent(content[0]) if content else parent + step
     key, rest = keys[0], keys[1:]
     for i, line in enumerate(lines):
         match = re.match(rf" {{{indent}}}{re.escape(key)}\s*:(?:\s+(.*))?$", line.rstrip("\n"))
         if not match:
             continue
+        comment = re.search(r"\s+#.*$", line.rstrip("\n"))
         if not rest:
-            comment = re.search(r"\s+#.*$", line.rstrip("\n"))
             lines[i] = f"{' ' * indent}{key}: {value}{comment.group(0) if comment else ''}\n"
             return lines
+        inline = re.sub(r"\s+#.*$", "", match.group(1) or "").strip()
+        if inline not in ("", "{}"):
+            raise ValueError(f"budget: {key} holds an inline value ({inline}); write it as an indented map first")
         end = i + 1
-        while end < len(lines) and (not lines[end].strip() or len(lines[end]) - len(lines[end].lstrip()) > indent):
+        while end < len(lines) and (not lines[end].strip() or _indent(lines[end]) > indent):
             end += 1
         while end > i + 1 and not lines[end - 1].strip():
             end -= 1  # a trailing blank line stays after the block
-        comment = re.search(r"\s+#.*$", lines[i].rstrip("\n"))
         lines[i] = f"{' ' * indent}{key}:{comment.group(0) if comment else ''}\n"  # `roles: {}` becomes a map header
-        lines[i + 1:end] = _set_in(lines[i + 1:end], rest, value, indent + 2)
+        lines[i + 1:end] = _set_in(lines[i + 1:end], rest, value, indent, step)
         return lines
     tail = len(lines)
     while tail and not lines[tail - 1].strip():
         tail -= 1
-    new = [f"{' ' * (indent + 2 * n)}{k}:\n" for n, k in enumerate(keys[:-1])]
-    new.append(f"{' ' * (indent + 2 * len(rest))}{keys[-1]}: {value}\n")
+    new = [f"{' ' * (indent + step * n)}{k}:\n" for n, k in enumerate(keys[:-1])]
+    new.append(f"{' ' * (indent + step * len(rest))}{keys[-1]}: {value}\n")
     return lines[:tail] + new + lines[tail:]
 
 
@@ -210,6 +224,8 @@ def last_context(path: Path) -> int | None:
                     context = _context(json.loads(raw))
                     if context is not None:
                         return context
+        if pos > 0:  # the limit, not the start of the file: say so rather than read as "no call yet"
+            raise ValueError(f"no assistant call in the last {LIMIT >> 20} MiB of the transcript")
     return None
 
 
@@ -235,6 +251,8 @@ def first_prompt(path: Path) -> str:
     with path.open("rb") as handle:
         raw = handle.readline(BLOCK)
     if not raw.endswith(b"\n"):
+        if len(raw) >= BLOCK:  # a cut first line could hide the budget line: never read as "none"
+            raise ValueError(f"the agent's first transcript line is over {BLOCK >> 20} MiB")
         return ""
     content = (json.loads(raw).get("message") or {}).get("content")
     if isinstance(content, list):
@@ -252,11 +270,14 @@ def find_transcript(agent: str) -> Path | None:
 def stated(prompt: str) -> tuple[str | None, int | None]:
     """The prompt's first line `specclaw budget: role=<role> context=<n>`, either part optional."""
     match = STATED.match(prompt.lstrip().split("\n", 1)[0])
-    fields = dict(re.findall(r"(\w+)=(\S+)", match.group(1))) if match else {}
+    fields = dict(re.findall(r"(\w+)=(\S*)", match.group(1))) if match else {}
     context = fields.get("context", "")
     if context and not context.isdigit():  # a typo must not quietly fall back to the role default
         raise ValueError(f"the budget line's context={context!r} is not a whole number of tokens")
-    return fields.get("role"), int(context) if context else None
+    role = fields.get("role")
+    if role is not None and role not in ROLES:
+        raise ValueError(f"the budget line's role={role!r} is not a role ({', '.join(ROLES)})")
+    return role, int(context) if context else None
 
 
 def role_of(agent_type: object) -> str:
@@ -269,8 +290,7 @@ def role_and_cap(config: dict, agent_type: object, prompt: str) -> tuple[str, in
     """A known stated role, else role_of the agent type; the cap is the stated context clamped into
     the role's range, else the role's context."""
     role, context = stated(prompt)
-    if role not in ROLES:
-        role = role_of(agent_type)
+    role = role or role_of(agent_type)
     default = ROLES[role]
     cap = min(max(context, default // 2), default * 2) if context is not None else config["roles"][role][0]
     return role, cap

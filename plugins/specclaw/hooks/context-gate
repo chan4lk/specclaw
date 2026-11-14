@@ -44,17 +44,20 @@ def answer(event: dict) -> int:
     kind, text, fields = budget.decide(config, event, budget.first_prompt(path), context)
     if kind is None:
         return 0
-    budget.log({"session_id": event.get("session_id"), "agent_id": agent, "decision": kind, **fields})
     warning = "; ".join(config["warnings"])
     if kind == "deny":
         print(text + (f"\nspecclaw config: {warning}" if warning else ""), file=sys.stderr)
-        return 2
-    line = f"specclaw context gate: {fields['role']} agent {agent} at {context // 1000}k of {fields['cap'] // 1000}k; it was told to hand off"
-    print(json.dumps({
-        "systemMessage": line + (f" (config: {warning})" if warning else ""),
-        "hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": text},
-    }))
-    return 0
+    else:
+        line = f"specclaw context gate: {fields['role']} agent {agent} at {context // 1000}k of {fields['cap'] // 1000}k; it was told to hand off"
+        print(json.dumps({
+            "systemMessage": line + (f" (config: {warning})" if warning else ""),
+            "hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": text},
+        }))
+    try:  # after the verdict is out: a log failure (full disk, a racing rotation) never changes it
+        budget.log({"session_id": event.get("session_id"), "agent_id": agent, "decision": kind, **fields})
+    except OSError:
+        pass
+    return 2 if kind == "deny" else 0
 
 
 def main() -> int:
