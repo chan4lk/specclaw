@@ -86,6 +86,12 @@ cp "$P/.specclaw/config.yaml" "$TMP/before"
 if [ "$a$b$c$d$e" = 11122 ] && cmp -s "$TMP/before" "$P/.specclaw/config.yaml"; then
   ok "set refuses an unknown role and out-of-range values with exit 1, bad arguments with exit 2, writes nothing"
 else no "set refusals: $a$b$c$d$e"; fi
+T="$TMP/template/.specclaw"; mkdir -p "$T"; cp "$HERE/templates/config.yaml" "$T/config.yaml"
+"$BUDGET" set "$T" builder-backend 150000
+if [ "$(sed -n '/^budget:/,/^[a-z]/p' "$T/config.yaml" | grep -A2 '^  roles:  *# set with')" = "$(printf '  roles:                        # set with `specclaw-budget set .specclaw <role> <n>`; see `roles --json`\n    builder-backend:\n      context: 150000')" ] \
+   && [ -z "$(find "$T" -name '.config.yaml.*')" ]; then
+  ok "set on the shipped template turns roles: {} into a map, keeps its comment, leaves no temp file"
+else no "set on the template: $(sed -n '/^budget:/,/^# Brown/p' "$T/config.yaml")"; fi
 Q="$TMP/noblock/.specclaw"; mkdir -p "$Q"; printf 'models:\n  coding: x' > "$Q/config.yaml"
 "$BUDGET" set "$Q" general 150000
 if [ "$(cat "$Q/config.yaml")" = "$(printf 'models:\n  coding: x\nbudget:\n  roles:\n    general:\n      context: 150000')" ]; then
@@ -117,6 +123,9 @@ else no "warn: $RC $OUT $ERR"; fi
 gate block
 run a1 general-purpose Bash 'git add -A && git commit -m "fix: a; b && rm -rf c"'; [ "$RC" -eq 0 ] && has "hand off" && ok "block: git add && git commit (a message holding ; && rm) passes with the note" || no "block commit: $RC $OUT $ERR"
 run a1 general-purpose Bash 'specclaw-budget handover .specclaw 001-x T1 finish the tests'; [ "$RC" -eq 0 ] && ok "block: specclaw-budget handover passes" || no "block handover: $RC $ERR"
+for c in 'git commit -m x 2>&1' 'git status 2>/dev/null' 'git log --oneline | head -5' 'git diff >&2' 'cd /tmp && git -C /tmp add -A'; do
+  run a1 general-purpose Bash "$c"; [ "$RC" -eq 0 ] && ok "block: '$c' passes (redirects and a head pipe are not commands)" || no "block $c: $RC $ERR"
+done
 for c in Edit 'Bash:rm -rf x' 'Bash:git add . && rm x' 'Bash:git commit -m ok; curl x'; do
   case "$c" in Bash:*) run a1 general-purpose Bash "${c#Bash:}" ;; *) run a1 general-purpose "$c" x ;; esac
   [ "$RC" -eq 2 ] && [[ "$ERR" == *"specclaw-budget handover"* ]] && ok "block denies '$c' with exit 2 and the hand-off steps" || no "block $c: $RC $OUT $ERR"
@@ -143,6 +152,11 @@ run '../x' general-purpose Edit x; [ "$RC" -eq 0 ] && has "not a plain id" && ok
 gate bogus
 run a1 general-purpose Edit x; [ "$RC" -eq 0 ] && has "running on warn" && ok "a bad gate value runs on warn and says so" || no "bad gate: $RC $OUT $ERR"
 gate warn
+printf 'budget:\n  roles:\n    general:\n      context:\n    builder-backend:\n      context: 5\n' > "$Q/config.yaml"
+r="$("$BUDGET" roles --json "$Q" 2>"$TMP/err")"; rc=$?
+[ "$rc" -eq 0 ] && [[ "$r" == *'"general": {"context": 200000'* ]] && grep -q 'general.context' "$TMP/err" && grep -q 'builder-backend.context' "$TMP/err" \
+  && ok "a blank or out-of-range context is a warning and the default stands" || no "blank context ($rc): $r $(cat "$TMP/err")"
+run nosuchagent general-purpose Edit x; [ "$RC" -eq 0 ] && has "no subagent transcript" && ok "a missing subagent transcript fails open and loud, never silent" || no "missing transcript: $RC $OUT"
 
 # ── AC-8 estimate, brief, record, handover, timer ─────────────────────────────────────────────
 head -c 22000 /dev/zero | tr '\0' a > "$P/src/big.ts"
@@ -154,11 +168,13 @@ cat > "$P/.specclaw/changes/001-x/tasks.md" <<'EOF'
   - Files: src/big.ts
   - Context: 70000
 - [ ] `T3` — no files
+- [ ] `T4` — no files, but sized
+  - Context: 90000
 EOF
 out="$("$BUDGET" estimate "$P/.specclaw" 001-x)"; rc=$?
 if [ "$rc" -eq 1 ] && [ "$(printf '%s\n' "$out" | head -2)" = "$(printf 'T1 read=36000 context=36000\nT2 read=36000 context=70000')" ] \
-   && [[ "$out" == *"over 60000: T2; split it"* ]]; then
-  ok "estimate: read = 26000 + chars/2.2 (a missing file counts 0), Context: wins, exit 1 naming T2"
+   && [[ "$out" == *"over 60000: T2, T4; split it"* ]]; then
+  ok "estimate: read = 26000 + chars/2.2 (a missing file counts 0), Context: wins, exit 1 naming T2 and T4 (sized with no Files:)"
 else no "estimate ($rc): $out"; fi
 b1="$("$BUDGET" brief "$P/.specclaw" 001-x T1)"; b2="$("$BUDGET" brief "$P/.specclaw" 001-x T2)"
 if [ "$b1" = "$(printf 'subagent_type: specclaw:builder-frontend\nspecclaw budget: role=builder-frontend')" ] \

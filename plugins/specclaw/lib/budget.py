@@ -13,6 +13,7 @@ import math
 import os
 import re
 import subprocess
+import tempfile
 import time
 from pathlib import Path
 
@@ -31,7 +32,7 @@ BLOCK, LIMIT, LOG_MAX = 1 << 20, 64 << 20, 1 << 20
 AGENT_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
 STATED = re.compile(r"specclaw budget:(.*)")
 ALLOWED = re.compile(
-    r"(cd|git(\s+-C\s+\S+)?\s+(add|commit|status|diff|log))(\s|$)|(\S*/)?specclaw-budget\s+handover(\s|$)"
+    r"(cd|head|tail|git(\s+-C\s+\S+)?\s+(add|commit|status|diff|log))(\s|$)|(\S*/)?specclaw-budget\s+handover(\s|$)"
 )
 HAND_OFF = (
     "specclaw context gate: this {role} agent is at {used}k of its {cap}k context cap. Hand off now: "
@@ -93,7 +94,7 @@ def load(specclaw_dir: Path) -> dict:
         if name not in ROLES:
             warnings.append(f"budget.roles.{name} is not a role ({', '.join(ROLES)}); ignored")
         elif value is not None:
-            if value.isdigit() and ROLES[name] // 2 <= int(value) <= ROLES[name] * 2:
+            if isinstance(value, str) and value.isdigit() and ROLES[name] // 2 <= int(value) <= ROLES[name] * 2:
                 roles[name] = (int(value), "config")
             else:
                 warnings.append(f"budget.roles.{name}.context {value!r} is outside {ROLES[name] // 2}..{ROLES[name] * 2}; using the default")
@@ -129,9 +130,15 @@ def set_context(specclaw_dir: Path, role: str, value: int) -> None:
         lines += ["budget:\n", "  roles:\n", f"    {role}:\n", f"      context: {value}\n"]
     else:
         lines[start + 1:end] = _set_in(lines[start + 1:end], ["roles", role, "context"], str(value), 2)
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text("".join(lines), "utf-8")
-    os.replace(tmp, path)
+    handle, tmp = tempfile.mkstemp(dir=path.parent, prefix=".config.yaml.")
+    try:  # a unique temp file, the original's mode, one atomic replace; a failed write leaves nothing
+        with os.fdopen(handle, "w", encoding="utf-8") as out:
+            out.write("".join(lines))
+        os.chmod(tmp, path.stat().st_mode & 0o7777)
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
 
 
 def _set_in(lines: list[str], keys: list[str], value: str, indent: int) -> list[str]:
@@ -150,7 +157,8 @@ def _set_in(lines: list[str], keys: list[str], value: str, indent: int) -> list[
             end += 1
         while end > i + 1 and not lines[end - 1].strip():
             end -= 1  # a trailing blank line stays after the block
-        lines[i] = f"{' ' * indent}{key}:\n"  # `roles: {}` becomes a map header
+        comment = re.search(r"\s+#.*$", lines[i].rstrip("\n"))
+        lines[i] = f"{' ' * indent}{key}:{comment.group(0) if comment else ''}\n"  # `roles: {}` becomes a map header
         lines[i + 1:end] = _set_in(lines[i + 1:end], rest, value, indent + 2)
         return lines
     tail = len(lines)
@@ -181,9 +189,10 @@ def _context(record: dict) -> int | None:
 
 def last_context(path: Path) -> int | None:
     """The last assistant call's context, read backwards in 1 MiB blocks up to 64 MiB; a
-    half-written last line is skipped; no call yet: None."""
+    half-written last line is skipped; no call yet: None. A missing file raises: a changed transcript
+    layout must fail loud, not leave every subagent ungated in silence."""
     if not path.is_file():
-        return None
+        raise FileNotFoundError(f"no subagent transcript at {path.parent.name}/{path.name}")
     with path.open("rb") as handle:
         end = pos = handle.seek(0, os.SEEK_END)
         carry, first = b"", True
@@ -266,6 +275,7 @@ def committing(tool: object, tool_input: object) -> bool:
     if not isinstance(command, str):
         return False
     bare = re.sub(r"'[^']*'|\"(?:\\.|[^\"\\])*\"", "''", command)
+    bare = re.sub(r"\d*>&\d*-?|\d*>>?\s*/dev/null", " ", bare)  # 2>&1, >&2, 2>/dev/null are not commands
     parts = [part.strip() for part in re.split(r"&&|\|\||[;|&\n]", bare)]
     parts = [part for part in parts if part]
     return bool(parts) and all(ALLOWED.match(part) for part in parts)

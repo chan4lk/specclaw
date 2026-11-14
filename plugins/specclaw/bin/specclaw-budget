@@ -36,10 +36,10 @@ def tasks_of(specclaw_dir: str, change: str) -> dict:
 def estimate(specclaw_dir: str, change: str) -> int:
     root, over = Path(specclaw_dir).resolve().parent, []
     for task, fields in tasks_of(specclaw_dir, change).items():
-        if not fields.get("Files"):
-            continue
-        read = budget.read_tokens(root, fields["Files"])
         stated = fields.get("Context", "")
+        if not fields.get("Files") and not stated.isdigit():
+            continue
+        read = budget.read_tokens(root, fields.get("Files", ""))
         context = int(stated) if stated.isdigit() else read
         print(f"{task} read={read} context={context}")
         if context > budget.TASK_LIMIT:
