@@ -66,7 +66,8 @@ const engine = (on: Parameters<Parameters<typeof test>[1]>[1], files: Record<str
   })
 }
 
-const RULES = () => ({ value: { content: [{ type: 'text', text: '2 proposed rule(s) for .specclaw/review/rules/learned.md (dry-run' }], isError: false } })
+const FP = '0a1b2c3d4e5f'
+const RULES = () => ({ value: { content: [{ type: 'text', text: `2 proposed rule(s) for .specclaw/review/rules/learned.md (dry-run):\n\n- fp ${FP} [major B3] seen 3x in a.py: guard nulls\n- fp 99aa88bb77cc [minor S1] seen 4x in b.ts: name it` }], isError: false } })
 
 test('R062 AC-6 /dash opens the pane and draws every part from the files', async ($, on) => {
   const statuses: (string | undefined)[] = []
@@ -78,7 +79,7 @@ test('R062 AC-6 /dash opens the pane and draws every part from the files', async
   const has = async (text: RegExp) => (await ui.find({ type: 'Text', text }))?.text
   expect(await has(/^ {2}062-x/)).toMatch(/build +1\/2 +wave 1/)
   expect(await has(/rounds/)).toBe('  062-x                        1 rounds · clean · last 0/1/2 b/M/m · 1 escalated · final abc1234 at HEAD')
-  expect(await has(/proposed rules/)).toBe('  2 proposed rules awaiting approval (specclaw-review learn)')
+  expect(await has(/proposed rules/)).toBe('  2 proposed rules awaiting approval (approve or reject under ACTIONS)')
   expect(await has(/^ {2}1 lessons/)).toBe('  1 lessons · pattern 1')
   expect(await has(/^TOKENS/)).toContain('API-equivalent estimate')
   expect(await has(/by role/)).toBe('  by role: main $0.02 · code-reviewer $0.01')
@@ -192,5 +193,124 @@ test('R062 AC-2 a parsed role is not read again; a transcript that leaves and re
   await $.turn.complete(turn)
   const ui = await $.ui.mount(PANE)
   expect(await roleLine(ui)).toBe('  by role: main $0.02 · explorer $0.01')
+  await ui.unmount()
+})
+
+// 063: the actions. The test's Bash hook stands for the shell: it records each command and answers by it.
+type Answer = { stdout: string } | { deny: string }
+const shell = (on: Parameters<Parameters<typeof test>[1]>[1], answer: (command: string) => Answer) => {
+  const ran: string[] = []
+  on('tool.call', (_, e) => {
+    const inner = /^cd '\/x' && \{ (.*) ; \} 2>&1; echo "__dash_exit=\$\?"$/.exec(String((e as { command?: unknown }).command))
+    if (e.tool !== 'Bash' || !inner) throw new Error(`unexpected tool call ${JSON.stringify(e)}`)
+    ran.push(inner[1]!)
+    const a = answer(inner[1]!)
+    return 'deny' in a ? a : { result: { stdout: a.stdout, stderr: '', interrupted: false } }
+  })
+  return ran
+}
+const approved = (files: Record<string, string | null>, name: string) => {
+  files[`/x/.specclaw/changes/${name}`] = null
+  files[`/x/.specclaw/changes/${name}/state.json`] = JSON.stringify({ phase: 'tasks', phases: { proposal: { status: 'approved' } } })
+}
+
+test('R063 AC-3 Confirm launch appears only after a dry run of the selection, and launches only what it did not refuse', async ($, on) => {
+  const files = seed()
+  approved(files, '063-y')
+  approved(files, '064-z')
+  engine(on, files, [], { reads: [], writes: 0, mcp: 0 }, RULES)
+  const ran = shell(on, c => ({ stdout: c.endsWith('--dry-run')
+    ? `063-y: would assign to me@x.com and add fleet:auto as me@x.com\n064-z: refused: assigned to o@x.com; only they can opt in\n__dash_exit=4\n`
+    : 'queued\n__dash_exit=0\n' }))
+  await $.command.run({ command: 'dash', args: '' })
+  const ui = await $.ui.mount(PANE)
+  const confirm = () => ui.find({ key: 'confirm-launch' })
+  expect(await ui.find({ key: 'pick-062-x' })).toBeUndefined()
+  await ui.press({ key: 'pick-063-y' })
+  await ui.press({ key: 'pick-064-z' })
+  expect(await confirm()).toBeUndefined()
+  await ui.press({ key: 'dry-run' })
+  expect(ran).toEqual(['specclaw-fleet optin 063-y 064-z --dry-run'])
+  expect((await confirm())?.text).toContain('Confirm: launch 1 (spends your plan, pushes a branch)')
+  await ui.press({ key: 'pick-064-z' })
+  expect(await confirm()).toBeUndefined()
+  await ui.press({ key: 'pick-064-z' })
+  await ui.press({ key: 'dry-run' })
+  await ui.press({ key: 'confirm-launch' })
+  expect(ran.at(-1)).toBe('specclaw-fleet optin 063-y && specclaw-fleet trigger 063-y')
+  expect(await confirm()).toBeUndefined()
+  await ui.unmount()
+})
+
+test('R063 AC-3 fleet not installed or not set up: setup steps, no Confirm', async ($, on) => {
+  const files = seed()
+  approved(files, '063-y')
+  engine(on, files, [], { reads: [], writes: 0, mcp: 0 }, RULES)
+  let out = 'bash: specclaw-fleet: command not found\n__dash_exit=127\n'
+  shell(on, () => ({ stdout: out }))
+  await $.command.run({ command: 'dash', args: '' })
+  const ui = await $.ui.mount(PANE)
+  await ui.press({ key: 'pick-063-y' })
+  await ui.press({ key: 'dry-run' })
+  expect((await ui.find({ type: 'Text', text: /Set up fleet/ }))?.text).toBe('    Set up fleet: /plugin install specclaw-fleet@chan4lk, then /specclaw-fleet:setup')
+  expect(await ui.find({ key: 'confirm-launch' })).toBeUndefined()
+  out = 'specclaw-fleet: could not read the identity behind AZDO_TOKEN (check .specclaw/.env)\n__dash_exit=1\n'
+  await ui.press({ key: 'dry-run' })
+  expect((await ui.find({ type: 'Text', text: /Fleet could not run/ }))?.text).toContain('/specclaw-fleet:setup')
+  expect(await ui.find({ key: 'confirm-launch' })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('R063 AC-4 a Bash call the permission rules refuse puts the exact command into the prompt', async ($, on) => {
+  engine(on, seed(), [], { reads: [], writes: 0, mcp: 0 }, RULES)
+  const filled: string[] = []
+  on('prompt.fill', (_, e) => (filled.push(e.text), { isFilled: true }))
+  shell(on, () => ({ deny: 'no rule allows it' }))
+  await $.command.run({ command: 'dash', args: '' })
+  const ui = await $.ui.mount(PANE)
+  await ui.press({ key: `approve-${FP}` })
+  expect(filled).toEqual([`specclaw-review learn --apply ${FP}`])
+  expect((await ui.find({ type: 'Text', text: /^ {2}last:/ }))?.text).toBe(`  last: specclaw-review learn --apply ${FP} · sent to the prompt`)
+  await ui.unmount()
+})
+
+const CAPS = '{"coding":{"context":120000,"default":120000,"min":40000,"max":400000,"source":"default"}}'
+
+test('R063 AC-5 approve, reject, caps and undo each run their command; the pane never writes a file', async ($, on) => {
+  const calls: Calls = { reads: [], writes: 0, mcp: 0 }
+  engine(on, seed(), [], calls, RULES)
+  const ran = shell(on, c => ({ stdout: `${c.startsWith('specclaw-budget roles') ? CAPS : c.endsWith('--dismissed') ? 'fleet' : 'ok'}\n__dash_exit=0\n` }))
+  await $.command.run({ command: 'dash', args: '' })
+  const ui = await $.ui.mount(PANE)
+  await ui.press({ key: `approve-${FP}` })
+  await ui.press({ key: 'reject-99aa88bb77cc' })
+  await ui.press({ key: 'show-caps' })
+  expect((await ui.find({ type: 'Text', text: /^ {2}coding/ }))?.text).toContain('120000 (40000–400000, default 120000, default)')
+  await ui.input({ key: 'cap-coding', text: '90000' })
+  await ui.press({ key: 'show-dismissed' })
+  await ui.press({ key: 'undo-fleet' })
+  expect(ran).toEqual([
+    `specclaw-review learn --apply ${FP}`, 'specclaw-review learn --reject 99aa88bb77cc',
+    "specclaw-budget roles --json '/x/.specclaw'", "specclaw-budget set '/x/.specclaw' coding 90000", "specclaw-budget roles --json '/x/.specclaw'",
+    "specclaw-suggest '/x/.specclaw' --dismissed", "specclaw-suggest '/x/.specclaw' --undismiss fleet", "specclaw-suggest '/x/.specclaw' --dismissed",
+  ])
+  expect(calls.writes).toBe(0)
+  await ui.unmount()
+})
+
+test('R063 AC-5 no specclaw-budget: the 065 note and no cap input; a bad cap is refused before any command', async ($, on) => {
+  engine(on, seed(), [], { reads: [], writes: 0, mcp: 0 }, RULES)
+  let budget = false
+  const ran = shell(on, c => ({ stdout: budget && c.startsWith('specclaw-budget roles') ? `${CAPS}\n__dash_exit=0\n` : 'bash: specclaw-budget: command not found\n__dash_exit=127\n' }))
+  await $.command.run({ command: 'dash', args: '' })
+  const ui = await $.ui.mount(PANE)
+  await ui.press({ key: 'show-caps' })
+  expect((await ui.find({ type: 'Text', text: /context-gate/ }))?.text).toBe('  Caps need specclaw ≥ the context-gate release (065): specclaw-budget is not installed.')
+  expect(await ui.find({ key: 'cap-coding' })).toBeUndefined()
+  budget = true
+  await ui.press({ key: 'show-caps' })
+  await ui.input({ key: 'cap-coding', text: '9e4; rm -rf ~' })
+  expect(ran.filter(c => c.startsWith('specclaw-budget set'))).toEqual([])
+  expect((await ui.find({ type: 'Text', text: /refused: number/ }))?.text).toBeDefined()
   await ui.unmount()
 })

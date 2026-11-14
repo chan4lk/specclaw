@@ -14,15 +14,15 @@ export const VIEW: DashView = {
   at: NOW,
   build: { kind: 'ok', data: {
     changes: [
-      { name: '062-dash-pane', phase: 'build', done: 1, total: 4, failed: 0, verdict: null, pr: null, span: { label: 'wave 1', since: NOW - 12 * 60000 } },
-      { name: '059-core', phase: 'verify', done: 4, total: 4, failed: 1, verdict: 'PASS', pr: 'https://github.com/x/pull/129', span: null },
+      { name: '062-dash-pane', phase: 'build', done: 1, total: 4, failed: 0, verdict: null, pr: null, span: { label: 'wave 1', since: NOW - 12 * 60000 }, approved: true, feature: null },
+      { name: '059-core', phase: 'verify', done: 4, total: 4, failed: 1, verdict: 'PASS', pr: 'https://github.com/x/pull/129', span: null, approved: true, feature: null },
     ],
     fleet: { kind: 'ok', data: { running: 2, prs_open: 1, jobs: 3, generated_at: new Date(NOW - 120000).toISOString() } },
   } },
   review: { kind: 'ok', data: [{ name: '059-core', rounds: 17, status: 'clean', blocker: 0, major: 0, minor: 4, escalated: 0, finalHead: '03a8e23b4610feab', atHead: true }] },
   learning: { kind: 'ok', data: {
     lessons: [{ change: '059-core', category: 'pattern', priority: 'high', detail: 'say hi', at: '' }],
-    byCategory: { pattern: 1 }, proposed: { kind: 'ok', data: 3 },
+    byCategory: { pattern: 1 }, proposed: { kind: 'ok', data: ['a', 'b', 'c'].map(fp => ({ fp, seen: 3, lesson: fp })) },
   } },
   tokens: { kind: 'ok', data: TOKENS },
 }
@@ -39,7 +39,7 @@ test('R062 AC-4 AC-6 the pane draws every part; every cost sits under the labell
   expect(lines).toContain('  fleet · 2 running · 1 PRs open · 3 jobs · snapshot 2m old')
   expect(lines).toContain('  059-core                     17 rounds · clean · last 0/0/4 b/M/m · 0 escalated · final 03a8e23b46 at HEAD')
   expect(lines).toContain('  1 lessons · pattern 1')
-  expect(lines).toContain('  3 proposed rules awaiting approval (specclaw-review learn)')
+  expect(lines).toContain('  3 proposed rules awaiting approval (approve or reject under ACTIONS)')
   expect(lines).toContain('  today (UTC) 1.2M tokens · $3.20 · 7 days 9.1M tokens · $22.10')
   expect(lines).toContain('  Build 062                       $20.00 · context 34%')
   const header = lines.findIndex(l => l.startsWith('TOKENS'))

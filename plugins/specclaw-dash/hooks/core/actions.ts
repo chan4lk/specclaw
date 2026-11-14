@@ -1,6 +1,6 @@
 // Each pane action as the one existing command it runs, and the parsers for what those commands print. Pure.
 // The pane owns no logic: specclaw-fleet, specclaw-review, specclaw-budget (065) and specclaw-suggest decide.
-import type { CapRow, ChangeRow } from '../../types/index.d.ts'
+import type { CapRow, ChangeRow, Section } from '../../types/index.d.ts'
 
 // Every value put into a command must match its pattern, or the action is refused before a command exists.
 const CHANGE = /^\d{3}-[a-z0-9][a-z0-9-]*$/
@@ -79,4 +79,27 @@ export const unwrap = (stdout: string) => {
   const at = stdout.lastIndexOf(MARK)
   if (at < 0) return { code: -1, out: stdout.trimEnd() } // cut off before the mark: the exit code is unknown
   return { code: Number.parseInt(stdout.slice(at + MARK.length), 10), out: stdout.slice(0, at).trimEnd() }
+}
+
+export const CAPS_NOTE = 'Caps need specclaw ≥ the context-gate release (065): specclaw-budget is not installed.'
+export const FLEET_SETUP = 'Set up fleet: /plugin install specclaw-fleet@chan4lk, then /specclaw-fleet:setup'
+
+// Exit 127 is the shell's "command not found": say what to install instead of a bare error.
+export const hint = (command: string, code: number, out: string) => {
+  if (code !== 127) return out
+  const name = command.split(' ')[0]
+  if (name === 'specclaw-fleet') return `${out}\n${FLEET_SETUP}`
+  if (name === 'specclaw-budget') return `${out}\n${CAPS_NOTE}`
+  return `${out}\n${name} is not on PATH: /plugin install ${name === 'specclaw-suggest' ? 'specclaw' : name}@chan4lk`
+}
+
+// A list command's output as a pane section: not installed is a card, any other failure one error line.
+export const listSection = <T>(ran: { code: number | null; out: string }, parse: (out: string) => T, missing: string): Section<T> => {
+  if (ran.code === 127) return { kind: 'missing', card: missing }
+  if (ran.code !== 0) return { kind: 'error', error: ran.out.split('\n')[0] || `exit ${ran.code}` }
+  try {
+    return { kind: 'ok', data: parse(ran.out) }
+  } catch (error) {
+    return { kind: 'error', error: error instanceof Error ? error.message : String(error) }
+  }
 }
