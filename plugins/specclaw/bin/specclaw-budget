@@ -25,6 +25,14 @@ def usage() -> int:
     return 2
 
 
+def config_of(specclaw_dir: str) -> dict:
+    """The budget config, refused when there is no config.yaml: never defaults passed off as a read."""
+    path = Path(specclaw_dir) / "config.yaml"
+    if not path.is_file():
+        raise ValueError(f"no config at {path}")
+    return budget.load(Path(specclaw_dir))
+
+
 def tasks_of(specclaw_dir: str, change: str) -> dict:
     folder = Path(specclaw_dir) / "changes" / change
     path = folder / "tasks.md" if (folder / "tasks.md").is_file() else folder / "change.md"
@@ -56,7 +64,7 @@ def brief(specclaw_dir: str, change: str, task: str) -> int:
     fields = tasks_of(specclaw_dir, change).get(task)
     if fields is None:
         raise ValueError(f"no task {task} in {change}")
-    routing = budget.load(Path(specclaw_dir))["routing"]
+    routing = config_of(specclaw_dir)["routing"]
     agent = routing.get(fields.get("Kind", "").strip().lower(), routing["default"])
     context = budget.task_context(fields)
     print(f"subagent_type: {agent}")
@@ -84,10 +92,7 @@ def record(specclaw_dir: str, change: str, task: str, agent: str) -> int:
 def main(argv: list) -> int:
     command, args = (argv[0], argv[1:]) if argv else ("", [])
     if command == "roles" and args[:1] == ["--json"] and len(args) <= 2:
-        folder = Path(args[1] if len(args) == 2 else ".specclaw")
-        if not (folder / "config.yaml").is_file():
-            raise ValueError(f"no config at {folder / 'config.yaml'}")  # never defaults passed off as a read
-        config = budget.load(folder)
+        config = config_of(args[1] if len(args) == 2 else ".specclaw")
         for warning in config["warnings"]:
             print(f"specclaw-budget: {warning}", file=sys.stderr)
         print(json.dumps(budget.roles_json(config)))

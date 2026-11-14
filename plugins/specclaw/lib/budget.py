@@ -278,8 +278,8 @@ def role_and_cap(config: dict, agent_type: object, prompt: str) -> tuple[str, in
 
 def committing(tool: object, tool_input: object) -> bool:
     """A Bash call whose every command commits or writes the hand-off (cd, head and tail may join it). Quoted text is blanked first,
-    so a commit message may hold anything. shortcut: an unquoted $(...) is not inspected; the gate is
-    a quality cap on a cooperative agent, not a sandbox."""
+    so a commit message may hold anything. shortcut: an unquoted $(...) and a quoted option ("--output=f")
+    are not inspected; the gate is a quality cap on a cooperative agent, not a sandbox."""
     command = tool_input.get("command") if tool == "Bash" and isinstance(tool_input, dict) else None
     if not isinstance(command, str):
         return False

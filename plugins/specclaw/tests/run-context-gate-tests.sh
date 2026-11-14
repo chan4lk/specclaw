@@ -141,8 +141,10 @@ do T1'
 run a3 general-purpose Edit x; [ "$RC" -eq 2 ] && [[ "$ERR" == *"builder-backend agent is at 170k of its 100k"* ]] && ok "a stated context=20000 is clamped up to the role's minimum 100k, and the stated role wins" || no "clamp low: $RC $ERR"
 transcript a3 170000 'specclaw budget: role=builder-frontend context=900000'
 run a3 general-purpose Edit x; [ "$RC" -eq 0 ] && [ -z "$OUT" ] && ok "a stated context=900000 is clamped down to 400k (170k passes)" || no "clamp high: $RC $OUT $ERR"
-transcript a3 170000 'specclaw budget: role=builder-backend context=70k'
-run a3 general-purpose Edit x; [ "$RC" -eq 0 ] && has "context='70k' is not a whole number" && ok "a malformed stated context fails loud, never falls back in silence" || no "bad stated: $RC $OUT $ERR"
+for v in '70k' '70,000' '~70000' '7e4' '70000tokens'; do
+  transcript a3 170000 "specclaw budget: role=builder-backend context=$v"
+  run a3 general-purpose Edit x; [ "$RC" -eq 0 ] && has "context='$v' is not a whole number" && ok "a stated context=$v fails loud, never falls back in silence" || no "bad stated $v: $RC $OUT $ERR"
+done
 
 # ── AC-7 fail open ────────────────────────────────────────────────────────────────────────────
 rm -rf "$SPECCLAW_GATE_LOG_DIR"
@@ -185,11 +187,20 @@ if [ "$b1" = "$(printf 'subagent_type: specclaw:builder-frontend\nspecclaw budge
 else no "brief: $b1 / $b2"; fi
 "$BUDGET" brief "$P/.specclaw" 001-x T9 2>/dev/null; [ $? -eq 1 ] && ok "brief of an unknown task exits 1" || no "brief unknown task"
 "$BUDGET" record "$P/.specclaw" 001-x T9 a1 2>/dev/null; [ $? -eq 1 ] && ok "record of an unknown task exits 1" || no "record unknown task"
-"$BUDGET" roles --json "$TMP/nowhere" >/dev/null 2>&1; [ $? -eq 1 ] && ok "roles --json with no config.yaml exits 1, never defaults passed off as a read" || no "roles no config"
-mkdir -p "$P/.specclaw/changes/002-y"; printf -- '- [ ] `T1` — a\n  - Files: src/big.ts\n  - Context: 70,000\n' > "$P/.specclaw/changes/002-y/tasks.md"
-out="$("$BUDGET" estimate "$P/.specclaw" 002-y 2>&1)"; rc=$?; out2="$("$BUDGET" brief "$P/.specclaw" 002-y T1 2>&1)"; rc2=$?
-[ "$rc$rc2" = 11 ] && [[ "$out" == *"T1: Context: '70,000' is not a whole number"* ]] && [[ "$out2" == *"not a whole number"* ]] \
-  && ok "a malformed Context: is refused by estimate (naming the task) and brief, never read as absent" || no "bad Context ($rc$rc2): $out / $out2"
+mkdir -p "$TMP/empty/.specclaw/changes/001-x" "$TMP/dirconf/config.yaml/x"; cp "$P/.specclaw/changes/001-x/tasks.md" "$TMP/empty/.specclaw/changes/001-x/"
+for d in "$TMP/nowhere" "$TMP/empty/.specclaw" "$TMP/dirconf"; do
+  "$BUDGET" roles --json "$d" >/dev/null 2>&1; a=$?; "$BUDGET" brief "$d" 001-x T1 >/dev/null 2>&1; b=$?
+  [ "$a$b" = 11 ] && ok "roles --json and brief exit 1 with no config.yaml file (${d#"$TMP"/}), never defaults passed off as a read" || no "no config $d: $a$b"
+done
+mkdir -p "$P/.specclaw/changes/002-y"
+for v in '70,000' '70000 tokens' '~70000' '7e4' '70k'; do
+  printf -- '- [ ] `T1` — a\n  - Files: src/big.ts\n  - Context: %s\n' "$v" > "$P/.specclaw/changes/002-y/tasks.md"
+  o1="$("$BUDGET" estimate "$P/.specclaw" 002-y 2>&1)"; r1=$?; o2="$("$BUDGET" brief "$P/.specclaw" 002-y T1 2>&1)"; r2=$?
+  o3="$("$BUDGET" record "$P/.specclaw" 002-y T1 a1 2>&1)"; r3=$?
+  [ "$r1$r2$r3" = 111 ] && [[ "$o1" == *"T1: Context: '$v' is not a whole number"* ]] && [[ "$o2$o3" == *"'$v' is not a whole number"*"'$v' is not a whole number"* ]] \
+    && ok "Context: '$v' is refused by estimate (naming T1), brief and record" || no "Context '$v' ($r1$r2$r3): $o1 / $o2 / $o3"
+done
+[ ! -f "$P/.specclaw/changes/002-y/timeline.jsonl" ] && ok "a refused record writes no line" || no "refused record wrote"
 "$BUDGET" record "$P/.specclaw" 001-x T2 a1 >/dev/null && "$BUDGET" record "$P/.specclaw" 001-x T1 zz >/dev/null \
   && "$BUDGET" handover "$P/.specclaw" 001-x T2 finish the parser tests
 TL="$P/.specclaw/changes/001-x/timeline.jsonl"
