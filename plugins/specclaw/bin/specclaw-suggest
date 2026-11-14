@@ -33,9 +33,9 @@ fi
 
 if [ "$2" = "--dismiss" ] || [ "$2" = "--undismiss" ]; then
   f="${3:-}"
-  plugin_feature "$f" >/dev/null || { echo "specclaw-suggest: unknown feature '$f'" >&2; exit 0; }
   # A tip is never the reason a skill stops, so --dismiss fails with 0; the dash's Undo needs to see a failure.
   what=dismissal rc=0; [ "$2" = "--undismiss" ] && what="undo of dismissal" rc=1
+  plugin_feature "$f" >/dev/null || { echo "specclaw-suggest: unknown feature '$f'" >&2; exit "$rc"; }
   fail() { echo "specclaw-suggest: could not record $what of '$f' in $CONFIG" >&2; rm -f "${tmp:-}"; exit "$rc"; }
   [ -f "$CONFIG" ] && [ -r "$CONFIG" ] || fail
   if [ "$2" = "--dismiss" ]; then

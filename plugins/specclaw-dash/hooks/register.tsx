@@ -15,16 +15,19 @@ async function dryRun($: EngineInterface) {
   await act($, () => commands.dryRun(items), ran => {
     if (ran.code === null || ran.code === 127) return { plan: null }
     const { launchable, named } = dryRunResult(items, ran.out)
-    if (named === 0 && ran.code > 0) ran.out = `${ran.out}\nFleet could not run. ${FLEET_SETUP}` // not a timeout (-1)
+    if (named === 0) ran.out += ran.code === -1 ? '\nThe dry run did not finish (timeout or cut-off output).' : `\nFleet could not run. ${FLEET_SETUP}`
     return { plan: { items, launchable } }
   })
 }
 
+// Check and clear the plan in one update, so a second press while the first runs launches nothing.
 async function launch($: EngineInterface) {
-  const { plan, selected } = await readActions($)
-  if (!plan || plan.launchable.length === 0 || plan.items.join(' ') !== selected.join(' ')) return
-  await updateActions($, s => ({ ...s, selected: [], plan: null })) // first, so a second press cannot launch twice
-  await act($, () => commands.launch(plan.launchable))
+  let go: string[] = []
+  await updateActions($, s => {
+    go = s.plan && s.plan.items.join(' ') === s.selected.join(' ') ? s.plan.launchable : []
+    return go.length ? { ...s, selected: [], plan: null } : s
+  })
+  if (go.length) await act($, () => commands.launch(go))
 }
 
 const loadCaps = ($: EngineInterface) => specclawDir($).then(dir => act($, () => commands.caps(dir), ran => ({ caps: listSection(ran, parseCaps, CAPS_NOTE) }), true))

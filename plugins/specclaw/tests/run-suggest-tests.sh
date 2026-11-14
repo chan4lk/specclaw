@@ -134,6 +134,7 @@ check "063 AC-7 --undismiss removes one feature, keeps the rest and the comment"
 sug "$TMP/u" --undismiss review >/dev/null; sug "$TMP/u" --undismiss fleet >/dev/null; sug "$TMP/u" --undismiss fleet >/dev/null
 check "063 AC-7 undoing the last one leaves an empty list; undoing again is a no-op" 'grep -qE "^  dismissed: \[\]" "$TMP/u/config.yaml" && [ "$(sug "$TMP/u" --dismissed)" = "rc=0" ]'
 # Undo failures exit 1 (the dash shows the exit code) and leave the config as it was.
+check "063 AC-7 --undismiss of an unknown feature exits 1; --dismiss of one still exits 0" 'grep -q "rc=1" <<<"$(sug "$TMP/u" --undismiss nope 2>&1)" && grep -q "rc=0" <<<"$(sug "$TMP/u" --dismiss nope 2>&1)"'
 for row in none:- rodir:555 unreadable:000 rofile:444; do
   name="${row%%:*}"; mode="${row#*:}"; d="$TMP/uf-$name"
   if [ "$mode" != - ]; then

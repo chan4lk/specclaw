@@ -242,6 +242,20 @@ test('R063 AC-3 Confirm launch appears only after a dry run of the selection, an
   await ui.unmount()
 })
 
+test('R063 AC-3 two presses of Confirm at once launch once', async ($, on) => {
+  const files = seed()
+  approved(files, '063-y')
+  engine(on, files, [], { reads: [], writes: 0, mcp: 0 }, RULES)
+  const ran = shell(on, c => ({ stdout: c.endsWith('--dry-run') ? '063-y: would assign to me@x.com and add fleet:auto as me@x.com\n__dash_exit=0\n' : 'queued\n__dash_exit=0\n' }))
+  await $.command.run({ command: 'dash', args: '' })
+  const ui = await $.ui.mount(PANE)
+  await ui.press({ key: 'pick-063-y' })
+  await ui.press({ key: 'dry-run' })
+  await Promise.allSettled([ui.press({ key: 'confirm-launch' }), ui.press({ key: 'confirm-launch' })])
+  expect(ran.filter(c => c.startsWith('specclaw-fleet optin 063-y &&'))).toHaveLength(1)
+  await ui.unmount()
+})
+
 test('R063 AC-3 fleet not installed or not set up: setup steps, no Confirm', async ($, on) => {
   const files = seed()
   approved(files, '063-y')

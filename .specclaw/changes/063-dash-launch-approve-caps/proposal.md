@@ -38,6 +38,9 @@ Pane actions. Each one runs an existing command; the pane owns no logic:
 - **Size:** bounded — adds actions to the 062 pane over existing commands
 - **Files affected:** ~6
 - **Complexity:** medium
+- **Size waiver:** about 450 counted lines. The required version bump adds 21 lines across 17 manifests, and two
+  review rounds added the undo failure paths and an atomic launch guard. The code is one mapping module, one
+  runner and the pane's actions; splitting it would ship buttons without their commands.
 - **Risk:** high for Launch. It spends a plan and pushes a branch, so it always needs a dry-run first and an
   explicit confirm.
 
