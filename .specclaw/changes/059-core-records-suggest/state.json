@@ -1,0 +1,12 @@
+{
+  "change": "059-core-records-suggest",
+  "phase": "build",
+  "branch": "claude/059-core-records-suggest",
+  "size": "bounded",
+  "phases": {
+    "proposal": {"status":"approved","at":"2026-11-14T04:47:17Z"},
+    "spec": {"status":"done","at":"2026-11-14T04:50:14Z"},
+    "tasks": {"status":"done","at":"2026-11-14T04:50:15Z"},
+    "build": {"status":"in-progress","at":"2026-11-14T04:50:43Z"}
+  }
+}
