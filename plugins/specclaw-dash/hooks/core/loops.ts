@@ -1,6 +1,6 @@
 // The build, review and learning loops from a change folder's files: pure, over text the mod read.
 // Plugins install into separate folders, so these small parsers are dash's own (not imports of core's).
-import type { ChangeRow, FleetLine, LessonRow, ReviewRow, Section } from '../../types/index.d.ts'
+import type { ChangeRow, FleetLine, LessonRow, ReviewRow, RuleRow, Section } from '../../types/index.d.ts'
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 const str = (v: unknown) => (typeof v === 'string' && v !== '' ? v : null)
@@ -41,7 +41,9 @@ export const openSpan = (timeline: string): ChangeRow['span'] => {
   return [...open.values()].reduce<ChangeRow['span']>((best, s) => (best === null || s.since >= best.since ? s : best), null)
 }
 
-export type ChangeFiles = { name: string; state?: string; tasks?: string; lean?: string; timeline?: string }
+export type ChangeFiles = { name: string; state?: string; tasks?: string; lean?: string; timeline?: string; proposal?: string }
+
+const FEATURE = /^\*\*Feature:\*\*\s*(\S+)/m
 
 export const parseChange = (f: ChangeFiles): ChangeRow => {
   const doc = f.state === undefined ? {} : json(f.state)
@@ -50,9 +52,11 @@ export const parseChange = (f: ChangeFiles): ChangeRow => {
   const phase = state === undefined ? '?' : (state.phase === undefined ? 'proposal' : (str(state.phase) ?? '?'))
   const verify = isObject(phases.verify) ? phases.verify : {}
   const pr = isObject(phases.pr) ? phases.pr : {}
+  const proposal = isObject(phases.proposal) ? phases.proposal : {}
   return {
     name: f.name, phase, ...countTasks(f.tasks ?? leanTasks(f.lean ?? '')),
     verdict: str(verify.verdict), pr: str(pr.url) ?? str(state?.pr), span: openSpan(f.timeline ?? ''),
+    approved: proposal.status === 'approved', feature: FEATURE.exec(f.proposal ?? f.lean ?? '')?.[1] ?? null,
   }
 }
 
@@ -98,6 +102,18 @@ export const proposedCount = (text: string) => {
   if (m) return Number(m[1])
   if (text.startsWith('no recurring lessons')) return 0
   throw new Error('learn_propose answered in an unknown form')
+}
+
+// `- fp <fp> [<severity> <rule>] seen <n>x in <files>: <lesson>`; a count that does not match is an unknown form.
+const RULE = /^- fp ([0-9a-f]+) \[[^\]]*\] seen (\d+)x in .*?: (.*)$/
+export const proposedRules = (text: string): RuleRow[] => {
+  const count = proposedCount(text)
+  const rows = text.split('\n').flatMap(l => {
+    const m = RULE.exec(l)
+    return m ? [{ fp: m[1]!, seen: Number(m[2]), lesson: m[3]! }] : []
+  })
+  if (rows.length !== count) throw new Error('learn_propose answered in an unknown form')
+  return rows
 }
 
 const join = (base: string, rel: string) => {

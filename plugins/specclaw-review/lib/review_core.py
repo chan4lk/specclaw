@@ -975,9 +975,11 @@ def stats(cfg):
 # ─── learn ───────────────────────────────────────────────────────────────────
 
 def learn_candidates(cfg):
-    """Active lessons seen review.learn_threshold (default 3) times; the review loop counts once per change."""
+    """Active lessons seen review.learn_threshold (default 3) times; the review loop counts once per change.
+    A lesson a human rejected as a rule (`learn --reject`) is not proposed again, but stays active for recall."""
     n = cfg.num("learn_threshold", 3)
-    return [e for e in mem.load(cfg.mem_dir) if e.get("status") == "active" and int(e.get("count", 1)) >= n]
+    return [e for e in mem.load(cfg.mem_dir) if e.get("status") == "active" and e.get("learn") != "rejected"
+            and int(e.get("count", 1)) >= n]
 
 
 def learn_propose(cfg):
@@ -990,6 +992,14 @@ def learn_propose(cfg):
         out.append(f"- fp {e['fp']} [{e['severity']} {e.get('rule','')}] seen {e['count']}x in "
                    f"{', '.join(e.get('files', [])[:3])}: {e.get('lesson','')}")
     return "\n".join(out)
+
+
+def learn_reject(cfg, fps):
+    picked = {e["fp"] for e in learn_candidates(cfg)} & set(fps)
+    if not picked:
+        raise ReviewError("none of the given fingerprints is a current learn candidate")
+    mem.mark(cfg.mem_dir, picked, "rejected", key="learn")
+    return f"rejected {len(picked)} proposed rule(s); the lesson(s) stay in review memory"
 
 
 def learn_apply(cfg, fps):

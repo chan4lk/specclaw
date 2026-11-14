@@ -1,0 +1,120 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 2,
+  "minor": 2
+ },
+ "escalated": [],
+ "files": [
+  ".claude-plugin/marketplace.json",
+  "plugins/specclaw-bf/.claude-plugin/plugin.json",
+  "plugins/specclaw-bf/.codex-plugin/plugin.json",
+  "plugins/specclaw-dash/.claude-plugin/plugin.json",
+  "plugins/specclaw-dash/.codex-plugin/plugin.json",
+  "plugins/specclaw-dash/hooks/register.tsx",
+  "plugins/specclaw-extras/.claude-plugin/plugin.json",
+  "plugins/specclaw-extras/.codex-plugin/plugin.json",
+  "plugins/specclaw-fleet/.claude-plugin/plugin.json",
+  "plugins/specclaw-fleet/.codex-plugin/plugin.json",
+  "plugins/specclaw-review/.claude-plugin/plugin.json",
+  "plugins/specclaw-review/.codex-plugin/plugin.json",
+  "plugins/specclaw-sync/.claude-plugin/plugin.json",
+  "plugins/specclaw-sync/.codex-plugin/plugin.json",
+  "plugins/specclaw/.claude-plugin/plugin.json",
+  "plugins/specclaw/.codex-plugin/plugin.json",
+  "plugins/specclaw/bin/specclaw-suggest",
+  "plugins/specclaw/tests/run-suggest-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "class": "other",
+   "file": "plugins/specclaw-dash/hooks/register.tsx",
+   "fp": "674aabe604b4",
+   "in_delta": true,
+   "line": 26,
+   "message": "The guard and the clear are not atomic. `readActions` is awaited, the guard runs on that snapshot, then `updateActions` clears `plan` in a separate await. Two launch handlers can both read the plan before either clears it, so the comment 'a second press cannot launch twice' does not hold. Move the check and the clear into one `updateActions` callback (or take an in-flight flag) and launch only if that callback saw a valid plan. Add a test that fires two launch presses concurrently and asserts exactly one `specclaw-fleet optin` call. The pane test only covers a single press.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B12",
+   "scenario": "The user double-presses Confirm launch. Handler 1 awaits readActions, and handler 2 starts and awaits readActions before handler 1 reaches updateActions. Both see the plan, both pass the guard, and `specclaw-fleet optin <items>` runs twice. That spends the plan twice and pushes the branch twice.",
+   "severity": "major",
+   "unclassified": false
+  },
+  {
+   "class": "other",
+   "file": "plugins/specclaw/bin/specclaw-suggest",
+   "fp": "086f3d5a5109",
+   "in_delta": true,
+   "line": 36,
+   "message": "The fix covers only some of the `--undismiss` failure paths. The unknown-feature branch above `fail()` still does `exit 0`, so a failed undo is reported as success. Exit non-zero there for `--undismiss`, using the same `rc` logic. Add a test row for it.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "`config.yaml` lists a feature name that `plugin_feature` no longer knows (an old or renamed feature). The pane shows it as dismissed, and Undo runs `specclaw-suggest <cfg> --undismiss old`. The script prints 'unknown feature' and exits 0, so the pane shows `exit 0` while the dismissal is still in the config.",
+   "severity": "major",
+   "unclassified": false
+  },
+  {
+   "class": "other",
+   "file": "plugins/specclaw/tests/run-suggest-tests.sh",
+   "fp": "9788e2fd7771",
+   "in_delta": true,
+   "line": 143,
+   "message": "The `rofile` row (config chmod 444 in a writable dir) probably does not fail. The new code checks only `-f` and `-r`, and a temp-file-then-`mv` write replaces a read-only file without error. So `--undismiss` would succeed with rc=0, and the row, which expects rc=1 and unchanged bytes, would go red or only pass by coincidence. Either drop the row or make the script check writability explicitly.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "`config.yaml` is mode 444 in a writable directory. The undo succeeds via rename and removes `review`. The row expects rc=1 and an unchanged file, so it fails.",
+   "severity": "minor",
+   "unclassified": false
+  },
+  {
+   "class": "other",
+   "file": "plugins/specclaw-dash/hooks/register.tsx",
+   "fp": "0a5d6bb24880",
+   "in_delta": true,
+   "line": 18,
+   "message": "The setup hint now needs `ran.code > 0`. A dry run that exits 0 but whose output names none of the items (unparseable output) gets no 'could not run' flag. It becomes an empty plan that looks like 'nothing launchable'. Surface unparsed output as unknown whenever `named === 0`, and use a separate message for timeouts.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B3",
+   "scenario": "`optin --dry-run` exits 0 but prints a changed format. `named` is 0 and `launchable` is empty. The pane shows no warning, so the user cannot tell it from a legitimate 'nothing to launch'.",
+   "severity": "minor",
+   "unclassified": false
+  }
+ ],
+ "fix_proof": {
+  "base": "bfede3424c5c17782ffae1ba36afd5f366c1bffe",
+  "mode": "block",
+  "reason": "1 test file(s) fail on bfede3424c and pass on HEAD",
+  "status": "proven",
+  "tests": [
+   "plugins/specclaw/tests/run-suggest-tests.sh"
+  ]
+ },
+ "head": "a4762fdc8acd9ccf62e6bca63e120941deb4621d",
+ "impact": [
+  "plugins/specclaw-dash/hooks/core/actions.ts",
+  "plugins/specclaw-dash/tests/actions.spec.ts",
+  "plugins/specclaw-dash/tests/pane.test.tsx",
+  "plugins/specclaw-dash/types/index.d.ts"
+ ],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 28286,
+ "round": 2,
+ "since": "bfede3424c",
+ "status": "open",
+ "system_chars": 9653,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794657943,
+ "ts_start": 1794657909
+}

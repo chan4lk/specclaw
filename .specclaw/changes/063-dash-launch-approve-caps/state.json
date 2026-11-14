@@ -1,0 +1,14 @@
+{
+  "change": "063-dash-launch-approve-caps",
+  "phase": "pr",
+  "branch": "",
+  "size": "bounded",
+  "phases": {
+    "proposal": {"status":"approved","at":"2026-11-14T04:47:17Z"},
+    "spec": {"status":"done","at":"2026-11-14T11:54:37Z"},
+    "tasks": {"status":"done","at":"2026-11-14T11:54:38Z"},
+    "build": {"status":"done","at":"2026-11-14T12:02:09Z","tasks":{"done":3,"total":3,"failed":0}},
+    "verify": {"status":"passed","at":"2026-11-14T12:42:41Z","verdict":"PASS"},
+    "pr": {"status":"raised","at":"2026-11-14T12:43:11Z","url":"https://github.com/chan4lk/specclaw/pull/135"}
+  }
+}
