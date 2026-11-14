@@ -123,6 +123,15 @@ for dirt in modified untracked; do
   check "a $dirt file outside .specclaw/ after verify is held" "$d" 2 "uncommitted or untracked changes outside .specclaw/ since its verify"
 done
 
+# No base (touched comes from ls) and a broken index: git status fails at the freshness check.
+d="$(repo nobase-badindex nosuch)"; change "$d" 002-x "$DONE" passed PASS
+rm -rf "$d/.specclaw/changes/001-old"; echo garbage > "$d/.git/index"
+says "a git failure at the freshness check skips the change by name" "$d" "the done guard skipped 002-x: git could not compare its verify with HEAD ("
+
+# A base ref with no merge-base (orphan HEAD, as in a shallow clone) falls back to checking every change.
+d="$(repo orphan)"; git -C "$d" checkout -q --orphan lone && commit "$d" 2026-01-02T00:00:00Z lone
+check "no merge-base checks every active change" "$d" 2 "001-old has every task done, but no verify verdict"
+
 d="$TMP/nochanges"; mkdir -p "$d/.specclaw"; printf 'git:\n  base_branch: nosuch\n' > "$d/.specclaw/config.yaml"; git -C "$d" init -q
 check "a project with no changes folder yet exits 0 in silence" "$d" 0 ""
 [ -z "$(cd "$d" && printf '{}' | "$GUARD" 2>/dev/null)" ] && echo "PASS: and prints no message" || { fail=1; echo "FAIL: a fresh project printed a message"; }

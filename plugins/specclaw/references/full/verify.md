@@ -72,7 +72,7 @@ With none of the keys present, the payload is unchanged from before the e2e tier
 specclaw-verify size .specclaw <change>
 ```
 
-Counts production lines added and deleted against the merge-base with the base branch, leaving out tests (`test/`, `tests/`, `spec/`, `specs/`, `*.spec.*`, `*_spec.*`, `*.test.*`, `*Test.*`, `*Tests.*` and similar, ignoring case), `.specclaw/`, lockfiles, generated files and the `pr.size_exclude` globs. Exit 1 means it is over `pr.size_cap` (default 400, `0` = off) and the proposal has no `Size waiver: <reason>` line: the verdict is FAIL. Exit 2 means it could not count (no base branch, or git failed); that is also a FAIL until it can, never a pass. Over half the cap it suggests a split. Put its one line in the verify report.
+Counts production lines added and deleted against the merge-base with the base branch, leaving out tests (`test/`, `tests/`, `spec/`, `specs/`, `__tests__/` and the usual test file names, ignoring case), `.specclaw/`, lockfiles, generated files and the `pr.size_exclude` globs. Exit 1 means it is over `pr.size_cap` (default 400, `0` = off) and the proposal has no `Size waiver: <reason>` line: the verdict is FAIL. Exit 2 means it could not count (no base branch, no merge-base with it, a malformed `pr.size_cap`, or git failed; the line says which); that is also a FAIL until it can, never a pass. The exact exclusion list is `SIZE_EXCLUDE` in `bin/specclaw-verify`. Over half the cap it suggests a split. Put its one line in the verify report.
 
 ## Step 2 — Build verify context
 

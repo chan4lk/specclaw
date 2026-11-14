@@ -40,6 +40,7 @@ missing() (
   fi
   for name in $touched; do
     dir=".specclaw/changes/$name"
+    late="" dirty=""
     # Not an active change (the archive folder, or a folder moved away on this branch): nothing to check.
     if [ "$name" = archive ] || [ ! -d "$dir" ]; then continue; fi
     tasks="$dir/tasks.md"

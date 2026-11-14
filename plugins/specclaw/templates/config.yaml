@@ -250,11 +250,12 @@ automation:
 pr:
   # PR size cap (change 060): `specclaw-verify size` counts production lines added
   # and deleted against the merge-base with the base branch. Tests (test/, tests/,
-  # spec/, specs/, *.spec.*, *_spec.*, *Test.*, *Tests.*, any case), .specclaw/,
+  # spec/, specs/, __tests__/ and the usual test file names, any case; the list is
+  # SIZE_EXCLUDE in bin/specclaw-verify), .specclaw/,
   # lockfiles and generated files are left out, plus the git glob pathspecs in
   # size_exclude (space-separated, e.g. "docs/** **/*.md"). Over size_cap, verify
   # FAILs unless the proposal has a `Size waiver: <reason>` line; over half, it
-  # suggests a split; when it cannot count (no base branch, or git fails), it exits 2. 0 turns the cap off.
+  # suggests a split; when it cannot count (no base or merge-base, a malformed size_cap, or git fails), it exits 2. 0 turns the cap off.
   size_cap: 400
   size_exclude: ""
 
