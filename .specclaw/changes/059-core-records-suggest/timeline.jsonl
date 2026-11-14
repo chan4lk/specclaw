@@ -3,3 +3,6 @@
 {"ev":"start","span":"plan","kind":"phase","label":"plan","at":"2026-11-14T04:49:49Z","ts":1794631789}
 {"ev":"stop","span":"plan","at":"2026-11-14T04:50:22Z","ts":1794631822,"status":"ok"}
 {"ev":"start","span":"W1","kind":"wave","label":"wave 1","at":"2026-11-14T04:50:43Z","ts":1794631843}
+{"ev":"stop","span":"W1","at":"2026-11-14T04:56:24Z","ts":1794632184,"status":"ok"}
+{"ev":"start","span":"verify-1794632190","kind":"phase","label":"verify","at":"2026-11-14T04:56:30Z","ts":1794632190}
+{"ev":"stop","span":"verify-1794632190","at":"2026-11-14T06:31:23Z","ts":1794637883,"status":"ok"}

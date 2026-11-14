@@ -1,0 +1,63 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 1
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw/CLAUDE.md",
+  "plugins/specclaw/bin/specclaw-log-learning",
+  "plugins/specclaw/bin/specclaw-suggest",
+  "plugins/specclaw/hooks/session-start",
+  "plugins/specclaw/lib/plugins.sh",
+  "plugins/specclaw/references/full/status.md",
+  "plugins/specclaw/skills/status/SKILL.md",
+  "plugins/specclaw/templates/config.yaml",
+  "plugins/specclaw/tests/run-suggest-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/lib/plugins.sh",
+   "fp": "4c1dd417b5e7",
+   "in_delta": true,
+   "line": 19,
+   "message": "plugins_dismissed reads only an inline `dismissed: [..]` value on the key's own line. A YAML block list (`dismissed:` followed by `- review`) yields an empty set. specclaw-suggest --dismiss now refuses to write to a block list and tells the user to 'add it by hand'. That hand edit is then ignored by both the tip and the hook notices, so the advice leaves the user with a dismissal that does nothing. Either parse block lists in plugins_dismissed (the same reader serves --dismiss, the tip and the hook), or fail loudly instead of treating an unreadable list as 'nothing dismissed'.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "config.yaml has `plugins:\\n  dismissed:\\n    - review`. `specclaw-suggest .specclaw review` still prints the install tip, and session-start still prints the install notice. The AC-3 block-list test only checks that the file is left unchanged, never that the existing entry is honoured.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw/tests/run-suggest-tests.sh",
+   "fp": "e7e7525981b4",
+   "in_delta": true,
+   "line": 52,
+   "message": "The json_esc fix is tested with one detail string that mixes `\\r` and ESC. The newly escaped CATEGORY and PRIORITY, and ACTION, get no hostile input. The same fix applied to a variant table (quote, backslash, `\\r`, `\\b`, `\\f`, 0x01, in each field) would show whether every field is escaped. As written, removing json_esc from category or priority leaves the suite green.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Revert the `$(json_esc \"$CATEGORY\")` and `$(json_esc \"$PRIORITY\")` changes in specclaw-log-learning: AC-6 still passes, because both fields are plain words in the test.",
+   "severity": "minor"
+  }
+ ],
+ "head": "7baf5d5f21bb72e20a0a011359c39c7f45477284",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 35101,
+ "round": 2,
+ "since": "961e98d",
+ "status": "open",
+ "system_chars": 8924,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794632401,
+ "ts_start": 1794632370
+}
