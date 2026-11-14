@@ -55,5 +55,8 @@ check "deleted lines count" "$d" 0 "size cap: 1 production lines (cap 10)"
 d="$(repo nobase '  size_cap: 10')"; sed -i.bak 's/base_branch: main/base_branch: nosuch/' "$d/.specclaw/config.yaml"
 check "no base branch is not counted and exits 2, never a pass" "$d" 2 "size cap: not counted, no base branch"
 
+d="$(repo badgit '  size_cap: 10')"; lines "$d/src/b.ts" 2; echo garbage > "$d/.git/index"
+check "a git failure after the base resolves is not counted and exits 2" "$d" 2 "size cap: not counted, git diff against"
+
 (( fail == 0 )) && echo "R060 AC-4 the size cap counts production lines and honours the waiver"
 exit "$fail"

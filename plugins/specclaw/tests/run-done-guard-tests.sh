@@ -81,6 +81,9 @@ check "a clean review verdict and a PASS verify exit 0" "$d" 0 "" "{}" "$STUB:$B
 d="$(repo nobase nosuch)"; change "$d" 002-x "$DONE" passed PASS
 check "without a base every active change is checked" "$d" 2 "001-old has every task done, but no verify verdict"
 
+d="$(repo badjson)"; change "$d" 002-x "$DONE"; echo '{"phases": {' > "$d/.specclaw/changes/002-x/state.json"
+check "an unreadable state.json is skipped, never reported as a verdict" "$d" 0 ""
+
 d="$(repo noconfig)"; change "$d" 002-x "$DONE"; rm "$d/.specclaw/config.yaml"
 check "no .specclaw/config.yaml exits 0" "$d" 0 ""
 

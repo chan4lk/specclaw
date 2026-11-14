@@ -253,7 +253,7 @@ pr:
   # lockfiles and generated files are left out, plus the git glob pathspecs in
   # size_exclude (space-separated, e.g. "docs/** **/*.md"). Over size_cap, verify
   # FAILs unless the proposal has a `Size waiver: <reason>` line; over half, it
-  # suggests a split; when it cannot count (no base branch), it exits 2. 0 turns the cap off.
+  # suggests a split; when it cannot count (no base branch, or git fails), it exits 2. 0 turns the cap off.
   size_cap: 400
   size_exclude: ""
 
