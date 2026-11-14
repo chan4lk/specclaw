@@ -366,6 +366,12 @@ ftcfg "[some-other-change]"
 out_json "$FT"; "$SR" run --change "$CH" >/dev/null; rc=$?
 check "064 AC-5 fast track off for this change: unchanged loop (exit 1, not final, no debt.md)" '[ "$rc" = 1 ] && [ "$(field "$RD/round-1.json" "d[\"final\"]")" = False ] && [ ! -f .specclaw/debt.md ]'
 
+# 064 AC-7: both CI templates run the verdict and post the status only through the --head gate.
+for t in github-actions.yml azure-pipelines.yml; do
+  check "064 AC-7 $t: verdict step, status gated by verdict --head, review-loop context" 'f="$PLUGIN_DIR/ci/$t"; grep -q "verdict --change \"\$CHANGE\" --check-head" "$f" && grep -q "if.*verdict --change \"\$CHANGE\" --head \"\$HEAD_SHA\"" "$f" && grep -q "review-loop" "$f"'
+done
+check "064 AC-7 templates are valid YAML (when PyYAML is installed)" 'python3 -c "import yaml" 2>/dev/null || exit 0; for t in "$PLUGIN_DIR"/ci/*.yml; do python3 -c "import sys,yaml; yaml.safe_load(open(sys.argv[1]))" "$t" || exit 1; done'
+
 echo
 [ "$FAILS" -eq 0 ] && echo "All specclaw-review tests passed." || echo "$FAILS failure(s)."
 exit $((FAILS > 0))
