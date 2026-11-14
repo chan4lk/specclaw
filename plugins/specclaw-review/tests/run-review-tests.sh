@@ -311,6 +311,57 @@ check "AC-25 severity flagged; suggested block names governance but not ADRs; no
 printf 'presets: []\ngit:\n  base_branch: main\nreview:\n  governance_budget: 10\n' > .specclaw/config.yaml
 check "AC-26 over budget warns; --json is valid JSON" '"$SR" discover | grep -q WARNING && "$SR" discover --json | python3 -c "import json,sys; d=json.load(sys.stdin); assert d[\"over_budget\"] is True"'
 
+# 064 AC-1: verdict --head binds the clean verdict to one exact SHA (no records-only drift).
+mkrepo "$TMP/h1"
+out_json '[]'; "$SR" run --change "$CH" --final >/dev/null
+fh="$(git rev-parse HEAD)"
+o="$("$SR" verdict --change "$CH" --head "$fh")"; rc=$?
+check "064 AC-1 --head at the final-pass SHA exits 0 and prints the final round file" '[ "$rc" = 0 ] && [ "$(sed -n 2p <<<"$o")" = "$RD/round-1.json" ]'
+check "064 AC-1 --head at another SHA exits 1" '! "$SR" verdict --change "$CH" --head "$(git rev-parse HEAD~1)" >/dev/null'
+git add -A && git commit -qm records
+check "064 AC-1 records-only commit: plain verdict OK, --head at the new HEAD exits 1" '"$SR" verdict --change "$CH" >/dev/null && ! "$SR" verdict --change "$CH" --head "$(git rev-parse HEAD)" >/dev/null'
+out_json "$MAJOR"; "$SR" run --change "$CH" --final >/dev/null
+check "064 AC-1 an open final pass at the given SHA exits 1" '! "$SR" verdict --change "$CH" --head "$(git rev-parse HEAD)" >/dev/null'
+
+# 064 AC-4: finding class is normalised; follow-ups carry it.
+check "064 AC-4 class normalised: Data Loss -> data-loss, missing/unknown -> other" 'python3 - "$PLUGIN_DIR/lib" <<"PY"
+import sys; sys.path.insert(0, sys.argv[1]); import review_core as rc
+class C(rc.Config):
+    def __init__(self): self.review = {}
+f = rc.calibrate(C(), [{"severity": "minor", "rule": "B1", "file": "x.py", "line": 1, "message": "a", "class": "Data Loss"},
+                       {"severity": "minor", "rule": "B2", "file": "y.py", "line": 1, "message": "b"},
+                       {"severity": "minor", "rule": "B3", "file": "z.py", "line": 1, "message": "c", "class": "style"},
+                       {"severity": "minor", "rule": "B4", "file": "w.py", "line": 1, "message": "d", "class": "SECURITY"}])
+assert [x["class"] for x in f] == ["data-loss", "other", "other", "security"], [x["class"] for x in f]
+PY'
+mkrepo "$TMP/c4"
+out_json '[{"severity":"minor","rule":"B10","file":"a.py","line":1,"message":"naming","class":"law","in_delta":true}]'
+"$SR" run --change "$CH" >/dev/null
+check "064 AC-4 the follow-up line carries class:" 'grep -q "class:law -->" ".specclaw/changes/$CH/follow-ups.md"'
+
+# 064 AC-5: fast track — one final round, only gate-class blockers block, the rest goes to debt.md once.
+ftcfg() { printf 'presets: []\ngit:\n  base_branch: main\nreview:\n  backend: "cat %s.out.json"\n  fast_track: %s\n%s' "$(git rev-parse --show-toplevel)" "$1" "${2:-}" > .specclaw/config.yaml; }
+mkrepo "$TMP/ft"
+ftcfg all
+FT='[{"severity":"major","rule":"S1","file":"a.py","line":2,"message":"token logged","scenario":"s","class":"security","in_delta":true},
+ {"severity":"blocker","rule":"B2","file":"a.py","line":1,"message":"crash on none","scenario":"s","class":"other","in_delta":true},
+ {"severity":"minor","rule":"B10","file":"a.py","line":1,"message":"naming","in_delta":true}]'
+out_json "$FT"; "$SR" run --change "$CH" >/dev/null; rc=$?
+check "064 AC-5 fast track: non-gate findings exit 0, round is final, all three land in debt.md" '[ "$rc" = 0 ] && [ "$(field "$RD/round-1.json" "d[\"final\"]")" = True ] && [ "$(grep -c "^- \[ \]" .specclaw/debt.md)" = 3 ] && grep -q "class:security -->" .specclaw/debt.md'
+check "064 AC-5 fast track: nothing goes to follow-ups.md; verdict is clean" '[ ! -f ".specclaw/changes/$CH/follow-ups.md" ] && "$SR" verdict --change "$CH" >/dev/null'
+"$SR" run --change "$CH" >/dev/null
+check "064 AC-5 a re-run does not duplicate debt lines" '[ "$(grep -c "^- \[ \]" .specclaw/debt.md)" = 3 ]'
+out_json '[{"severity":"blocker","rule":"S2","file":"a.py","line":2,"message":"sql injection","scenario":"s","class":"security","in_delta":true}]'
+"$SR" run --change "$CH" >/dev/null; rc=$?
+check "064 AC-5 fast track: a security blocker exits 1 and is not written to debt" '[ "$rc" = 1 ] && ! grep -q "sql injection" .specclaw/debt.md'
+ftcfg all "$(printf 'release_gate:\n  block_on: [law]\n')"
+"$SR" run --change "$CH" >/dev/null; rc=$?
+check "064 AC-5 release_gate.block_on: [law] makes a security blocker debt, not a block" '[ "$rc" = 0 ] && grep -q "sql injection" .specclaw/debt.md'
+mkrepo "$TMP/ft2"
+ftcfg "[some-other-change]"
+out_json "$FT"; "$SR" run --change "$CH" >/dev/null; rc=$?
+check "064 AC-5 fast track off for this change: unchanged loop (exit 1, not final, no debt.md)" '[ "$rc" = 1 ] && [ "$(field "$RD/round-1.json" "d[\"final\"]")" = False ] && [ ! -f .specclaw/debt.md ]'
+
 echo
 [ "$FAILS" -eq 0 ] && echo "All specclaw-review tests passed." || echo "$FAILS failure(s)."
 exit $((FAILS > 0))

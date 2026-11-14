@@ -6,8 +6,10 @@
 #   specclaw-review classify [--since <sha>]           skip | review, and the files
 #   specclaw-review run --change <c> [--since <sha>] [--final]
 #                                                      one round; exit 0 clean, 1 open, 3 not run, 4 escalate
-#   specclaw-review verdict --change <c> [--pr-line] [--check-head]
+#   specclaw-review verdict --change <c> [--pr-line] [--check-head] [--head <sha>]
 #                                                      exit 0 only when clean + final pass at HEAD
+#                                                      --head: also only when the final pass ran at exactly
+#                                                      <sha> (the clean-loop PR status gate); prints the round file
 #                                                      (--pr-line, --check-head: accepted for CI snippets; same output)
 #   specclaw-review memory query --files <f>... [--budget N] [--k N]
 #   specclaw-review memory compact
@@ -41,6 +43,7 @@ def main(argv):
     v.add_argument("--change", required=True)
     v.add_argument("--pr-line", action="store_true")
     v.add_argument("--check-head", action="store_true")
+    v.add_argument("--head")
     m = sub.add_parser("memory")
     m.add_argument("action", choices=["query", "compact"])
     m.add_argument("--files", nargs="*", default=[])
@@ -78,6 +81,12 @@ def main(argv):
             if rec.get("error"):
                 print(f"  NOT RUN: {rec['error']}", file=sys.stderr)
             return rc.EXIT_BY_STATUS[rec["status"]]
+        elif a.cmd == "verdict" and a.head:
+            code, line, round_file = rc.verdict_at(cfg, a.change, a.head)
+            print(line)
+            if round_file:
+                print(round_file)
+            return code
         elif a.cmd == "verdict":
             code, line = rc.verdict(cfg, a.change)
             print(line)
