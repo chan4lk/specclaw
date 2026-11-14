@@ -216,6 +216,7 @@ spans() {
       }
       return ""
     }
+    /^\{"kind":"lesson"/ { next }
     {
       ev = field($0, "ev"); sp = field($0, "span")
       if (ev == "" || sp == "") { bad++; next }

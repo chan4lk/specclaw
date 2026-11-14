@@ -124,6 +124,8 @@ jobs:
         run: bash plugins/specclaw/tests/run-change-size-tests.sh
       - name: Run session-bootstrap hook tests
         run: bash plugins/specclaw/tests/run-bootstrap-hook-tests.sh
+      - name: Run plugin-suggestion and lesson-record tests
+        run: bash plugins/specclaw/tests/run-suggest-tests.sh
       - name: Run description-lint meta tests
         run: bash plugins/specclaw/tests/run-lint-meta-tests.sh
       # The lint itself. Pure bash, no network, no API key — cheap enough to run

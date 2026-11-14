@@ -1,0 +1,42 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 1
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw/tests/run-suggest-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/tests/run-suggest-tests.sh",
+   "fp": "b69c5130552c",
+   "in_delta": true,
+   "line": 87,
+   "message": "The previous finding asked the stub to check that a `config.yaml.??????` temp exists when `mv` is called. The stub only checks that `$1` is a file containing the line `  dismissed: [review]`. It never checks the temp's name or directory. The 'no leftover temp' assertion globs `$d/config.yaml.??????`, so it would pass vacuously if the script put its temp elsewhere. Make the stub also require that `$1` matches `$d/config.yaml.??????`, for example with `case \"$1\" in */config.yaml.??????) ...`. The marker uses `>>` and the check requires exactly one `called` line, so any second `mv` call would fail the row; that behaviour is fine but should stay intentional. PATH is still cut to `$TMP/failmv:/usr/bin:/bin`. This is now safe, because a missing earlier tool leaves no marker and the row fails visibly.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "The script is changed to create its temp under `$TMPDIR` instead of next to the config, then call the stubbed `mv`. The marker is still written, and no `$d/config.yaml.??????` exists, so the cleanup assertion passes without testing any cleanup in the config directory.",
+   "severity": "minor"
+  }
+ ],
+ "head": "6b77eb5fa7557181d5813ab4b1ba3c52d94dcb9c",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 12552,
+ "round": 12,
+ "since": "a078192",
+ "status": "clean",
+ "system_chars": 8959,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794633891,
+ "ts_start": 1794633875
+}

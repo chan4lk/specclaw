@@ -1,0 +1,44 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 0
+ },
+ "escalated": [
+  "aa2519b34208"
+ ],
+ "files": [
+  "plugins/specclaw/tests/run-suggest-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/tests/run-suggest-tests.sh",
+   "fp": "aa2519b34208",
+   "in_delta": true,
+   "line": 87,
+   "message": "The late-failure row has no positive control showing that the temp file existed and the stubbed `mv` was actually called. The row only checks for the 'could not record dismissal' text, rc=0, an unchanged config and no leftover temp. All of those also hold when the script fails earlier. The PATH is cut to `$TMP/failmv:/usr/bin:/bin`, so a missing `mktemp`, `cp` or `awk` fails the run before any temp exists. The row would then pass without running the late rename path or its cleanup. Make the stub record that it was called (for example, write a marker file and have the stub check that a `config.yaml.??????` temp exists at that moment), and assert the marker in the check. Also avoid cutting the PATH so tightly that earlier tools can vanish.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "On a machine where mktemp or awk is not in /usr/bin or /bin (nix, or homebrew coreutils): with the restricted PATH, `mktemp` fails inside specclaw-suggest -> the same 'could not record dismissal' message and rc=0 -> the row passes, although the late `mv ... || fail` path was never reached. Delete the temp cleanup and the row stays green.",
+   "severity": "major"
+  }
+ ],
+ "head": "a0781924de19e0431e51597e6463921962879c81",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 14002,
+ "round": 11,
+ "since": "e4e2790",
+ "status": "escalate",
+ "system_chars": 8964,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794633844,
+ "ts_start": 1794633818
+}
