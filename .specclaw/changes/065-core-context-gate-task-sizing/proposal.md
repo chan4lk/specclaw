@@ -49,6 +49,11 @@ Plan this change after that verdict and port from the code that lands on TBML `d
 - **Complexity:** large
 - **Risk:** high. A wrong gate stops every subagent. It fails open, and a bad config falls back to the defaults.
 
+Size waiver: one enforcement hook, the `specclaw-budget` CLI that 063 calls as a fixed contract, and the docs and
+skill text that explain them (about 680 counted lines, a third of them docs). The hook is unusable without the role
+table and config reader it shares with the CLI, and 063 is being built against this CLI in parallel, so a split would
+ship either a gate nobody can configure or a contract with nothing behind it.
+
 ## Open Questions
 
 - Should the gate ship `off` by default until a project opts in, given it is unproven outside TBML?
