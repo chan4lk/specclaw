@@ -1,8 +1,5 @@
 import type { EngineInterface } from 'claude-code'
-
-// git.base_branch, read only inside the top-level `git:` block (column-0 comments do not end it), as lib/base-ref.sh reads it.
-const GIT_BLOCK = /^git:[^\n]*\n((?:[ \t]+[^\n]*\n?|#[^\n]*\n?|\n)*)/m
-const BASE = /^  base_branch:[ \t]*["']?([^"'#\s]*)/m
+import { baseBranchFrom } from './core/base.ts'
 
 function run($: EngineInterface, cwd: string, args: string[]) {
   // LC_ALL=C keeps git's "not a git repository" in English, whatever the user's locale.
@@ -28,7 +25,7 @@ export async function onBaseBranch($: EngineInterface, cwd: string): Promise<str
   const config = `${cwd}/.specclaw/config.yaml`
   const text = (await $.fs.exists(config)) ? await $.fs.read(config) : ''
   if (typeof text !== 'string') throw new Error(`${config} is not text`)
-  const configured = BASE.exec(GIT_BLOCK.exec(text)?.[1] ?? '')?.[1]
+  const configured = baseBranchFrom(text)
   // symbolic-ref --quiet exits 1 when origin/HEAD is not set: that is "no remote default", not a failure.
   const remote = (await git($, cwd, ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'], [0, 1])).replace(/^origin\//, '')
   const base = configured || remote || 'main'

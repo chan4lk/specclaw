@@ -1,0 +1,10 @@
+plain|git:\n  base_branch: develop\n|develop
+double-quoted with a trailing comment|git:\n  base_branch: "develop"  # base\n|develop
+single-quoted after a column-0 comment|git:\n# the trunk\n  base_branch: 'develop'\n|develop
+four-space indent|git:\n    base_branch: develop\n|develop
+blank line inside the block|git:\n\n  base_branch: develop\n|develop
+a # with no space before it is part of the value|git:\n  base_branch: dev#1\n|dev#1
+only a comment after the key|git:\n  base_branch: # none\n|-
+an empty quoted value|git:\n  base_branch: ""\n|-
+base_branch in another block is ignored|jira:\n  base_branch: x\ngit:\n  strategy: y\n|-
+a column-0 --- ends the git block|git:\n  strategy: y\n---\n  base_branch: x\n|-

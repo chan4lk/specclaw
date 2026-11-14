@@ -549,26 +549,30 @@ cmd_report() {
 
 # Git glob pathspecs never counted as production lines, matched ignoring case; pr.size_exclude adds more.
 SIZE_EXCLUDE=('.specclaw/**' '**/test/**' '**/tests/**' '**/spec/**' '**/specs/**' '**/__tests__/**'
-  '**/*.tests/**' '**/*.test.*' '**/*.spec.*' '**/*_test.*' '**/*_spec.*' '**/test_*'
+  '**/testdata/**' '**/testfixtures/**' '**/*.*tests/**' '**/*.test/**'
+  '**/*.test.*' '**/*.spec.*' '**/*_test.*' '**/*_spec.*' '**/test_*'
   '**/*.lock' '**/*.lockb' '**/package-lock.json' '**/pnpm-lock.yaml' '**/go.sum'
   '**/generated/**' '**/*.generated.*' '**/*.min.*')
-# CamelCase test files (FooTest.java, FooTests.cs) match case-sensitively: ignoring case, *test.* would
-# also leave out production files such as latest.ts or contest.py.
-SIZE_EXCLUDE_CASED=('**/*Test.*' '**/*Tests.*')
+# CamelCase test names (FooTest.java, FooTests.cs, FooSpec.scala, src/integrationTest/) match
+# case-sensitively: ignoring case, *test.* would also leave out production files such as latest.ts.
+SIZE_EXCLUDE_CASED=('**/*Test.*' '**/*Tests.*' '**/*Spec.*' '**/*Test/**')
 
 cmd_size() {
   local specclaw_dir="$1" change_name="$2"
   local config="${specclaw_dir}/config.yaml" change_dir="${specclaw_dir}/changes/${change_name}"
   local root cap mb lines glob extra=() specs=(.)
   root="$(cd "${specclaw_dir}/.." && pwd)"
+  [ -d "$change_dir" ] || { echo "size cap: not counted, no change folder ${change_dir}"; return 2; }
   cap="$(yaml_val "$config" pr.size_cap)"
   cap="${cap:-400}"
   # A config error is "could not count" (2), never "over the cap" (1).
   [[ "$cap" =~ ^[0-9]+$ ]] || { echo "size cap: not counted, pr.size_cap must be a whole number, got '${cap}'"; return 2; }
+  cap=$((10#$cap))   # 08 is eight, not a bad octal
   [ "$cap" -eq 0 ] && { echo "size cap: off (pr.size_cap: 0)"; return 0; }
   read -ra extra <<<"$(yaml_val "$config" pr.size_exclude)"
   for glob in "${SIZE_EXCLUDE[@]}"; do specs+=(":(exclude,glob,icase)${glob}"); done
-  for glob in "${SIZE_EXCLUDE_CASED[@]}" "${extra[@]}"; do specs+=(":(exclude,glob)${glob}"); done
+  # ${extra[@]+...}: an empty array under set -u aborts bash before 4.4 (stock macOS /bin/bash is 3.2).
+  for glob in "${SIZE_EXCLUDE_CASED[@]}" ${extra[@]+"${extra[@]}"}; do specs+=(":(exclude,glob)${glob}"); done
   # shellcheck disable=SC1091  # sourced lib, resolved at runtime
   . "${SCRIPT_DIR}/../lib/base-ref.sh"
   local base_name

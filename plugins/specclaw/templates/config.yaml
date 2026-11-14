@@ -250,7 +250,8 @@ automation:
 pr:
   # PR size cap (change 060): `specclaw-verify size` counts production lines added
   # and deleted against the merge-base with the base branch. Tests (test/, tests/,
-  # spec/, specs/, __tests__/ and the usual test file names, any case; the list is
+  # spec/, specs/, __tests__/, testdata/ and the usual test file names, any case,
+  # except CamelCase FooTest.*/FooSpec.* which match case-sensitively; the list is
   # SIZE_EXCLUDE in bin/specclaw-verify), .specclaw/,
   # lockfiles and generated files are left out, plus the git glob pathspecs in
   # size_exclude (space-separated, e.g. "docs/** **/*.md"). Over size_cap, verify

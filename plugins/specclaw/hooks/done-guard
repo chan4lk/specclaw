@@ -82,8 +82,9 @@ print(*(v.get(k) or "-" for k in ("status", "verdict", "at")))' "$dir/state.json
       echo "hold specclaw: $name has every task done, but there are uncommitted or untracked changes outside .specclaw/ since its verify. Commit them and re-run /specclaw:verify."
     fi
     if command -v specclaw-review >/dev/null; then
+      # One line: only lines starting "hold " or "skip " are read back.
       review="$(specclaw-review verdict --change "$name" 2>&1)" \
-        || echo "hold specclaw: $name has every task done, but its review is not clean: ${review:-no verdict}. Run the specclaw-review loop."
+        || echo "hold specclaw: $name has every task done, but its review is not clean: $(tr '\n' ' ' <<<"${review:-no verdict}" | sed 's/ *$//'). Run the specclaw-review loop."
     fi
   done
 )

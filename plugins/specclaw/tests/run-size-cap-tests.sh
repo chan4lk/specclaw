@@ -101,6 +101,14 @@ test/a.py|0
 Tests/a.py|0
 tests/a.py|0
 src/a.test.ts|0
+Foo.UnitTests/Bar.cs|0
+Foo.IntegrationTests/Bar.cs|0
+Foo.Test/Bar.cs|0
+src/integrationTest/kotlin/A.kt|0
+src/androidTest/java/A.java|0
+src/testFixtures/A.java|0
+pkg/testdata/in.txt|0
+src/main/scala/FooSpec.scala|0
 src/latest.ts|1
 src/contest.py|1
 src/inspect.ts|1
@@ -108,6 +116,25 @@ ROWS
 
 d="$(repo unrelated '  size_cap: 10')"; git -C "$d" checkout -q --orphan lone && git -C "$d" commit -qm lone
 check "a base with no merge-base names that cause (exit 2)" "$d" 2 "no merge-base with main"
+
+# One table (tests/fixtures/base-branch.tsv) drives this reader and hooks/core/base.ts (base.spec.ts).
+# shellcheck disable=SC1091
+. "$(dirname "$BIN")/../lib/base-ref.sh"
+while IFS='|' read -r name config want; do
+  printf '%b' "$config" > "$TMP/parity.yaml"
+  got="$(base_config_branch "$TMP/parity.yaml")"
+  [ "${got:--}" = "$want" ] && echo "PASS: base_branch parity: $name" || { fail=1; echo "FAIL: base_branch parity: $name (got '$got', want '$want')"; }
+done < "$(dirname "${BASH_SOURCE[0]}")/fixtures/base-branch.tsv"
+
+d="$(repo bash32 '  size_cap: 10
+  size_exclude: ""')"; lines "$d/src/b.ts" 2
+out="$(cd "$d" && /bin/bash "$BIN" size .specclaw 001-x 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] && grep -q "size cap: 2 production lines" <<<"$out" && echo "PASS: an empty size_exclude runs under /bin/bash ($(/bin/bash -c 'echo $BASH_VERSION'))" || { fail=1; echo "FAIL: /bin/bash run (exit $rc): $out"; }
+
+d="$(repo leadzero '  size_cap: 08')"; lines "$d/src/b.ts" 5
+check "a size_cap of 08 is eight, not a bad octal" "$d" 0 "(cap 8); over half the cap"
+out="$(cd "$d" && "$BIN" size .specclaw 999-missing 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] && grep -q "no change folder" <<<"$out" && echo "PASS: a misspelled change is not counted (exit 2)" || { fail=1; echo "FAIL: missing change folder (exit $rc): $out"; }
 
 d="$(repo badcap '  size_cap: lots')"
 check "a malformed pr.size_cap is not counted (exit 2), never read as over the cap" "$d" 2 "pr.size_cap must be a whole number"
