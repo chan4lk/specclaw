@@ -39,7 +39,7 @@ while IFS= read -r row; do
   n=$((n + 1)); d="$TMP/blk$n"; mkdir -p "$d"; printf "$row" > "$d/config.yaml"
   check "AC-3 block list row $n: dismissal honoured" '[ "$(sug "$d" review)" = "rc=0" ]'
   sug "$d" --dismiss bf >/dev/null
-  check "AC-3 block list row $n: folded into one inline list" 'grep -qxE "  dismissed: \[(fleet, )?review(, fleet)?, bf\]" "$d/config.yaml" && ! grep -qE "^[[:space:]]+- " "$d/config.yaml" && { ! grep -q "other:" <<<"$row" || grep -qx "  other: 1" "$d/config.yaml"; }'
+  check "AC-3 block list row $n: folded into one inline list" 'grep -qxE "  dismissed: \[(fleet, )?review(, fleet)?, bf\]" "$d/config.yaml" && ! grep -qE "^[[:space:]]+- " "$d/config.yaml" && { ! grep -q "other:" <<<"$row" || grep -qx "  other: 1" "$d/config.yaml"; } && { ! grep -q "next:" <<<"$row" || grep -qx "next: 1" "$d/config.yaml"; }'
 done <<'ROWS'
 plugins:\n  dismissed:\n    - review\n  other: 1\n
 plugins:\n  dismissed:\n    - fleet\n\n    # note\n    - review\n  other: 1\n
@@ -49,7 +49,9 @@ plugins:\n  dismissed:\n  - review\nnext: 1\n
 ROWS
 mkdir -p "$TMP/hb/.specclaw" && printf 'github:\n  sync: true\nplugins:\n  dismissed:\n    - sync\n' > "$TMP/hb/.specclaw/config.yaml"
 hb="$(cd "$TMP/hb" && PATH="/usr/bin:/bin" CLAUDE_PLUGIN_ROOT="$ROOT" bash "$PLUGIN_DIR/hooks/session-start")"
-check "AC-5 hook honours a block-list dismissal" '! grep -q "install specclaw-sync@chan4lk" <<<"$hb"'
+mkdir -p "$TMP/hc/.specclaw" && printf 'github:\n  sync: true\n' > "$TMP/hc/.specclaw/config.yaml"
+hc="$(cd "$TMP/hc" && PATH="/usr/bin:/bin" CLAUDE_PLUGIN_ROOT="$ROOT" bash "$PLUGIN_DIR/hooks/session-start")"
+check "AC-5 hook honours a block-list dismissal (control run without it shows the notice)" 'grep -q "install specclaw-sync@chan4lk" <<<"$hc" && grep -q "hookSpecificOutput" <<<"$hb" && ! grep -q "install specclaw-sync@chan4lk" <<<"$hb"'
 
 check "AC-4 unknown feature, missing config and Codex print nothing" '[ "$(sug "$S" nope 2>&1)" = "rc=0" ] && [ "$(sug "$TMP/none" review 2>&1)" = "rc=0" ] && [ "$(CODEX_THREAD_ID=t sug "$S" review 2>&1)" = "rc=0" ]'
 
