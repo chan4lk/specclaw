@@ -6,6 +6,7 @@ const GIT_BLOCK = /^git:[^\n]*\n((?:[ \t]*\n|[ \t]+[^\n]*\n?|#[^\n]*\n?)*)/m
 const KEY = /^[ \t]+base_branch:([^\n]*)$/m
 
 export function baseBranchFrom(config: string): string {
-  const value = KEY.exec(GIT_BLOCK.exec(config)?.[1] ?? '')?.[1] ?? ''
+  const lf = config.replace(/\r/g, '') // CRLF configs: the same \r strip as base_config_branch
+  const value = KEY.exec(GIT_BLOCK.exec(lf)?.[1] ?? '')?.[1] ?? ''
   return value.replace(/[ \t]+#.*$/, '').trim().replace(/^"(.*)"$/, '$1').replace(/^'(.*)'$/, '$1')
 }

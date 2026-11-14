@@ -257,6 +257,7 @@ pr:
   # size_exclude (space-separated, e.g. "docs/** **/*.md"). Over size_cap, verify
   # FAILs unless the proposal has a `Size waiver: <reason>` line; over half, it
   # suggests a split; when it cannot count (no base or merge-base, a malformed size_cap, or git fails), it exits 2. 0 turns the cap off.
+  # The default test list is fixed; extend it for your layout (conftest.py, e2e/, ...) with size_exclude.
   size_cap: 400
   size_exclude: ""
 

@@ -94,6 +94,16 @@ check "no python3 is named, never read as a verdict" "$d" 2 "python3: command no
 d="$(repo noconfig)"; change "$d" 002-x "$DONE"; rm "$d/.specclaw/config.yaml"
 check "no .specclaw/config.yaml exits 0" "$d" 0 ""
 
+# .specclaw/ in a subfolder of a larger repo: the cwd (the process's or the event's) is looked at first,
+# then the git toplevel. A cwd at the repo root finds no config there or at the toplevel: not a project.
+m="$TMP/mono"; mkdir -p "$m/app/.specclaw/changes" "$m/app/src"
+printf 'git:\n  base_branch: main\n' > "$m/app/.specclaw/config.yaml"; echo a > "$m/app/src/a.ts"
+git -C "$m" init -q -b main && commit "$m" 2026-01-01T00:00:00Z init && git -C "$m" checkout -q -b feat
+change "$m/app" 002-x "$DONE"; commit "$m" 2026-01-02T00:00:00Z work   # committed: git diff paths must be cwd-relative
+check "a project in a subfolder, cwd at the subfolder, is checked" "$m/app" 2 "002-x has every task done, but no verify verdict"
+check "a project in a subfolder, cwd at the repo root, exits 0 quietly" "$m" 0 ""
+check "a project in a subfolder, event cwd at the subfolder, is checked" "$m" 2 "002-x has every task done, but no verify verdict" "{\"cwd\": \"$m/app\"}"
+
 # skip() is the only way a change goes unchecked, and it always tells the user (systemMessage, exit 0).
 says() { # says <label> <repo> <want-substring of systemMessage>
   local out rc

@@ -8,6 +8,6 @@ const rows = readFileSync(new URL('./fixtures/base-branch.tsv', import.meta.url)
 for (const row of rows) {
   const [name, config, want] = row.split('|')
   test(`base_branch parity: ${name}`, () => {
-    expect(baseBranchFrom((config ?? '').replaceAll('\\n', '\n'))).toBe(want === '-' ? '' : want ?? '')
+    expect(baseBranchFrom((config ?? '').replaceAll('\\r', '\r').replaceAll('\\n', '\n'))).toBe(want === '-' ? '' : want ?? '')
   })
 }

@@ -7,8 +7,9 @@
 # tests/fixtures/base-branch.tsv. The git: block runs until a column-0 line that is not blank and not a
 # comment; any indent; a comment needs a space before its # (as yaml_val); one pair of quotes dropped.
 base_config_branch() {
-  awk '/^[^[:space:]#]/ { g = ($0 ~ /^git:/); next }
-       g && /^[[:space:]]+base_branch:/ { sub(/^[[:space:]]+base_branch:/, ""); print; exit }' "$1" 2>/dev/null \
+  # CRLF configs: \r is stripped first, as in baseBranchFrom.
+  tr -d '\r' 2>/dev/null <"$1" | awk '/^[^[:space:]#]/ { g = ($0 ~ /^git:/); next }
+       g && /^[[:space:]]+base_branch:/ { sub(/^[[:space:]]+base_branch:/, ""); print; exit }' \
     | sed -E 's/[[:space:]]+#.*$//; s/^[[:space:]]+//; s/[[:space:]]+$//; s/^"(.*)"$/\1/'"; s/^'(.*)'$/\\1/" || true
 }
 

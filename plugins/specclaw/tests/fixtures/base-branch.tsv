@@ -8,3 +8,4 @@ only a comment after the key|git:\n  base_branch: # none\n|-
 an empty quoted value|git:\n  base_branch: ""\n|-
 base_branch in another block is ignored|jira:\n  base_branch: x\ngit:\n  strategy: y\n|-
 a column-0 --- ends the git block|git:\n  strategy: y\n---\n  base_branch: x\n|-
+CRLF line endings, with a blank line inside the block|git:\r\n\r\n  base_branch: develop\r\n|develop

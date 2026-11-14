@@ -36,3 +36,14 @@ specclaw-build source `lib/base-ref.sh` would give one reader for all of them. T
 and it also needs a decision on whether the key may sit at any depth inside `git:`.
 - [minor B1] `plugins/specclaw/hooks/done-guard:76` `late` captures `git rev-list ... 2>&1`. If git exits 0 but writes a warning to stderr (for example a config or replace-ref warning), `late` is non-empty and the guard reports 'code was committed after its verify (warning: …)'. Capture stderr separately, so that only stdout decides whether a commit is newer than the verify. (round 15) <!-- fp:8ab6a46ac7b1 -->
 - [minor B4] `plugins/specclaw/references/full/verify.md:75` The docs say 'The exact exclusion list is `SIZE_EXCLUDE` in `bin/specclaw-verify`', and templates/config.yaml says the same. The case-sensitive CamelCase patterns live in a second array, SIZE_EXCLUDE_CASED. Name both arrays in verify.md and in templates/config.yaml. (round 15) <!-- fp:748da93703f0 -->
+
+## Operator decision (2026-11-14): the default test-layout list is frozen
+
+Round 15's `de966eb7f8b9` (`conftest.py`, `*_tests.*`, `e2e/`, `cypress/` counted as production lines) is
+answered by `pr.size_exclude`, not by more default layouts. The default list (`SIZE_EXCLUDE` and
+`SIZE_EXCLUDE_CASED` in `bin/specclaw-verify`) stays as it is; `verify.md`, `templates/config.yaml` and
+the code comment say projects extend it with `pr.size_exclude`. <!-- fp:de966eb7f8b9 -->
+
+Also fixed after round 15, per the operator: `b9024b2769a8` (the done guard looks for `.specclaw/` in the
+event cwd first, then the git toplevel; subfolder rows added) and `3bb88cbd75e1` (both base_branch readers
+strip `\r`; a CRLF row in `tests/fixtures/base-branch.tsv`).

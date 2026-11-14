@@ -8,7 +8,7 @@
 # with exit 2, which keeps the turn going with it as the reason.
 #
 # A wrong guard traps the turn, so every other path exits 0: a Stop this hook already holds
-# (stop_hook_active), no .specclaw/config.yaml, and any internal error (which is shown to the
+# (stop_hook_active), no .specclaw/config.yaml in the cwd or the git toplevel, and any internal error (which is shown to the
 # user as a systemMessage, never passed off as "nothing missing"). Without a base to diff
 # against, every active change is checked (never fewer). Registered for Claude Code only, in
 # hooks/mod.json: nothing shows Codex accepts a Stop command hook in hooks/hooks.json.
@@ -22,11 +22,18 @@ fi
 
 # Output protocol of missing(): "hold <text>" names a missing step (exit 2); "skip <change>: <reason>"
 # comes only from skip(), the one way a change may go unchecked, and always reaches the user.
+# The event's cwd (python3 reads the JSON; without it, or with no cwd, the process cwd).
+cwd="$(python3 -c 'import json, sys; print(json.load(sys.stdin).get("cwd") or "")' <<<"$input" 2>/dev/null)" || cwd=""
+[ -n "$cwd" ] && [ -d "$cwd" ] || cwd="$PWD"
+
 skip() { printf 'skip %s: %s\n' "$1" "$2"; }
 
 missing() (
   set -euo pipefail
-  root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+  # The project is the hook's cwd (the event's, as the mod uses) when it holds .specclaw/, else the git
+  # toplevel. Neither having .specclaw/config.yaml means not a specclaw project: exit 0 quietly.
+  cd "$cwd"
+  if [ -f .specclaw/config.yaml ]; then root="$PWD"; else root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0; fi
   [ -f "$root/.specclaw/config.yaml" ] || exit 0
   [ -d "$root/.specclaw/changes" ] || exit 0
   # shellcheck disable=SC1091  # sourced lib, resolved at runtime
@@ -34,7 +41,7 @@ missing() (
   cd "$root"
   read -r mb _ <<<"$(base_merge_base "$root")"
   if [ -n "$mb" ] && [ "$mb" != - ]; then
-    touched="$({ git diff --name-only "$mb" -- .specclaw/changes; git ls-files --others --exclude-standard -- .specclaw/changes; } | cut -d/ -f3 | sort -u)"
+    touched="$({ git diff --relative --name-only "$mb" -- .specclaw/changes; git ls-files --others --exclude-standard -- .specclaw/changes; } | cut -d/ -f3 | sort -u)"
   else
     touched="$(ls .specclaw/changes)"
   fi

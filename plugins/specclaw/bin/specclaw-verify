@@ -547,7 +547,8 @@ cmd_report() {
 
 # ─── Subcommand: size (change 060) ───────────────────────────────────────────
 
-# Git glob pathspecs never counted as production lines, matched ignoring case; pr.size_exclude adds more.
+# Git glob pathspecs never counted as production lines, matched ignoring case. This default is fixed:
+# projects extend it for their own test layouts with pr.size_exclude.
 SIZE_EXCLUDE=('.specclaw/**' '**/test/**' '**/tests/**' '**/spec/**' '**/specs/**' '**/__tests__/**'
   '**/testdata/**' '**/testfixtures/**' '**/*.*tests/**' '**/*.test/**'
   '**/*.test.*' '**/*.spec.*' '**/*_test.*' '**/*_spec.*' '**/test_*'
