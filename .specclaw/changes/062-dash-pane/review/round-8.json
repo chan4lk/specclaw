@@ -1,0 +1,64 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 1
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw-dash/hooks/core/view.ts",
+  "plugins/specclaw-dash/tests/view.spec.ts"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw-dash/tests/view.spec.ts",
+   "fp": "a9e4b980925d",
+   "in_delta": true,
+   "line": 58,
+   "message": "The new table test sets `skipped` and `unreadable` by hand on a fixed TOKENS object. It checks that the renderers (pane, band, status line) print `\u2265` for those counts, but not that the scanner produces them. The previous round asked for a bad usage record, a bad title record and a skipped file, so the class is every way a total can be incomplete. Add a scan-level table that feeds malformed usage lines, malformed title lines and an oversize file through the real scan and asserts the resulting counts and the `\u2265` output. The fix itself is a class fix: `lowerBound` is the only place the mark is decided, and every total (today, week, session, role, band, status) goes through `lowerBound` or `money`.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "A scan change stops counting a malformed usage record in `unreadable` -> the table test stays green because it plants `unreadable: 3` directly, while the real pane prints an exact-looking total.",
+   "severity": "minor"
+  }
+ ],
+ "head": "cf74392768875cfaf3bd766b30bba9c4cd4305f6",
+ "impact": [
+  "plugins/specclaw-bf/bin/specclaw-bf-bootstrap",
+  "plugins/specclaw-bf/bin/specclaw-bf-prototype",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-render",
+  "plugins/specclaw-bf/bin/specclaw-bf-rebuild-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-replay",
+  "plugins/specclaw-bf/bin/specclaw-bf-ui",
+  "plugins/specclaw-bf/tests/run-baseline-collect-tests.sh",
+  "plugins/specclaw-bf/tests/run-bf-status-tests.sh",
+  "plugins/specclaw-bf/tests/run-narration-gate-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-byte-identity-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-checklist-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-screen-coverage-tests.sh",
+  "plugins/specclaw-bf/tests/run-quality-tests.sh",
+  "plugins/specclaw-dash/.claude-plugin/plugin.json",
+  "plugins/specclaw-dash/hooks/core/scan.ts",
+  "plugins/specclaw-dash/hooks/read.ts",
+  "plugins/specclaw-dash/tests/scan.spec.ts",
+  "plugins/specclaw-dash/types/index.d.ts",
+  "plugins/specclaw-fleet/image/writeback.sh"
+ ],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 20722,
+ "round": 8,
+ "since": "4ab42ff",
+ "status": "clean",
+ "system_chars": 8932,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794641080,
+ "ts_start": 1794641065
+}

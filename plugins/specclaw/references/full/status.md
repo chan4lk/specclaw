@@ -14,3 +14,4 @@ Show the project dashboard.
 3. For a specific change, run `specclaw-validate-change .specclaw <change> status` to get a per-change snapshot.
 4. **Update check:** run `specclaw-check-update .specclaw`. If it prints a line (a newer plugin version is published), show that line verbatim after the dashboard; if it prints nothing, say nothing. The script is fail-silent and gated by `plugin.update_check` in config.yaml — never treat its absence of output as an error.
 5. **Tip:** when two or more approved changes are not built yet, run `specclaw-suggest .specclaw fleet` and show any line it prints, at most once per session; if the user says no, run `specclaw-suggest .specclaw --dismiss fleet`.
+6. **Tip:** when a change is in `build` or `verify`, run `specclaw-suggest .specclaw dash` and show any line it prints, at most once per session; if the user says no, run `specclaw-suggest .specclaw --dismiss dash`.

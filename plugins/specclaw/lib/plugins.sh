@@ -3,7 +3,8 @@
 # hooks/session-start and specclaw-suggest (change 059). Sourced, never executed.
 # Callers set PLUGIN_ROOT (this plugin's root) and CONFIG (config.yaml).
 
-# plugin_feature <feature> — "<command it ships>|<plugin>|<what it adds>".
+# plugin_feature <feature> — "<command it ships>|<plugin>|<what it adds>". A plugin that ships no
+# command (specclaw-dash, a mod only) leaves the first field empty and is found by its folder.
 plugin_feature() {
   case "$1" in
     review) echo "specclaw-review|specclaw-review|a review loop checks each change against your project's rules before its PR" ;;
@@ -11,6 +12,7 @@ plugin_feature() {
     sync)   echo "specclaw-gh-sync|specclaw-sync|keep changes in step with GitHub issues, Azure Boards or Jira" ;;
     bf)     echo "specclaw-bf-status|specclaw-bf|brownfield analysis maps an existing codebase before you change it" ;;
     extras) echo "specclaw-party|specclaw-extras|the review panel and automation" ;;
+    dash)   echo "|specclaw-dash|a /dash pane shows builds, review rounds, lessons and token use in one place" ;;
     *) return 1 ;;
   esac
 }
@@ -35,11 +37,17 @@ plugin_dismissed() { case " $(plugins_dismissed) " in *" $1 "*) return 0 ;; esac
 # installed <command> <plugin> — the add-on counts as installed when its command
 # is on PATH, or when it sits next to this plugin: plugins/<name>/bin in a
 # checkout, <cache>/<owner>/<name>/<ver>/bin in the plugin cache. The second
-# check covers hook environments without plugin bin/ dirs on PATH.
+# check covers hook environments without plugin bin/ dirs on PATH. A plugin with
+# no command (empty <command>) is found by its manifest in the same two places.
 installed() {
-  command -v "$1" >/dev/null 2>&1 \
-    || compgen -G "$PLUGIN_ROOT/../$2/bin/$1" >/dev/null \
-    || compgen -G "$PLUGIN_ROOT/../../$2/*/bin/$1" >/dev/null
+  if [ -n "$1" ]; then
+    command -v "$1" >/dev/null 2>&1 \
+      || compgen -G "$PLUGIN_ROOT/../$2/bin/$1" >/dev/null \
+      || compgen -G "$PLUGIN_ROOT/../../$2/*/bin/$1" >/dev/null
+  else
+    [ -f "$PLUGIN_ROOT/../$2/.claude-plugin/plugin.json" ] \
+      || compgen -G "$PLUGIN_ROOT/../../$2/*/.claude-plugin/plugin.json" >/dev/null
+  fi
 }
 
 # missing <what the project uses> <feature> — append one install line to NOTICE,

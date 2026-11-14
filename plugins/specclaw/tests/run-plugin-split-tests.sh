@@ -16,15 +16,17 @@ trap 'rm -rf "$TMP"' EXIT
 # AC-6: core skills and references carry no brownfield text.
 check "AC-6 core has no bf/brownfield/rebuild mentions" '! grep -rqiE "bf-|brownfield|rebuild" "$PLUGIN_DIR/skills" "$PLUGIN_DIR/references"'
 
-# AC-7: every plugin, each with both manifests, one shared version everywhere.
-check "AC-7 every plugin has both manifests and one shared version" 'python3 - "$REPO" <<"PY"
+# AC-7: every plugin, each with both manifests, one shared version everywhere. specclaw-dash is a mod
+# only (change 062): mods do not run in Codex, so it has a Claude manifest and no Codex one.
+check "AC-7 every plugin has its manifests and one shared version" 'python3 - "$REPO" <<"PY"
 import glob, json, sys
 r = sys.argv[1]
 names = [p["name"] for p in json.load(open(r + "/.claude-plugin/marketplace.json"))["plugins"]]
-assert names == ["specclaw", "specclaw-bf", "specclaw-sync", "specclaw-extras", "specclaw-review", "specclaw-fleet"], names
+assert names == ["specclaw", "specclaw-bf", "specclaw-sync", "specclaw-extras", "specclaw-review", "specclaw-fleet", "specclaw-dash"], names
 vs = {json.load(open(f))["version"] for n in names for f in glob.glob(f"{r}/plugins/{n}/.c*-plugin/plugin.json")}
 vs |= {p["version"] for p in json.load(open(r + "/.claude-plugin/marketplace.json"))["plugins"]}
-assert len(glob.glob(r + "/plugins/*/.c*-plugin/plugin.json")) == 2 * len(names) and len(vs) == 1, vs
+assert len(glob.glob(r + "/plugins/*/.claude-plugin/plugin.json")) == len(names) and len(vs) == 1, vs
+assert sorted(glob.glob(r + "/plugins/*/.codex-plugin/plugin.json")) == sorted(f"{r}/plugins/{n}/.codex-plugin/plugin.json" for n in names if n != "specclaw-dash")
 PY'
 
 # AC-8: github.sync on, specclaw-sync absent → install notice, and the lean flow still validates.
