@@ -52,9 +52,9 @@ saves() {
     && [[ "$saved_left" == "work.base work.bundle " ]] && grep -q "exit=push-failed .*bundle=saved" <<<"$saved"
 }
 no_folder() {
-  [[ "$none_exit" == 4 ]] && grep -q "bundle=none" <<<"$none" && ! grep -q "bundle=saved" <<<"$none" || return 1
+  [[ "$none_exit" == 4 ]] && grep -q "bundle=off" <<<"$none" && ! grep -q "bundle=saved" <<<"$none" || return 1
   [[ "$ro" == skip ]] && { echo "  SKIP: read-only bundle folder (running as root, so the folder stays writable)"; return 0; }
-  grep -q "bundle=none" <<<"$ro" && ! grep -q "bundle=saved" <<<"$ro"
+  grep -q "bundle=none" <<<"$ro" && ! grep -q "bundle=saved" <<<"$ro" && grep -q "bundle=none" <<<"$keep_old"
 }
 failed_save() {
   grep -q "bundle=none" <<<"$keep_old" && [[ "$keep_old_left" == "work.base work.bundle " ]] \
@@ -74,7 +74,7 @@ cleans() {
 }
 
 check "AC7 a fully failed push writes work.bundle (base..branch) and work.base, replacing the old pair, and records bundle=saved, exit 4" saves
-check "AC7 no bundle folder, or a read-only one, records bundle=none and still exits 4" no_folder
+check "AC7 no bundle folder records bundle=off, a read-only one bundle=none (a save that failed), and both still exit 4" no_folder
 check "AC7 a failed save records bundle=none, keeps an older pair that verifies and removes one that does not" failed_save
 check "AC8 no remote branch and a valid bundle: verify, fetch into the change branch, print resuming from saved bundle" resumes
 check "AC8 a corrupt bundle or a base that is not an ancestor is ignored with a warning and the run starts fresh" corrupt

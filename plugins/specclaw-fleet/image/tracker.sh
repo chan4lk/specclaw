@@ -51,10 +51,11 @@ push_change_branch() {
   return 1
 }
 
-# After a fully failed push, keeps BUNDLE_BASE..<change branch> in the per-change bundle folder (FR-7); prints saved or none.
+# After a fully failed push, keeps BUNDLE_BASE..<change branch> in the per-change bundle folder (FR-7); prints saved, none, or off (no folder).
 # Base first, then bundle, each renamed into place. A failed save keeps an older pair only while it still verifies.
 save_bundle() {
   local b d="$BUNDLE_DIR" kept=""
+  [[ -d "$d" ]] || { echo off; return 0; }
   b="$(change_branch)"
   if [[ -f "$d/work.bundle" && -n "$b" ]] && ! bundle_held "refs/heads/$b"; then
     kept="$(set_bundle_aside)" || { echo none; return 0; }
@@ -79,13 +80,14 @@ bundle_held() {
 
 # A saved bundle with commits the branch lacks is never overwritten: it moves to the first free kept-<n>.* for the operator, and the record says kept=<name>.
 set_bundle_aside() {
-  local k n=1
+  local k n=1 lost=""
   while [[ -e "$BUNDLE_DIR/kept-$n.bundle" || -e "$BUNDLE_DIR/kept-$n.base" ]]; do n=$((n + 1)); done
   k="$BUNDLE_DIR/kept-$n"
   mv -n "$BUNDLE_DIR/work.bundle" "$k.bundle" 2>/dev/null && [[ ! -e "$BUNDLE_DIR/work.bundle" ]] || return 1
-  mv -n "$BUNDLE_DIR/work.base" "$k.base" 2>/dev/null || rm -f "$BUNDLE_DIR/work.base"
+  [[ ! -e "$BUNDLE_DIR/work.base" ]] || mv -n "$BUNDLE_DIR/work.base" "$k.base" 2>/dev/null \
+    || { lost=",kept_base=none"; echo "WARNING: could not move $BUNDLE_DIR/work.base to $k.base; $k.bundle is kept without it" >&2; }
   echo "WARNING: set aside $k.bundle: it holds commits this branch does not" >&2
-  printf '%s' "${k##*/}"
+  printf '%s' "${k##*/}$lost"
 }
 
 # After a good push the pair goes only when HEAD holds every tip in the bundle, or it is no bundle at all; else it is kept.
