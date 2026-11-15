@@ -62,10 +62,10 @@ trap 'rm -rf "$WORK"' EXIT
 # whole trees means a change to a shared template is caught too, which a
 # binaries-only comparison would miss entirely.
 OLD_TREE="$WORK/oldtree"; mkdir -p "$OLD_TREE"
-if ! git -C "$REPO_ROOT" archive "$BASE" plugins/specclaw 2>/dev/null | tar -x -C "$OLD_TREE" 2>/dev/null; then
-  echo "could not materialise plugins/specclaw at ${BASE} — skipping suite (exit 0)."; exit 0
+if ! git -C "$REPO_ROOT" archive "$BASE" plugins/specclaw-bf 2>/dev/null | tar -x -C "$OLD_TREE" 2>/dev/null; then
+  echo "could not materialise plugins/specclaw-bf at ${BASE} — skipping suite (exit 0)."; exit 0
 fi
-OLD_PLUGIN="$OLD_TREE/plugins/specclaw"
+OLD_PLUGIN="$OLD_TREE/plugins/specclaw-bf"
 [ -d "$OLD_PLUGIN/bin" ] || { echo "no bin/ in the ${BASE} tree — skipping suite (exit 0)."; exit 0; }
 chmod +x "$OLD_PLUGIN"/bin/specclaw-* 2>/dev/null || true
 
