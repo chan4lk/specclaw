@@ -15,7 +15,9 @@ case "$*" in
   *" -x "*) [[ "${GATE:-}" == proxy-down ]] && exit 7; exit 0 ;;
 esac
 echo "{}"'
-stub git '[[ "$1" == -C && "$3" == merge-base ]] && { [[ -z "${NOT_ANCESTOR:-}" ]]; exit; }
+stub git '[[ "$1" == -C && "$3" == merge-base ]] && { [[ -z "${NOT_ANCESTOR:-}" && "$5" != "${BUNDLE_NOT_ANCESTOR:-none}" ]]; exit; }
+[[ "$1" == -C && "$3" == bundle ]] && { echo "bundle $4 $5 ${6:-}" >> "$TMP/bundle.log"; [[ "$4" == create ]] && echo bundle > "$5"; [[ "$4" != verify || -z "${BUNDLE_BAD:-}" ]]; exit; }
+[[ "$1" == -C && "$3" == fetch && "$5" == *.bundle ]] && { echo "fetch $5 $6" >> "$TMP/bundle.log"; exit 0; }
 [[ "$1" == -C && "$3" == rev-parse && "$4" == --abbrev-ref ]] && { [[ -s "$TMP/onbranch" ]] && { cat "$TMP/onbranch"; exit 0; }; echo "${ON_BRANCH-specclaw/049-x}"; exit 0; }
 [[ "$1" == -C && "$3" == rev-parse ]] && { echo deadbeef; exit 0; }
 [[ "$1" == -C && "$3" == rev-list ]] && { echo "${REVLIST-3}"; exit 0; }
@@ -58,11 +60,11 @@ stub codex 'sleep "${AGENT_SLEEP:-0}"; exit "${AGENT_RC:-0}"'
 export TMP REAL_AZDO=""
 
 run_entry() {
-  rm -rf "${TMP:?}/status" "${TMP:?}/work" "${TMP:?}/home" "${TMP:?}/onbranch" "${TMP:?}/pushes"
+  rm -rf "${TMP:?}/status" "${TMP:?}/work" "${TMP:?}/home" "${TMP:?}/onbranch" "${TMP:?}/pushes" "${TMP:?}/bundle.log"
   mkdir -p "$TMP/status" "$TMP/work" "$TMP/home" "$TMP/seed"
   : > "$CALLS"
   printf 'oat-token' > "$TMP/cred"
-  env FLEET_STATUS_DIR="$TMP/status" FLEET_WORK="$TMP/work" FLEET_CRED="$TMP/cred" FLEET_SEED="$TMP/seed" \
+  env FLEET_BUNDLE_DIR="$TMP/bundles" FLEET_STATUS_DIR="$TMP/status" FLEET_WORK="$TMP/work" FLEET_CRED="$TMP/cred" FLEET_SEED="$TMP/seed" \
     HTTPS_PROXY=http://proxy:3128 FLEET_GATE_TRIES=2 FLEET_GATE_SLEEP=0 AZDO_ORG="${ENTRY_ORG:-o}" AZDO_PROJECT="${ENTRY_PROJECT:-p}" FLEET_WORK_ITEM=42 FLEET_COMMIT=abc123 FLEET_CODEX_HOME="$TMP/codex" FLEET_AZDO_CONFIG=$'azdo:\n  fleet_states:\n    failed: Failed' HOME="$TMP/home" FLEET_AGENT="${ENTRY_AGENT:-claude}" FLEET_CHANGE=049-x FLEET_REF="${ENTRY_REF:-main}" FLEET_PR_TARGET="${ENTRY_PR_TARGET:-}" FLEET_MODE="${ENTRY_MODE:-}" FLEET_MERGE_REF="${ENTRY_MERGE:-}" AZDO_TOKEN=pat-secret \
     FLEET_REPO_URL="${ENTRY_REPO_URL-https://dev.azure.com/o/p/_git/r}" ANTHROPIC_API_KEY=k ANTHROPIC_AUTH_TOKEN=k OPENAI_API_KEY=k CODEX_API_KEY=k \
     bash "$ENTRY" > "$TMP/out" 2>&1

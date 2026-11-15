@@ -31,11 +31,22 @@ push_change_branch() {
   read -ra pauses <<<"${FLEET_PUSH_PAUSES:-5 15 45}"
   for ((i = 1; i <= n; i++)); do
     (( i == n && n > 1 )) && git -C "$REPO" repack -a -d -f -q >&2
-    err="$(git -C "$REPO" push -q -u origin HEAD 2>&1 >/dev/null)" && { rm -f "$STATUS/push-error"; printf '%s' "$branch"; return 0; }
+    err="$(git -C "$REPO" push -q -u origin HEAD 2>&1 >/dev/null)" \
+      && { rm -f "$STATUS/push-error" "${FLEET_BUNDLE_DIR:-/fleet/bundles}"/work.{bundle,base}; printf '%s' "$branch"; return 0; }
     printf '%s\n' "$err" | grep -v '^[[:space:]]*$' | tail -n 1 | redact > "$STATUS/push-error"
     echo "WARNING: push $i/$n of $branch failed: $(cat "$STATUS/push-error")" >&2
     p="${pauses[i - 1]:-${pauses[${#pauses[@]} - 1]:-0}}"
     (( i < n )) && sleep "$p"
   done
   return 1
+}
+
+# After a fully failed push, keeps BUNDLE_BASE..<change branch> in the per-change bundle folder (FR-7); prints saved or none.
+save_bundle() {
+  local b d="${FLEET_BUNDLE_DIR:-/fleet/bundles}"
+  b="$(change_branch)"
+  [[ -n "${BUNDLE_BASE:-}" && -n "$b" && -d "$d" && -w "$d" ]] \
+    && git -C "$REPO" bundle create "$d/work.bundle.tmp" "$BUNDLE_BASE..refs/heads/$b" >/dev/null 2>&1 \
+    && mv -f "$d/work.bundle.tmp" "$d/work.bundle" && printf '%s\n' "$BUNDLE_BASE" > "$d/work.base" && { echo saved; return 0; }
+  rm -f "$d/work.bundle.tmp" 2>/dev/null; echo none
 }
