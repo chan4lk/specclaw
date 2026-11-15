@@ -97,6 +97,8 @@ merge_base_ref || { record state=failed exit=merge-ref-failed; finish 2; }
 workspace_ready=1
 [[ "${FLEET_AGENT_TIMEOUT:-7200}" =~ ^[0-9]{1,6}$ ]] || { record state=failed exit=bad-agent-timeout; finish 2; }
 agent_budget=$(( 10#${FLEET_AGENT_TIMEOUT:-7200} - SECONDS ))
+# The Job's activeDeadlineSeconds is this deadline + 600 from Job start: pushing stops 300 s past it, leaving pod startup, the record and the bundle the rest.
+DELIVER_BY=$(( 10#${FLEET_AGENT_TIMEOUT:-7200} + 300 ))
 (( agent_budget > 0 )) || { record state=failed exit=deadline-before-agent; finish 143; }
 AGENT_STARTED="$(stamp)" AGENT_T0=$SECONDS AGENT_HEAD="$(git -C "$REPO" rev-parse HEAD)" AGENT_ROUNDS0="$(round_count)"
 rc=0; run_agent || rc=$?

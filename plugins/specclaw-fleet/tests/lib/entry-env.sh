@@ -25,7 +25,9 @@ stub git '[[ "$1" == -C && "$3" == merge-base ]] && { case "$5 ${6:-}" in
 [[ "$1" == -C && "$3" == rev-parse ]] && { echo deadbeef; exit 0; }
 [[ "$1" == -C && "$3" == rev-list ]] && { echo "${REVLIST-3}"; exit 0; }
 [[ "$1" == -C && "$3" == repack ]] && { echo repack >> "$TMP/pushes"; exit 0; }
-[[ "$1" == -C && "$3" == push ]] && { echo push >> "$TMP/pushes"; (( $(grep -c push "$TMP/pushes") > ${PUSH_FAILS:-0} )) && exit 0; printf "%s\n" "${PUSH_ERR:-fatal: push failed}" >&2; exit 1; }
+[[ "$1" == -C && "$*" == *" push -q "* ]] && { echo push >> "$TMP/pushes"; [[ "$*" == *http.lowSpeedTime=* ]] || echo no-low-speed >> "$TMP/pushes"
+  (( $(grep -c push "$TMP/pushes") <= ${PUSH_HANGS:-0} )) && { echo "pushing..." >&2; sleep 30; }
+  (( $(grep -c push "$TMP/pushes") > ${PUSH_FAILS:-0} )) && exit 0; printf "%s\n" "${PUSH_ERR:-fatal: push failed}" >&2; exit 1; }
 [[ "$1" == -C && "$3" == ls-remote && -n "${LS_FAIL:-}" ]] && exit 128
 [[ "$1" == -C && "$3" == fetch && -n "${FETCH_FAIL:-}" ]] && exit 128
 [[ "$1" == -C && "$3" == merge ]] && { [[ -n "${MERGE_CONFLICT:-}${MERGE_BROKEN:-}" ]] && exit 1; [[ -n "${MERGE_BRINGS_PASS:-}" ]] && echo pass > "$2/.specclaw/features/049-x/integration-result"; exit 0; }

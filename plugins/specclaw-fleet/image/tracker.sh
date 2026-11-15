@@ -23,21 +23,30 @@ show_agent_log() {
 }
 
 # Retries the push (FLEET_PUSH_ATTEMPTS, pauses FLEET_PUSH_PAUSES, last repeats); repacks before the final try.
+# Each try is cut off after FLEET_PUSH_TIMEOUT s; nothing starts that would end past DELIVER_BY (set by the entrypoint), so the record and bundle still fit.
 push_change_branch() {
-  local branch err i n="${FLEET_PUSH_ATTEMPTS:-}" p="${FLEET_PUSH_PAUSES:-}"
+  local branch err i rc s n="${FLEET_PUSH_ATTEMPTS:-}" p="${FLEET_PUSH_PAUSES:-}" t="${FLEET_PUSH_TIMEOUT:-}" end="${DELIVER_BY:-$((SECONDS + 300))}"
   local -a pauses
   branch="$(change_branch)"
   [[ -n "$branch" && "$(git -C "$REPO" rev-parse --abbrev-ref HEAD 2>/dev/null)" == "$branch" ]] || return 0
   [[ -z "$n" || "$n" =~ ^[1-9]$ ]] || echo "WARNING: FLEET_PUSH_ATTEMPTS is not 1-9; using the default" >&2
   [[ "$n" =~ ^[1-9]$ ]] || n=4
   [[ -z "$p" || "$p" =~ ^[[:blank:]]*[0-9]+([[:blank:]]+[0-9]+)*[[:blank:]]*$ ]] || { echo "WARNING: FLEET_PUSH_PAUSES is not seconds separated by spaces; using the default" >&2; p=""; }
+  [[ -z "$t" || "$t" =~ ^[1-9][0-9]{0,3}$ ]] || echo "WARNING: FLEET_PUSH_TIMEOUT is not whole seconds from 1 to 9999; using the default" >&2
+  [[ "$t" =~ ^[1-9][0-9]{0,3}$ ]] || t=120
   read -ra pauses <<<"${p:-5 15 45}"
   for ((i = 1; i <= n; i++)); do
-    (( i == n && n > 1 )) && git -C "$REPO" repack -a -d -f -q >&2
-    err="$(git -C "$REPO" push -q -u origin HEAD 2>&1 >/dev/null)" && { rm -f "$STATUS/push-error"; drop_bundle; printf '%s' "$branch"; return 0; }
+    s=0; (( i > 1 )) && s="$(( 10#${pauses[i - 2]:-${pauses[${#pauses[@]} - 1]}} ))"
+    (( end - SECONDS > s + 5 )) || { echo "WARNING: delivery budget spent; push $i/$n of $branch and later ones skipped" >&2
+      [[ -s "$STATUS/push-error" ]] || echo "push skipped: delivery budget spent" > "$STATUS/push-error"; break; }
+    sleep "$s"
+    (( i == n && n > 1 && end - SECONDS > 2 * t )) && timeout "$(( end - SECONDS - t ))" git -C "$REPO" repack -a -d -f -q >&2
+    s=$(( end - SECONDS < t ? end - SECONDS : t ))
+    err="$(timeout "$s" git -C "$REPO" -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=60 push -q -u origin HEAD 2>&1 >/dev/null)"; rc=$?
+    (( rc == 0 )) && { rm -f "$STATUS/push-error"; drop_bundle; printf '%s' "$branch"; return 0; }
+    (( rc == 124 )) && err+=$'\n'"push timed out after ${s}s"
     printf '%s\n' "$err" | grep -v '^[[:space:]]*$' | tail -n 1 | redact > "$STATUS/push-error"
     echo "WARNING: push $i/$n of $branch failed: $(cat "$STATUS/push-error")" >&2
-    (( i < n )) && sleep "${pauses[i - 1]:-${pauses[${#pauses[@]} - 1]}}"
   done
   return 1
 }
