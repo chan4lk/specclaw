@@ -45,6 +45,7 @@ reset_env; FLEET_CLAUDE_VERSION='1.2.3", injected: "x' FLEET_DEFAULT_AGENT=codex
 # The bundle subPath per repo URL: whole host and every path segment, so repos that collided before differ.
 sub_rows=1 subs=""
 while IFS='|' read -r url want; do
+  # shellcheck disable=SC2034 # bundle_subpath reads F_REPO and F_CHANGE
   got="$(source "$FLEET_ROOT/lib/podspec.sh"; F_REPO="$url" F_CHANGE=049-x; bundle_subpath)"
   [[ "$got" == "$want" && "$got" =~ ^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)+$ && "/$got/" != */./* && "/$got/" != */../* ]] \
     || { sub_rows=0; echo "  $url: got $got, want $want"; }
