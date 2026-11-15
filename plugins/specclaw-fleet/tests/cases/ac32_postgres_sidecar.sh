@@ -7,7 +7,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/../lib/dispatch-env.sh"
 stub_cluster
 DIGEST="sha256:$(printf '0123456789abcdef%.0s' 1 2 3 4)"
 # Job name, secret name and commit change with each reset_env repo; mask them so only the template is compared.
-job() { sed -n '/^kind: Job/,/^---/p' "$TMP/out" | sed -E '/^---/d; s/fleet-[0-9a-z]+-[0-9a-f]{5}(-[0-9a-f]{5})?/fleet-JOB/g; s/(FLEET_COMMIT, value: ")[0-9a-f]{40}/\1COMMIT/'; }
+job() { sed -n '/^kind: Job/,/^---/p' "$TMP/out" | sed -E '/^---/d; s/fleet-[0-9a-z]+-[0-9a-f]{5}(-[0-9a-f]{5})?/fleet-JOB/g; s/(FLEET_COMMIT, value: ")[0-9a-f]{40}/\1COMMIT/; s/(FLEET_HARD_DEADLINE, value: ")[0-9]+/\1DEADLINE/'; }
 
 reset_env; dispatch --dry-run; plain="$(job)"
 # The same manifest with the three postgres hooks cut out of manifest.sh: what render_job printed before 058.
