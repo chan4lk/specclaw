@@ -38,14 +38,17 @@ ROWS
 budget_rows=1
 while IFS='|' read -r vars want; do
   mkdir -p "$TMP/bundles"
+  vars="${vars/NEAR/$(( $(date +%s) + 195 ))}"; vars="${vars/PAST/$(( $(date +%s) - 5 ))}"
   IFS=';' read -ra kv <<<"$vars"; ( export "${kv[@]}" PUSH_FAILS=9 FLEET_PUSH_ATTEMPTS=3 AGENT_RC=5; run_entry )
   [[ "$(pushes)" == "$want" && "$(cat "$TMP/status/exit")" == 4 && -s "$TMP/bundles/work.bundle" ]] && grep -q "delivery budget spent; push" "$TMP/out" \
-    && grep -q "exit=push-failed .*push_error=fatal: push failed bundle=saved" "$CALLS" || { budget_rows=0; echo "  budget [$vars]: pushes [$(pushes)]"; }
+    && grep -qE "exit=push-failed .*push_error=(fatal: push failed|push skipped: delivery budget spent) bundle=saved" "$CALLS" || { budget_rows=0; echo "  budget [$vars]: pushes [$(pushes)]"; }
   rm -rf "$TMP/bundles"
 done <<'ROWS'
 FLEET_AGENT_TIMEOUT=60;FLEET_PUSH_PAUSES=400|push 
 FLEET_AGENT_TIMEOUT=60;FLEET_PUSH_PAUSES=0 400|push push 
 AGENT_SLEEP=20;FLEET_AGENT_TIMEOUT=2;FLEET_PUSH_PAUSES=299|push 
+FLEET_HARD_DEADLINE=NEAR;FLEET_PUSH_PAUSES=20|push 
+FLEET_HARD_DEADLINE=PAST;FLEET_PUSH_PAUSES=0|
 ROWS
 timeout_rows=1
 for row in "x|warn" "0|warn" "-1|warn" "10000|warn" "1 2|warn" "5|ok"; do

@@ -46,6 +46,7 @@ push_change_branch() {
     (( rc == 0 )) && { rm -f "$STATUS/push-error"; drop_bundle; printf '%s' "$branch"; return 0; }
     (( rc == 124 )) && err+=$'\n'"push timed out after ${s}s"
     printf '%s\n' "$err" | grep -v '^[[:space:]]*$' | tail -n 1 | redact > "$STATUS/push-error"
+    [[ -s "$STATUS/push-error" ]] || echo "push failed: exit $rc" > "$STATUS/push-error"
     echo "WARNING: push $i/$n of $branch failed: $(cat "$STATUS/push-error")" >&2
   done
   return 1
@@ -62,16 +63,17 @@ save_bundle() {
     kept=",kept=$kept"
   fi
   [[ -n "${BUNDLE_BASE:-}" && -n "$b" && -d "$d" && -w "$d" ]] && printf '%s\n' "$BUNDLE_BASE" > "$d/work.base.tmp" \
-    && git -C "$REPO" bundle create "$d/work.bundle.tmp" "$BUNDLE_BASE..refs/heads/$b" >/dev/null 2>&1 \
+    && timeout 120 git -C "$REPO" bundle create "$d/work.bundle.tmp" "$BUNDLE_BASE..refs/heads/$b" >/dev/null 2>&1 \
     && mv -f "$d/work.base.tmp" "$d/work.base" && mv -f "$d/work.bundle.tmp" "$d/work.bundle" && { echo "saved$kept"; return 0; }
   rm -f "$d"/work.{bundle,base}.tmp 2>/dev/null
   [[ ! -f "$d/work.bundle" ]] || git -C "$REPO" bundle verify "$d/work.bundle" >/dev/null 2>&1 || rm -f "$d"/work.{bundle,base} 2>/dev/null
   echo "none$kept"
 }
 
-# True when <ref> holds every tip in the saved bundle, or the file is no bundle at all.
+# True when <ref> holds every tip in the saved bundle, or the file is readable and no bundle at all. Unreadable is not held.
 bundle_held() {
   local heads tip _
+  [[ -r "$BUNDLE_DIR/work.bundle" ]] || return 1
   heads="$(git -C "$REPO" bundle list-heads "$BUNDLE_DIR/work.bundle" 2>/dev/null)" || return 0
   while read -r tip _; do
     [[ -z "$tip" ]] || git -C "$REPO" merge-base --is-ancestor "$tip" "$1" 2>/dev/null || return 1

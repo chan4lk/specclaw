@@ -38,7 +38,8 @@ ds_new="$(g bundle list-heads "$B/work.bundle" | cut -d' ' -f1)"; ds_bases="$(ca
 KEPT='saved,kept=kept-1'
 old() { g branch -q -f old_in "$c2"; g branch -q -f old_out "$c3"; echo "$c0" > "$B/work.base"; g bundle create -q "$B/work.bundle" "$@" ^origin/main; }
 # Modes: rw; ro folder; kept-1.bundle or only kept-1.base taken; bundle create fails; the base cannot move.
-no_create() { git() { [[ "$3 $4" == "bundle create" ]] && return 1; command git "$@"; }; save_bundle; }
+REAL_GIT="$(command -v git)"; mkdir -p "$TMP/shim"; printf '#!/bin/sh\n[ "$3 $4" = "bundle create" ] && exit 1\nexec "%s" "$@"\n' "$REAL_GIT" > "$TMP/shim/git"; chmod +x "$TMP/shim/git"
+no_create() { PATH="$TMP/shim:$PATH" save_bundle; }
 no_base_move() { mv() { [[ "${*: -1}" == */kept-*.base ]] && return 1; command mv "$@"; }; save_bundle; }
 aside_row() {
   local out n keep="" fn=save_bundle before name; rm -rf "${B:?}"/*; "old_$1"; before="$(g bundle list-heads "$B/work.bundle" 2>/dev/null)"

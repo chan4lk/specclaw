@@ -97,8 +97,14 @@ merge_base_ref || { record state=failed exit=merge-ref-failed; finish 2; }
 workspace_ready=1
 [[ "${FLEET_AGENT_TIMEOUT:-7200}" =~ ^[0-9]{1,6}$ ]] || { record state=failed exit=bad-agent-timeout; finish 2; }
 agent_budget=$(( 10#${FLEET_AGENT_TIMEOUT:-7200} - SECONDS ))
-# The Job's activeDeadlineSeconds is this deadline + 600 from Job start: pushing stops 300 s past it, leaving pod startup, the record and the bundle the rest.
+# Pushing stops 300 s past the agent deadline, and never later than 180 s before FLEET_HARD_DEADLINE: the wall-clock time,
+# stamped at dispatch, when the Job's activeDeadlineSeconds ends. Scheduling and the image pull are thus counted, and the
+# bundle, the record and the writeback container keep 180 s.
 DELIVER_BY=$(( 10#${FLEET_AGENT_TIMEOUT:-7200} + 300 ))
+if [[ "${FLEET_HARD_DEADLINE:-}" =~ ^[0-9]{9,11}$ ]]; then
+  hard_left=$(( SECONDS + 10#$FLEET_HARD_DEADLINE - $(date +%s) - 180 ))
+  (( hard_left < DELIVER_BY )) && DELIVER_BY=$hard_left
+elif [[ -n "${FLEET_HARD_DEADLINE:-}" ]]; then echo "WARNING: FLEET_HARD_DEADLINE is not a time in seconds; ignored" >&2; fi
 (( agent_budget > 0 )) || { record state=failed exit=deadline-before-agent; finish 143; }
 AGENT_STARTED="$(stamp)" AGENT_T0=$SECONDS AGENT_HEAD="$(git -C "$REPO" rev-parse HEAD)" AGENT_ROUNDS0="$(round_count)"
 rc=0; run_agent || rc=$?
