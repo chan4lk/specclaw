@@ -1,0 +1,107 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 2,
+  "minor": 1
+ },
+ "escalated": [
+  "3adff7cdffcb",
+  "6fc81ad5e3ab"
+ ],
+ "files": [
+  "plugins/specclaw-review/bin/specclaw-review",
+  "plugins/specclaw-review/lib/review_core.py",
+  "plugins/specclaw-review/mcp/server.py",
+  "plugins/specclaw-review/skills/review/SKILL.md",
+  "plugins/specclaw-review/tests/run-review-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw-review/lib/review_core.py",
+   "fp": "3adff7cdffcb",
+   "in_delta": true,
+   "line": 723,
+   "message": "The rename/delete fix keeps a finding for one round only. `_gone` checks `base..HEAD` against the finding's old path. After the carrying round, the next `--since <that round's head>` range no longer contains the rename or deletion. `_gone` is then false, and `_fix_touched` finds no hunks for the vanished path, so the finding is dropped as 'the fix did not change its lines'. In the default `warn` mode it closes, with only an `unproven` entry. In `block` mode it stays carried but can never be cleared. Fix: resolve the finding's current path with `git diff -M --name-status` and record it on the carried finding, or keep the GONE carry across later rounds until the code is re-reviewed. Add a test that runs two `--since` rounds after a rename.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "Round 1 reports a major in a.py. The fix renames a.py to c.py. Round 2 (`--since H1`) carries the finding as 'file renamed or deleted'. Round 3 (`--since` round 2's head) has no change to a.py, so the finding closes silently in warn mode, even though the flagged code still exists in c.py.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-review/tests/run-review-tests.sh",
+   "fp": "154df5545a02",
+   "in_delta": true,
+   "line": 380,
+   "message": "The rename and delete rows run only with `fix_proof: block`, because `fpround` defaults to block. The `warn` branch is untested for GONE findings: it keeps them and lists only the other unproven findings under `unproven`. Add a warn-mode rename row, and a row where a GONE finding and an untouched finding sit in the same round.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "A change to the `kept` filter in the warn branch, such as dropping the `!= GONE` exemption, would close renamed-file findings by default. The current table stays green.",
+   "severity": "minor"
+  },
+  {
+   "carried": "the fix did not change its lines since the pre-fix commit",
+   "file": "plugins/specclaw-review/lib/review_core.py",
+   "fp": "6fc81ad5e3ab",
+   "in_delta": true,
+   "line": 703,
+   "message": "The rename variant the previous round named is not fixed or tested. `_fix_touched` runs `git diff -U0 base..HEAD -- <finding file>` with only the old path as pathspec, so git cannot pair the rename. A renamed file shows as a whole-file deletion hunk (`-1,N +0,0`), and any finding line within 1..N+3 counts as touched. A pure `git mv` with no content change therefore marks the finding as covered and drops it. The finding's code still exists under the new path, so it should be carried. Fix: resolve the file's current path with `git diff -M --name-status base..HEAD`, compare the hunks of the renamed pair, and carry the finding when the contents are unchanged. The test table also has no rename row. The two other rows the previous round asked for, an unrelated edit and two findings in one file, are covered by the `fp8` row.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "Finding a.py:2. The fix commit only runs `git mv a.py c.py`, and some other proven test passes. `git diff -U0 base..HEAD -- a.py` yields `@@ -1,40 +0,0 @@`, so line 2 is in range, `covers` gets the fp, and the finding is not carried. Expected: carried, because the lines were not changed.",
+   "severity": "major"
+  }
+ ],
+ "fix_proof": {
+  "base": "595a0e2b72b149c365b65c71ac363641b279eb25",
+  "covers": [],
+  "mode": "block",
+  "reason": "1 test file(s) fail on 595a0e2b72 and pass on HEAD",
+  "status": "proven",
+  "tests": [
+   "plugins/specclaw-review/tests/run-review-tests.sh"
+  ]
+ },
+ "head": "430401f8aca90bad012b857462efd70e9a72967c",
+ "impact": [
+  ".github/workflows/ci.yml",
+  ".github/workflows/fleet-image.yml",
+  "plugins/specclaw-bf/bin/specclaw-bf-domain-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-replay",
+  "plugins/specclaw-bf/tests/run-narration-gate-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-byte-identity-tests.sh",
+  "plugins/specclaw-bf/tests/run-quality-tests.sh",
+  "plugins/specclaw-fleet/lib/dispatch.sh",
+  "plugins/specclaw-fleet/lib/feature-run.sh",
+  "plugins/specclaw-fleet/lib/trigger.sh",
+  "plugins/specclaw-fleet/pipelines/dispatch-hosted.yml",
+  "plugins/specclaw-fleet/pipelines/dispatch.yml",
+  "plugins/specclaw-fleet/tests/cases/ac10_pipeline_refs.sh",
+  "plugins/specclaw-fleet/tests/cases/ac10_pipeline_script.sh",
+  "plugins/specclaw-fleet/tests/cases/ac11_config.sh",
+  "plugins/specclaw-fleet/tests/cases/ac15_delivery.sh",
+  "plugins/specclaw-fleet/tests/cases/ac17_trigger.sh",
+  "plugins/specclaw-fleet/tests/cases/ac18_gate_parity.sh",
+  "plugins/specclaw-fleet/tests/cases/ac22_settings.sh"
+ ],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 32809,
+ "round": 4,
+ "since": "595a0e2b72b149c365b65c71ac363641b279eb25",
+ "status": "escalate",
+ "system_chars": 9645,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794639863,
+ "ts_start": 1794639801
+}

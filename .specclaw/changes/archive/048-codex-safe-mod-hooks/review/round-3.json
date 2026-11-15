@@ -1,0 +1,42 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 1
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw/tests/run-codex-plugin-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/tests/run-codex-plugin-tests.sh",
+   "fp": "e1cf423a0cf7",
+   "in_delta": true,
+   "line": 79,
+   "message": "Changing `2>&1` to `2>/dev/null` discards the python error, so every failure is labelled 'unparsable'. That includes a missing python3, an unreadable file, and a JSON decode error. The check still fails closed, but the diagnostic is gone. Capture stderr separately and include its last line in the fail message, or print a distinct 'unreadable' marker from the script.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B3",
+   "scenario": "python3 is not on PATH, or hooks.json is unreadable -> the test prints 'holds only keys Codex accepts (found: unparsable)', which points at the JSON content rather than the real cause.",
+   "severity": "minor"
+  }
+ ],
+ "head": "8a273ba47994ca060ea257b1df7f74bd43c8ccd5",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 11302,
+ "round": 3,
+ "since": "4514800",
+ "status": "clean",
+ "system_chars": 8970,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1793696113,
+ "ts_start": 1793696095
+}

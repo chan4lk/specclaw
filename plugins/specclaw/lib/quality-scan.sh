@@ -988,9 +988,10 @@ run_jscpd() {
         > "$rdir/duplicated"
 
       # Files with no clones still count as successfully measured with zero
-      # duplicated lines.
+      # duplicated lines. FILENAME, not NR == FNR: with zero clones the first
+      # file is empty and NR == FNR would stay true across the whole second one.
       awk -F'\t' -v OFS='\t' '
-        NR == FNR {
+        FILENAME == ARGV[1] {
           duplicated[$1] = $2 + 0
           next
         }

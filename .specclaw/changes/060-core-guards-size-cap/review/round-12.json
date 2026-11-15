@@ -1,0 +1,46 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 1
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw/hooks/done-guard",
+  "plugins/specclaw/references/full/verify.md",
+  "plugins/specclaw/skills/verify/SKILL.md",
+  "plugins/specclaw/templates/config.yaml",
+  "plugins/specclaw/tests/run-done-guard-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/tests/run-done-guard-tests.sh",
+   "fp": "d797820a4025",
+   "in_delta": true,
+   "line": 126,
+   "message": "The new `late=\"\" dirty=\"\"` reset in `missing()` (plugins/specclaw/hooks/done-guard:43) has no test. Neither new case has two changes in one run, so a state leaked from one change to the next stays invisible. The tests pass with the reset removed. Add a two-change case: the first change is dirty or late, the second takes a path that does not recompute `late`/`dirty`, or whose git call fails. Assert that the second change is judged on its own state.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Change A is dirty (non-empty `dirty`) and is held. Change B then reaches the freshness branch without re-running the assignments, or its `git status` fails. Without the reset, B inherits A's `dirty` and is held for A's dirt, or is judged wrongly. No test covers this, so deleting the reset line keeps every test green.",
+   "severity": "minor"
+  }
+ ],
+ "head": "9042650b706b9689a7cb7a8dd167e086d7be96f6",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 17742,
+ "round": 12,
+ "since": "fcba186180",
+ "status": "clean",
+ "system_chars": 8905,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794635420,
+ "ts_start": 1794635400
+}

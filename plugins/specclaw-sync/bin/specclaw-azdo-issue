@@ -7,6 +7,26 @@
 #   specclaw-azdo-issue comment  <specclaw_dir> <change> "<comment text>"
 #   specclaw-azdo-issue close    <specclaw_dir> <change>
 #   specclaw-azdo-issue link-pr  <specclaw_dir> <change> <project_id> <repo_id> <pr_id>
+#   specclaw-azdo-issue show     <specclaw_dir> <change>
+#   specclaw-azdo-issue updates  <specclaw_dir> <change>
+#   specclaw-azdo-issue tag      <specclaw_dir> <change> <tag>
+#   specclaw-azdo-issue claim    <specclaw_dir> <change> <tag> [blocking-tag...]
+#   specclaw-azdo-issue untag    <specclaw_dir> <change> <tag>
+#   specclaw-azdo-issue fields   <specclaw_dir> <change> key=value...
+#   specclaw-azdo-issue whoami   <specclaw_dir> <change>
+#   specclaw-azdo-issue optin    <specclaw_dir> <change> <tag> <upn>
+#   specclaw-azdo-issue records  <specclaw_dir> <change>
+#
+# `optin` assigns the item to <upn> when it is unassigned and adds <tag> as the
+# caller, in one rev-guarded PATCH. An existing <tag> is removed first and then
+# re-added, so the revision history always shows the caller adding it. It exits 4
+# when the item is assigned to someone else.
+# `whoami` prints the identity behind AZDO_TOKEN; `records` prints the fleet
+# run-update comments, newest first, as JSON.
+#
+# `fields` writes only keys mapped under azdo.fleet_fields.<key> (and `state`
+# through azdo.fleet_states.<value>), then always posts one comment listing
+# every pair, so the record survives a process with no custom fields.
 #
 # Reads AZDO_TOKEN / AZDO_ORG / AZDO_PROJECT from .specclaw/.env (set by
 # /specclaw-sync:auth-azdo) and azdo.boards.* from config.yaml.
@@ -43,6 +63,7 @@ CHANGE_NAME="$3"
 CONFIG_FILE="$SPECCLAW_DIR/config.yaml"
 AUTH_FILE="$SPECCLAW_DIR/.env"
 CHANGE_DIR="$SPECCLAW_DIR/changes/$CHANGE_NAME"
+[[ -d "$CHANGE_DIR" || ! -d "$SPECCLAW_DIR/features/$CHANGE_NAME" ]] || CHANGE_DIR="$SPECCLAW_DIR/features/$CHANGE_NAME"
 STATUS_FILE="$CHANGE_DIR/status.md"
 
 [[ -d "$CHANGE_DIR" ]] || { echo "ERROR: Change not found: $CHANGE_DIR" >&2; exit 1; }
@@ -319,28 +340,165 @@ cmd_close() {
   cmd_comment "" "$SPECCLAW_DIR" "$CHANGE_NAME" "$msg"
 
   # Also add a `closed-by-specclaw` tag (additive — keep existing tags)
-  local current_tags new_tags body
-  current_tags="$(ado_get "wit/workitems/${wi_id}?api-version=7.1" \
-    | python3 -c 'import json,sys; print(json.load(sys.stdin).get("fields",{}).get("System.Tags",""))')"
-  if [[ "$current_tags" == *"closed-by-specclaw"* ]]; then
-    echo "Closed Work Item #${wi_id} (already tagged closed-by-specclaw)"
-    return 0
-  fi
-  if [[ -z "$current_tags" ]]; then
-    new_tags="closed-by-specclaw"
-  else
-    new_tags="${current_tags}; closed-by-specclaw"
-  fi
-  body="$(python3 - "$new_tags" <<'PY'
-import json, sys
-patch = [{"op":"replace","path":"/fields/System.Tags","value": sys.argv[1]}]
-print(json.dumps(patch))
-PY
-)"
-  ado_patch_json "wit/workitems/${wi_id}?api-version=7.1" "$body" >/dev/null \
+  ( tag_update "$wi_id" add closed-by-specclaw lax ) \
     || warn "Failed to add closed-by-specclaw tag — closing comment was still posted"
   echo "Closed Work Item #${wi_id}"
 }
+
+PY_TAGS='
+import json, sys
+mode, tag, strict, blocking = sys.argv[1], sys.argv[2], sys.argv[3] == "strict", sys.argv[4:]
+item = json.load(sys.stdin)
+tags = [t.strip() for t in item.get("fields", {}).get("System.Tags", "").split(";") if t.strip()]
+held = {t.lower() for t in tags}
+assign = None
+if mode == "optin":
+    upn = blocking[0]
+    who = (item.get("fields", {}).get("System.AssignedTo") or {}).get("uniqueName", "")
+    if who and who.lower() != upn.lower():
+        print(who, file=sys.stderr)
+        sys.exit(4)
+    if tag.lower() in held:
+        sys.exit(5)
+    assign = None if who else upn
+    tags.append(tag)
+elif mode == "add":
+    if any(b.lower() in held for b in blocking) or (strict and tag.lower() in held):
+        sys.exit(3)
+    if tag.lower() in held:
+        sys.exit(10)
+    tags.append(tag)
+else:
+    if tag.lower() not in held:
+        sys.exit(10)
+    tags = [t for t in tags if t.lower() != tag.lower()]
+print(item["rev"])
+ops = [{"op": "test", "path": "/rev", "value": item["rev"]},
+       {"op": "replace", "path": "/fields/System.Tags", "value": "; ".join(tags)}]
+if assign:
+    ops.append({"op": "add", "path": "/fields/System.AssignedTo", "value": assign})
+print(json.dumps(ops))
+'
+
+ado_patch_status() {
+  local url="https://dev.azure.com/${AZDO_ORG}/${AZDO_PROJECT}/_apis/${1}"
+  curl -s -o /dev/null -w '%{http_code}' --max-time 30 -X PATCH "$url" \
+    -H "Authorization: Basic $(auth_header)" \
+    -H "Content-Type: application/json-patch+json" \
+    -d "$2" || true
+}
+
+tag_update() {
+  local wi_id="$1" mode="$2" tag="$3" strict="$4" attempt item out rc rev now code
+  shift 4
+  for attempt in 1 2 3; do
+    item="$(ado_get "wit/workitems/${wi_id}?api-version=7.1")" || die "ADO read failed for Work Item #${wi_id}"
+    rc=0
+    out="$(python3 -c "$PY_TAGS" "$mode" "$tag" "$strict" "$@" <<<"$item")" || rc=$?
+    case "$rc" in 0) ;; 3|4|5) return "$rc" ;; 10) return 0 ;; *) die "Could not read tags of Work Item #${wi_id}" ;; esac
+    rev="${out%%$'\n'*}"
+    code="$(ado_patch_status "wit/workitems/${wi_id}?api-version=7.1" "${out#*$'\n'}")"
+    case "$code" in
+      2??) return 0 ;;
+      4??) ;;
+      *) die "Tag update for Work Item #${wi_id} has an unknown outcome (HTTP ${code:-none}); check its tags before retrying" ;;
+    esac
+    now="$(ado_get "wit/workitems/${wi_id}?api-version=7.1" | python3 -c 'import json,sys; print(json.load(sys.stdin)["rev"])')" \
+      || die "ADO read failed for Work Item #${wi_id} after a rejected tag update"
+    [[ "$now" != "$rev" ]] || die "Tag update rejected for Work Item #${wi_id} (HTTP ${code}): the item did not change, so this is not a race"
+  done
+  die "Work Item #${wi_id} kept changing; gave up updating ${tag} after ${attempt} attempts"
+}
+
+cmd_claim() {
+  require_creds
+  local tag="${4:-}" wi_id rc=0
+  [[ -n "$tag" ]] || die "Usage: specclaw-azdo-issue claim <specclaw_dir> <change> <tag> [blocking-tag...]"
+  wi_id="$(existing_wi_id)"
+  [[ -n "$wi_id" ]] || die "No Work Item for this change — run specclaw-azdo-issue create first"
+  tag_update "$wi_id" add "$tag" strict "${@:5}" || rc=$?
+  (( rc == 3 )) && { echo "Work Item #${wi_id} already holds ${tag} or a blocking tag" >&2; exit 3; }
+  echo "Claimed Work Item #${wi_id}: ${tag}"
+}
+
+cmd_untag() {
+  require_creds
+  local tag="${4:-}" wi_id
+  [[ -n "$tag" ]] || die "Usage: specclaw-azdo-issue untag <specclaw_dir> <change> <tag>"
+  wi_id="$(existing_wi_id)"
+  [[ -n "$wi_id" ]] || die "No Work Item for this change — run specclaw-azdo-issue create first"
+  tag_update "$wi_id" remove "$tag" lax
+  echo "Untagged Work Item #${wi_id}: ${tag}"
+}
+
+cmd_tag() {
+  require_creds
+  local tag="${4:-}" wi_id
+  [[ -n "$tag" ]] || die "Usage: specclaw-azdo-issue tag <specclaw_dir> <change> <tag>"
+  wi_id="$(existing_wi_id)"
+  [[ -n "$wi_id" ]] || die "No Work Item for this change — run specclaw-azdo-issue create first"
+  tag_update "$wi_id" add "$tag" lax
+  echo "Tagged Work Item #${wi_id}: ${tag}"
+}
+
+cmd_whoami() {
+  require_creds
+  # shellcheck disable=SC2016  # "$value" is a JSON key read by Python, not a shell expansion
+  printf 'Authorization: Basic %s\n' "$(auth_header)" | curl -sf --max-time 30 -H @- "https://dev.azure.com/$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$AZDO_ORG")/_apis/connectionData" \
+    | python3 -c 'import json,sys; u=json.load(sys.stdin)["authenticatedUser"]; p=u.get("properties",{}).get("Account",{}).get("$value",""); print(json.dumps({"upn":p,"name":u.get("providerDisplayName",""),"id":u.get("id","")}))' \
+    || die "Could not read the identity behind AZDO_TOKEN"
+}
+
+cmd_optin() {
+  require_creds
+  local tag="${4:-}" upn="${5:-}" wi_id rc=0
+  [[ -n "$tag" && -n "$upn" ]] || die "Usage: specclaw-azdo-issue optin <specclaw_dir> <change> <tag> <upn>"
+  local me
+  me="$(cmd_whoami | python3 -c 'import json,sys; print(json.load(sys.stdin)["upn"])')" || die "Could not read the identity behind AZDO_TOKEN"
+  [[ "$(printf '%s' "$me" | tr '[:upper:]' '[:lower:]')" == "$(printf '%s' "$upn" | tr '[:upper:]' '[:lower:]')" ]] \
+    || die "optin assigns only to the AZDO_TOKEN identity ($me), not $upn"
+  wi_id="$(existing_wi_id)"
+  [[ -n "$wi_id" ]] || die "No Work Item for this change — run specclaw-azdo-issue create first"
+  tag_update "$wi_id" optin "$tag" lax "$upn" || rc=$?
+  if (( rc == 5 )); then
+    tag_update "$wi_id" remove "$tag" lax
+    rc=0; ( tag_update "$wi_id" optin "$tag" lax "$upn" ) || rc=$?
+    (( rc == 0 || rc == 4 )) || { ( tag_update "$wi_id" add "$tag" lax ) || warn "could not restore ${tag} on Work Item #${wi_id}"; }
+  fi
+  (( rc == 4 )) && { echo "Work Item #${wi_id} is assigned to someone else; only they can opt in" >&2; exit 4; }
+  (( rc == 0 )) || die "Could not opt in Work Item #${wi_id}"
+  echo "Opted in Work Item #${wi_id}: assigned to ${upn}, ${tag}"
+}
+
+cmd_records() {
+  require_creds
+  local wi_id
+  wi_id="$(existing_wi_id)"
+  [[ -n "$wi_id" ]] || die "No Work Item for this change — run specclaw-azdo-issue create first"
+  ado_get "wit/workItems/${wi_id}/comments?\$top=200&order=desc&api-version=7.1-preview.4" | python3 -c "$PY_RECORDS" "$wi_id" \
+    || die "ADO read failed for Work Item #${wi_id} comments"
+}
+
+PY_RECORDS='
+import html, json, re, sys
+out = []
+doc = json.load(sys.stdin)
+if not isinstance(doc, dict) or not isinstance(doc.get("comments"), list):
+    sys.exit("comments answer is not a list")
+for c in doc["comments"]:
+    text = html.unescape(re.sub(r"<br\s*/?>|</(p|div|li)>", "\n", c.get("text", "")))
+    text = re.sub(r"<[^>]+>", "", text)
+    if "specclaw-fleet run update:" not in text:
+        continue
+    rec = {"at": c.get("createdDate", "")}
+    for line in text.splitlines():
+        m = re.match(r"\s*-\s*([a-z_]+):\s*(.*?)\s*$", line)
+        if m:
+            rec[m.group(1)] = m.group(2)
+    out.append(rec)
+out.sort(key=lambda r: r["at"], reverse=True)
+print(json.dumps({"work_item": sys.argv[1], "records": out}))
+'
 
 cmd_link_pr() {
   require_creds
@@ -375,6 +533,77 @@ PY
   fi
 }
 
+cmd_show() {
+  require_creds
+  local wi_id
+  wi_id="$(existing_wi_id)"
+  [[ -n "$wi_id" ]] || die "No Work Item for this change — run specclaw-azdo-issue create first"
+  ado_get "wit/workitems/${wi_id}?api-version=7.1" || die "ADO read failed for Work Item #${wi_id}"
+}
+
+cmd_updates() {
+  require_creds
+  local wi_id dir skip=0 count
+  wi_id="$(existing_wi_id)"
+  [[ -n "$wi_id" ]] || die "No Work Item for this change — run specclaw-azdo-issue create first"
+  dir="$(mktemp -d)"
+  trap 'rm -rf "$dir"' RETURN
+  while :; do
+    ado_get "wit/workitems/${wi_id}/updates?\$top=200&\$skip=${skip}&api-version=7.1" > "$dir/$(printf '%06d' "$skip").json" \
+      || die "ADO read failed for Work Item #${wi_id} updates (skip ${skip})"
+    count="$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))["value"]))' "$dir/$(printf '%06d' "$skip").json")" \
+      || die "Unreadable updates page for Work Item #${wi_id} (skip ${skip})"
+    (( count < 200 )) && break
+    skip=$((skip + 200))
+  done
+  python3 -c 'import glob,json,sys; v=[u for f in sorted(glob.glob(sys.argv[1]+"/*.json")) for u in json.load(open(f))["value"]]; print(json.dumps({"count":len(v),"value":v}))' "$dir" \
+    || die "Could not merge the update history for Work Item #${wi_id}"
+}
+
+fleet_field_ref() {
+  local key="$1" val="$2"
+  if [[ "$key" == state ]]; then
+    local mapped
+    mapped="$(yaml_val "$CONFIG_FILE" "azdo.fleet_states.$val")"
+    [[ -n "$mapped" ]] && printf 'System.State\t%s' "$mapped"
+  else
+    local ref
+    ref="$(yaml_val "$CONFIG_FILE" "azdo.fleet_fields.$key")"
+    [[ -n "$ref" ]] && printf '%s\t%s' "$ref" "$val"
+  fi
+  return 0
+}
+
+cmd_fields() {
+  require_creds
+  shift 3
+  [[ $# -gt 0 ]] || die "Usage: specclaw-azdo-issue fields <specclaw_dir> <change> key=value..."
+  local wi_id
+  wi_id="$(existing_wi_id)"
+  [[ -n "$wi_id" ]] || die "No Work Item for this change — run specclaw-azdo-issue create first"
+
+  local pair key mapped ops=() lines=("specclaw-fleet run update:")
+  for pair in "$@"; do
+    [[ "$pair" == *=* ]] || die "Expected key=value, got: $pair"
+    key="${pair%%=*}"
+    lines+=("- ${key}: ${pair#*=}")
+    mapped="$(fleet_field_ref "$key" "${pair#*=}")"
+    if [[ -z "$mapped" ]]; then
+      warn "no azdo.fleet_* mapping for '${key}' — recorded in the comment only"
+      continue
+    fi
+    ops+=("${mapped%%$'\t'*}" "${mapped#*$'\t'}")
+  done
+
+  cmd_comment "" "$SPECCLAW_DIR" "$CHANGE_NAME" "$(printf '%s\n' "${lines[@]}")"
+  if (( ${#ops[@]} )); then
+    local body
+    body="$(python3 -c 'import json,sys; a=sys.argv[1:]; print(json.dumps([{"op":"add","path":"/fields/"+a[i],"value":a[i+1]} for i in range(0,len(a),2)]))' "${ops[@]}")"
+    ado_patch_json "wit/workitems/${wi_id}?api-version=7.1" "$body" >/dev/null \
+      || die "ADO field update failed for Work Item #${wi_id} (the comment was posted)"
+  fi
+}
+
 # ─── Dispatch ─────────────────────────────────────────────────────────────────
 
 case "$SUBCMD" in
@@ -383,5 +612,14 @@ case "$SUBCMD" in
   comment) cmd_comment "$@" ;;
   close)   cmd_close   "$@" ;;
   link-pr) cmd_link_pr "$@" ;;
+  show)    cmd_show    "$@" ;;
+  updates) cmd_updates "$@" ;;
+  tag)     cmd_tag     "$@" ;;
+  claim)   cmd_claim   "$@" ;;
+  untag)   cmd_untag   "$@" ;;
+  fields)  cmd_fields  "$@" ;;
+  whoami)  cmd_whoami  "$@" ;;
+  optin)   cmd_optin   "$@" ;;
+  records) cmd_records "$@" ;;
   *) die "Unknown subcommand: $SUBCMD. Run with --help for usage." ;;
 esac

@@ -1,0 +1,20 @@
+export type SpecclawChange = {
+  name: string
+  phase: string
+  approved: boolean
+  done: number
+  total: number
+  failed: number
+  verdict?: string
+  pr?: string
+  mtimeMs: number
+  isUnreadable?: boolean
+}
+
+export type SpecclawSnapshot = { hasSpecclaw: boolean; isUnreadable?: boolean; changes: SpecclawChange[] }
+
+declare module 'claude-code' {
+  interface PluginState {
+    specclaw: { snapshot: Shaped<SpecclawSnapshot> }
+  }
+}

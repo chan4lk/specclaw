@@ -118,6 +118,27 @@ build:
     fable_max_fraction: 0.2                     # cap Fable share of tasks per build
     cache: true                                 # persist synthesized specs under changes/<change>/agents/
 
+# Context budget (change 065). A subagent cannot see its own token count, so the
+# PreToolUse hook hooks/context-gate (Claude Code only) checks it on every tool
+# call. At 90% of the agent's role cap:
+#   off    nothing is checked
+#   warn   the agent and the user are told to hand off; nothing is denied
+#   block  every call is denied except git add/commit/status/diff/log, cd,
+#          head, tail and `specclaw-budget handover` (no file redirects),
+#          until the agent stops
+# The main session is never capped. A subagent whose type names no role is
+# `general`. A prompt may open with `specclaw budget: role=<role> context=<n>`;
+# n is clamped to half..double the role's shipped default. Read and written
+# only through `specclaw-budget` (block-scoped, like party_val).
+budget:
+  gate: warn                       # off | warn | block
+  routing:                         # task Kind -> build agent type; `default` for any other Kind
+    frontend: specclaw:builder-frontend
+    docs: specclaw:builder-frontend
+    default: specclaw:builder-backend
+  roles: {}                        # set with `specclaw-budget set .specclaw <role> <n>`; see `roles --json`
+  # shipped: builder-backend 200000, builder-frontend 200000, code-reviewer 150000, general 200000
+
 # Brownfield (bf-*) command settings
 bf:
   # Narration agents — the bf spawns whose artifact is ALREADY FINAL before the
@@ -248,6 +269,19 @@ automation:
 
 # PR creation settings
 pr:
+  # PR size cap (change 060): `specclaw-verify size` counts production lines added
+  # and deleted against the merge-base with the base branch. Tests (test/, tests/,
+  # spec/, specs/, __tests__/, testdata/ and the usual test file names, any case,
+  # except CamelCase FooTest.*/FooSpec.* which match case-sensitively; the list is
+  # SIZE_EXCLUDE in bin/specclaw-verify), .specclaw/,
+  # lockfiles and generated files are left out, plus the git glob pathspecs in
+  # size_exclude (space-separated, e.g. "docs/** **/*.md"). Over size_cap, verify
+  # FAILs unless the proposal has a `Size waiver: <reason>` line; over half, it
+  # suggests a split; when it cannot count (no base or merge-base, a malformed size_cap, or git fails), it exits 2. 0 turns the cap off.
+  # The default test list is fixed; extend it for your layout (conftest.py, e2e/, ...) with size_exclude.
+  size_cap: 400
+  size_exclude: ""
+
   # Paths that are always fine undeclared — a CHANGELOG, a generated lockfile.
   # This wins over every other rule INCLUDING the junk patterns, so it is the
   # operator's escape hatch when a default misfires. It is not for silencing a
@@ -451,6 +485,10 @@ plugin:
                        # version (max once/24h, cached in .specclaw/.update-check —
                        # add that file to .gitignore). Fail-silent: network problems
                        # never affect any command. Set false for zero network calls.
+
+# Add-on plugin tips (specclaw-suggest). A "no" to a tip adds its feature here.
+plugins:
+  dismissed: []        # any of: review, fleet, sync, bf, extras
 
 # Azure DevOps integration (optional)
 # Run `specclaw auth azdo` to configure. Token stored in .specclaw/.env (gitignored).

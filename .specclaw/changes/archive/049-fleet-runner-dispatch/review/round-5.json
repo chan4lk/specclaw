@@ -1,0 +1,58 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 2
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw-fleet/pipelines/dispatch.yml",
+  "plugins/specclaw-fleet/tests/cases/ac10_pipeline_script.sh",
+  "plugins/specclaw-fleet/tests/cases/ac6_codex_serial.sh",
+  "plugins/specclaw-fleet/tests/lib/dispatch-env.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw-fleet/tests/cases/ac10_pipeline_script.sh",
+   "fp": "fd77a8739d14",
+   "in_delta": true,
+   "line": 48,
+   "message": "The `git diff` failure fix still has one variant row, a root commit with no parent. The stub only fails `git show`, so a `git diff` that fails for another reason (unreachable HEAD^1 in a shallow clone, repo error) is never exercised. Extend the git stub to fail `diff` under an env var and add a row. The current row would catch removal of the `|| exit 1`, so this is a coverage gap, not a wrong-behaviour finding.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "n/a (coverage gap; the code treats every `git diff` failure the same way)",
+   "severity": "minor"
+  },
+  {
+   "file": "plugins/specclaw-fleet/tests/cases/ac10_pipeline_script.sh",
+   "fp": "6839d78ab87f",
+   "in_delta": true,
+   "line": 29,
+   "message": "`scenario` sets `got=error` whenever rc != 0, even if a dispatch was also recorded in $CALLS. Rows expecting `error` therefore never assert that nothing was dispatched. For the unreadable-status rows, also assert $CALLS is empty (for example, report `error+dispatch` as a distinct outcome).",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "n/a (a step that dispatches and then exits non-zero for an unreadable file would still pass the error rows)",
+   "severity": "minor"
+  }
+ ],
+ "head": "66fb3bbc617de8fcb43fa5e7e24cf8d5bc44c165",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 21395,
+ "round": 5,
+ "since": "e854476",
+ "status": "clean",
+ "system_chars": 8984,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794042654,
+ "ts_start": 1794042592
+}

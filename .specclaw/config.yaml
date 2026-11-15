@@ -91,3 +91,9 @@ plugin:
     - "plugins/specclaw-extras/.codex-plugin/plugin.json"
     - "plugins/specclaw-review/.claude-plugin/plugin.json"
     - "plugins/specclaw-review/.codex-plugin/plugin.json"
+
+review:
+  timeout_seconds: 1800   # whole-change Opus final passes on large fleet diffs exceed 900 s
+  # fix proof (061): each changed suite; a mod's kit test (*.test.ts[x]) runs its plugin's tests, a bun spec runs alone
+  test_command: 'sh -c "for f; do case $f in *.test.ts|*.test.tsx) claude plugin test ${f%/tests/*} || exit 1;; *.spec.ts) bun test ./$f || exit 1;; *) bash $f || exit 1;; esac; done" sh {files}'
+  fix_proof: block         # 061: an unproven fix keeps blockers and majors open

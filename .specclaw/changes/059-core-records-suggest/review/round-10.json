@@ -1,0 +1,57 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 1
+ },
+ "escalated": [
+  "2431d1bb22ea"
+ ],
+ "files": [
+  "plugins/specclaw/tests/run-suggest-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/tests/run-suggest-tests.sh",
+   "fp": "2431d1bb22ea",
+   "in_delta": true,
+   "line": 68,
+   "message": "The previous finding asked for a row where the write fails after the target is reached. It should assert that the original bytes survive and that no config.yaml.?????? temp is left behind. This diff adds only the inode-changes-on-success rows. The failure rows above it (none, rodir, unreadable, rofile) fail early, at the missing config, mktemp, an unreadable source, or a pre-check on a read-only file. None of them drives the late `mv ... || fail` path, where the temp already exists and the rename onto the real file fails. The temp-cleanup and original-intact guarantee for that path is untested, and the test would stay green if the cleanup were deleted. Add a row that makes only the final rename fail while the temp file already exists. One way is a config path that is a non-empty directory, or a sticky or immutable target. Assert that the config is unchanged, no temp is left, and the output says it could not record the dismissal.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "The mv step fails after mktemp, cp and awk have succeeded. If the failure path stops removing the temp file, a config.yaml.XXXXXX file is left in the config directory. Every row in the suite still passes, because no row reaches that path.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw/tests/run-suggest-tests.sh",
+   "fp": "f9fceb70a659",
+   "in_delta": true,
+   "line": 81,
+   "message": "The symlink table covers relative, absolute and chained links, but not a relative target that uses `../`. It also has no row where the config's parent directory is itself a symlink. Both were named as variants of the link-resolution class. Add a `../real/config.yaml` row, with the link in a sibling directory, and a symlinked-directory row.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "A config link such as `$d/sub/config.yaml -> ../real/config.yaml` is resolved by joining the link's directory and the target. If the joined path is mishandled, the dismissal lands in the wrong place or replaces the link. No row exercises that case, so the suite cannot show it.",
+   "severity": "minor"
+  }
+ ],
+ "head": "e4e2790b34594d66479c6640ba9429e9e2d30e72",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 13504,
+ "round": 10,
+ "since": "4894ecd",
+ "status": "escalate",
+ "system_chars": 8969,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794633780,
+ "ts_start": 1794633756
+}

@@ -1,0 +1,131 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 4,
+  "minor": 2
+ },
+ "escalated": [
+  "f467ad5113da",
+  "e013b6ec1c63",
+  "ede45cee38d9"
+ ],
+ "files": [
+  ".github/workflows/ci.yml",
+  "plugins/specclaw-fleet/README.md",
+  "plugins/specclaw-fleet/image/writeback.sh",
+  "plugins/specclaw-fleet/lib/consent.sh",
+  "plugins/specclaw-fleet/lib/dispatch.sh",
+  "plugins/specclaw-fleet/lib/launch.sh",
+  "plugins/specclaw-fleet/lib/workitem.sh",
+  "plugins/specclaw-fleet/pipelines/dispatch.yml",
+  "plugins/specclaw-fleet/skills/dispatch/SKILL.md",
+  "plugins/specclaw-fleet/tests/cases/ac10_pipeline_script.sh",
+  "plugins/specclaw-fleet/tests/cases/ac11_config.sh",
+  "plugins/specclaw-fleet/tests/cases/ac4_gates.sh",
+  "plugins/specclaw-fleet/tests/cases/ac5_launch.sh",
+  "plugins/specclaw-fleet/tests/cases/ac6_codex_serial.sh",
+  "plugins/specclaw-fleet/tests/cases/ac7_entrypoint.sh",
+  "plugins/specclaw-fleet/tests/cases/ac8_writeback.sh",
+  "plugins/specclaw-fleet/tests/lib/dispatch-env.sh",
+  "plugins/specclaw-sync/bin/specclaw-azdo-issue",
+  "plugins/specclaw-sync/skills/azdo-issue/SKILL.md",
+  "plugins/specclaw-sync/tests/run-azdo-issue-claim-tests.sh",
+  "plugins/specclaw-sync/tests/run-azdo-issue-history-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw-sync/bin/specclaw-azdo-issue",
+   "fp": "f467ad5113da",
+   "in_delta": true,
+   "line": 437,
+   "message": "In `cmd_claim`, any failure of the claim PATCH (`ado_patch_json ... || { ...; exit 3; }`) is reported as 'changed while claiming' with exit 3. `claim_change` turns exit 3 into 'already handled or claimed by another dispatch', and the pipeline treats 3 as a clean skip. An auth error, 5xx, timeout or network failure therefore reads as 'someone else won the race'. Only a real rev conflict (HTTP 409/412) should exit 3. Every other PATCH failure should `die` (exit 1) so the pipeline step fails. The new test only stubs the PATCH failure as curl exit 22 and expects 3, so it cannot tell the two cases apart; add a variant for a non-conflict failure.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B3",
+   "scenario": "ADO returns 503 or the token is expired on the claim PATCH -> claim exits 3 -> dispatch prints 'already handled or claimed by another dispatch' and exits 3 -> the pipeline step goes green with nothing dispatched and no warning.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/pipelines/dispatch.yml",
+   "fp": "e013b6ec1c63",
+   "in_delta": true,
+   "line": 50,
+   "message": "The busy codex slot now exits 5, which the pipeline swallows silently (`0|3|5) ;;`), leaves the change untagged, and no longer marks the work item Failed or warns. README says 'a later run retries it', but the pipeline only triggers when a `state.json` changes on main, so nothing guarantees a later run happens. Before this round the same condition produced a visible refusal and a pipeline warning. Emit a `##vso[task.logissue type=warning]` for exit 5 and fix the README claim, or add a scheduled trigger.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B3",
+   "scenario": "The assignee has an unfinished codex job. A push approves change X -> dispatch exits 5 -> the step is green with no log issue, X is untagged and still Approved. No further state.json change lands -> X is never dispatched and nobody is told.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/tests/cases/ac5_launch.sh",
+   "fp": "c0bb3fba580a",
+   "in_delta": true,
+   "line": 27,
+   "message": "The new claim-release branch in `launch_job` (untag after `create_manifests` fails) is tested only for the busy case (AC4f). There is no row for the other failures that happen after the claim: `kubectl create` of the Secret or Job failing with Forbidden, a timeout or a connection error, or the untag itself failing (the `warn` path). If the release is dropped, or only handles exit 5, no test fails. Add table rows for those variants asserting the claim directory is gone and the exit code is propagated.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "kubectl create fails with Forbidden after the claim -> the claim is not released -> the work item stays tagged fleet:dispatched with no Job, and every later run skips it with exit 3. No test fails.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/.claude-plugin/plugin.json",
+   "fp": "ede45cee38d9",
+   "in_delta": true,
+   "line": 1,
+   "message": "This diff changes code under plugins/specclaw-fleet and plugins/specclaw-sync (new `claim` and `untag` subcommands, exit code 5, validation) but touches no plugin.json or marketplace.json version. The previous round raised this and it is still unaddressed in the diff. All claude and codex plugin.json files and every marketplace.json entry must carry one identical bumped version. Ignore this only if an earlier commit on the branch already bumped all of them.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "R1",
+   "scenario": "The plugin behaviour changes (new subcommands, new exit code) while the installed version string stays the same -> consumers cannot tell old from new, and the R1 shared-version rule is broken.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-sync/bin/specclaw-azdo-issue",
+   "fp": "8c9aaee9d5dd",
+   "in_delta": true,
+   "line": 425,
+   "message": "`cmd_claim` passes the whole work-item JSON to python as argv (`\"$item\"`). That is the same argv-size pattern this round removed from `cmd_updates`. A work item with a very large System.Description (over about 128 KB) fails with E2BIG. It fails closed ('Could not read tags') but permanently blocks dispatch. Pass the item via stdin or a temp file instead.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "Work item whose JSON exceeds 128 KB -> python cannot start -> claim dies with 'Could not read tags' on every run.",
+   "severity": "minor"
+  },
+  {
+   "file": "plugins/specclaw-sync/bin/specclaw-azdo-issue",
+   "fp": "0bbf121ead78",
+   "in_delta": true,
+   "line": 451,
+   "message": "`cmd_untag` is a read-modify-write of System.Tags with no `test /rev` precondition, unlike `claim`. It is used on the claim-release path and by `--force`. A tag written by another process between the GET and the PATCH is silently overwritten. Add the same rev test and retry or fail on conflict.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B7",
+   "scenario": "The release path reads the tags, someone adds fleet:auto or another dispatcher's tag, then the untag PATCH writes the stale list -> the concurrent tag is lost.",
+   "severity": "minor"
+  }
+ ],
+ "head": "9a6a680a2eb813493e4b3178738b1ee604fca1fa",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 54297,
+ "round": 11,
+ "since": "9bda7c0",
+ "status": "escalate",
+ "system_chars": 8963,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794045111,
+ "ts_start": 1794045039
+}

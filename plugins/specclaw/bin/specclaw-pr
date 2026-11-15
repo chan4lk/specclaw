@@ -583,6 +583,33 @@ record_pr_phase() {
   return 0
 }
 
+# post_review_status <pr_url> — the clean-loop status branch policy can require
+# (change 064, ADR-0017 decision 59). Posts `specclaw/review-loop` = success on
+# the PR's current head only when `specclaw-review verdict --head` confirms a
+# clean final pass at exactly that SHA: a status on any other head would approve
+# unreviewed code. Bookkeeping after the PR exists, so it never fails.
+post_review_status() {
+  command -v specclaw-review >/dev/null 2>&1 || return 0
+  local url="$1" pr sha branch out round
+  pr="$(gh pr view "$url" --json headRefOid,headRefName -q '.headRefOid + " " + .headRefName' 2>/dev/null)" || pr=""
+  read -r sha branch <<<"$pr"
+  if [[ -z "$sha" ]]; then
+    warn "could not read the PR head — specclaw/review-loop status not posted"
+    return 0
+  fi
+  # stdout only: line 2 is the round file, and a stderr line must not shift it
+  if ! out="$(specclaw-review verdict --change "$CHANGE_NAME" --head "$sha" 2>/dev/null)"; then
+    out="${out:-specclaw-review verdict failed}"
+    echo "  specclaw/review-loop status not posted: ${out%%$'\n'*}"
+    return 0
+  fi
+  round="$(sed -n 2p <<<"$out")"
+  gh api "repos/{owner}/{repo}/statuses/$sha" -f state=success -f context=specclaw/review-loop \
+    -f description=clean -f target_url="${url%/pull/*}/blob/${branch}/${round}" >/dev/null ||
+    { warn "posting the specclaw/review-loop status failed (PR is live at $url)"; return 0; }
+  echo "  specclaw/review-loop: clean posted on ${sha:0:10}"
+}
+
 # Everything here runs after `gh pr create`, so every step is bookkeeping against
 # a PR that already exists. Each one is individually guarded and the function
 # always returns 0: an abort here is what used to freeze every tracker at its
@@ -846,6 +873,9 @@ main() {
   save_pr_url "$pr_url" || warn "failed to record the PR URL in status.md — PR is live at $pr_url"
   pr_commit_bookkeeping "$CHANGE_NAME" "$pr_url" \
     "$CHANGE_DIR/state.json" "$CHANGE_DIR/status.md" "$SPECCLAW_DIR/STATUS.md"
+  # After the bookkeeping push. The host may not show that push yet; then the gate sees an older
+  # head and posts nothing (fail closed). The ci/ templates are the reliable poster.
+  post_review_status "$pr_url" || true
 
   # Step 8: Update project context (always-on; errors are non-blocking)
   local update_context_script="$SCRIPT_DIR/specclaw-update-context"

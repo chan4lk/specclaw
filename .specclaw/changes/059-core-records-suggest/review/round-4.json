@@ -1,0 +1,70 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 2
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw/bin/specclaw-suggest",
+  "plugins/specclaw/lib/plugins.sh",
+  "plugins/specclaw/tests/run-suggest-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/tests/run-suggest-tests.sh",
+   "fp": "7e889af6c593",
+   "in_delta": true,
+   "line": 51,
+   "message": "The hook test only asserts that the tip text is absent. It has no positive control, so it passes whenever the hook prints nothing. That includes the hook failing, a wrong $PLUGIN_DIR or CLAUDE_PLUGIN_ROOT, or the tip never being triggered for this config. Add a control run with the same config minus the `dismissed` block that must contain the install tip, or assert that the hook exited 0 and produced non-empty output. Then the row proves the block-list read is what suppresses the tip.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "The hook errors out under PATH=/usr/bin:/bin, for example because a tool it needs is missing. $hb is empty and the check passes. The same happens if plugins_dismissed ignores block lists but the tip is not emitted for this config for another reason. The test stays green with the reader fix removed.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw/tests/run-suggest-tests.sh",
+   "fp": "f82ab19b4ae3",
+   "in_delta": true,
+   "line": 44,
+   "message": "The sibling-key assertion checks only `  other: 1`. Row 5 (same-indent items followed by the top-level `next: 1`) never checks that `next: 1` survived the rewrite. Row 3, where the list is the last key, has no sibling to check. A writer that swallows the key after the list would pass these rows. Assert that the sibling line (`other:` or `next:`) is preserved for every row that has one.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "The writer's skip state leaks past `next: 1` in row 5, so `next: 1` is dropped. The check greps only for `other:` in the row text, finds none, and passes.",
+   "severity": "minor"
+  },
+  {
+   "file": "plugins/specclaw/bin/specclaw-suggest",
+   "fp": "405efba3742b",
+   "in_delta": true,
+   "line": 38,
+   "message": "The list-boundary rule (blank and comment lines continue the list, the next key ends it) is still written twice, once in the plugins_dismissed awk and once in the --dismiss awk. Only a comment in plugins.sh says they agree. The previous finding asked for one shared helper or at least one rule. The new rows pin the five listed shapes, but any later edit to one copy can drift again with nothing in code linking them.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B4",
+   "scenario": "Someone later changes the reader to end a list at an indented sibling key. The writer keeps skipping items after it, or the reverse, and a config shape not in the five rows is read and rewritten differently.",
+   "severity": "minor"
+  }
+ ],
+ "head": "14d27c476400e5305367a9115c831d742af44bb4",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 15149,
+ "round": 4,
+ "since": "9ee7b98",
+ "status": "open",
+ "system_chars": 8920,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794632585,
+ "ts_start": 1794632555
+}

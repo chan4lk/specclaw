@@ -1,0 +1,70 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 2
+ },
+ "escalated": [],
+ "files": [
+  ".claude-plugin/marketplace.json",
+  "plugins/specclaw-bf/.claude-plugin/plugin.json",
+  "plugins/specclaw-bf/.codex-plugin/plugin.json",
+  "plugins/specclaw-extras/.claude-plugin/plugin.json",
+  "plugins/specclaw-extras/.codex-plugin/plugin.json",
+  "plugins/specclaw-review/.claude-plugin/plugin.json",
+  "plugins/specclaw-review/.codex-plugin/plugin.json",
+  "plugins/specclaw-sync/.claude-plugin/plugin.json",
+  "plugins/specclaw-sync/.codex-plugin/plugin.json",
+  "plugins/specclaw/.claude-plugin/plugin.json",
+  "plugins/specclaw/.codex-plugin/plugin.json",
+  "plugins/specclaw/CLAUDE.md",
+  "plugins/specclaw/MOD.md",
+  "plugins/specclaw/hooks/hooks.json",
+  "plugins/specclaw/hooks/mod.json",
+  "plugins/specclaw/tests/run-codex-plugin-tests.sh"
+ ],
+ "final": true,
+ "findings": [
+  {
+   "file": "plugins/specclaw/tests/run-codex-plugin-tests.sh",
+   "fp": "ff9a7657be97",
+   "in_delta": true,
+   "line": 75,
+   "message": "The new check covers only one side of the fix: that hooks/hooks.json holds no keys Codex refuses. Nothing in the bash/coreutils suites asserts the other side, that `.claude-plugin/plugin.json` still names `./hooks/mod.json` and that `mod.json` lists `./register.tsx`. If either is dropped, the mod stops loading in Claude Code, and only `run-mod-tests.sh` would notice. That suite needs `bun` and `claude` and may not run in CI. The CLAUDE.md line also says `run-codex-plugin-tests.sh` 'checks it', which reads as covering this wiring. Fix: add an assertion that the Claude manifest's `hooks` names `./hooks/mod.json` and that `mod.json`'s `modules` contains `./register.tsx`, or narrow the CLAUDE.md wording.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "",
+   "severity": "minor"
+  },
+  {
+   "file": "plugins/specclaw/tests/run-codex-plugin-tests.sh",
+   "fp": "46ee70f28520",
+   "in_delta": true,
+   "line": 78,
+   "message": "The key check runs `set(json.load(...))` without first checking that the top level is a JSON object. A top-level array of strings such as `[\"description\"]` or `[]` yields only allowed or empty 'keys', so the check passes even though Codex would reject the file. A non-object top level should fail. Fix: assert `isinstance(d, dict)` and print a marker such as `not-an-object` when it is not.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B6",
+   "scenario": "",
+   "severity": "minor"
+  }
+ ],
+ "head": "4514800b41b5c09302609a1405572abf07153060",
+ "impact": [],
+ "model": "opus",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 21974,
+ "round": 2,
+ "since": null,
+ "status": "clean",
+ "system_chars": 8973,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1793696056,
+ "ts_start": 1793696035
+}

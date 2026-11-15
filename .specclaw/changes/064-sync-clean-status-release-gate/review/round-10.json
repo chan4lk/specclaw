@@ -1,0 +1,69 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 0
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw-review/ci/github-actions.yml",
+  "plugins/specclaw-sync/bin/specclaw-azdo-pr",
+  "plugins/specclaw-sync/bin/specclaw-sync",
+  "plugins/specclaw-sync/tests/run-release-tests.sh",
+  "plugins/specclaw/bin/specclaw-pr"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "class": "other",
+   "file": "plugins/specclaw-sync/tests/run-release-tests.sh",
+   "fp": "6d94cf3a8881",
+   "in_delta": true,
+   "line": 89,
+   "message": "The fix is a class fix in code: `-z` with a `\\0` split covers every path git would C-quote. The test is not a variant test. It adds one case, the non-ASCII folder `065-caf\u00e9`. The previous round asked for a variant test with a non-ASCII change directory plus a quote or tab in a path. B2 requires the named case plus at least two others. Make it table-driven over several quoted-path variants: non-ASCII, a tab, a double quote and a backslash in the change folder or file name. Each variant must exit 1 and print its item. Add a variant to the table only if LIST_RE accepts that path.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "A later change decodes only git's octal escapes (`\\303\\251`) but not `\\t`, `\\\"` or `\\\\`, or reintroduces line-based parsing for those. The single caf\u00e9 test still passes, while a list under a change folder whose name contains a tab or quote is skipped and its open security item is not gated, so the release is allowed.",
+   "severity": "major",
+   "unclassified": false
+  }
+ ],
+ "head": "86eb21da00aea6b7be13eccc95b5e068b6bac355",
+ "impact": [
+  ".github/workflows/ci.yml",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-collect",
+  "plugins/specclaw-bf/tests/run-quality-tests.sh",
+  "plugins/specclaw-extras/bin/specclaw-party",
+  "plugins/specclaw-fleet/image/Dockerfile",
+  "plugins/specclaw-fleet/image/claude-fetch.sh",
+  "plugins/specclaw-fleet/lib/launch.sh",
+  "plugins/specclaw-fleet/lib/podspec.sh",
+  "plugins/specclaw-fleet/tests/cases/ac12_claim.sh",
+  "plugins/specclaw-fleet/tests/cases/ac13_claude_fetch.sh",
+  "plugins/specclaw-fleet/tests/cases/ac28_pr_target.sh",
+  "plugins/specclaw-fleet/tests/cases/ac30_feature_advance.sh",
+  "plugins/specclaw-review/lib/review_core.py",
+  "plugins/specclaw-review/tests/run-review-tests.sh",
+  "plugins/specclaw/bin/specclaw-browser-lock",
+  "plugins/specclaw/bin/specclaw-build",
+  "plugins/specclaw/bin/specclaw-change-lock",
+  "plugins/specclaw/bin/specclaw-verify",
+  "plugins/specclaw/templates/config.yaml",
+  "plugins/specclaw/tests/run-change-lock-tests.sh"
+ ],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 20392,
+ "round": 10,
+ "since": "792803b141",
+ "status": "open",
+ "system_chars": 8920,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794635464,
+ "ts_start": 1794635444
+}

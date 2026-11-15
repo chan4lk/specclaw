@@ -43,7 +43,7 @@ with open(claude_path, encoding="utf-8") as handle:
 assert marketplace["name"] == "chan4lk"
 root = os.path.dirname(os.path.dirname(os.path.dirname(marketplace_path)))
 names = [p["name"] for p in marketplace["plugins"]]
-assert names == ["specclaw", "specclaw-bf", "specclaw-sync", "specclaw-extras", "specclaw-review"], names
+assert names == ["specclaw", "specclaw-bf", "specclaw-sync", "specclaw-extras", "specclaw-review", "specclaw-fleet"], names
 versions = set()
 for entry in marketplace["plugins"]:
     pdir = os.path.join(root, "plugins", entry["name"])
@@ -71,6 +71,25 @@ if [ -f "$CODEX_MANIFEST" ]; then
       || fail "canonical skill is packaged: $skill_name"
   done
 fi
+
+# Codex parses every plugin's hooks/hooks.json and refuses unknown keys (0.8.6 shipped `modules` there and lost the SessionStart router in Codex).
+for hooks_file in "$REPO_ROOT"/plugins/*/hooks/hooks.json; do
+  rel="${hooks_file#"$REPO_ROOT"/}"
+  extra="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(" ".join(sorted(set(d) - {"description", "hooks"})) if isinstance(d, dict) else "not-an-object")' "$hooks_file" 2>/dev/null)" \
+    && [ -z "$extra" ] \
+    && pass "$rel holds only keys Codex accepts" \
+    || fail "$rel holds only keys Codex accepts (found: ${extra:-unparsable})"
+done
+
+python3 - "$CLAUDE_MANIFEST" "$PLUGIN_DIR/hooks/mod.json" <<'PY' \
+  && pass "the Claude manifest loads the mod and the Claude-only Stop done guard from hooks/mod.json" \
+  || fail "the Claude manifest loads the mod and the Claude-only Stop done guard from hooks/mod.json"
+import json, sys
+manifest, mod = (json.load(open(path)) for path in sys.argv[1:3])
+assert manifest.get("hooks") == "./hooks/mod.json", manifest.get("hooks")
+assert mod["modules"] == ["./register.tsx"], mod
+assert mod["hooks"]["Stop"][0]["hooks"][0]["command"].endswith('/hooks/done-guard"'), mod
+PY
 
 [ -f "$WORKFLOW_FILE" ] || fail "CI workflow exists"
 if [ -f "$WORKFLOW_FILE" ]; then

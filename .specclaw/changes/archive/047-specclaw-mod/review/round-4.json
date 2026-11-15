@@ -1,0 +1,67 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 0
+ },
+ "escalated": [],
+ "files": [
+  ".github/workflows/ci.yml",
+  "plugins/specclaw-mod/README.md",
+  "plugins/specclaw-mod/tests/gate.spec.ts",
+  "plugins/specclaw-mod/tests/register.test.ts",
+  "plugins/specclaw-mod/tests/run-mod-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw-mod/.claude-plugin/plugin.json",
+   "fp": "fd36ba6670f6",
+   "in_delta": true,
+   "line": 1,
+   "message": "The previous round's R1 finding is not fixed in this diff. The commit changes files under plugins/specclaw-mod/ (README.md, tests/*, run-mod-tests.sh) but touches no plugin.json or marketplace.json. No version bump is present. Bump every plugins/*/.claude-plugin/plugin.json, every plugins/*/.codex-plugin/plugin.json and every plugins[] entry in .claude-plugin/marketplace.json to one identical new version. Add a check (for example in ci.yml) that fails when these versions disagree, so the rule holds for all files rather than just this one.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "R1",
+   "scenario": "Merge this PR as it stands: plugins/specclaw-mod changes ship, but all plugin.json and marketplace.json versions stay at their old shared value. Installed users see no version change and receive no update.",
+   "severity": "major"
+  }
+ ],
+ "head": "5802975d1daeedf5bd211ef48cff785909dff8dc",
+ "impact": [
+  ".github/workflows/trigger-evals.yml",
+  "plugins/specclaw-bf/bin/specclaw-bf-baseline",
+  "plugins/specclaw-bf/bin/specclaw-bf-blueprint",
+  "plugins/specclaw-bf/bin/specclaw-bf-bootstrap",
+  "plugins/specclaw-bf/bin/specclaw-bf-clarify",
+  "plugins/specclaw-bf/bin/specclaw-bf-domain-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-e2e-run",
+  "plugins/specclaw-bf/bin/specclaw-bf-prototype",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-rebuild-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-replay",
+  "plugins/specclaw-bf/bin/specclaw-bf-status",
+  "plugins/specclaw-bf/bin/specclaw-bf-ui",
+  "plugins/specclaw-bf/tests/run-bf-e2e-run-tests.sh",
+  "plugins/specclaw-bf/tests/run-bf-status-tests.sh",
+  "plugins/specclaw-bf/tests/run-blueprint-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-brief-contract-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-byte-identity-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-stack-resolver-tests.sh",
+  "plugins/specclaw-bf/tests/run-quality-tests.sh"
+ ],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 21128,
+ "round": 4,
+ "since": "2bd43ae2f8",
+ "status": "open",
+ "system_chars": 7688,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1793623938,
+ "ts_start": 1793623921
+}

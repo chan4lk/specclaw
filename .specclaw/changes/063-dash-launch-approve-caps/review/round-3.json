@@ -1,0 +1,125 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 2,
+  "minor": 2
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw-dash/hooks/register.tsx",
+  "plugins/specclaw-dash/tests/pane.test.tsx",
+  "plugins/specclaw/bin/specclaw-suggest",
+  "plugins/specclaw/tests/run-suggest-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "class": "other",
+   "file": "plugins/specclaw-dash/tests/pane.test.tsx",
+   "fp": "674c7743262c",
+   "in_delta": true,
+   "line": 245,
+   "message": "The race test is not shown to fail without the fix. It fires two `ui.press` calls from one mounted pane and one mocked shell. If the harness runs presses one after another, the second press already sees `plan: null` under the old read-then-clear code, and the test passes without the fix. Revert `launch` to the old version and confirm this test fails. If it stays green, make the mock `readActions`/`updateActions` yield between the read and the write, or start two handlers directly, so the two reads really interleave. Also confirm that `updateActions` itself runs its callback as one atomic read-modify-write; if it awaits between the read and the write, the fix does not hold.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B7",
+   "scenario": "The pane harness serializes `press` calls. The old non-atomic `launch` is restored. Both presses still pass, and the test reports exactly one launch even though the guard has no atomicity.",
+   "severity": "minor",
+   "unclassified": false
+  },
+  {
+   "class": "other",
+   "file": "plugins/specclaw-dash/hooks/register.tsx",
+   "fp": "102fb92abf3c",
+   "in_delta": true,
+   "line": 18,
+   "message": "The condition changed from `named === 0 && ran.code > 0` to `named === 0`, and a new `code === -1` message was added. Neither is covered by a test. A dry run that exits 0 but names no item (for example, changed output format) now says 'Fleet could not run. <setup steps>', which is misleading. A timeout now gets its own text. Add rows for exit 0 with no named items, and for exit -1.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "`optin --dry-run` exits 0 and prints only a banner, so no item is named. The pane tells the user to set up fleet, although fleet ran. No test pins this message.",
+   "severity": "minor",
+   "unclassified": false
+  },
+  {
+   "carried": "fix not proven: the changed tests fail on HEAD (exit 1)",
+   "class": "other",
+   "file": "plugins/specclaw-dash/hooks/register.tsx",
+   "fp": "674aabe604b4",
+   "in_delta": true,
+   "line": 26,
+   "message": "The guard and the clear are not atomic. `readActions` is awaited, the guard runs on that snapshot, then `updateActions` clears `plan` in a separate await. Two launch handlers can both read the plan before either clears it, so the comment 'a second press cannot launch twice' does not hold. Move the check and the clear into one `updateActions` callback (or take an in-flight flag) and launch only if that callback saw a valid plan. Add a test that fires two launch presses concurrently and asserts exactly one `specclaw-fleet optin` call. The pane test only covers a single press.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B12",
+   "scenario": "The user double-presses Confirm launch. Handler 1 awaits readActions, and handler 2 starts and awaits readActions before handler 1 reaches updateActions. Both see the plan, both pass the guard, and `specclaw-fleet optin <items>` runs twice. That spends the plan twice and pushes the branch twice.",
+   "severity": "major",
+   "unclassified": false
+  },
+  {
+   "carried": "fix not proven: the changed tests fail on HEAD (exit 1)",
+   "class": "other",
+   "file": "plugins/specclaw/bin/specclaw-suggest",
+   "fp": "086f3d5a5109",
+   "in_delta": true,
+   "line": 36,
+   "message": "The fix covers only some of the `--undismiss` failure paths. The unknown-feature branch above `fail()` still does `exit 0`, so a failed undo is reported as success. Exit non-zero there for `--undismiss`, using the same `rc` logic. Add a test row for it.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "`config.yaml` lists a feature name that `plugin_feature` no longer knows (an old or renamed feature). The pane shows it as dismissed, and Undo runs `specclaw-suggest <cfg> --undismiss old`. The script prints 'unknown feature' and exits 0, so the pane shows `exit 0` while the dismissal is still in the config.",
+   "severity": "major",
+   "unclassified": false
+  }
+ ],
+ "fix_proof": {
+  "base": "a4762fdc8acd9ccf62e6bca63e120941deb4621d",
+  "mode": "block",
+  "reason": "the changed tests fail on HEAD (exit 1)",
+  "status": "not_proven",
+  "tests": [
+   "plugins/specclaw-dash/tests/pane.test.tsx",
+   "plugins/specclaw/tests/run-suggest-tests.sh"
+  ]
+ },
+ "head": "93f14fe10d310d87ce035a34c1230987444741b9",
+ "impact": [
+  ".claude-plugin/marketplace.json",
+  ".github/workflows/ci.yml",
+  ".github/workflows/trigger-evals.yml",
+  "LICENSE",
+  "plugins/specclaw-bf/bin/specclaw-bf-analyze-codebase",
+  "plugins/specclaw-bf/bin/specclaw-bf-baseline",
+  "plugins/specclaw-bf/bin/specclaw-bf-bootstrap",
+  "plugins/specclaw-bf/bin/specclaw-bf-clarify",
+  "plugins/specclaw-bf/bin/specclaw-bf-domain-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-e2e-run",
+  "plugins/specclaw-bf/bin/specclaw-bf-prototype",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-rebuild-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-replay",
+  "plugins/specclaw-bf/bin/specclaw-bf-ui",
+  "plugins/specclaw-bf/tests/run-bf-collect-tests.sh",
+  "plugins/specclaw-dash/.claude-plugin/plugin.json",
+  "plugins/specclaw-dash/hooks/core/actions.ts",
+  "plugins/specclaw-dash/tests/actions.spec.ts",
+  "plugins/specclaw-dash/types/index.d.ts"
+ ],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 22267,
+ "round": 3,
+ "since": "a4762fdc8a",
+ "status": "open",
+ "system_chars": 9574,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794658056,
+ "ts_start": 1794658035
+}

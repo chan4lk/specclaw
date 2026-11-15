@@ -1,0 +1,97 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 2,
+  "minor": 2
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw-fleet/README.md",
+  "plugins/specclaw-fleet/image/entrypoint.sh",
+  "plugins/specclaw-fleet/image/writeback.sh",
+  "plugins/specclaw-fleet/lib/common.sh",
+  "plugins/specclaw-fleet/lib/dispatch.sh",
+  "plugins/specclaw-fleet/lib/launch.sh",
+  "plugins/specclaw-fleet/lib/onboard.sh",
+  "plugins/specclaw-fleet/lib/workitem.sh",
+  "plugins/specclaw-fleet/pipelines/dispatch.yml",
+  "plugins/specclaw-fleet/tests/cases/ac10_pipeline_base.sh",
+  "plugins/specclaw-fleet/tests/cases/ac11_config.sh",
+  "plugins/specclaw-fleet/tests/cases/ac2_onboard.sh",
+  "plugins/specclaw-fleet/tests/cases/ac4_gates.sh",
+  "plugins/specclaw-fleet/tests/cases/ac5_launch.sh",
+  "plugins/specclaw-fleet/tests/cases/ac7_entrypoint.sh",
+  "plugins/specclaw-fleet/tests/lib/dispatch-env.sh",
+  "plugins/specclaw-fleet/tests/lib/pipeline-env.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw-fleet/.claude-plugin/plugin.json",
+   "fp": "2d07bef06b5e",
+   "in_delta": true,
+   "line": 1,
+   "message": "Plugin code under plugins/ changes (specclaw-fleet lib, image and pipeline files, and earlier in the PR the specclaw-sync `updates` subcommand), but no plugin version is bumped. This was reported last round and is still unfixed. Bump `plugins/*/.claude-plugin/plugin.json`, `plugins/*/.codex-plugin/plugin.json` and every `plugins[]` entry in `.claude-plugin/marketplace.json` to one identical new version.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "R1",
+   "scenario": "The PR merges with every plugin.json and marketplace.json still at the old version. Installed users never see an update, and the version no longer tells which fleet or sync code is deployed.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/lib/onboard.sh",
+   "fp": "06f410b5f42f",
+   "in_delta": true,
+   "line": 26,
+   "message": "The fail-closed `cfg_val` is an instance fix. Its `die` and `exit 1` only end the command-substitution subshell, so any caller that does not add `|| die` keeps going with an empty value. `writer=\"${writer:-$(cfg_val fleet.vault_writer \"\")}\"` is such a caller. `prefix=\"$(cfg_val git.branch_prefix specclaw/)\"` in launch.sh:66 has the same gap and depends on `set -e` being active. Make every caller check the result (`v=\"$(cfg_val ...)\" || exit 1`), or have `cfg_val` signal failure in a way the shell cannot swallow. Also give the new warning different text when the config could not be read.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B3",
+   "scenario": "config.yaml is unreadable or python3 is missing, and the admin runs `specclaw-fleet onboard alice@x --vault v`. The `cfg_val` subshell prints 'Cannot read config.yaml' and exits, `writer` ends up empty, onboarding skips the writer grant and finishes. The new warning then reports 'no --writer / fleet.vault_writer' when the config could not be read at all.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/tests/cases/ac11_config.sh",
+   "fp": "efaf1ecafa18",
+   "in_delta": true,
+   "line": 19,
+   "message": "The three failure variants (absent, unreadable, no python3) are folded into one `&&` chain, so a failure does not say which variant broke. Only the absent case checks the 'Cannot read' message. `nothing_applied` runs after the later `--dry-run` case, so it checks that run rather than the failing ones. `chmod 000` does not block reads when the tests run as root, so the unreadable row would be wrong there. Make it one check per variant, evaluate `nothing_applied` right after each failing dispatch, and skip or replace the chmod row when running as root.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "A failing config read still lets dispatch create a Job and then exit non-zero. The test passes because `nothing_applied` is evaluated against the dry-run state.",
+   "severity": "minor"
+  },
+  {
+   "file": "plugins/specclaw-fleet/lib/dispatch.sh",
+   "fp": "711e34d04565",
+   "in_delta": true,
+   "line": 24,
+   "message": "The new fail-closed branch for a non-numeric `fleet.deadline_minutes` has no test. Add rows for `abc`, `-5`, `1.5` and `''`, where empty falls back to the default of 120.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Someone deletes the regex guard and `deadline_minutes: abc` goes back to a bash arithmetic error or a zero deadline. No test fails.",
+   "severity": "minor"
+  }
+ ],
+ "head": "7e6b29aac7503a09c6393f63f2518b10af803c32",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 34850,
+ "round": 8,
+ "since": "7560475",
+ "status": "open",
+ "system_chars": 8843,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794043702,
+ "ts_start": 1794043636
+}

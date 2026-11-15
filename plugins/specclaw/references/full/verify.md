@@ -66,6 +66,14 @@ With none of the keys present, the payload is unchanged from before the e2e tier
 - `e2e_memory_limited: true` must be reported as **the memory limit was exceeded**, naming the cap that `e2e_output` quotes (e.g. "E2E: memory limit exceeded — killed by SIGKILL under cap 4096M"). Never call it a flaky, transient or generic test failure, and never suggest a re-run as the fix: raise `verify.playwright.max_memory_mb`, cut `verify.playwright.max_browsers`, or split `verify.playwright.projects`.
 - `e2e_memory_limited: false` with `e2e_state: failed` is an ordinary failure — report it from `e2e_output` on its own terms. An exit `137` here means the process was killed with no specclaw cap in force (host OOM killer or an external kill); say that, and do not name a cap.
 
+### Size cap
+
+```bash
+specclaw-verify size .specclaw <change>
+```
+
+Counts production lines added and deleted against the merge-base with the base branch, leaving out tests (`test/`, `tests/`, `spec/`, `specs/`, `__tests__/`, `testdata/` and the usual test file names, ignoring case; CamelCase names such as `FooTest.java`, `FooSpec.scala` and `src/integrationTest/` match case-sensitively, so `latest.ts` still counts), `.specclaw/`, lockfiles, generated files and the `pr.size_exclude` globs. Exit 1 means it is over `pr.size_cap` (default 400, `0` = off) and the proposal has no `Size waiver: <reason>` line: the verdict is FAIL. Exit 2 means it could not count (no base branch, no merge-base with it, a malformed `pr.size_cap`, or git failed; the line says which); that is also a FAIL until it can, never a pass. The exact exclusion list is `SIZE_EXCLUDE` and `SIZE_EXCLUDE_CASED` in `bin/specclaw-verify`; that default is fixed, and a project extends it for its own test layout (`conftest.py`, `e2e/`, ...) with `pr.size_exclude`. Over half the cap it suggests a split. Put its one line in the verify report.
+
 ## Step 2 — Build verify context
 
 ```bash
@@ -98,11 +106,14 @@ If `true`:
 
 ## Step 3.55 — Local review loop (specclaw-review add-on, conditional)
 
-Run this only when `command -v specclaw-review` succeeds; otherwise skip it silently. Run the loop from the
+Run this only when `command -v specclaw-review` succeeds. Run the loop from the
 `specclaw-review:review` skill until `specclaw-review verdict --change <change>` exits 0. Append its one-line
 output to the verify-report. A non-zero verdict caps the overall verdict at FAIL. The loop uses the project's
 own rulebook (`specclaw-review rules`), which is what the PR is judged by. Step 3.5's generic review does not
 use it.
+
+When `specclaw-review` is not installed, run `specclaw-suggest .specclaw review` and show any line it prints,
+at most once per session; if the user says no, run `specclaw-suggest .specclaw --dismiss review`.
 
 ## Step 3.6 — Split changes
 

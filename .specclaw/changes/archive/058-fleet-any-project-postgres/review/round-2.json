@@ -1,0 +1,46 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 0
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw-fleet/image/draft-pr.sh",
+  "plugins/specclaw-fleet/image/entrypoint.sh",
+  "plugins/specclaw-fleet/lib/podspec.sh",
+  "plugins/specclaw-fleet/tests/cases/ac32_postgres_sidecar.sh",
+  "plugins/specclaw-fleet/tests/cases/ac7_entrypoint.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw-fleet/image/draft-pr.sh",
+   "fp": "f59cd46270fd",
+   "in_delta": true,
+   "line": 32,
+   "message": "This is an instance fix, and it regresses the path it stopped covering. The old code encoded spaces in AZDO_PROJECT at the point of use, so it covered both the clone-URL value and the value from the fleet-azdo secret. The new code encodes spaces only inside entrypoint.sh's dev.azure.com regex branch and removes the encoding here. When the clone URL does not match that regex, AZDO_ORG and AZDO_PROJECT keep the secret's values, and nothing encodes them any more. The fix is to encode once at the point of use with a shared helper that percent-encodes every byte outside the unreserved set while leaving existing %XX sequences alone. Apply it to AZDO_ORG and AZDO_PROJECT at every URL site (draft-pr, specclaw-azdo-pr and specclaw-azdo-issue). Alternatively, normalise the secret-sourced values too. The same gap exists for other raw characters in a clone URL, such as raw non-ASCII or `?` and `#`, which still pass through unencoded.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "FLEET_REPO_URL is a form the regex rejects (for example a visualstudio.com URL) and the fleet-azdo secret has AZDO_PROJECT='My Project'. Before this commit, ensure_pr built .../My%20Project/_apis/... Now it builds .../My Project/_apis/... with a raw space, so the PR search request fails or is malformed, and ensure_pr returns 0 silently and creates no draft PR. The ac7 test table has no row for the secret-only path, so it stays green.",
+   "severity": "major"
+  }
+ ],
+ "head": "5d78c145b0012c518a0c0e80b49c3498ed1d3c22",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 18817,
+ "round": 2,
+ "since": "22abf04edf",
+ "status": "open",
+ "system_chars": 8922,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794412147,
+ "ts_start": 1794412132
+}

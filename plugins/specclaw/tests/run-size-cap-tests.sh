@@ -1,0 +1,154 @@
+#!/usr/bin/env bash
+# Change 060: specclaw-verify size — production lines against the merge-base, over pr.size_cap
+# fails unless the proposal carries a Size waiver line.
+set -uo pipefail
+BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")/../bin" && pwd)/specclaw-verify"
+TMP="$(mktemp -d)"
+trap 'rm -rf "${TMP:?}"' EXIT
+export GIT_CONFIG_GLOBAL=/dev/null GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
+fail=0
+
+lines() { seq 1 "$2" > "$1"; }
+repo() { # repo <name> <pr-block>: base main with one file; HEAD on feat with change 001-x
+  local d="$TMP/$1"
+  mkdir -p "$d/.specclaw/changes/001-x" "$d/src"
+  printf 'git:\n  base_branch: main\npr:\n%s\n' "$2" > "$d/.specclaw/config.yaml"
+  echo '# Proposal' > "$d/.specclaw/changes/001-x/proposal.md"
+  echo a > "$d/src/a.ts"
+  git -C "$d" init -q -b main && git -C "$d" add -A && git -C "$d" commit -qm init
+  git -C "$d" checkout -q -b feat
+  echo "$d"
+}
+check() { # check <label> <repo> <want-exit> <want-substring>
+  local out rc
+  out="$(cd "$2" && "$BIN" size .specclaw 001-x 2>&1)"; rc=$?
+  BASE_SEEN="$out"
+  out="$(sed -E 's/ against [^ ]+ @ [0-9a-f]{10}//' <<<"$out")"
+  if [ "$rc" -eq "$3" ] && grep -qF -- "$4" <<<"$out"; then echo "PASS: $1"; else fail=1; echo "FAIL: $1 (exit $rc): $out"; fi
+}
+
+d="$(repo small '  size_cap: 10')"
+lines "$d/src/b.ts" 3; git -C "$d" add -A; git -C "$d" commit -qm b
+mkdir -p "$d/tests" "$d/src/generated"
+lines "$d/tests/t.sh" 50; lines "$d/src/a.test.ts" 50; lines "$d/package-lock.json" 50; lines "$d/src/generated/api.ts" 50
+lines "$d/.specclaw/changes/001-x/spec.md" 50
+check "tests, lockfiles, generated files and .specclaw/ are not counted" "$d" 0 "size cap: 3 production lines (cap 10)"
+lines "$d/src/new.ts" 4
+check "untracked files count, over half the cap prints the split note" "$d" 0 "size cap: 7 production lines (cap 10); over half the cap, consider splitting."
+lines "$d/src/more.ts" 4; git -C "$d" add -A
+check "over the cap fails" "$d" 1 "size cap: 11 production lines is over the 10-line cap."
+P="$d/.specclaw/changes/001-x/proposal.md"
+for line in '**Size waiver**:' 'Size waiver:' 'Size waiver: **'; do
+  printf '# Proposal\n%s\n' "$line" > "$P"
+  check "a waiver with no reason ($line) does not pass" "$d" 1 "is over the 10-line cap"
+done
+for line in '**Size waiver:** one migration' '**Size waiver**: one migration' '- size waiver: one migration' 'Size waiver: one migration'; do
+  printf '# Proposal\n%s\n' "$line" > "$P"
+  check "a Size waiver line passes ($line)" "$d" 0 "with the waiver in .specclaw/changes/001-x/proposal.md"
+done
+
+d="$(repo off '  size_cap: 0')"; lines "$d/src/b.ts" 999
+check "pr.size_cap 0 is off" "$d" 0 "size cap: off"
+
+d="$(repo default '  test_policy: none')"; lines "$d/src/b.ts" 401
+check "the default cap is 400" "$d" 1 "401 production lines is over the 400-line cap"
+
+d="$(repo exclude '  size_cap: 10
+  size_exclude: "docs/** *.md"')"
+mkdir -p "$d/docs"; lines "$d/docs/x.ts" 50; lines "$d/README.md" 50; lines "$d/src/b.ts" 2
+check "pr.size_exclude globs are not counted" "$d" 0 "size cap: 2 production lines (cap 10)"
+
+d="$(repo deleted '  size_cap: 10')"; git -C "$d" rm -q src/a.ts
+check "deleted lines count" "$d" 0 "size cap: 1 production lines (cap 10)"
+
+d="$(repo nobase '  size_cap: 10')"; sed -i.bak 's/base_branch: main/base_branch: nosuch/' "$d/.specclaw/config.yaml"
+check "no base branch is not counted and exits 2, never a pass" "$d" 2 "size cap: not counted, no base branch"
+
+d="$(repo badgit '  size_cap: 10')"; lines "$d/src/b.ts" 2; echo garbage > "$d/.git/index"
+check "a git failure after the base resolves is not counted and exits 2" "$d" 2 "size cap: not counted, git diff against"
+
+# The shared base reader (lib/base-ref.sh) takes a single-quoted base after a column-0 comment, as branch.ts does.
+d="$TMP/trunk"; mkdir -p "$d/.specclaw/changes/001-x" "$d/src"
+printf "git:\n# the integration branch\n  base_branch: 'trunk'  # quoted\npr:\n  size_cap: 10\n" > "$d/.specclaw/config.yaml"
+git -C "$d" init -q -b trunk && git -C "$d" add -A && git -C "$d" commit -qm init && git -C "$d" checkout -q -b feat
+lines "$d/src/b.ts" 2
+check "a single-quoted git.base_branch after a comment line is read" "$d" 0 "size cap: 2 production lines (cap 10)"
+grep -qE "against trunk @ [0-9a-f]{10} " <<<"$BASE_SEEN" && echo "PASS: the count names the base and merge-base it was taken against" || { fail=1; echo "FAIL: base not named: $BASE_SEEN"; }
+
+# Untracked files are counted as git counts tracked ones: a binary is skipped, a last line with no newline counts.
+d="$(repo binary '  size_cap: 10')"
+printf '\000\001\n\n\n\n\n\n\n\n\n\n\n\n' > "$d/src/blob.bin"; printf 'a\nb' > "$d/src/nonl.ts"
+check "an untracked binary is skipped and a no-newline last line counts" "$d" 0 "size cap: 2 production lines (cap 10)"
+git -C "$d" status --porcelain | grep -q '^??' && echo "PASS: the real index is untouched" || { fail=1; echo "FAIL: the real index was changed"; }
+
+# Test layouts are left out whatever their case; CamelCase test files are matched by their capital T,
+# so production files that merely end in "test" (latest.ts, contest.py) still count.
+while IFS='|' read -r path counted; do
+  d="$(repo "x$RANDOM" '  size_cap: 100')"
+  mkdir -p "$d/$(dirname "$path")"; echo x > "$d/$path"
+  check "$path is $([ "$counted" = 1 ] && echo counted || echo 'left out')" "$d" 0 "size cap: $counted production lines (cap 100)"
+done <<'ROWS'
+spec/models/user_spec.rb|0
+Spec/a.rb|0
+specs/a.ts|0
+app/user_spec.rb|0
+src/a.spec.ts|0
+src/A.SPEC.ts|0
+src/FooTest.java|0
+src/FooTests.cs|0
+Foo.Tests/Bar.cs|0
+test/a.py|0
+Tests/a.py|0
+tests/a.py|0
+src/a.test.ts|0
+Foo.UnitTests/Bar.cs|0
+Foo.IntegrationTests/Bar.cs|0
+Foo.Test/Bar.cs|0
+src/integrationTest/kotlin/A.kt|0
+src/androidTest/java/A.java|0
+src/testFixtures/A.java|0
+pkg/testdata/in.txt|0
+src/main/scala/FooSpec.scala|0
+UnitTests/A.cs|0
+IntegrationTests/A.cs|0
+src/E2ETests/a.ts|0
+ApiTests/a.ts|0
+src/Contests/a.ts|1
+src/latest.ts|1
+src/contest.py|1
+src/inspect.ts|1
+ROWS
+
+d="$(repo unrelated '  size_cap: 10')"; git -C "$d" checkout -q --orphan lone && git -C "$d" commit -qm lone
+check "a base with no merge-base names that cause (exit 2)" "$d" 2 "no merge-base with main"
+
+# One table (tests/fixtures/base-branch.tsv) drives this reader and hooks/core/base.ts (base.spec.ts).
+# shellcheck disable=SC1091
+. "$(dirname "$BIN")/../lib/base-ref.sh"
+while IFS='|' read -r name config want; do
+  printf '%b' "$config" > "$TMP/parity.yaml"
+  got="$(base_config_branch "$TMP/parity.yaml")"
+  [ "${got:--}" = "$want" ] && echo "PASS: base_branch parity: $name" || { fail=1; echo "FAIL: base_branch parity: $name (got '$got', want '$want')"; }
+done < "$(dirname "${BASH_SOURCE[0]}")/fixtures/base-branch.tsv"
+
+d="$(repo bash32 '  size_cap: 10
+  size_exclude: ""')"; lines "$d/src/b.ts" 2
+out="$(cd "$d" && /bin/bash "$BIN" size .specclaw 001-x 2>&1)"; rc=$?
+if ! /bin/bash -c '[ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -lt 44 ]'; then
+  echo "SKIP: an empty size_exclude under bash < 4.4 (not exercised: /bin/bash is $(/bin/bash -c 'echo $BASH_VERSION'))"
+elif [ "$rc" -eq 0 ] && grep -q "size cap: 2 production lines" <<<"$out"; then
+  echo "PASS: an empty size_exclude runs under /bin/bash $(/bin/bash -c 'echo $BASH_VERSION')"
+else
+  fail=1; echo "FAIL: /bin/bash run (exit $rc): $out"
+fi
+
+d="$(repo leadzero '  size_cap: 08')"; lines "$d/src/b.ts" 5
+check "a size_cap of 08 is eight, not a bad octal" "$d" 0 "(cap 8); over half the cap"
+out="$(cd "$d" && "$BIN" size .specclaw 999-missing 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] && grep -q "no change folder" <<<"$out" && echo "PASS: a misspelled change is not counted (exit 2)" || { fail=1; echo "FAIL: missing change folder (exit $rc): $out"; }
+
+d="$(repo badcap '  size_cap: lots')"
+check "a malformed pr.size_cap is not counted (exit 2), never read as over the cap" "$d" 2 "pr.size_cap must be a whole number"
+
+(( fail == 0 )) && echo "R060 AC-4 the size cap counts production lines and honours the waiver"
+exit "$fail"

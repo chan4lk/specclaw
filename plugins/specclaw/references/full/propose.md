@@ -15,7 +15,7 @@ Create a new proposal for a change.
    - Run `specclaw-next-change-number .specclaw` for `<NNN>`, and slugify the user's idea (lowercase, hyphens, no spaces) for `<slug>`. Join them with a hyphen. Never format the number by hand — `specclaw-next-change-number` owns that rule and is the only place it lives.
 
    From here on `<change-name>` means the full numbered name, prefix included.
-2. Create `.specclaw/changes/<change-name>/`.
+2. Create `.specclaw/changes/<change-name>/`. If the idea names an issue, work item or PR, run `specclaw-suggest .specclaw sync` and show any line it prints, at most once per session; if the user says no, run `specclaw-suggest .specclaw --dismiss sync`.
 
 3. Generate `proposal.md` from `$CLAUDE_PLUGIN_ROOT/templates/proposal.md`. Fill in: problem statement, proposed solution, scope (in / out), impact (files, complexity, risk), open questions.
    - Also generate `.specclaw/changes/<change-name>/status.md` from `$CLAUDE_PLUGIN_ROOT/templates/status.md`. Fill in: `{{title}}` and `{{change_name}}`, `{{date}}` / `{{updated}}` with today's date, and the phase rows — set Proposal status to `🟡 Draft` and the remaining phases (Spec, Design, Tasks, Build, Verify) to pending. Leave task/agent/issue sections empty for now.

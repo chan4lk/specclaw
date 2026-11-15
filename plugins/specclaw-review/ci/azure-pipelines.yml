@@ -1,13 +1,36 @@
 # specclaw-review — CI side. Reviews run locally; CI only confirms that the reviewed commit is HEAD.
-# No model call and no token here: the build server never spends a review round.
+# No model call and no review token here: the build server never spends a review round.
 # Add this as a step in your PR pipeline (python3 + git available; checkout with fetchDepth: 0).
+# When the clean final pass ran at exactly the PR's source commit, it also posts the PR status
+# `specclaw/review-loop` (genre specclaw, name review-loop) that a branch policy can require, bound to the
+# latest iteration. The build identity needs "Contribute to pull requests" on the repo.
 steps:
   - checkout: self
     fetchDepth: 0
   - script: |
       set -euo pipefail
-      CHANGE="$(git diff --name-only "origin/$(System.PullRequest.TargetBranch)...HEAD" \
+      git checkout -q "$HEAD_SHA"   # the PR's source commit, not the merge commit
+      CHANGE="$(git diff --name-only "origin/${TARGET#refs/heads/}...HEAD" \
         | sed -nE 's#^\.specclaw/changes/([^/]+)/review/round-[0-9]+\.json$#\1#p' | sort -u | head -1)"
       if [ -z "$CHANGE" ]; then echo "##vso[task.logissue type=warning]no local review rounds in this PR"; exit 0; fi
       python3 path/to/specclaw-review/bin/specclaw-review verdict --change "$CHANGE" --check-head
-    displayName: specclaw-review verdict (local review covered HEAD)
+      if ! OUT="$(python3 path/to/specclaw-review/bin/specclaw-review verdict --change "$CHANGE" --head "$HEAD_SHA")"; then
+        echo "##vso[task.logissue type=warning]specclaw/review-loop not posted: $(head -1 <<<"$OUT")"; exit 0
+      fi
+      API="${COLLECTION}${PROJECT}/_apis/git/repositories/${REPO_ID}/pullRequests/${PR_ID}"
+      ITER="$(curl -sf -H "Authorization: Bearer $SYSTEM_ACCESSTOKEN" "$API/iterations?api-version=7.1" \
+        | python3 -c 'import json,sys; v=json.load(sys.stdin)["value"][-1]; print(v["id"] if v["sourceRefCommit"]["commitId"]==sys.argv[1] else "")' "$HEAD_SHA")" || ITER=""
+      if [ -z "$ITER" ]; then echo "##vso[task.logissue type=warning]latest iteration unreadable or not $HEAD_SHA; status not posted"; exit 0; fi
+      python3 -c 'import json,sys; print(json.dumps({"state":"succeeded","description":"clean","iterationId":int(sys.argv[1]),
+        "context":{"genre":"specclaw","name":"review-loop"}}))' "$ITER" \
+        | curl -sf -X POST -H "Authorization: Bearer $SYSTEM_ACCESSTOKEN" -H "Content-Type: application/json" \
+            -d @- "$API/statuses?api-version=7.1" >/dev/null
+    displayName: specclaw-review verdict + specclaw/review-loop status
+    env:
+      SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+      HEAD_SHA: $(System.PullRequest.SourceCommitId)
+      TARGET: $(System.PullRequest.TargetBranch)
+      PR_ID: $(System.PullRequest.PullRequestId)
+      REPO_ID: $(Build.Repository.ID)
+      COLLECTION: $(System.CollectionUri)
+      PROJECT: $(System.TeamProjectId)

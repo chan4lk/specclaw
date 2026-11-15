@@ -1,0 +1,58 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 2,
+  "minor": 0
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw/CLAUDE.md",
+  "plugins/specclaw/bin/specclaw-suggest",
+  "plugins/specclaw/lib/plugins.sh",
+  "plugins/specclaw/tests/run-suggest-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/bin/specclaw-suggest",
+   "fp": "86d1bb63bc67",
+   "in_delta": true,
+   "line": 39,
+   "message": "The writer and the reader disagree about where a block list ends. plugins_dismissed keeps `inlist` set across blank lines and comment lines, so it reads every `- item` that follows. The --dismiss awk drops items only while they are contiguous: any other line, including a blank or comment line, runs `{ skip = 0; print }`. Items after that line survive the rewrite. The fix is for the writer to keep skipping blank and comment lines inside the list, with the same boundary rule as the reader (ideally one shared helper), and to reset only on the next key.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B4",
+   "scenario": "config.yaml has `plugins:\\n  dismissed:\\n    - review\\n    # keep fleet nagging off\\n    - fleet\\n`. Running `specclaw-suggest <dir> --dismiss bf` writes `dismissed: [review, fleet, bf]`, then prints the comment and the leftover `    - fleet` line. The result is a flow sequence followed by a stray block item, which is invalid YAML. Any strict parser, such as the fleet tooling or a yq read, rejects it or drops the data. The fix claimed that block lists are folded cleanly, but this variant corrupts the config.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw/tests/run-suggest-tests.sh",
+   "fp": "c791c599e55c",
+   "in_delta": true,
+   "line": 35,
+   "message": "The fix for the block-list defect has one test, a clean two-line list followed by a sibling key. The class has more variants: blank or comment lines between items, quoted items (`- \"review\"`), trailing `# comment` on an item, items at the same indent as the key, and a list as the last key in the file. The hook's honouring of a block-list dismissal is not tested either, although the previous finding named the hook as a consumer. Add a table-driven set of rows that exercises both the reader and the --dismiss rewrite.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "A row with `    - review\\n    # note\\n    - fleet` fails today because the rewrite leaves `- fleet` behind. The single existing row passes regardless, so the table cannot show that breakage.",
+   "severity": "major"
+  }
+ ],
+ "head": "9ee7b9829edfd39809a9a4a4857d9db3d38d2a37",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 20575,
+ "round": 3,
+ "since": "7baf5d5",
+ "status": "open",
+ "system_chars": 8917,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794632503,
+ "ts_start": 1794632479
+}

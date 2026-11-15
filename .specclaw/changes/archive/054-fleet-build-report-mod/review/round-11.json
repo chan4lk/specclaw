@@ -1,0 +1,106 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 2,
+  "minor": 2
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw-fleet/image/entrypoint.sh",
+  "plugins/specclaw-fleet/tests/cases/ac39_first_line_sites.sh",
+  "plugins/specclaw-fleet/tests/cases/ac7_entrypoint.sh",
+  "plugins/specclaw-fleet/tests/lib/entry-env.sh",
+  "plugins/specclaw-fleet/tests/partial.spec.ts"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw-fleet/tests/lib/entry-env.sh",
+   "fp": "bf007994a19f",
+   "in_delta": true,
+   "line": 64,
+   "message": "The empty FLEET_REPO_URL variant the previous round asked for is not tested, and the new empty-AZDO_REPO warning is never exercised. entry-env.sh uses `${ENTRY_REPO_URL:-default}`, so an empty ENTRY_REPO_URL falls back to the default URL. The `||r` row in ac7_entrypoint.sh therefore just re-tests the default URL. No row can make FLEET_REPO_URL empty, so deleting the WARN line or the guard leaves the suite green. Use `${ENTRY_REPO_URL-default}` (no colon), add rows for an empty URL and for `.../_git//`, and assert the WARN text in $TMP/out.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Delete the `[[ -n \"$AZDO_REPO\" ]] || echo WARN...` line, or set FLEET_REPO_URL=\"\" in the pod. The suite still passes because the `||r` row never sends an empty URL, so a silent empty AZDO_REPO ships.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/image/entrypoint.sh",
+   "fp": "a699a46eae15",
+   "in_delta": true,
+   "line": 19,
+   "message": "The derivation strips only one trailing `/`. A URL ending in `//` leaves `r/`, and `##*/` then gives an empty name. The check after it only warns, so the pod continues with an empty AZDO_REPO. Strip all trailing slashes, for example with a loop or `shopt -s extglob; ${u%%+(/)}`, or fail instead of warning.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "FLEET_REPO_URL=https://dev.azure.com/o/p/_git/r// -> repo_name=`.../r/` -> AZDO_REPO is empty, only a warning is printed, and pr-azdo fails later.",
+   "severity": "minor"
+  },
+  {
+   "file": "plugins/specclaw-fleet/tests/cases/ac39_first_line_sites.sh",
+   "fp": "66e1e7d7ab0e",
+   "in_delta": true,
+   "line": 8,
+   "message": "The first_obj row passes ~390 KB of data through the environment (`OBJS=\"$objs\"` on `bash -c`). Linux caps a single environment string at MAX_ARG_STRLEN (128 KB), so exec fails with E2BIG. `2>/dev/null` hides the error and the row is reported as a failure on Linux regardless of the code under test. Write the objects to a file and read them from it, or pipe them via stdin, instead of using an env var. Reduce the line count for that row if it must stay in the environment.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Run the suite on a Linux CI or pod image: `env OBJS=<390KB> bash -c ...` returns rc=126 (Argument list too long), so the first_obj row always fails and the whole check fails with no diagnostic.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/tests/partial.spec.ts",
+   "fp": "4919d4301a38",
+   "in_delta": true,
+   "line": 38,
+   "message": "The previous finding named the band, status, pane, shell table and HTML. The band is only checked for the PRs marker, not the `hosted \u2265` marker. No case drives a `status` renderer, if one is separate from the pane. Extend the assertions to cover the hosted marker in the band and every remaining renderer.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Drop the `\u2265` on hosted_s from the band or status output: no assertion fails, because only the pane, the shell table and the HTML check the hosted marker.",
+   "severity": "minor"
+  }
+ ],
+ "head": "0e3e332197b450e7776e7f6c03e6fc5d1b8b3b0e",
+ "impact": [
+  "plugins/specclaw-bf/bin/specclaw-bf-analyze-codebase",
+  "plugins/specclaw-bf/bin/specclaw-bf-blueprint",
+  "plugins/specclaw-bf/bin/specclaw-bf-e2e-run",
+  "plugins/specclaw-bf/tests/fixtures/analyze/package.json",
+  "plugins/specclaw-bf/tests/run-bf-collect-tests.sh",
+  "plugins/specclaw-bf/tests/run-bf-e2e-run-tests.sh",
+  "plugins/specclaw-bf/tests/run-blueprint-tests.sh",
+  "plugins/specclaw-extras/tests/run-debug-protocol-tests.sh",
+  "plugins/specclaw-fleet/bin/specclaw-fleet",
+  "plugins/specclaw-fleet/image/Dockerfile",
+  "plugins/specclaw-fleet/tests/cases/ac13_claude_fetch.sh",
+  "plugins/specclaw-fleet/tests/cases/ac14_dispatch_inputs.sh",
+  "plugins/specclaw-sync/bin/specclaw-jira-issue",
+  "plugins/specclaw-sync/tests/run-jira-sync-tests.sh",
+  "plugins/specclaw/bin/specclaw-init",
+  "plugins/specclaw/tests/run-bootstrap-hook-tests.sh",
+  "plugins/specclaw/tests/run-change-size-tests.sh",
+  "plugins/specclaw/tests/run-preset-check-tests.sh",
+  "plugins/specclaw/tests/run-staged-files-tests.sh",
+  "plugins/specclaw/tests/run-timing-tests.sh"
+ ],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 26575,
+ "round": 11,
+ "since": "b736a2f",
+ "status": "open",
+ "system_chars": 8938,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794293550,
+ "ts_start": 1794293518
+}

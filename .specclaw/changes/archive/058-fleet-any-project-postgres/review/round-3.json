@@ -1,0 +1,57 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 1
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw-fleet/image/entrypoint.sh",
+  "plugins/specclaw-fleet/tests/cases/ac7_entrypoint.sh",
+  "plugins/specclaw-fleet/tests/lib/entry-env.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw-fleet/tests/cases/ac7_entrypoint.sh",
+   "fp": "d460ada4c475",
+   "in_delta": true,
+   "line": 75,
+   "message": "The class fix for secret-sourced AZDO_ORG/AZDO_PROJECT is tested by one hand-picked row: a project containing a space. AZDO_ORG on the secret path is never varied, because run_entry hard-codes AZDO_ORG=o. The table-driven rows only cover the clone-URL path. Add a secret-path table that varies org and project over a raw space, existing %XX, a lone '%', non-ASCII, '?' and '#', and assert both values.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "If line 38 of entrypoint.sh is changed to encode only AZDO_PROJECT, or the non-URL branch stops encoding AZDO_ORG, a secret value of AZDO_ORG='My Org' with a github.com clone URL reaches the pod unencoded. The suite stays green, because the only secret-path row is ENTRY_PROJECT='My Proj' and it expects org 'o'.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/image/entrypoint.sh",
+   "fp": "98ba68998e38",
+   "in_delta": true,
+   "line": 19,
+   "message": "AZDO_REPO is spliced into the same in-pod URLs as AZDO_ORG/AZDO_PROJECT, but it is not passed through url_seg. It comes from the raw clone URL tail or a preset secret value. I could not see the consumers, so this holds only if draft-pr, specclaw-azdo-pr and specclaw-azdo-issue do not encode it themselves. If they don't, apply url_seg to AZDO_REPO too.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "FLEET_REPO_URL=https://dev.azure.com/o/p/_git/My Repo gives AZDO_REPO='My Repo'. Unless a consumer encodes it, the PR/issue URL contains a raw space and the call fails, while org and project now encode correctly.",
+   "severity": "minor"
+  }
+ ],
+ "head": "1deb5ee89d8fdead549a151c6dfa38c5ec65c00b",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 16367,
+ "round": 3,
+ "since": "5d78c145b0",
+ "status": "open",
+ "system_chars": 8938,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794412567,
+ "ts_start": 1794412538
+}

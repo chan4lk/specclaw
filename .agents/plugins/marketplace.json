@@ -38,6 +38,13 @@
         "source": "local",
         "path": "./plugins/specclaw-review"
       }
+    },
+    {
+      "name": "specclaw-fleet",
+      "source": {
+        "source": "local",
+        "path": "./plugins/specclaw-fleet"
+      }
     }
   ]
 }

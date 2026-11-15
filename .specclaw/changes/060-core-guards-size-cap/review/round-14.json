@@ -1,0 +1,102 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 2,
+  "minor": 1
+ },
+ "escalated": [
+  "310dbcb5f446",
+  "61ccb8b6ac24"
+ ],
+ "files": [
+  "plugins/specclaw/CLAUDE.md",
+  "plugins/specclaw/bin/specclaw-verify",
+  "plugins/specclaw/hooks/branch.ts",
+  "plugins/specclaw/hooks/core/base.ts",
+  "plugins/specclaw/hooks/done-guard",
+  "plugins/specclaw/lib/base-ref.sh",
+  "plugins/specclaw/references/full/verify.md",
+  "plugins/specclaw/templates/config.yaml",
+  "plugins/specclaw/tests/base.spec.ts",
+  "plugins/specclaw/tests/fixtures/base-branch.tsv",
+  "plugins/specclaw/tests/run-size-cap-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/lib/base-ref.sh",
+   "fp": "310dbcb5f446",
+   "in_delta": true,
+   "line": 9,
+   "message": "This is an instance fix. Last round's finding asked for one reader of git.base_branch: base-ref.sh sourcing lib/common.sh and calling yaml_val, with branch.ts matching yaml_val. The diff instead makes the two new readers (base_config_branch and baseBranchFrom) agree with each other and leaves yaml_val, which lib/pr-git.sh uses for the base-branch refusal and the PR target, as a third independent copy. The shared tests/fixtures/base-branch.tsv table is fed only to base_config_branch and baseBranchFrom, never to yaml_val, so the copies can still disagree. 'Any indent' is matched to the key at any depth inside the git: block, which is wider than a section.key lookup. Fix: have base_config_branch call yaml_val and make baseBranchFrom follow its rules, or add yaml_val as a third consumer of the same table.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B4",
+   "scenario": "config.yaml has `git:\\n  worktree:\\n    base_branch: develop\\n`. base_config_branch and baseBranchFrom return `develop`, so the size cap and done-guard measure against develop. `yaml_val git.base_branch` is expected to return empty for a key nested under another key, so the PR target and refusal in pr-git.sh fall back to the default branch. The size check and the PR then use different bases.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw/bin/specclaw-verify",
+   "fp": "61ccb8b6ac24",
+   "in_delta": true,
+   "line": 553,
+   "message": "The test-layout fix is still an instance fix. File names are matched in both the singular and plural CamelCase forms (`*Test.*` and `*Tests.*`). Directories are matched only with `*Test/**` (cased) and `*.*tests/**`, which needs a dot. Directories named with a plural CamelCase suffix and no dot (`UnitTests/`, `IntegrationTests/`, `E2ETests/`, `ApiTests/`) fall through and count as production lines. Add `**/*Tests/**` to SIZE_EXCLUDE_CASED, plus rows in ROWS.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "A change adds 500 lines under `src/IntegrationTests/OrderFlow.cs`. No pattern matches `IntegrationTests/`: `**/tests/**` needs the whole name, `**/*.*tests/**` needs a dot, and `*Test/**` needs the name to end in `Test`. The 500 lines count as production, and the size check reports a FAIL for a test-only change.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw/tests/run-size-cap-tests.sh",
+   "fp": "0584a4aaf201",
+   "in_delta": true,
+   "line": 128,
+   "message": "The empty-`size_exclude` test only fails without the `${extra[@]+...}` guard on bash 3.2 to 4.3. On bash 4.4 or newer, including a Linux CI runner and the dev's own `/bin/bash` where it is newer, it prints PASS with the guard deleted. It prints the bash version but does not assert it. When `/bin/bash` is 4.4 or newer, print SKIP (not exercised) instead of PASS.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Delete the `${extra[@]+...}` guard and run the suite on Linux with bash 5. The test still prints `PASS: an empty size_exclude runs under /bin/bash`.",
+   "severity": "minor"
+  }
+ ],
+ "head": "2f17e9d1eb995f06d5e5eb596d415eb42802c91c",
+ "impact": [
+  "plugins/specclaw-bf/bin/specclaw-bf-blueprint",
+  "plugins/specclaw-bf/bin/specclaw-bf-bootstrap",
+  "plugins/specclaw-bf/bin/specclaw-bf-clarify",
+  "plugins/specclaw-bf/bin/specclaw-bf-e2e-run",
+  "plugins/specclaw-bf/bin/specclaw-bf-prototype",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-render",
+  "plugins/specclaw-bf/bin/specclaw-bf-rebuild-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-replay",
+  "plugins/specclaw-bf/bin/specclaw-bf-status",
+  "plugins/specclaw-bf/bin/specclaw-bf-ui",
+  "plugins/specclaw-bf/tests/run-bf-collect-tests.sh",
+  "plugins/specclaw-bf/tests/run-bf-e2e-run-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-byte-identity-tests.sh",
+  "plugins/specclaw-fleet/tests/cases/ac28_pr_target.sh",
+  "plugins/specclaw-fleet/tests/cases/ac35_report.sh",
+  "plugins/specclaw/bin/specclaw-check-staged",
+  "plugins/specclaw/hooks/core/gate.ts",
+  "plugins/specclaw/hooks/register.tsx",
+  "plugins/specclaw/lib/pr-git.sh"
+ ],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 37345,
+ "round": 14,
+ "since": "9042650b70",
+ "status": "escalate",
+ "system_chars": 8871,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794635788,
+ "ts_start": 1794635730
+}

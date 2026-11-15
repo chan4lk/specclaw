@@ -1,0 +1,120 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 3,
+  "minor": 2
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw-mod/README.md",
+  "plugins/specclaw-mod/hooks/core/gate.ts",
+  "plugins/specclaw-mod/tests/gate.spec.ts",
+  "plugins/specclaw-mod/tests/register.test.ts",
+  "plugins/specclaw-mod/tests/run-mod-tests.sh",
+  "plugins/specclaw-mod/tests/state.spec.ts"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw-mod/.claude-plugin/plugin.json",
+   "fp": "e4cc7023c229",
+   "in_delta": true,
+   "line": 1,
+   "message": "The diff changes plugin code (hooks/core/gate.ts, README, tests) under plugins/specclaw-mod/ but bumps no version. Bump specclaw-mod, and every other plugin, to the same version in each plugins/*/.claude-plugin/plugin.json, each plugins/*/.codex-plugin/plugin.json and every plugins[] entry in .claude-plugin/marketplace.json.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "R1",
+   "scenario": "A user installed the previous specclaw-mod version. This gate behaviour change (case-insensitive matching, narrower state.json carve-out) ships under the same version number, so installed copies are never updated.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-mod/tests/run-mod-tests.sh",
+   "fp": "e7804575ea62",
+   "in_delta": true,
+   "line": 19,
+   "message": "The glob `./tests/*.spec.ts` excludes register.test.ts. That file imports 'claude-code/testing' and runs only under `claude plugin test`. When `claude` is not on PATH the script sets RESULT=PARTIAL but still exits 0. A runner that has skipped the only test for the double-dispatch fix therefore reports success. Exit non-zero (or a distinct code) when the claude-based steps did not run, or fail in CI.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B3",
+   "scenario": "A CI runner without `claude` runs run-mod-tests.sh. The bun specs pass, the register test never runs, and the script exits 0. Reverting the register.tsx fix keeps CI green.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-mod/tests/register.test.ts",
+   "fp": "44decadf4ba7",
+   "in_delta": true,
+   "line": 3,
+   "message": "The test covers one failure mode only: the `session.cwd` handler throws. The previous round asked for both a rejecting refresh and a synchronously throwing refresh, because `.catch` does not intercept a synchronous throw. Add rows for both shapes. Assert the returned tool result (`{ result: { stdout: 'ok' } }`), not just `deny === undefined`. The two commands in the loop exercise the same path and add no variant. The test also never runs under `bun test`, so there is no evidence it fails without the fix.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "refresh throws synchronously before returning a promise, after the tool has run. The `.catch` never fires and the error escapes the handler. The test still passes because it only exercises one throw shape and never inspects the result.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-mod/hooks/core/gate.ts",
+   "fp": "07411ba3a5d0",
+   "in_delta": true,
+   "line": 33,
+   "message": "The path is lowercased on every platform. On case-sensitive filesystems (Linux), a sibling directory that differs only in case is a different directory but is now treated as inside the project. The previous finding asked for case-insensitivity on Windows and macOS. Either gate it on platform or document it as a deliberate fail-closed trade-off.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "Linux, cwd=/work/app, path=/work/App/x.ts (an unrelated directory). The gate now denies the edit when no change is approved, where before it returned ALLOW.",
+   "severity": "minor"
+  },
+  {
+   "file": "plugins/specclaw-mod/tests/gate.spec.ts",
+   "fp": "8f17e0fd7afb",
+   "in_delta": true,
+   "line": 18,
+   "message": "The new `/i` flags on EXEMPT and STATE_FILE have no test rows. Add `/repo/.SpecClaw/changes/x/state.json` (deny), `/repo/.specclaw/changes/x/STATE.JSON` (deny) and `/repo/.GIT/config` (allow). Also add a deny row for state.json nested deeper than `changes/<name>/`, since the carve-out is narrower than the old `endsWith('/state.json')`.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Dropping the `i` flag from STATE_FILE leaves every row in AC6 green, even though `.SPECCLAW/changes/x/state.json` would then become editable.",
+   "severity": "minor"
+  }
+ ],
+ "head": "2bd43ae2f8d6657fec0b4a20241f14ebf36a7867",
+ "impact": [
+  "plugins/specclaw-bf/bin/specclaw-bf-analyze-codebase",
+  "plugins/specclaw-bf/bin/specclaw-bf-blueprint",
+  "plugins/specclaw-bf/bin/specclaw-bf-bootstrap",
+  "plugins/specclaw-bf/bin/specclaw-bf-clarify",
+  "plugins/specclaw-bf/bin/specclaw-bf-e2e-run",
+  "plugins/specclaw-bf/bin/specclaw-bf-prototype",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-render",
+  "plugins/specclaw-bf/bin/specclaw-bf-rebuild-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-replay",
+  "plugins/specclaw-bf/bin/specclaw-bf-status",
+  "plugins/specclaw-bf/bin/specclaw-bf-ui",
+  "plugins/specclaw-bf/tests/run-bf-status-tests.sh",
+  "plugins/specclaw-bf/tests/run-blueprint-tests.sh",
+  "plugins/specclaw-bf/tests/run-bootstrap-gate-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-brief-contract-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-byte-identity-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-checklist-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-gates-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-id-permanence-tests.sh"
+ ],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 25256,
+ "round": 3,
+ "since": "e165451d99",
+ "status": "open",
+ "system_chars": 7678,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1793623870,
+ "ts_start": 1793623837
+}

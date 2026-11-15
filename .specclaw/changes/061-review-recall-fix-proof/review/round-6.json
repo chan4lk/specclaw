@@ -1,0 +1,57 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 0
+ },
+ "error": "backend exited 1: ge (https://www.anthropic.com/legal/aup). This sometimes happens with safe, normal conversations. Claude Code can't respond to this message with Opus 5.5.\n\nTry rephrasing the request in a new session or change your model.\n\nLearn more: https://support.claude.com/en/articles/8106465\n\nDetails: `[reasoning_extraction]`\n\nRequest ID: req_011Ch2SnswMNV6ytbgUauMdr\n\nMessage ID: msg_011Ch2Snt5YRjtnJymzWQQeh",
+ "files": [
+  "plugins/specclaw-review/bin/specclaw-review",
+  "plugins/specclaw-review/hooks/hooks.json",
+  "plugins/specclaw-review/hooks/recall",
+  "plugins/specclaw-review/lib/review_core.py",
+  "plugins/specclaw-review/lib/review_memory.py",
+  "plugins/specclaw-review/mcp/server.py",
+  "plugins/specclaw-review/review-rules/base.md",
+  "plugins/specclaw-review/skills/learn/SKILL.md",
+  "plugins/specclaw-review/skills/review/SKILL.md",
+  "plugins/specclaw-review/tests/run-review-tests.sh"
+ ],
+ "final": true,
+ "findings": [],
+ "head": "58aa7c3db7c21309ff3fdc6cc2318c782485755f",
+ "impact": [
+  ".github/workflows/ci.yml",
+  ".github/workflows/fleet-image.yml",
+  "plugins/specclaw-bf/bin/specclaw-bf-domain-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-replay",
+  "plugins/specclaw-bf/tests/run-narration-gate-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-byte-identity-tests.sh",
+  "plugins/specclaw-bf/tests/run-quality-tests.sh",
+  "plugins/specclaw-fleet/lib/dispatch.sh",
+  "plugins/specclaw-fleet/lib/feature-run.sh",
+  "plugins/specclaw-fleet/lib/trigger.sh",
+  "plugins/specclaw-fleet/pipelines/dispatch-hosted.yml",
+  "plugins/specclaw-fleet/pipelines/dispatch.yml",
+  "plugins/specclaw-fleet/tests/cases/ac10_pipeline_refs.sh",
+  "plugins/specclaw-fleet/tests/cases/ac10_pipeline_script.sh",
+  "plugins/specclaw-fleet/tests/cases/ac11_config.sh",
+  "plugins/specclaw-fleet/tests/cases/ac15_delivery.sh",
+  "plugins/specclaw-fleet/tests/cases/ac17_trigger.sh",
+  "plugins/specclaw-fleet/tests/cases/ac18_gate_parity.sh",
+  "plugins/specclaw-fleet/tests/cases/ac22_settings.sh"
+ ],
+ "model": "opus",
+ "passes": [
+  "review"
+ ],
+ "round": 6,
+ "since": null,
+ "status": "not_run",
+ "system_chars": 9632,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794642191,
+ "ts_start": 1794641277
+}

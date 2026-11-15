@@ -1,0 +1,104 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 4,
+  "minor": 1
+ },
+ "escalated": [],
+ "files": [
+  ".github/workflows/fleet-image.yml",
+  "plugins/specclaw-fleet/lib/common.sh",
+  "plugins/specclaw-fleet/lib/dispatch.sh",
+  "plugins/specclaw-fleet/lib/trigger-gates.sh",
+  "plugins/specclaw-fleet/lib/trigger.sh",
+  "plugins/specclaw-fleet/lib/workitem.sh",
+  "plugins/specclaw-fleet/skills/run/SKILL.md",
+  "plugins/specclaw-fleet/tests/cases/ac16_doctor.sh",
+  "plugins/specclaw-fleet/tests/cases/ac17_trigger.sh",
+  "plugins/specclaw-fleet/tests/cases/ac18_gate_parity.sh",
+  "plugins/specclaw-fleet/tests/cases/ac19_env_and_guard.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw-fleet/lib/trigger.sh",
+   "fp": "d1bd33e6fccb",
+   "in_delta": true,
+   "line": 48,
+   "message": "The reorder in `fleet_trigger` moved the approval gate behind two mutating steps. The `--retry` untag calls and `trigger_work_item` (which creates a work item under `--create`) now run before `check_gates` calls `trigger_ref_approved`. Before this round, `trigger_ref_approved` ran first. The SKILL.md claim that trigger 'writes nothing' while checking is false for these two paths. Fix: run `parse_dispatch_args`, `check_gates` and the busy check first. The work-item creation and the untag calls would run only after the gates pass (create when no work item exists; untag only if `--retry` is given). Note that `check_gates` already refuses when there is no work item, so the order needs care for `--create`: run the approval check before creating, then re-run the full gates.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B6",
+   "scenario": "`specclaw-fleet trigger 049-x --create` on a change whose proposal is not approved on origin/main -> `trigger_work_item` creates an Azure Boards work item, and only then does the approval gate die. Before this round it failed before creating anything. Likewise, `trigger 049-x --retry` on a change that then fails a gate clears the `fleet:dispatched` and `fleet:refused` tags, so the refusal record is lost even though nothing was queued.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/lib/trigger.sh",
+   "fp": "42aba3897ea5",
+   "in_delta": true,
+   "line": 36,
+   "message": "`trigger_codex_busy` uses `F_NS`, but `parse_dispatch_args` now skips `parse_pod_inputs` in check-only mode, and that function is what sets the pod/namespace inputs. If `F_NS` is not set elsewhere, kubectl runs with `-n ''` or under `set -u` errors. `-n ''` queries the context's default namespace, so it looks in the wrong place and gets NotFound. A NotFound result returns 0, and the JSON then reports `codex_busy_check: \"done\"`. This is a check that did not really run, reported as clear. Fix: resolve the namespace and hash explicitly for check-only mode, and test that the busy check reads the same namespace dispatch uses.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B3",
+   "scenario": "FLEET_NAMESPACE=fleet, and the assignee's codex Job is active in `fleet`. Trigger runs `kubectl get job fleet-codex-<hash>` in the default namespace -> NotFound -> returns 0 -> the run is queued with `codex_busy_check: done`, and dispatch then finds the slot busy.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/lib/trigger.sh",
+   "fp": "78d15309d339",
+   "in_delta": true,
+   "line": 36,
+   "message": "The busy check is still a second copy of dispatch's logic. `trigger_codex_busy` re-implements the codex-slot check with its own kubectl call, its own NotFound handling and its own 'unknown means pass' fallback, instead of sharing one function with dispatch. The previous round asked for one shared gate sequence, and the claim that trigger 'runs exactly dispatch's gates' does not hold for this gate. Move the busy check into one function called from `check_gates` (with the check-only variant deciding what to do on an unreadable cluster), and delete the trigger copy.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B4",
+   "scenario": "Dispatch changes how it detects a busy slot (for example, it also counts pending pods or a different Job name). Trigger keeps the old rule, reports the slot free and queues the run, and dispatch then refuses it.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/tests/cases/ac18_gate_parity.sh",
+   "fp": "7664b60d6daf",
+   "in_delta": true,
+   "line": 16,
+   "message": "The parity table covers only gate_owner outcomes and 'handled'. The previous round asked for parity across all gate outcomes, including busy. Missing rows: busy codex slot, the credential-missing and Key Vault-unreadable outcomes, an unapproved proposal and a missing work item. The busy-check copy is the one most likely to drift, and no test would notice.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Delete `trigger_codex_busy` from `fleet_trigger`, or make it always return 0 -> every test stays green, yet a busy codex slot is queued as `ok`.",
+   "severity": "major"
+  },
+  {
+   "file": ".github/workflows/fleet-image.yml",
+   "fp": "c1a9fb105d1f",
+   "in_delta": true,
+   "line": 52,
+   "message": "The manifest request's Accept header lists only the OCI index and Docker v2 manifest types. It omits `application/vnd.oci.image.manifest.v1+json` and `application/vnd.docker.distribution.manifest.list.v2+json`. If a registry answers 404 for an existing tag whose media type is not accepted, the guard reads that as 'free' and allows an overwrite. Add the missing media types, or use a HEAD request that accepts all four.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "The existing tag is a plain OCI image manifest (built without provenance) -> a registry that filters on Accept returns 404 -> the guard passes and the tag is overwritten.",
+   "severity": "minor"
+  }
+ ],
+ "head": "9688d159c1f57714b275414f8c37a152ea8b2e07",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 31977,
+ "round": 4,
+ "since": "453a310",
+ "status": "open",
+ "system_chars": 8844,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794062257,
+ "ts_start": 1794062203
+}

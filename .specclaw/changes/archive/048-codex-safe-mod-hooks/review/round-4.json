@@ -1,0 +1,83 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 3
+ },
+ "escalated": [],
+ "files": [
+  ".claude-plugin/marketplace.json",
+  "plugins/specclaw-bf/.claude-plugin/plugin.json",
+  "plugins/specclaw-bf/.codex-plugin/plugin.json",
+  "plugins/specclaw-extras/.claude-plugin/plugin.json",
+  "plugins/specclaw-extras/.codex-plugin/plugin.json",
+  "plugins/specclaw-review/.claude-plugin/plugin.json",
+  "plugins/specclaw-review/.codex-plugin/plugin.json",
+  "plugins/specclaw-sync/.claude-plugin/plugin.json",
+  "plugins/specclaw-sync/.codex-plugin/plugin.json",
+  "plugins/specclaw/.claude-plugin/plugin.json",
+  "plugins/specclaw/.codex-plugin/plugin.json",
+  "plugins/specclaw/CLAUDE.md",
+  "plugins/specclaw/MOD.md",
+  "plugins/specclaw/hooks/hooks.json",
+  "plugins/specclaw/hooks/mod.json",
+  "plugins/specclaw/tests/run-codex-plugin-tests.sh"
+ ],
+ "final": true,
+ "findings": [
+  {
+   "file": "plugins/specclaw/tests/run-codex-plugin-tests.sh",
+   "fp": "9d252a2f4eb9",
+   "in_delta": true,
+   "line": 76,
+   "message": "The hooks.json key check runs only against the repo's real files. Its rejection branches (an extra key such as `modules`, a non-object top level such as `[]`, unparsable JSON) are never run against a fixture. A later edit that broke one of them, for example by dropping the `isinstance` guard or the `2>/dev/null`/exit-status coupling, would go unnoticed while the real files stay clean. Fix: add a small table of temporary hooks.json fixtures (`{\"hooks\":{},\"modules\":[]}`, `[]`, `{bad`), each expected to fail, plus `{\"description\":\"x\",\"hooks\":{}}`, expected to pass. The check does fail on the 0.8.6 tree, so this is not a missing regression test.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "",
+   "severity": "minor"
+  },
+  {
+   "file": "plugins/specclaw/CLAUDE.md",
+   "fp": "28f525486072",
+   "in_delta": true,
+   "line": 194,
+   "message": "The new sentence about Codex and hooks/mod.json is inserted between 'registers hooks/session-start\u2026' and 'It injects skills/using-specclaw/SKILL.md'. 'It' now reads as referring to `.claude-plugin/plugin.json` or the change, not the session-start hook. Move the Codex/mod.json sentence after the additionalContext sentence, or start the next one with 'The hook injects'.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "docs",
+   "scenario": "",
+   "severity": "minor"
+  },
+  {
+   "file": "plugins/specclaw/CLAUDE.md",
+   "fp": "a7cd845b759b",
+   "in_delta": true,
+   "line": 395,
+   "message": "The `run-mod-tests.sh` row changes 'reader' to 'change parsing'. That edit is unrelated to moving the mod into hooks/mod.json, and nothing in this diff supports it. Also, the `run-codex-plugin-tests.sh` row is not updated to mention the two new checks (hooks.json keys Codex accepts, manifest \u2192 hooks/mod.json wiring), although the new prose says that suite checks it. Revert the unrelated wording or justify it, and add the new checks to the suite's row.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B10",
+   "scenario": "",
+   "severity": "minor"
+  }
+ ],
+ "head": "8a273ba47994ca060ea257b1df7f74bd43c8ccd5",
+ "impact": [],
+ "model": "opus",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 22452,
+ "round": 4,
+ "since": null,
+ "status": "clean",
+ "system_chars": 8973,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1793696143,
+ "ts_start": 1793696117
+}

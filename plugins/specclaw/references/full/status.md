@@ -5,7 +5,7 @@
 Show the project dashboard.
 
 1. Refresh: `specclaw-update-status .specclaw`
-2. Read `.specclaw/STATUS.md` and present:
+2. Read the file named in its `OK: Updated <path>` line and present it. On an integration branch (`main`, `master`, `git.base_branch`, `feature/*`) that is `.specclaw/STATUS.md`. On a change branch it is a file inside `.git`, because only integration branches write the committed copy. Present:
    - Active changes with progress %
    - Pending proposals
    - Recently archived changes
@@ -13,3 +13,5 @@ Show the project dashboard.
    - **Unnumbered-folders hint:** `specclaw-update-status` emits one extra line (to stdout, and italicised under the dashboard header) when change folders without a `<NNN>-` prefix exist — the count plus a pointer to `/specclaw-extras:renumber`. Show it verbatim alongside the dashboard. It is a hint, not a prompt: do not ask whether to run the backfill, and expect nothing at all when the count is zero.
 3. For a specific change, run `specclaw-validate-change .specclaw <change> status` to get a per-change snapshot.
 4. **Update check:** run `specclaw-check-update .specclaw`. If it prints a line (a newer plugin version is published), show that line verbatim after the dashboard; if it prints nothing, say nothing. The script is fail-silent and gated by `plugin.update_check` in config.yaml — never treat its absence of output as an error.
+5. **Tip:** when two or more approved changes are not built yet, run `specclaw-suggest .specclaw fleet` and show any line it prints, at most once per session; if the user says no, run `specclaw-suggest .specclaw --dismiss fleet`.
+6. **Tip:** when a change is in `build` or `verify`, run `specclaw-suggest .specclaw dash` and show any line it prints, at most once per session; if the user says no, run `specclaw-suggest .specclaw --dismiss dash`.

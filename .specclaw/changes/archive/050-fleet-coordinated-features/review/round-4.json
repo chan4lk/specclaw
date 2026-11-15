@@ -1,0 +1,28 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 0
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw-fleet/tests/cases/ac29_feature_state.sh"
+ ],
+ "final": false,
+ "findings": [],
+ "head": "6bc933d147b9517a9d4b4839cded5b450a06659f",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 12411,
+ "round": 4,
+ "since": "9d987f2a682618e64669495828cc7c59d8b4da30",
+ "status": "clean",
+ "system_chars": 9042,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794208625,
+ "ts_start": 1794208614
+}

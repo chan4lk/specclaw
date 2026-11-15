@@ -1,0 +1,121 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 2,
+  "minor": 3
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw-dash/README.md",
+  "plugins/specclaw-dash/hooks/core/loops.ts",
+  "plugins/specclaw-dash/hooks/core/scan.ts",
+  "plugins/specclaw-dash/hooks/read.ts",
+  "plugins/specclaw-dash/tests/pane.test.tsx",
+  "plugins/specclaw-dash/tests/run-mod-tests.sh",
+  "plugins/specclaw/tests/run-suggest-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw-dash/hooks/core/loops.ts",
+   "fp": "5b54366697e5",
+   "in_delta": true,
+   "line": 84,
+   "message": "The new comment says this is 'the same validity check' as specclaw-fleet's parseReport. It is not. The fleet parser also requires every key in TOTALS to be numeric (see the fleet report.spec row 'totals missing a count'), while this copy checks only running, prs_open and jobs. This diff adds a second copy of the rule that can disagree with the first, and the comment hides that. Either validate the same set of keys, or state that dash deliberately accepts less. Add a row to loops.spec.ts for a missing `rows` and a missing other total; the diff adds no test for the new `rows` check.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B4",
+   "scenario": "A report with version 1, a valid generated_at, rows: [] and totals {running:1, prs_open:0, jobs:1} but no review_rounds \u2192 fleet's own pane says 'report unreadable', while dash shows an ok fleet line from the same file.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-dash/tests/pane.test.tsx",
+   "fp": "2d60ef9b03f8",
+   "in_delta": true,
+   "line": 151,
+   "message": "The role() fix (cache only a parsed agentType, retry otherwise) has one test, for a meta file that is absent at first. The class has more variants: a meta read that throws, malformed JSON, valid JSON without agentType, and a meta that appears later. The pruning of `roles` alongside `scans` has no test either. Make the test table-driven over these variants, and add a case showing that a successfully cached type is not re-read.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "If the catch were changed to cache null on a thrown read, or on bad JSON, the only test (absent meta) would still pass. The wrong 'subagent' billing would stick for those variants without any test failing.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-dash/hooks/read.ts",
+   "fp": "7bd414594a93",
+   "in_delta": true,
+   "line": 89,
+   "message": "`resolveHead(...).catch(() => null)` swallows a failed HEAD read silently. null is also the value for 'no reviewed changes', so 'could not ask' and 'nothing to ask' share one value, and no card or note surfaces the failure. No test drives the HEAD-error path or the new fileText stat branch (a folder at HEAD, a stat that throws). Surface an unknown state for HEAD and add rows for those cases.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B3",
+   "scenario": "A read of .git/HEAD throws \u2192 head is null with no indication. How reviewRow treats null decides whether rounds are shown as current or stale.",
+   "severity": "minor"
+  },
+  {
+   "file": "plugins/specclaw/tests/run-suggest-tests.sh",
+   "fp": "6ed88112bcd0",
+   "in_delta": true,
+   "line": 115,
+   "message": "The previous finding named plugins/specclaw/lib/plugins.sh as the place to suppress the dash tip on Codex. This diff changes only the test and does not touch plugins.sh, so the fix cannot be verified from the diff. The row also covers only two Codex env vars (CODEX_THREAD_ID, CODEX_SANDBOX) and not the other signal the finding suggested, CLAUDE_PLUGIN_ROOT unset. Confirm that plugins.sh already suppresses the tip, and add a row for any other host signal it relies on.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "If plugins.sh has no Codex guard, `CODEX_THREAD_ID=t sug \"$S\" dash` still prints the Install tip and this new row fails. If the guard keys on another variable, such as CODEX_HOME, the row does not cover it.",
+   "severity": "minor"
+  },
+  {
+   "file": "plugins/specclaw-dash/tests/run-mod-tests.sh",
+   "fp": "c0ebf64980fc",
+   "in_delta": true,
+   "line": 15,
+   "message": "The AC-7 check is a pipeline of `grep -r ... | grep -v ...`. If the grep over hooks fails (wrong PLUGIN_DIR, missing directory), it prints nothing, grep -v exits 1, and the script reports PASS. A check that did not run reads as a pass. Test that the directory exists first, or count the matches and require at least one.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B3",
+   "scenario": "PLUGIN_DIR points at a path with no hooks directory \u2192 grep exits 2 with no output \u2192 'PASS: AC-7 ...'.",
+   "severity": "minor"
+  }
+ ],
+ "head": "513168c0e512ed1662c2ec5a4f406cc6c46e0e75",
+ "impact": [
+  "')\"",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-replay",
+  "plugins/specclaw-bf/tests/run-quality-tests.sh",
+  "plugins/specclaw-bf/tests/run-replay-classification-tests.sh",
+  "plugins/specclaw-dash/hooks/core/view.ts",
+  "plugins/specclaw-dash/tests/loops.spec.ts",
+  "plugins/specclaw-dash/tests/view.spec.ts",
+  "plugins/specclaw-fleet/hooks/core/report.ts",
+  "plugins/specclaw-fleet/hooks/core/view.ts",
+  "plugins/specclaw-fleet/hooks/register.tsx",
+  "plugins/specclaw-fleet/lib/report-render.sh",
+  "plugins/specclaw-fleet/lib/report.html",
+  "plugins/specclaw-fleet/tests/cases/ac35_report.sh",
+  "plugins/specclaw-fleet/tests/cases/ac36_report_output.sh",
+  "plugins/specclaw-fleet/tests/fixtures.ts",
+  "plugins/specclaw-fleet/tests/partial.spec.ts",
+  "plugins/specclaw-fleet/tests/report.spec.ts",
+  "plugins/specclaw-fleet/types/index.d.ts",
+  "plugins/specclaw/bin/specclaw-quality-scan"
+ ],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 30316,
+ "round": 4,
+ "since": "38880b2",
+ "status": "open",
+ "system_chars": 8938,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794639066,
+ "ts_start": 1794639020
+}

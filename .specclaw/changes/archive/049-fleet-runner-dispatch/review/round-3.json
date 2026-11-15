@@ -1,0 +1,110 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 2,
+  "minor": 2
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw-fleet/README.md",
+  "plugins/specclaw-fleet/image/writeback.sh",
+  "plugins/specclaw-fleet/k8s/egress-proxy.yaml",
+  "plugins/specclaw-fleet/k8s/00-namespace.yaml",
+  "plugins/specclaw-fleet/k8s/network-policy.yaml",
+  "plugins/specclaw-fleet/lib/common.sh",
+  "plugins/specclaw-fleet/lib/launch.sh",
+  "plugins/specclaw-fleet/lib/manifest.sh",
+  "plugins/specclaw-fleet/lib/vault.sh",
+  "plugins/specclaw-fleet/lib/workitem.sh",
+  "plugins/specclaw-fleet/pipelines/dispatch.yml",
+  "plugins/specclaw-fleet/tests/cases/ac10_manifests.sh",
+  "plugins/specclaw-fleet/tests/cases/ac4_gates.sh",
+  "plugins/specclaw-fleet/tests/cases/ac5_launch.sh",
+  "plugins/specclaw-fleet/tests/cases/ac6_codex_serial.sh",
+  "plugins/specclaw-fleet/tests/cases/ac8_writeback.sh",
+  "plugins/specclaw-fleet/tests/lib/dispatch-env.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw-fleet/tests/cases/ac6_codex_serial.sh",
+   "fp": "031cb56b8c7b",
+   "in_delta": true,
+   "line": 24,
+   "message": "The finished-Job race test is not deterministic. It starts two dispatches and relies on scheduling to interleave them between the `get job` read and the delete. The stub has no hook that forces worker B to read the old UID, worker A to delete and create, and worker B to then attempt its delete. If the UID precondition is removed or replaced by an unconditional delete, this test passes whenever B's delete lands before A's create or after B's own read. Add a deterministic test: seed a finished Job with an old UID, make the stub swap in a new claim with a new UID between the read and the `delete --raw`, then assert the delete is refused and the new claim survives. The stub already checks `preconditions.uid`, so only the interleaving hook is missing.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B7",
+   "scenario": "Revert `delete_job_if_uid` to an unconditional delete. Run `race_finished` on a seeded finished Job. B reads `finished old-uid` before A creates, and A's delete and create finish before B's delete. A repeated run can still pass when the two workers happen not to overlap. The suite does not reliably catch a regression of the precondition, which is the fix's core claim.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/tests/cases/ac10_manifests.sh",
+   "fp": "a72394bd5ecb",
+   "in_delta": true,
+   "line": 31,
+   "message": "The test for the dispatch.yml fix only greps the pipeline source for the literal text `could not list changed state files\"; exit 1`. It never runs the step with a failing `git diff`, and it checks no variants such as a shallow clone with no HEAD^1 or a git error. A textual match is not a test of behaviour. Extract the step's script, or run it with a stubbed `git` that exits non-zero, and assert a non-zero exit with the error logged.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Change the line to `git diff ... > \"$changed\" || true  # could not list changed state files\"; exit 1` or move the message into a comment. The grep stays green while a failed diff again exits 0 with 'nothing approved'.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/pipelines/dispatch.yml",
+   "fp": "289503eb8970",
+   "in_delta": false,
+   "line": 43,
+   "message": "The fix covers only the `git diff` listing. The same step has a second 'could not ask' path. `status_at` runs `git show ... 2>/dev/null | jq ...`, and any git or jq failure yields an empty status. The loop's `continue` then reads that as 'not approved' and skips the item, and the step exits 0. Check `git cat-file -e` and the jq exit status separately. Treat 'file absent at HEAD^1' as empty, and any other failure as an error that sets failed=1.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": true,
+   "rule": "B3",
+   "scenario": "`jq` is missing from the agent image, or `git show HEAD:<f>` fails. An approved state.json gives an empty status, `[[ ... == approved ]]` is false, the item is skipped, and the pipeline succeeds without ever dispatching.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/lib/launch.sh",
+   "fp": "5956a45d6b81",
+   "in_delta": true,
+   "line": 21,
+   "message": "`kubectl get ... | jq` returns jq's exit status. A `get` that fails for a reason other than NotFound (API error, RBAC) therefore gives `state=\"\"` and is treated the same as 'no Job'. Likewise `delete_job_if_uid` swallows every delete failure with `|| true`. Dispatch then proceeds to create and may surface AlreadyExists as 'unfinished codex job', which is the wrong reason. Check `PIPESTATUS`, and only treat NotFound as an empty slot.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B3",
+   "scenario": "A transient 500 on `get job` while a finished Job exists. State is empty, no delete runs, the create gets AlreadyExists, and the assignee is told they have an unfinished codex job when the real cause was an API error.",
+   "severity": "minor"
+  },
+  {
+   "file": "plugins/specclaw-fleet/lib/launch.sh",
+   "fp": "5a06a0d71dc6",
+   "in_delta": true,
+   "line": 23,
+   "message": "The 'finished' test still treats `.status.failed > 0` as finished, even when `.status.active > 0`. With a backoffLimit above 0, a retrying Job has failed=1 and active=1. It would be deleted and replaced while a pod is still using the auth.json. Prefer the Complete/Failed conditions alone, or require `active == 0`. The new `{\"failed\":1}` test row asserts the risky behaviour.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "A codex Job with backoffLimit > 0 has one failed pod and a retry pod running. The status is `{failed:1, active:1}`, so the next dispatch deletes the running Job and starts a second concurrent run on the same auth.json.",
+   "severity": "minor"
+  }
+ ],
+ "head": "7c52959c9a192af5d074612460533287a0edd5fa",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 33676,
+ "round": 3,
+ "since": "36857c9",
+ "status": "open",
+ "system_chars": 8920,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794042302,
+ "ts_start": 1794042235
+}

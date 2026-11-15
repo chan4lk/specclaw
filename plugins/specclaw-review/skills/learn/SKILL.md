@@ -10,7 +10,8 @@ Rules are never written silently. Every write needs the human's yes.
 ## Promote recurring lessons
 
 1. Run `specclaw-review learn` (or call the `learn_propose` MCP tool). It is a dry-run that lists the lessons
-   seen two or more times, each with its fingerprint.
+   seen in `review.learn_threshold` (default 3) or more changes, each with its fingerprint. The review loop
+   counts a lesson once per change.
 2. Show the list to the user. For each lesson, ask whether a **guard test** (an automated check) would be better
    than a prose rule. A guard is what actually changes behaviour; a rule only reminds the reviewer. If they want
    a guard, propose it as a new change instead.

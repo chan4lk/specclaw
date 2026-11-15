@@ -1,0 +1,44 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 1
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw/bin/specclaw-suggest",
+  "plugins/specclaw/lib/plugins.sh",
+  "plugins/specclaw/tests/run-suggest-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/bin/specclaw-suggest",
+   "fp": "b001fe40794b",
+   "in_delta": true,
+   "line": 47,
+   "message": "The reader now handles CRLF, but the --dismiss writer does not. It prints the rewritten `  dismissed: [...]` line with a bare LF (carrying over a CR only when the line had a comment), and the plugins block it appends to a bare config is LF too. The CRLF test rows hide this by piping the output through `tr -d \"\\r\"` before grepping. Fix: detect CR on the original `dismissed:` or `plugins:` line and append it to the emitted line, and add a CRLF assertion that does not strip CR (for example `grep -c $'\\r$'` equals the line count).",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "config.yaml saved with CRLF containing `plugins:\\r\\n  dismissed: [review]\\r\\n`; run `specclaw-suggest <dir> --dismiss bf` -> the file ends up with `plugins:\\r\\n  dismissed: [review, bf]\\n`, mixed line endings. The new CRLF rows still pass because they strip CR first.",
+   "severity": "minor"
+  }
+ ],
+ "head": "03a8e23b4610feab5ba991f6f8d8c7a8b751aaee",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 15339,
+ "round": 15,
+ "since": "6b77eb5",
+ "status": "clean",
+ "system_chars": 8904,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794635772,
+ "ts_start": 1794635751
+}

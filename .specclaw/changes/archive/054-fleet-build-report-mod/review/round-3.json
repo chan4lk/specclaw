@@ -1,0 +1,43 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 0
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw-fleet/lib/report.sh",
+  "plugins/specclaw-fleet/tests/cases/ac35_report.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw-fleet/tests/cases/ac35_report.sh",
+   "fp": "5783b92d84cf",
+   "in_delta": true,
+   "line": 46,
+   "message": "The `row could not be built` case does not isolate its cause, and nothing tests the actual fix in report.sh. The old `${j:-\\{\\}}` expanded to the literal `\\{\\}` whenever `status_job` printed nothing. That made `--argjson j` fail, so every dispatched or running change with no job output got a `?` row with the note `row could not be built`. The new test uses a dispatched record, so `status_job` runs, and then asserts that same note. It would pass with the old code for that reason alone, without `agent_started:5` having any effect. No case asserts that a dispatched change with empty `status_job` output now gets a normal, non-`?` row. That assertion is the one that fails without the `[[ -n \"$j\" ]] || j='{}'` fix. Add a table case for dispatched and running records whose `status_job` stub prints nothing, and assert the row's state is not `?`. Give the `row could not be built` case a failure that does not depend on `j`, such as a stub `status_job` that prints valid `{}`, and assert that the record shape alone triggers the note. Also check that the other `--argjson` inputs (`r`, `p`, `b`) are normalised the same way, since an empty `b` from a failed `api_obj` gives the same failure.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "A dispatched change whose `status_job` prints nothing. Before the fix, the row was `?` with note `row could not be built`. After the fix, it is a normal row. The added test uses a dispatched record and expects the `?` note, so it is green for the old bug too and proves nothing about the fix. Reverting the `j` default leaves the new tests green.",
+   "severity": "major"
+  }
+ ],
+ "head": "9dbca6c35e3c8fdf7c2489e853739e2958daa918",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 12835,
+ "round": 3,
+ "since": "fae66012c3",
+ "status": "open",
+ "system_chars": 8934,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794242327,
+ "ts_start": 1794242309
+}

@@ -1,0 +1,71 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 2,
+  "minor": 0
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw-fleet/lib/feature-run.sh",
+  "plugins/specclaw-fleet/lib/feature-state.sh",
+  "plugins/specclaw-fleet/tests/cases/ac29_feature_state.sh",
+  "plugins/specclaw-fleet/tests/cases/ac30_feature_advance.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw-fleet/lib/feature-state.sh",
+   "fp": "86c9ae334484",
+   "in_delta": true,
+   "line": 7,
+   "message": "The running check now runs before the PR read and before the merge-by-ancestry check, and it looks only at records[0].state. The finding asked for 'newest record is dispatched/running AND newer than the PR record'. Without that condition, any dispatched/running record hides a merged PR, a completed PR, a refusal, and a hand merge. A stale dispatched/running record (for example a pod that died without finalising) reports the member as running forever, and its dependents stay waiting. Before this change, merged and failed were checked first. Fix: return running only when the record is newer than the PR record, or when the PR is in conflict. Keep the merged checks ahead of it.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "002-a's PR into feature/cat is completed, or origin/specclaw/002-a is an ancestor of origin/feature/cat, and records[0] is a stale 'running' record -> member_base now returns running instead of merged. 003-b (depends on 002-a) never becomes ready.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/lib/feature-state.sh",
+   "fp": "139893cf526a",
+   "in_delta": false,
+   "line": 6,
+   "message": "The fix is applied to the work-item read and the PR read, but the records read still treats a failure as an empty result: `recs=... || recs='{\"records\":[]}'`. A failed or junk records read means no running, failed, or PR information. The member then falls through to pending/ready and is dispatched again, or is reported as not-opted-in. Fix: if records fails or is not an object with a records array, echo `?` and return.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": true,
+   "rule": "B3",
+   "scenario": "`azdo_issue records` fails (network error) for a member whose dispatch is in flight -> recs is empty -> no running detected -> consent ok -> state pending/ready -> advance dispatches it a second time.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/tests/cases/ac29_feature_state.sh",
+   "fp": "449ddafdacf7",
+   "in_delta": true,
+   "line": 37,
+   "message": "The new tests cover one variant per fix and not the class. For the unreadable PR read, only the case where the stub has no PR is tested. A non-object body, an object without `status`, and a record state of `dispatched` are not tested. For the unreadable work item in advance, only an HTML body is tested. A `show` that exits non-zero, and valid JSON that is not an object, are not tested. Removing `has(\"status\")` or the `type == \"object\"` check would leave the tests green. Add table-driven variants.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "azdo_rest returns `{}` or `[]` with exit 0 -> the has(\"status\") guard is the only thing preventing a wrong verdict, and no test fails if it is deleted.",
+   "severity": "major"
+  }
+ ],
+ "head": "4dae74094d07dc2eb76e98694de91b5908967557",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 18416,
+ "round": 2,
+ "since": "737b5d3",
+ "status": "open",
+ "system_chars": 8935,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794208135,
+ "ts_start": 1794208112
+}

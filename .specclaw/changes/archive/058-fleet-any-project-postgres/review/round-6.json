@@ -1,0 +1,46 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 1
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw-fleet/README.md",
+  "plugins/specclaw-fleet/image/entrypoint.sh",
+  "plugins/specclaw-fleet/lib/podspec.sh",
+  "plugins/specclaw-fleet/tests/cases/ac32_postgres_sidecar.sh",
+  "plugins/specclaw-fleet/tests/cases/ac7_entrypoint.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw-fleet/image/entrypoint.sh",
+   "fp": "c087ed8a70a5",
+   "in_delta": true,
+   "line": 24,
+   "message": "The org/project parse covers `<org>/<project>/_git/<repo>` and the legacy `.visualstudio.com` form. It still misses the project-less Azure DevOps clone URL, where the project is implied by the repo name: `https://dev.azure.com/<org>/_git/<repo>` and `https://<org>.visualstudio.com/_git/<repo>`. Those URLs fall through silently to the shared secret's org and project, which is the defect class this change fixes. Add a branch for the project-less form (org from the URL, project = repo name) and add table rows for both hosts. If those clone URLs are deliberately unsupported, make the pod warn instead of staying silent.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "FLEET_REPO_URL=https://dev.azure.com/acme/_git/proj -> neither regex matches, so AZDO_ORG/AZDO_PROJECT keep the fleet-azdo secret's values (e.g. other-org/other-proj) and the draft PR is created in the wrong project, with no warning.",
+   "severity": "minor"
+  }
+ ],
+ "head": "eb8904234bcd7ad7dfb77fd648eeec3304ed76ef",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 20141,
+ "round": 6,
+ "since": "88449ba468",
+ "status": "clean",
+ "system_chars": 8926,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794413488,
+ "ts_start": 1794413468
+}

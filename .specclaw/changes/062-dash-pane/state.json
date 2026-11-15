@@ -1,0 +1,13 @@
+{
+  "change": "062-dash-pane",
+  "phase": "build",
+  "branch": "",
+  "size": "architectural",
+  "phases": {
+    "proposal": {"status":"approved","at":"2026-11-14T04:47:17Z"},
+    "spec": {"status":"done","at":"2026-11-14T06:36:44Z"},
+    "design": {"status":"done","at":"2026-11-14T06:36:44Z"},
+    "tasks": {"status":"done","at":"2026-11-14T06:36:44Z"},
+    "build": {"status":"done","at":"2026-11-14T06:43:52Z"}
+  }
+}

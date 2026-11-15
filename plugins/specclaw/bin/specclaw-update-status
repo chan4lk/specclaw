@@ -1,19 +1,36 @@
 #!/usr/bin/env bash
 # Regenerate STATUS.md dashboard from current state
-# Usage: specclaw-update-status <specclaw_dir>
+# Usage: specclaw-update-status [--integration] <specclaw_dir>
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PARSE_TASKS="$SCRIPT_DIR/specclaw-parse-tasks"
 
+INTEGRATION=0
+[ "${1:-}" = "--integration" ] && { INTEGRATION=1; shift; }
 SPECCLAW_DIR="$1"
 CHANGES_DIR="$SPECCLAW_DIR/changes"
 ARCHIVE_DIR="$CHANGES_DIR/archive"
-STATUS_FILE="$SPECCLAW_DIR/STATUS.md"
 
 # Read project name from config
 PROJECT_NAME=$(grep 'name:' "$SPECCLAW_DIR/config.yaml" | head -1 | sed 's/.*name: *"\(.*\)"/\1/')
+
+# Only integration branches write the committed STATUS.md (057): change
+# branches all rewriting it made every parallel merge conflict on it. Elsewhere
+# the same dashboard goes inside .git, where nothing can commit it.
+status_file() {
+  local branch base
+  [ "$INTEGRATION" = 1 ] && { echo "$SPECCLAW_DIR/STATUS.md"; return; }
+  git -C "$SPECCLAW_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 || { echo "$SPECCLAW_DIR/STATUS.md"; return; }
+  branch="$(git -C "$SPECCLAW_DIR" symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+  base="$(cfg_val git base_branch)"
+  case "$branch" in
+    main|master|feature/?*) echo "$SPECCLAW_DIR/STATUS.md"; return ;;
+  esac
+  [ -n "$branch" ] && [ "$branch" = "$base" ] && { echo "$SPECCLAW_DIR/STATUS.md"; return; }
+  git -C "$SPECCLAW_DIR" rev-parse --path-format=absolute --git-path specclaw-STATUS.md
+}
 
 # ─── PR state (FR14) ─────────────────────────────────────────────────────────
 # A change that is already in review must never render as "awaiting planning".
@@ -390,6 +407,7 @@ if [ "$UNNUMBERED_COUNT" -gt 0 ]; then
   HINT_LINE=$'\n\n'"_${HINT_TEXT}_"
 fi
 
+STATUS_FILE="$(status_file)"
 cat > "$STATUS_FILE" << EOF
 # 🦞 SpecClaw Dashboard
 

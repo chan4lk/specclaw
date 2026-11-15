@@ -1,0 +1,90 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 2
+ },
+ "escalated": [],
+ "files": [
+  ".claude-plugin/marketplace.json",
+  "plugins/specclaw-bf/.claude-plugin/plugin.json",
+  "plugins/specclaw-bf/.codex-plugin/plugin.json",
+  "plugins/specclaw-extras/.claude-plugin/plugin.json",
+  "plugins/specclaw-extras/.codex-plugin/plugin.json",
+  "plugins/specclaw-fleet/.claude-plugin/plugin.json",
+  "plugins/specclaw-fleet/.codex-plugin/plugin.json",
+  "plugins/specclaw-fleet/README.md",
+  "plugins/specclaw-fleet/image/entrypoint.sh",
+  "plugins/specclaw-fleet/lib/manifest.sh",
+  "plugins/specclaw-fleet/lib/podspec.sh",
+  "plugins/specclaw-fleet/lib/settings.sh",
+  "plugins/specclaw-fleet/skills/setup/SKILL.md",
+  "plugins/specclaw-fleet/tests/cases/ac22_settings.sh",
+  "plugins/specclaw-fleet/tests/cases/ac32_postgres_sidecar.sh",
+  "plugins/specclaw-fleet/tests/cases/ac7_entrypoint.sh",
+  "plugins/specclaw-fleet/tests/lib/entry-env.sh",
+  "plugins/specclaw-review/.claude-plugin/plugin.json",
+  "plugins/specclaw-review/.codex-plugin/plugin.json",
+  "plugins/specclaw-sync/.claude-plugin/plugin.json",
+  "plugins/specclaw-sync/.codex-plugin/plugin.json",
+  "plugins/specclaw/.claude-plugin/plugin.json",
+  "plugins/specclaw/.codex-plugin/plugin.json"
+ ],
+ "final": true,
+ "findings": [
+  {
+   "file": "plugins/specclaw-fleet/image/entrypoint.sh",
+   "fp": "324e504a40d4",
+   "in_delta": true,
+   "line": 21,
+   "message": "The org and project are read from the clone URL only when it has the form `https://[user@]dev.azure.com/<org>/<project>/_git/<repo>`. Two other forms of the same Azure DevOps URL fall through silently to the shared secret's org and project. The first is the legacy host `https://<org>.visualstudio.com[/DefaultCollection]/<project>/_git/<repo>`, which `Build.Repository.Uri` still returns for older orgs. The second is any change of case in the host (`Dev.Azure.com`). In both cases the pod quietly uses the wrong project, which is the defect this change exists to fix. The new test pins the wrong result (`https://acme.visualstudio.com/proj/_git/r>o|p`). Fix: also parse the `<org>.visualstudio.com` form (org from the subdomain, with an optional `DefaultCollection/`) and match the host case-insensitively. Add those rows to the `azdo_project_from_url` table.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "FLEET_REPO_URL=https://acme.visualstudio.com/Proj2/_git/r and the fleet-azdo secret has AZDO_PROJECT=Proj1 \u2192 the pod exports AZDO_PROJECT=Proj1. draft-pr and the specclaw-azdo-pr/-issue calls then target Proj1, where repo r does not exist, so the PR is never created.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw-fleet/lib/podspec.sh",
+   "fp": "b51d5e40086c",
+   "in_delta": true,
+   "line": 61,
+   "message": "The README says the sidecar serves Postgres on `127.0.0.1`. The official postgres image's entrypoint sets `listen_addresses='*'`, so the server also listens on the pod IP, with a known default password. Any pod that can route to this one could reach the test database. Pass `args: [-c, listen_addresses=127.0.0.1]` (the startup probe already uses 127.0.0.1) so the code matches the docs.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B10",
+   "scenario": "",
+   "severity": "minor"
+  },
+  {
+   "file": "plugins/specclaw-fleet/tests/cases/ac32_postgres_sidecar.sh",
+   "fp": "a8c9732c3f9f",
+   "in_delta": true,
+   "line": 22,
+   "message": "`sidecar_before_agent` checks only PGHOST and PGPORT in the agent's env and only the `pgdata` volume. It does not check that the agent gets PGUSER, PGPASSWORD and PGDATABASE, or that the `pgrun` and `pgtmp` volumes the sidecar mounts are declared. Dropping any of them would leave the test green. Assert them all, with non-default user, password and db values so the defaults cannot mask a mix-up.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "",
+   "severity": "minor"
+  }
+ ],
+ "head": "88449ba4680cb047ae98dc4ec7ceafb714ffb627",
+ "impact": [],
+ "model": "opus",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 43895,
+ "round": 5,
+ "since": null,
+ "status": "open",
+ "system_chars": 8943,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794413049,
+ "ts_start": 1794412977
+}

@@ -1,0 +1,45 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 0
+ },
+ "escalated": [
+  "665da5c52149"
+ ],
+ "files": [
+  "plugins/specclaw/bin/specclaw-suggest",
+  "plugins/specclaw/tests/run-suggest-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/tests/run-suggest-tests.sh",
+   "fp": "665da5c52149",
+   "in_delta": true,
+   "line": 69,
+   "message": "The new test does not prove the fix. The reported defect was a non-atomic in-place write, where `cat \"$tmp\" > \"$CONFIG\"` truncates the config before any data is written. The old `cat >` code already followed a symlink and kept the file mode, so the added symlink-and-mode test passes on both the old and new code. No test drives a failure after the target is opened for writing, and no test checks that the target is replaced by rename or that the original survives a late failure. The new link-resolution loop also has untested branches. Only one relative symlink one level deep is covered, so the absolute-target branch (`/*) target=\"$l\"`), chained links, `../` relative links and a link into another directory are not exercised. Add table-driven rows that fail without the fix, for example a write that fails after the target is opened, asserting the original bytes are intact and no `config.yaml.??????` temp is left behind. Add link rows for relative, absolute and chained targets.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Revert bin/specclaw-suggest to `cat \"$tmp\" > \"$CONFIG\"` with no link loop \u2192 the symlink test still passes, since the redirect follows the link and the mode is unchanged. Separately, delete the `/*) target=\"$l\"` branch \u2192 a config symlinked by absolute path now resolves to a wrong path under the link's directory, `-w` fails, and the dismissal is reported as failed, yet no test fails.",
+   "severity": "major"
+  }
+ ],
+ "head": "4894ecdebfef7e324d7b2dc142bd1d4a9785d68a",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 13723,
+ "round": 9,
+ "since": "b7644df",
+ "status": "escalate",
+ "system_chars": 8932,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794633722,
+ "ts_start": 1794633704
+}

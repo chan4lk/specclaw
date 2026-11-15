@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+# done-guard — Stop hook (change 060; ported from ION-TBML-SUITE's .claude/hooks/done-guard.sh).
+#
+# For each active change touched on this branch (since the merge-base with the base branch,
+# committed, uncommitted or untracked) whose tasks are all done, name each step still missing:
+# a PASS verify verdict, one not older than the last commit outside .specclaw/ (so it is for HEAD),
+# and, when specclaw-review is on PATH, a clean review verdict. What is missing goes to stderr
+# with exit 2, which keeps the turn going with it as the reason.
+#
+# A wrong guard traps the turn, so every other path exits 0: a Stop this hook already holds
+# (stop_hook_active), no .specclaw/config.yaml in the cwd or the git toplevel, and any internal error (which is shown to the
+# user as a systemMessage, never passed off as "nothing missing"). Without a base to diff
+# against, every active change is checked (never fewer). Registered for Claude Code only, in
+# hooks/mod.json: nothing shows Codex accepts a Stop command hook in hooks/hooks.json.
+
+input="$(cat)"
+grep -qE '"stop_hook_active"[[:space:]]*:[[:space:]]*true' <<<"$input" && exit 0
+if ! HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; then
+  printf '{"systemMessage": "specclaw: the done guard did not run (it could not find its plugin folder), so nothing was checked."}\n'
+  exit 0
+fi
+
+# Output protocol of missing(): "hold <text>" names a missing step (exit 2); "skip <change>: <reason>"
+# comes only from skip(), the one way a change may go unchecked, and always reaches the user.
+# The event's cwd (python3 reads the JSON; without it, or with no cwd, the process cwd).
+cwd="$(python3 -c 'import json, sys; print(json.load(sys.stdin).get("cwd") or "")' <<<"$input" 2>/dev/null)" || cwd=""
+[ -n "$cwd" ] && [ -d "$cwd" ] || cwd="$PWD"
+
+skip() { printf 'skip %s: %s\n' "$1" "$2"; }
+
+missing() (
+  set -euo pipefail
+  # The project is the hook's cwd (the event's, as the mod uses) when it holds .specclaw/, else the git
+  # toplevel. Neither having .specclaw/config.yaml means not a specclaw project: exit 0 quietly.
+  cd "$cwd"
+  if [ -f .specclaw/config.yaml ]; then root="$PWD"; else root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0; fi
+  [ -f "$root/.specclaw/config.yaml" ] || exit 0
+  [ -d "$root/.specclaw/changes" ] || exit 0
+  # shellcheck disable=SC1091  # sourced lib, resolved at runtime
+  . "$HERE/lib/base-ref.sh"
+  cd "$root"
+  read -r mb _ <<<"$(base_merge_base "$root")"
+  if [ -n "$mb" ] && [ "$mb" != - ]; then
+    touched="$({ git diff --relative --name-only "$mb" -- .specclaw/changes; git ls-files --others --exclude-standard -- .specclaw/changes; } | cut -d/ -f3 | sort -u)"
+  else
+    touched="$(ls .specclaw/changes)"
+  fi
+  for name in $touched; do
+    dir=".specclaw/changes/$name"
+    late="" dirty=""
+    # Not an active change (the archive folder, or a folder moved away on this branch): nothing to check.
+    if [ "$name" = archive ] || [ ! -d "$dir" ]; then continue; fi
+    tasks="$dir/tasks.md"
+    [ -f "$tasks" ] || tasks="$dir/change.md"
+    if [ ! -f "$tasks" ]; then continue; fi   # not planned yet, so not done: the rule, not a skip
+    if ! counts="$("$HERE/bin/specclaw-parse-tasks" --count "$tasks" 2>&1)" || ! [[ "$counts" =~ ^[0-9]+\ [0-9]+\ [0-9]+\ [0-9]+$ ]]; then
+      skip "$name" "its tasks file could not be counted (${counts##*$'\n'})"
+      continue
+    fi
+    read -r finished total _ deferred <<<"$counts"
+    if [ "$total" -eq 0 ] || [ $((finished + deferred)) -ne "$total" ]; then continue; fi   # not done: the rule
+    # A real JSON read: state.json is pretty-printed by specclaw-set-phase, and a line grep is not a parser.
+    # No state.json is "no verify verdict". One that cannot be read (bad JSON, wrong shape, no python3) is
+    # held with its last error line: never read as a verdict.
+    if [ ! -f "$dir/state.json" ]; then
+      fields="- - -"
+    elif ! fields="$(python3 -c 'import json, sys
+d = json.load(open(sys.argv[1]))
+v = d.get("phases", {}).get("verify") or {}
+if not isinstance(v, dict): sys.exit("phases.verify is not an object")
+print(*(v.get(k) or "-" for k in ("status", "verdict", "at")))' "$dir/state.json" 2>&1)"; then
+      echo "hold specclaw: $name has every task done, but its state.json could not be read (${fields##*$'\n'}). Fix it, then run /specclaw:verify."
+      continue
+    fi
+    read -r status verdict at <<<"$fields"
+    if [ "$status" = - ]; then
+      echo "hold specclaw: $name has every task done, but no verify verdict. Run /specclaw:verify."
+    elif [ "$verdict" != PASS ] && { [ "$verdict" != - ] || { [ "$status" != passed ] && [ "$status" != "done" ]; }; }; then
+      [ "$verdict" = - ] && verdict="$status"
+      echo "hold specclaw: $name has every task done, but its verify verdict is $verdict, not PASS. Fix it and re-run /specclaw:verify."
+    elif [ "$at" = - ]; then
+      echo "hold specclaw: $name has every task done, but its verify verdict has no time, so it cannot be tied to HEAD. Re-run /specclaw:verify."
+    elif ! late="$(git rev-list -1 --since="$at" HEAD -- . ':(exclude).specclaw' 2>&1)" \
+      || ! dirty="$(git status --porcelain -- . ':(exclude).specclaw' 2>&1)"; then
+      skip "$name" "git could not compare its verify with HEAD (${late##*$'\n'}${dirty:+; ${dirty##*$'\n'}})"
+    elif [ -n "$late" ]; then
+      echo "hold specclaw: $name has every task done, but code was committed after its verify (${late:0:10}). Re-run /specclaw:verify for HEAD."
+    elif [ -n "$dirty" ]; then
+      echo "hold specclaw: $name has every task done, but there are uncommitted or untracked changes outside .specclaw/ since its verify. Commit them and re-run /specclaw:verify."
+    fi
+    if command -v specclaw-review >/dev/null; then
+      # One line: only lines starting "hold " or "skip " are read back.
+      review="$(specclaw-review verdict --change "$name" 2>&1)" \
+        || echo "hold specclaw: $name has every task done, but its review is not clean: $(tr '\n' ' ' <<<"${review:-no verdict}" | sed 's/ *$//'). Run the specclaw-review loop."
+    fi
+  done
+)
+
+# An internal error still exits 0 (never trap the turn), but says so: a systemMessage on stdout is shown
+# to the user without blocking, so "could not check" never reads as "nothing missing".
+json_text() { tr -d '"\\\000-\037'; }
+err="$(mktemp)" || err=/dev/null
+# A plain assignment, not `if`/`||`: in a conditional context bash ignores set -e inside missing().
+report="$(missing 2>"$err")"
+rc=$?
+if [ "$rc" -ne 0 ]; then
+  last="$(tail -n 1 "$err" | json_text)"
+  [ "$err" = /dev/null ] || rm -f "$err"
+  printf '{"systemMessage": "specclaw: the done guard did not run (%s), so nothing was checked."}\n' "${last:-internal error}"
+  exit 0
+fi
+[ "$err" = /dev/null ] || rm -f "$err"
+holds="$(sed -n 's/^hold //p' <<<"$report")"
+skips="$(sed -n 's/^skip \(.*\)$/specclaw: the done guard skipped \1./p' <<<"$report")"
+if [ -n "$holds" ]; then
+  # Exit 2 shows stderr only, so the skips ride along there.
+  printf '%s\n' "$holds" ${skips:+"$skips"} >&2
+  exit 2
+fi
+[ -n "$skips" ] || exit 0
+printf '{"systemMessage": "%s"}\n' "$(json_text <<<"${skips//$'\n'/ }")"
+exit 0
