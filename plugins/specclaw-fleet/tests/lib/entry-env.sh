@@ -19,6 +19,8 @@ stub git '[[ "$1" == -C && "$3" == merge-base ]] && { [[ -z "${NOT_ANCESTOR:-}" 
 [[ "$1" == -C && "$3" == rev-parse && "$4" == --abbrev-ref ]] && { [[ -s "$TMP/onbranch" ]] && { cat "$TMP/onbranch"; exit 0; }; echo "${ON_BRANCH-specclaw/049-x}"; exit 0; }
 [[ "$1" == -C && "$3" == rev-parse ]] && { echo deadbeef; exit 0; }
 [[ "$1" == -C && "$3" == rev-list ]] && { echo "${REVLIST-3}"; exit 0; }
+[[ "$1" == -C && "$3" == repack ]] && { echo repack >> "$TMP/pushes"; exit 0; }
+[[ "$1" == -C && "$3" == push ]] && { echo push >> "$TMP/pushes"; (( $(grep -c push "$TMP/pushes") > ${PUSH_FAILS:-0} )) && exit 0; printf "%s\n" "${PUSH_ERR:-fatal: push failed}" >&2; exit 1; }
 [[ "$1" == -C && "$3" == ls-remote && -n "${LS_FAIL:-}" ]] && exit 128
 [[ "$1" == -C && "$3" == fetch && -n "${FETCH_FAIL:-}" ]] && exit 128
 [[ "$1" == -C && "$3" == merge ]] && { [[ -n "${MERGE_CONFLICT:-}${MERGE_BROKEN:-}" ]] && exit 1; [[ -n "${MERGE_BRINGS_PASS:-}" ]] && echo pass > "$2/.specclaw/features/049-x/integration-result"; exit 0; }
@@ -56,7 +58,7 @@ stub codex 'sleep "${AGENT_SLEEP:-0}"; exit "${AGENT_RC:-0}"'
 export TMP REAL_AZDO=""
 
 run_entry() {
-  rm -rf "${TMP:?}/status" "${TMP:?}/work" "${TMP:?}/home" "${TMP:?}/onbranch"
+  rm -rf "${TMP:?}/status" "${TMP:?}/work" "${TMP:?}/home" "${TMP:?}/onbranch" "${TMP:?}/pushes"
   mkdir -p "$TMP/status" "$TMP/work" "$TMP/home" "$TMP/seed"
   : > "$CALLS"
   printf 'oat-token' > "$TMP/cred"

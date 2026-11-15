@@ -52,7 +52,8 @@ deliver() {
   local branch pr draft line
   local -a stats=()
   while IFS= read -r line; do stats+=("$line"); done < <(safe_stats)
-  branch="$(push_change_branch)"
+  branch="$(push_change_branch)" || { show_agent_log
+    record state=failed exit=push-failed "push_error=$(cat "$STATUS/push-error" 2>/dev/null)" "${stats[@]}"; finish 4; }
   read -r pr draft < <(ensure_pr "$branch")
   show_agent_log
   record "state=$([[ -n "$pr" ]] && echo pr_open || echo failed)" "exit=$1" "branch=$branch" "pr=${pr:-none}" "draft=${draft:-false}" "${stats[@]}"
