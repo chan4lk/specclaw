@@ -1,6 +1,6 @@
-# Status: 065-core-context-gate-task-sizing
+# Status: 061-review-recall-fix-proof
 
-**Change:** 065-core-context-gate-task-sizing
+**Change:** 061-review-recall-fix-proof
 **Started:** 2026-11-14
 **Last Updated:** 2026-11-14
 
@@ -10,11 +10,11 @@
 |-------|--------|-------|
 | Proposal | ✅ Approved |  |
 | Spec | ✅ Done |  |
-| Design | ✅ Done |  |
+| Design | ⏳ Pending | |
 | Tasks | ✅ Done |  |
-| Build | ✅ Done |  |
-| Verify | ✅ Passed | PASS |
-| PR | ✅ Raised | https://github.com/chan4lk/specclaw/pull/134 |
+| Build | ⏳ Pending | |
+| Verify | ⏳ Pending | |
+| Archived | ✅ Done |  |
 
 ## Task Progress
 
@@ -28,4 +28,4 @@
 |------|-------|-------|--------|----------|--------|
 
 ## Issues
-**GitHub Issue:** #127
+**GitHub Issue:** #123
