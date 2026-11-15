@@ -7,6 +7,13 @@ parse_pod_inputs() {
   F_PULL_SECRET="${FLEET_IMAGE_PULL_SECRET:-}"
   [[ -z "$F_PULL_SECRET" || "$F_PULL_SECRET" =~ ^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$ ]] \
     || die "FLEET_IMAGE_PULL_SECRET is not a valid secret name"
+  F_BUNDLE_CLAIM="${FLEET_BUNDLE_CLAIM:-}" F_PUSH_ATTEMPTS="${FLEET_PUSH_ATTEMPTS:-}"
+  [[ -z "$F_BUNDLE_CLAIM" || "$F_BUNDLE_CLAIM" =~ ^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$ ]] \
+    || die "FLEET_BUNDLE_CLAIM is not a valid claim name"
+  [[ -z "$F_PUSH_ATTEMPTS" || "$F_PUSH_ATTEMPTS" =~ ^[1-9]$ ]] || die "FLEET_PUSH_ATTEMPTS must be a whole number from 1 to 9"
+  # a ReadWriteOnce claim binds to one node, so every Job must land on the same labelled node
+  [[ -z "$F_BUNDLE_CLAIM" || -n "${FLEET_NODE_LABEL:-}" ]] \
+    || die "fleet.bundle_claim is set but fleet.node_label is not; a ReadWriteOnce claim needs every Job pinned to one node"
   F_MODE="${FLEET_MODE:-}" F_MERGE_REF="${FLEET_MERGE_REF:-}" F_PR_TARGET="${FLEET_PR_TARGET:-}"
   [[ -z "$F_MODE" || "$F_MODE" == integrate ]] || die "FLEET_MODE must be empty or integrate"
   local r; for r in "$F_MERGE_REF" "$F_PR_TARGET"; do
@@ -34,6 +41,7 @@ render_run_env() {
   [[ -n "$F_MODE" ]] && printf '            - {name: FLEET_MODE, value: %s}\n' "$(yaml_str "$F_MODE")"
   [[ -n "$F_MERGE_REF" ]] && printf '            - {name: FLEET_MERGE_REF, value: %s}\n' "$(yaml_str "$F_MERGE_REF")"
   [[ -n "$F_PR_TARGET" ]] && printf '            - {name: FLEET_PR_TARGET, value: %s}\n' "$(yaml_str "$F_PR_TARGET")"
+  [[ -n "${F_PUSH_ATTEMPTS:-}" ]] && printf '            - {name: FLEET_PUSH_ATTEMPTS, value: "%s"}\n' "$F_PUSH_ATTEMPTS"
   return 0
 }
 
@@ -91,4 +99,30 @@ render_pg_env() {
 render_pg_volumes() {
   [[ -n "${F_PG_IMAGE:-}" ]] || return 0
   printf '\n        - {name: pgdata, emptyDir: {}}\n        - {name: pgrun, emptyDir: {}}\n        - {name: pgtmp, emptyDir: {}}'
+}
+
+# subPath <org>/<project>/<repo>/<change>: path segments of the repo URL without _git and .git,
+# padded on the left with the host's first label (github.com/o/r gives github/o/r).
+bundle_subpath() {
+  local host path seg out=""; local -a segs=() keep=()
+  path="${F_REPO#*://}" host="${path%%/*}" path="${path#"$host"}"
+  IFS=/ read -ra segs <<<"$path"
+  for seg in "${segs[@]}"; do [[ -z "$seg" || "$seg" == _git ]] || keep+=("${seg%.git}"); done
+  while (( ${#keep[@]} < 3 )); do keep=("${host%%.*}" "${keep[@]}"); done
+  for seg in "${keep[@]: -3}" "$F_CHANGE"; do
+    seg="$(printf '%s' "$seg" | tr -c 'A-Za-z0-9._-' '_')"
+    [[ "$seg" =~ ^\.*$ ]] && seg="_$seg"
+    out+="${out:+/}$seg"
+  done
+  printf '%s' "$out"
+}
+
+render_bundle_mount() {
+  [[ -n "${F_BUNDLE_CLAIM:-}" ]] || return 0
+  printf '\n            - {name: bundles, mountPath: /fleet/bundles, subPath: %s}' "$(yaml_str "$(bundle_subpath)")"
+}
+
+render_bundle_volume() {
+  [[ -n "${F_BUNDLE_CLAIM:-}" ]] || return 0
+  printf '\n        - {name: bundles, persistentVolumeClaim: {claimName: %s}}' "$F_BUNDLE_CLAIM"
 }

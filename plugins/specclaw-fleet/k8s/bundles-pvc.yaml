@@ -1,0 +1,11 @@
+# Optional: apply when fleet.bundle_claim is set. ReadWriteOnce binds to one node, so fleet.node_label is then required.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fleet-bundles
+  namespace: specclaw-fleet
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi

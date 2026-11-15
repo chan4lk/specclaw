@@ -1,7 +1,7 @@
 # shellcheck shell=bash
-FLEET_SETTING_KEYS="vault cluster_name namespace image claude_version default_agent deadline_minutes pipeline pipeline_file remote ref image_pull_secret node_label postgres_image postgres_port postgres_user postgres_password postgres_db"
-FLEET_SECURE_KEYS="vault image postgres_image namespace node_label image_pull_secret claude_version deadline_minutes cluster_name"
-FLEET_NUMERIC_KEYS="deadline_minutes"
+FLEET_SETTING_KEYS="vault cluster_name namespace image claude_version default_agent deadline_minutes pipeline pipeline_file remote ref image_pull_secret node_label postgres_image postgres_port postgres_user postgres_password postgres_db push_attempts bundle_claim"
+FLEET_SECURE_KEYS="vault image postgres_image namespace node_label image_pull_secret claude_version deadline_minutes cluster_name bundle_claim"
+FLEET_NUMERIC_KEYS="deadline_minutes push_attempts"
 
 setting_var() {
   printf 'FLEET_%s' "$(tr '[:lower:]' '[:upper:]' <<<"$1")"

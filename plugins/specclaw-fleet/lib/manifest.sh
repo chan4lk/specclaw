@@ -51,7 +51,7 @@ $(render_run_env)
             - {name: status, mountPath: /fleet/status}
             - {name: cred, mountPath: /run/fleet, readOnly: true}
             - {name: codex, mountPath: /fleet/codex}
-            - {name: tmp, mountPath: /tmp}
+            - {name: tmp, mountPath: /tmp}$(render_bundle_mount)
       containers:
         - name: writeback
           image: $F_IMAGE
@@ -75,6 +75,6 @@ $(render_run_env)
         - {name: codex, emptyDir: {}}
         - {name: tmp, emptyDir: {}}
         - {name: wbhome, emptyDir: {}}
-        - {name: cred, secret: {secretName: $F_SECRET_OBJ}}$(render_pg_volumes)
+        - {name: cred, secret: {secretName: $F_SECRET_OBJ}}$(render_pg_volumes)$(render_bundle_volume)
 YAML
 }
