@@ -1,0 +1,35 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 0
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw/lib/budget.py",
+  "plugins/specclaw/tests/run-context-gate-tests.sh"
+ ],
+ "final": false,
+ "findings": [],
+ "head": "1d4aece50f2f959e771d6a4ce0460751e17988c2",
+ "impact": [
+  "plugins/specclaw/bin/specclaw-init",
+  "plugins/specclaw/bin/specclaw-loop",
+  "plugins/specclaw/bin/specclaw-pr",
+  "plugins/specclaw/bin/specclaw-quality-scan",
+  "plugins/specclaw/hooks/context-gate"
+ ],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 13673,
+ "round": 5,
+ "since": "f6a459ad41",
+ "status": "clean",
+ "system_chars": 8884,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794657896,
+ "ts_start": 1794657882
+}

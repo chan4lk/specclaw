@@ -189,6 +189,41 @@ decoy block above `party:` carries every scalar key the script reads. Without th
 regression to `yaml_val` passes by luck — nothing in the fixture would collide — while the shipped
 `config.yaml` silently reads the wrong section. The decoys *are* the test; do not tidy them away.
 
+## The context gate: a hook holds subagents to their role's cap
+
+A subagent cannot see its own token count, and agents that bundled several jobs into one launch
+peaked at 160k–269k context while quality fell long before (ION-TBML-SUITE ADR-0017, decisions 33,
+35, 43). `hooks/context-gate` (change 065, ported from TBML's `dl-gate.py`) is a `PreToolUse`
+command hook in `hooks/mod.json`, so Claude Code only. For a subagent call it reads the agent's own
+transcript (`<transcript_path minus .jsonl>/subagents/agent-<agent_id>.jsonl`) backwards for the last
+call's context, and compares it with the role's cap:
+
+- **Role:** the `role=` on the prompt's first line `specclaw budget: role=<role> context=<n>`,
+  else the agent type after its last `:` when the table names it, else `general` (decision 42).
+  A stated role or context that does not parse is an error: the call goes through, loudly.
+  The main session is never capped.
+- **Cap:** the stated `context=` clamped to half..double the role's *shipped* default, else
+  `budget.roles.<role>.context`, else the default (`builder-*` and `general` 200000,
+  `code-reviewer` 150000).
+- **At 90%:** `budget.gate: warn` (shipped) tells the agent and the user to commit and run
+  `specclaw-budget handover`, and denies nothing. `block` denies every call except Bash whose
+  every command is `git add/commit/status/diff/log`, `cd`, `head`, `tail` or `specclaw-budget handover` (quoted
+  text is blanked first, so a commit message may hold anything; a part holding a redirect other
+  than fd duplication or `/dev/null`, or `--output`, is denied). It is a quality cap on a cooperative
+  agent, not a sandbox. `off` reads nothing.
+
+It **fails open and loud** (decision 49): any exception exits 0 with a `systemMessage` and a line in
+`~/.claude/specclaw/gate.jsonl` (rotated past 1 MiB; ids and numbers only). A bad `budget:` value is
+a warning and its default stands. It ships `warn` because a wrong `block` stops every subagent;
+this repo's own config stays on the default.
+
+`budget:` is read and written only by `lib/budget.py` (via `specclaw-budget`), block-scoped like
+`party_val`. `run-context-gate-tests.sh` carries a decoy `context:` key in another block; keep it.
+Plan sizes each task with `specclaw-budget estimate` (26000 + file characters / 2.2, plus the typed
+diff) and splits any over 60000; build dispatches the agent type `brief` names
+(`builder-frontend` on Sonnet or `builder-backend` on Opus, by `budget.routing`) and `record`s the
+estimate against the transcript peak in `timeline.jsonl`.
+
 ## Session bootstrap (the `SessionStart` hook)
 
 `hooks/hooks.json` registers `hooks/session-start` on `startup|clear|compact`. Codex reads this file too and refuses any key but `description` and `hooks`, so the Claude Code mod is loaded from `hooks/mod.json` instead, which only `.claude-plugin/plugin.json` names (change 048; `run-codex-plugin-tests.sh` checks it). `hooks/mod.json` also registers `hooks/done-guard` as a `Stop` hook for Claude Code only (change 060): nothing shows Codex accepts a `Stop` command hook, so it stays out of `hooks/hooks.json`. It injects
@@ -265,6 +300,7 @@ All executable scripts live in `bin/`. Key ones:
 | `specclaw-check-staged` | The staged-files gate: four buckets, `--json`, `--strict`. Exit 1 on a BLOCK, 2 on a usage error — a caller must be able to tell "this PR is wrong" from "you called me wrong" |
 | `specclaw-build` | Build orchestration: `setup` / `commit` / `finalize` / `worktree-path` / `synth-agent` / `check-report` (**the evidence gate on `done`**) / `review-package` (prepare one task's diff for a task-scoped review; read-only w.r.t. git) |
 | `specclaw-set-size` | The one-way size ratchet (`spike → bounded → architectural`). Refuses downgrades and no-ops **by name**; does not write `state.json` itself — it re-records the current phase through `specclaw-set-phase`, which stays the only writer |
+| `specclaw-budget` | Context caps by role (change 065): `roles --json` / `set` (**the only reader and writer of the `budget:` block**, and a fixed contract with 063's dash) / `estimate` (task sizing) / `brief` (agent type and budget line) / `record` (estimate vs transcript peak) / `handover`. Python 3, shares `lib/budget.py` with `hooks/context-gate`. Exit 1 refused, 2 usage |
 | `specclaw-party` | Adversarial proposal panel: `panel` (resolve the roster) / `tally` (compute the verdict) / `report` (assemble `party-report.md`) / `get` (**the only reader of the `party:` block**) — see below |
 | `specclaw-bf-status` | Per-**phase** brownfield dashboard to stdout: one row per `bf-*` phase, the open items holding each back, and the next command. `--next` prints the same computation as the compact guidance block every lifecycle `bf-*` skill appends to its own summary — the next human **action**, the next **command**, and a short attention list. **This is the single source of the `bf-*` lifecycle ordering**; no skill may work out its own next phase. Writes nothing in either mode — no file, no cache, no archive entry. jq optional. Complements `specclaw-bf-rebuild-collect module-status`, which is the per-**module** view and *is* a written artifact |
 | `specclaw-bf-bootstrap` | Target-foundation stage: `collect` (validate + resolve the required decisions) / `gate` (foundation-only boundary) / `smoke` / `record` / `foundation-check` (the gate `/specclaw:propose` reads) / `not-applicable` |
@@ -396,6 +432,7 @@ Suites live in `tests/`, are bash + coreutils only (no jq in the suites themselv
 | `run-timing-tests.sh` | the span round-trip, eight concurrent writers losing nothing, the unclosed span, both report formats, `agent-runs`, enclosing spans not double-counting, the baseline present and absent, the anomaly threshold either side, `enabled: false`, a corrupt ledger line, and `run-long` with and without `--change` |
 | `run-staged-files-tests.sh` | the four buckets against real git repos: the missing artifact, the undeclared ripple under default and `--strict`, the junk sweep, both escape hatches, the size-aware artifact set, exit-code separation, the loop's scoped add against an untracked junk file, and that no PR-creation command lives in build |
 | `run-done-guard-tests.sh` | `hooks/done-guard` (change 060) against real git repos: exit 2 naming the step for a touched, all-done change with no verify, a FAIL verify, code committed after verify or a non-clean review stub; exit 0 for PASS at HEAD, untouched changes, open tasks, `stop_hook_active`, no config and an internal error |
+| `run-context-gate-tests.sh` | `hooks/context-gate` and `specclaw-budget` (change 065) on transcript fixtures: `roles --json` and `set` against a decoy `context:` key, the silent paths, `warn` and `block` at 90% (a commit with `;` and `&&` in its message passes, `git add . && rm x` does not), role and clamp, fail-open paths, `estimate` / `brief` / `record` / `handover`, and the registration |
 | `run-size-cap-tests.sh` | `specclaw-verify size` (change 060): the default exclusions, untracked and deleted lines, the split note, the cap, the waiver, `size_cap: 0` and `size_exclude` |
 | `run-mod-tests.sh` | the Claude Code mod (`hooks/register.tsx`, see `MOD.md`): bun tests for `hooks/core/` (change parsing, band/pane/status text, gate decision with the base-branch check, and the `git.base_branch` reader against `tests/fixtures/base-branch.tsv`, which `run-size-cap-tests.sh` also feeds to `lib/base-ref.sh`), then `claude plugin validate` and `claude plugin test` driving the real hooks, including the `warn` default and the fail-open path. Needs `bun` and `claude` |
 `shellcheck-gate.sh` fails CI on any shellcheck finding absent from `shellcheck-baseline.txt` (pairs of `<path> <SCxxxx>`, no line numbers, so unrelated edits do not churn it). Fix a new finding or add a targeted `# shellcheck disable=SCxxxx` with a rationale — never silence one by appending to the baseline. It skips with exit 0 when shellcheck is not installed, so the suite still runs locally.
