@@ -1,6 +1,6 @@
-# Status: 064-sync-clean-status-release-gate
+# Status: 065-core-context-gate-task-sizing
 
-**Change:** 064-sync-clean-status-release-gate
+**Change:** 065-core-context-gate-task-sizing
 **Started:** 2026-11-14
 **Last Updated:** 2026-11-14
 
@@ -14,6 +14,8 @@
 | Tasks | ✅ Done |  |
 | Build | ✅ Done |  |
 | Verify | ✅ Passed | PASS |
+| PR | ✅ Raised | https://github.com/chan4lk/specclaw/pull/134 |
+| Archived | ✅ Done |  |
 
 ## Task Progress
 
@@ -27,4 +29,4 @@
 |------|-------|-------|--------|----------|--------|
 
 ## Issues
-**GitHub Issue:** #126
+**GitHub Issue:** #127

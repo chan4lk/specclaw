@@ -1,6 +1,6 @@
-# Status: 061-review-recall-fix-proof
+# Status: 062-dash-pane
 
-**Change:** 061-review-recall-fix-proof
+**Change:** 062-dash-pane
 **Started:** 2026-11-14
 **Last Updated:** 2026-11-14
 
@@ -10,10 +10,11 @@
 |-------|--------|-------|
 | Proposal | ✅ Approved |  |
 | Spec | ✅ Done |  |
-| Design | ⏳ Pending | |
+| Design | ✅ Done |  |
 | Tasks | ✅ Done |  |
-| Build | ⏳ Pending | |
+| Build | ✅ Done |  |
 | Verify | ⏳ Pending | |
+| Archived | ✅ Done |  |
 
 ## Task Progress
 
@@ -27,4 +28,4 @@
 |------|-------|-------|--------|----------|--------|
 
 ## Issues
-**GitHub Issue:** #123
+**GitHub Issue:** #124

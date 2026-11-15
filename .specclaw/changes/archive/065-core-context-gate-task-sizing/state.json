@@ -1,6 +1,6 @@
 {
   "change": "065-core-context-gate-task-sizing",
-  "phase": "pr",
+  "phase": "archived",
   "branch": "",
   "size": "architectural",
   "phases": {
@@ -10,6 +10,7 @@
     "tasks": {"status":"done","at":"2026-11-14T11:53:58Z"},
     "build": {"status":"done","at":"2026-11-14T11:59:12Z"},
     "verify": {"status":"passed","at":"2026-11-14T12:18:38Z","verdict":"PASS"},
-    "pr": {"status":"raised","at":"2026-11-14T12:19:00Z","url":"https://github.com/chan4lk/specclaw/pull/134"}
+    "pr": {"status":"raised","at":"2026-11-14T12:19:00Z","url":"https://github.com/chan4lk/specclaw/pull/134"},
+    "archived": {"status":"done","at":"2026-11-15T10:14:12Z"}
   }
 }
