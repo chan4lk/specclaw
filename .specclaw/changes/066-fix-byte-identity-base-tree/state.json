@@ -1,0 +1,9 @@
+{
+  "change": "066-fix-byte-identity-base-tree",
+  "phase": "proposal",
+  "branch": "",
+  "size": "bounded",
+  "phases": {
+    "proposal": {"status":"approved","at":"2026-11-15T11:04:10Z"}
+  }
+}
