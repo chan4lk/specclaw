@@ -45,15 +45,18 @@ push_change_branch() {
 # After a fully failed push, keeps BUNDLE_BASE..<change branch> in the per-change bundle folder (FR-7); prints saved or none.
 # Base first, then bundle, each renamed into place. A failed save keeps an older pair only while it still verifies.
 save_bundle() {
-  local b d="$BUNDLE_DIR"
+  local b d="$BUNDLE_DIR" kept=""
   b="$(change_branch)"
-  [[ ! -f "$d/work.bundle" || -z "$b" ]] || bundle_held "refs/heads/$b" || set_bundle_aside || { echo none; return 0; }
+  if [[ -f "$d/work.bundle" && -n "$b" ]] && ! bundle_held "refs/heads/$b"; then
+    kept="$(set_bundle_aside)" || { echo none; return 0; }
+    kept=",kept=$kept"
+  fi
   [[ -n "${BUNDLE_BASE:-}" && -n "$b" && -d "$d" && -w "$d" ]] && printf '%s\n' "$BUNDLE_BASE" > "$d/work.base.tmp" \
     && git -C "$REPO" bundle create "$d/work.bundle.tmp" "$BUNDLE_BASE..refs/heads/$b" >/dev/null 2>&1 \
-    && mv -f "$d/work.base.tmp" "$d/work.base" && mv -f "$d/work.bundle.tmp" "$d/work.bundle" && { echo saved; return 0; }
+    && mv -f "$d/work.base.tmp" "$d/work.base" && mv -f "$d/work.bundle.tmp" "$d/work.bundle" && { echo "saved$kept"; return 0; }
   rm -f "$d"/work.{bundle,base}.tmp 2>/dev/null
   [[ ! -f "$d/work.bundle" ]] || git -C "$REPO" bundle verify "$d/work.bundle" >/dev/null 2>&1 || rm -f "$d"/work.{bundle,base} 2>/dev/null
-  echo none
+  echo "none$kept"
 }
 
 # True when <ref> holds every tip in the saved bundle, or the file is no bundle at all.
@@ -65,11 +68,14 @@ bundle_held() {
   done <<<"$heads"
 }
 
-# A saved bundle with commits the branch lacks is never overwritten: it moves to kept-<time>.* for the operator.
+# A saved bundle with commits the branch lacks is never overwritten: it moves to kept-<time>-<pid>-<n>.* for the operator, and the record says kept=<name>.
 set_bundle_aside() {
   local k
-  k="$BUNDLE_DIR/kept-$(date -u +%Y%m%dT%H%M%SZ)"
-  mv -f "$BUNDLE_DIR/work.bundle" "$k.bundle" && { mv -f "$BUNDLE_DIR/work.base" "$k.base" 2>/dev/null; echo "WARNING: set aside $k.bundle: it holds commits this branch does not" >&2; }
+  k="$BUNDLE_DIR/kept-$(date -u +%Y%m%dT%H%M%SZ)-$$-$RANDOM"
+  mv -n "$BUNDLE_DIR/work.bundle" "$k.bundle" 2>/dev/null && [[ ! -e "$BUNDLE_DIR/work.bundle" ]] || return 1
+  mv -n "$BUNDLE_DIR/work.base" "$k.base" 2>/dev/null
+  echo "WARNING: set aside $k.bundle: it holds commits this branch does not" >&2
+  printf '%s' "${k##*/}"
 }
 
 # After a good push the pair goes only when HEAD holds every tip in the bundle, or it is no bundle at all; else it is kept.

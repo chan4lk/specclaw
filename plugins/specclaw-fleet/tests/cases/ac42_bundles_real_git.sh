@@ -34,6 +34,30 @@ fresh_clone; dv_out="$(cat "$TMP/out")"; dv_head="$(g rev-parse HEAD)"; : > "$TM
 # Still diverged, and this run's own push fails: the diverged bundle is set aside, never overwritten.
 c5="$(commit c5)"; ds_save="$(save_bundle 2>/dev/null)"; ds_kept="$(g bundle list-heads "$B"/kept-*.bundle 2>/dev/null | cut -d' ' -f1)"
 ds_new="$(g bundle list-heads "$B/work.bundle" | cut -d' ' -f1)"; ds_bases="$(cat "$B"/kept-*.base 2>/dev/null)"; rm -f "$B"/kept-*
+# Table: what a failed push does to an older bundle (the branch is at c5, on c4 on c2).
+KEPT='saved,kept=kept-[0-9TZ]+-[0-9]+-[0-9]+'
+old() { g branch -q -f old_in "$c2"; g branch -q -f old_out "$c3"; echo "$c0" > "$B/work.base"; g bundle create -q "$B/work.bundle" "$@" ^origin/main; }
+aside_row() {
+  local out n keep=""; rm -rf "${B:?}"/*; "old_$1"; [[ "$4" == ro ]] && chmod a-w "$B"
+  out="$(save_bundle 2>/dev/null)"; chmod u+w "$B"; n="$(find "$B" -name 'kept-*.bundle' | wc -l | tr -d ' ')"
+  [[ "$4" == ro ]] && keep="$(g bundle list-heads "$B/work.bundle" | cut -d' ' -f1)"
+  [[ "$out" =~ ^$2$ && "$n" == "$3" && ( "$4" != ro || "$keep" == "$c3" ) ]] || { echo "row $1: out=$out kept=$n"; return 1; }
+}
+old_contained() { old old_in; }
+old_diverged() { old old_out; }
+old_two_heads() { old old_in old_out; }
+old_junk() { echo junk > "$B/work.bundle"; }
+c0="$(g rev-parse origin/main)"; aside_rows=0
+while read -r row want kept mode; do
+  [[ "$mode" == ro && "$(id -u)" == 0 ]] && { echo "SKIP: $row (running as root, the folder stays writable)"; continue; }
+  aside_row "$row" "$want" "$kept" "$mode" || aside_rows=1
+done <<ROWS
+contained saved 0 rw
+diverged $KEPT 1 rw
+two_heads $KEPT 1 rw
+junk saved 0 rw
+diverged none 0 ro
+ROWS
 # Behind: the bundle tip (c3's branch rebuilt as c2) is already in the remote; no warning, and the push deletes it.
 rm -f "$B"/work.*; g checkout -q -B tmp "$c2"; g branch -q -f "$BR" "$c2"; BUNDLE_BASE="$(g rev-parse origin/main)" save_bundle >/dev/null
 fresh_clone; bh_out="$(cat "$TMP/out")"; bh_head="$(g rev-parse HEAD)"; pushed_ok; bh_left="$(ls "$B")"
@@ -51,7 +75,8 @@ diverged() {
   grep -q "WARNING: saved bundle $B/work.bundle has diverged" <<<"$dv_out" && [[ "$dv_head" == "$c4" && "$dv_left" == "work.base work.bundle " ]] \
     && grep -q "WARNING: kept $B/work.bundle" <<<"$dv_push" && git -C "$ORIGIN" merge-base --is-ancestor "$c2" "$c4" && [[ -n "$c3" ]]
 }
-set_aside() { [[ "$ds_save" == saved && "$ds_kept" == "$c3" && "$ds_new" == "$c5" && -n "$ds_bases" ]]; }
+set_aside() { [[ "$ds_save" =~ ^$KEPT$ && "$ds_kept" == "$c3" && "$ds_new" == "$c5" && -n "$ds_bases" ]]; }
+aside_table() { [[ "$aside_rows" == 0 ]]; }
 behind() { [[ "$bh_head" == "$c4" && -z "$bh_left" ]] && ! grep -q "saved bundle" <<<"$bh_out"; }
 not_ancestor() { grep -q "is not a commit id that is an ancestor" <<<"$na_out" && [[ "$na_head" == "$c4" && -z "$junk_left" ]]; }
 
@@ -59,6 +84,7 @@ check "real git: a failed push saves a bundle that verifies, with the clone's ba
 check "real git: remote branch behind the bundle fast-forwards to it, and the good push deletes the bundle" fast_forwards
 check "real git: a bundle that diverged from the remote branch is warned about and kept after the push" diverged
 check "real git: a failed push never overwrites a bundle holding commits the branch lacks; it is set aside" set_aside
+check "real git: older bundle table: contained or unreadable is replaced; diverged or several heads is set aside and recorded; a set-aside that cannot move it saves nothing" aside_table
 check "real git: a bundle already in the remote branch resumes nothing and is deleted after the push" behind
 check "real git: a base outside this history is ignored; a file that is not a bundle is deleted after a good push" not_ancestor
 finish
