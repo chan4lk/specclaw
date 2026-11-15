@@ -15,8 +15,11 @@ case "$*" in
   *" -x "*) [[ "${GATE:-}" == proxy-down ]] && exit 7; exit 0 ;;
 esac
 echo "{}"'
-stub git '[[ "$1" == -C && "$3" == merge-base ]] && { [[ -z "${NOT_ANCESTOR:-}" && "$5" != "${BUNDLE_NOT_ANCESTOR:-none}" ]]; exit; }
-[[ "$1" == -C && "$3" == bundle ]] && { echo "bundle $4 $5 ${6:-}" >> "$TMP/bundle.log"; [[ "$4" == create ]] && echo bundle > "$5"; [[ "$4" != verify || -z "${BUNDLE_BAD:-}" ]]; exit; }
+stub git '[[ "$1" == -C && "$3" == merge-base ]] && { case "$5 ${6:-}" in
+  "HEAD FETCH_HEAD") [[ "${BUNDLE_REL:-ahead}" == ahead ]] ;; "FETCH_HEAD HEAD") [[ "${BUNDLE_REL:-}" == behind ]] ;;
+  "tip1 HEAD") [[ -z "${TIP_NOT_PUSHED:-}" ]] ;; *) [[ -z "${NOT_ANCESTOR:-}" && "$5" != "${BUNDLE_NOT_ANCESTOR:-none}" ]] ;; esac; exit; }
+[[ "$1" == -C && "$3" == bundle ]] && { echo "bundle $4 $5 ${6:-}" >> "$TMP/bundle.log"
+  case "$4" in create) [[ -z "${BUNDLE_CREATE_FAIL:-}" ]] && echo bundle > "$5" ;; list-heads) [[ -z "${BUNDLE_BAD:-}" ]] && echo "${BUNDLE_TIP:-}" ;; *) [[ -z "${BUNDLE_BAD:-}" ]] ;; esac; exit; }
 [[ "$1" == -C && "$3" == fetch && "$5" == *.bundle ]] && { echo "fetch $5 $6" >> "$TMP/bundle.log"; exit 0; }
 [[ "$1" == -C && "$3" == rev-parse && "$4" == --abbrev-ref ]] && { [[ -s "$TMP/onbranch" ]] && { cat "$TMP/onbranch"; exit 0; }; echo "${ON_BRANCH-specclaw/049-x}"; exit 0; }
 [[ "$1" == -C && "$3" == rev-parse ]] && { echo deadbeef; exit 0; }

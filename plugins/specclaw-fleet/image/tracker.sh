@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+BUNDLE_DIR="${FLEET_BUNDLE_DIR:-/fleet/bundles}"
 tracker_dir() {
   local dir="$WORK/fallback/.specclaw"
   if [[ -d "$REPO/.specclaw/changes/$FLEET_CHANGE" ]]; then printf '%s' "$REPO/.specclaw"; return 0; fi
@@ -23,30 +24,46 @@ show_agent_log() {
 
 # Retries the push (FLEET_PUSH_ATTEMPTS, pauses FLEET_PUSH_PAUSES, last repeats); repacks before the final try.
 push_change_branch() {
-  local branch err i n="${FLEET_PUSH_ATTEMPTS:-4}" p
+  local branch err i n="${FLEET_PUSH_ATTEMPTS:-}" p="${FLEET_PUSH_PAUSES:-}"
   local -a pauses
   branch="$(change_branch)"
   [[ -n "$branch" && "$(git -C "$REPO" rev-parse --abbrev-ref HEAD 2>/dev/null)" == "$branch" ]] || return 0
-  [[ "$n" =~ ^[1-9]$ ]] || { echo "WARNING: FLEET_PUSH_ATTEMPTS=$n is not 1-9; using 4" >&2; n=4; }
-  read -ra pauses <<<"${FLEET_PUSH_PAUSES:-5 15 45}"
+  [[ -z "$n" || "$n" =~ ^[1-9]$ ]] || echo "WARNING: FLEET_PUSH_ATTEMPTS is not 1-9; using the default" >&2
+  [[ "$n" =~ ^[1-9]$ ]] || n=4
+  [[ -z "$p" || "$p" =~ ^[[:blank:]]*[0-9]+([[:blank:]]+[0-9]+)*[[:blank:]]*$ ]] || { echo "WARNING: FLEET_PUSH_PAUSES is not seconds separated by spaces; using the default" >&2; p=""; }
+  read -ra pauses <<<"${p:-5 15 45}"
   for ((i = 1; i <= n; i++)); do
     (( i == n && n > 1 )) && git -C "$REPO" repack -a -d -f -q >&2
-    err="$(git -C "$REPO" push -q -u origin HEAD 2>&1 >/dev/null)" \
-      && { rm -f "$STATUS/push-error" "${FLEET_BUNDLE_DIR:-/fleet/bundles}"/work.{bundle,base}; printf '%s' "$branch"; return 0; }
+    err="$(git -C "$REPO" push -q -u origin HEAD 2>&1 >/dev/null)" && { rm -f "$STATUS/push-error"; drop_bundle; printf '%s' "$branch"; return 0; }
     printf '%s\n' "$err" | grep -v '^[[:space:]]*$' | tail -n 1 | redact > "$STATUS/push-error"
     echo "WARNING: push $i/$n of $branch failed: $(cat "$STATUS/push-error")" >&2
-    p="${pauses[i - 1]:-${pauses[${#pauses[@]} - 1]:-0}}"
-    (( i < n )) && sleep "$p"
+    (( i < n )) && sleep "${pauses[i - 1]:-${pauses[${#pauses[@]} - 1]}}"
   done
   return 1
 }
 
 # After a fully failed push, keeps BUNDLE_BASE..<change branch> in the per-change bundle folder (FR-7); prints saved or none.
+# Base first, then bundle, each renamed into place. A failed save keeps an older pair only while it still verifies.
 save_bundle() {
-  local b d="${FLEET_BUNDLE_DIR:-/fleet/bundles}"
+  local b d="$BUNDLE_DIR"
   b="$(change_branch)"
-  [[ -n "${BUNDLE_BASE:-}" && -n "$b" && -d "$d" && -w "$d" ]] \
+  [[ -n "${BUNDLE_BASE:-}" && -n "$b" && -d "$d" && -w "$d" ]] && printf '%s\n' "$BUNDLE_BASE" > "$d/work.base.tmp" \
     && git -C "$REPO" bundle create "$d/work.bundle.tmp" "$BUNDLE_BASE..refs/heads/$b" >/dev/null 2>&1 \
-    && mv -f "$d/work.bundle.tmp" "$d/work.bundle" && printf '%s\n' "$BUNDLE_BASE" > "$d/work.base" && { echo saved; return 0; }
-  rm -f "$d/work.bundle.tmp" 2>/dev/null; echo none
+    && mv -f "$d/work.base.tmp" "$d/work.base" && mv -f "$d/work.bundle.tmp" "$d/work.bundle" && { echo saved; return 0; }
+  rm -f "$d"/work.{bundle,base}.tmp 2>/dev/null
+  [[ ! -f "$d/work.bundle" ]] || git -C "$REPO" bundle verify "$d/work.bundle" >/dev/null 2>&1 || rm -f "$d"/work.{bundle,base} 2>/dev/null
+  echo none
+}
+
+# After a good push the pair goes only when HEAD holds every tip in the bundle, or it is no bundle at all; else it is kept.
+drop_bundle() {
+  local heads tip _
+  [[ -f "$BUNDLE_DIR/work.bundle" ]] || return 0
+  if heads="$(git -C "$REPO" bundle list-heads "$BUNDLE_DIR/work.bundle" 2>/dev/null)"; then
+    while read -r tip _; do
+      [[ -z "$tip" ]] || git -C "$REPO" merge-base --is-ancestor "$tip" HEAD 2>/dev/null \
+        || { echo "WARNING: kept $BUNDLE_DIR/work.bundle: it holds commits the pushed branch does not" >&2; return 0; }
+    done <<<"$heads"
+  fi
+  rm -f "$BUNDLE_DIR"/work.{bundle,base}
 }
