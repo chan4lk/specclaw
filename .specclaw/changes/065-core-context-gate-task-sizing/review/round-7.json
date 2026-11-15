@@ -1,0 +1,94 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 2
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw/CLAUDE.md",
+  "plugins/specclaw/bin/specclaw-budget",
+  "plugins/specclaw/lib/budget.py",
+  "plugins/specclaw/references/full/build.md",
+  "plugins/specclaw/templates/config.yaml",
+  "plugins/specclaw/tests/run-context-gate-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/tests/run-context-gate-tests.sh",
+   "fp": "b98c4d75b3fd",
+   "in_delta": true,
+   "line": 190,
+   "message": "The fix for malformed Context values ships single-case tests, not a variant table. Estimate and brief get one row, `Context: 70,000`. `record` gets no malformed-Context row. The budget line's `context=` gets one row, `70k`. The previous round named `70,000`, `70000 tokens` and `~70000`. Add a table-driven loop over `70,000`, `70000 tokens`, `~70000`, `7e4` and a trailing-text value. Run each through estimate, brief and record, and give the gate a `context=` row for each. Each row must assert a non-zero exit (or a loud toast for the gate) and that the task is named.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Someone later changes `task_context` to `value.split()[0].isdigit()`. `Context: 70000 tokens` is then read as 70000 and `Context: ~70000` is still refused. The suite stays green, because it only tests `70,000` and `70k`. The class regresses in silence.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw/lib/budget.py",
+   "fp": "26344a1c8a55",
+   "in_delta": true,
+   "line": 292,
+   "message": "The `--output` deny runs after quoted text is blanked, so a quoted spelling of the option is not seen. Quoting is the same spelling-variant class the previous finding named. The docs now call the gate a quality cap, so this is minor. Either test the unblanked part for `--output`, or document the quote bypass next to the existing `shortcut:` note.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "`git log '--output=f'` and `git diff \"--output=f\"` have the option blanked, so no `[<>]` or `--output` remains. The call passes in block mode, and git writes the file `f`.",
+   "severity": "minor"
+  },
+  {
+   "file": "plugins/specclaw/bin/specclaw-budget",
+   "fp": "27c7371ea607",
+   "in_delta": true,
+   "line": 90,
+   "message": "The missing-config check is applied only to `roles --json`. `brief` also calls `budget.load` and routes from `routing`. With no config.yaml it silently routes to the default agent and exits 0, which is the same 'defaults passed off as a read' defect. The roles test also covers only a nonexistent directory. It does not cover an existing directory with no config.yaml, or a directory named config.yaml. Give `brief` the same guard, or move the guard into one shared helper, and add those rows.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "`.specclaw/changes/001-x/tasks.md` exists but `.specclaw/config.yaml` is missing. `specclaw-budget brief .specclaw 001-x T1` prints the default `subagent_type` and exits 0, ignoring any routing the project would have configured.",
+   "severity": "minor"
+  }
+ ],
+ "head": "bd83f0915bffc4c2e106605782f4fe1f87122380",
+ "impact": [
+  ".claude-plugin/marketplace.json",
+  ".github/workflows/ci.yml",
+  "plugins/specclaw-bf/bin/specclaw-bf-prototype",
+  "plugins/specclaw-bf/bin/specclaw-bf-ui",
+  "plugins/specclaw-bf/tests/run-prototype-brief-contract-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-checklist-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-gates-tests.sh",
+  "plugins/specclaw-dash/.claude-plugin/plugin.json",
+  "plugins/specclaw-dash/hooks/core/view.ts",
+  "plugins/specclaw-dash/tests/pane.test.tsx",
+  "plugins/specclaw-dash/tests/view.spec.ts",
+  "plugins/specclaw-fleet/hooks/core/view.ts",
+  "plugins/specclaw-fleet/lib/report-render.sh",
+  "plugins/specclaw-fleet/lib/report.html",
+  "plugins/specclaw-fleet/tests/cases/ac26_skills.sh",
+  "plugins/specclaw-fleet/tests/cases/ac36_report_output.sh",
+  "plugins/specclaw-fleet/tests/report.spec.ts",
+  "plugins/specclaw/bin/specclaw-build",
+  "plugins/specclaw/bin/specclaw-build-context",
+  "plugins/specclaw/bin/specclaw-parse-tasks"
+ ],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 36971,
+ "round": 7,
+ "since": "1d4aece50f",
+ "status": "open",
+ "system_chars": 8846,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794658122,
+ "ts_start": 1794658076
+}

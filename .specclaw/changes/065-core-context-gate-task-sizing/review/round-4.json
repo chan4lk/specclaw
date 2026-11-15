@@ -1,0 +1,65 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 0
+ },
+ "escalated": [
+  "2a31ea4fe288"
+ ],
+ "files": [
+  "plugins/specclaw/CLAUDE.md",
+  "plugins/specclaw/lib/budget.py",
+  "plugins/specclaw/tests/run-context-gate-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/lib/budget.py",
+   "fp": "2a31ea4fe288",
+   "in_delta": true,
+   "line": 281,
+   "message": "The fd-duplication alternative `\\d*>&\\d+-?` has no boundary after the digits. Bash reads `>&2out` as a redirect of stdout and stderr to a file named `2out`, but the regex strips only `>&2` and leaves `out` as a plain word. No `<` or `>` remains, so the call passes the new `[<>]` check, which is the guard added to stop file writes. Add a lookahead `(?=[\\s;&|]|$)` after the fd alternative, as the /dev/null branch already has, so `>&2x` and `2>&1x` keep their `>` and are denied. Add deny rows for `>&2x`, `2>&1x` and `>&file`.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "In block mode, `git log >&2out` becomes `git log  out` after the strip. It matches ALLOWED and contains no `<` or `>`, so it passes with exit 0 and writes a file named `2out`. The documented rule is that a call can never write a file.",
+   "severity": "major"
+  }
+ ],
+ "head": "f6a459ad41c6b998917a8079b51d76b6280a3aa1",
+ "impact": [
+  "plugins/specclaw-bf/bin/specclaw-bf-bootstrap",
+  "plugins/specclaw-bf/bin/specclaw-bf-prototype",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-rebuild-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-replay",
+  "plugins/specclaw-bf/bin/specclaw-bf-status",
+  "plugins/specclaw-bf/tests/run-prototype-byte-identity-tests.sh",
+  "plugins/specclaw-bf/tests/run-replay-classification-tests.sh",
+  "plugins/specclaw-extras/tests/run-debug-protocol-tests.sh",
+  "plugins/specclaw-extras/tests/run-party-tests.sh",
+  "plugins/specclaw/bin/specclaw-init",
+  "plugins/specclaw/bin/specclaw-log-error",
+  "plugins/specclaw/bin/specclaw-loop",
+  "plugins/specclaw/bin/specclaw-pr",
+  "plugins/specclaw/bin/specclaw-quality-scan",
+  "plugins/specclaw/bin/specclaw-verify",
+  "plugins/specclaw/hooks/context-gate",
+  "plugins/specclaw/tests/gate.spec.ts"
+ ],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 19238,
+ "round": 4,
+ "since": "736db0000a",
+ "status": "escalate",
+ "system_chars": 8885,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794657871,
+ "ts_start": 1794657851
+}
