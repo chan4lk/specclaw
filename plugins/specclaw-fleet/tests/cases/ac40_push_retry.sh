@@ -34,11 +34,23 @@ PUSH_HANGS=1;FLEET_PUSH_ATTEMPTS=2|push repack push |state=pr_open
 PUSH_HANGS=2;PUSH_FAILS=2;FLEET_PUSH_ATTEMPTS=2|push repack push |exit=push-failed push_error=push timed out after 1s
 PUSH_HANGS=1;PUSH_FAILS=9;FLEET_PUSH_ATTEMPTS=1|push |exit=push-failed push_error=push timed out after 1s
 ROWS
+# A late pod (scheduling, image pull) has less time before the Job's wall-clock deadline: the agent's budget shrinks with it.
+late=1
+while read -r hard want_exit want_record; do
+  t0=$SECONDS; ( export FLEET_HARD_DEADLINE="$(( $(date +%s) + hard ))" FLEET_AGENT_TIMEOUT=600 AGENT_SLEEP=12 AGENT_RC=5; run_entry )
+  [[ "$(cat "$TMP/status/exit")" == "$want_exit" ]] && (( SECONDS - t0 < 30 )) && grep -q "$want_record" "$CALLS" \
+    || { late=0; echo "  late [$hard]: exit $(cat "$TMP/status/exit") after $((SECONDS - t0))s"; }
+done <<'ROWS'
+1200 5 state=pr_open
+484 143 state=pr_open
+300 143 exit=deadline-before-agent
+ROWS
+late_rows() { [[ "$late" == 1 ]]; }
 # Pauses that would run past the delivery budget (agent deadline + 300 s) skip the later tries; the record and bundle still happen.
 budget_rows=1
 while IFS='|' read -r vars want; do
   mkdir -p "$TMP/bundles"
-  vars="${vars/NEAR/$(( $(date +%s) + 195 ))}"; vars="${vars/PAST/$(( $(date +%s) - 5 ))}"
+  vars="${vars/NEAR/$(( $(date +%s) + 490 ))}"
   IFS=';' read -ra kv <<<"$vars"; ( export "${kv[@]}" PUSH_FAILS=9 FLEET_PUSH_ATTEMPTS=3 AGENT_RC=5; run_entry )
   [[ "$(pushes)" == "$want" && "$(cat "$TMP/status/exit")" == 4 && -s "$TMP/bundles/work.bundle" ]] && grep -q "delivery budget spent; push" "$TMP/out" \
     && grep -qE "exit=push-failed .*push_error=(fatal: push failed|push skipped: delivery budget spent) bundle=saved" "$CALLS" || { budget_rows=0; echo "  budget [$vars]: pushes [$(pushes)]"; }
@@ -47,8 +59,7 @@ done <<'ROWS'
 FLEET_AGENT_TIMEOUT=60;FLEET_PUSH_PAUSES=400|push 
 FLEET_AGENT_TIMEOUT=60;FLEET_PUSH_PAUSES=0 400|push push 
 AGENT_SLEEP=20;FLEET_AGENT_TIMEOUT=2;FLEET_PUSH_PAUSES=299|push 
-FLEET_HARD_DEADLINE=NEAR;FLEET_PUSH_PAUSES=20|push 
-FLEET_HARD_DEADLINE=PAST;FLEET_PUSH_PAUSES=0|
+FLEET_HARD_DEADLINE=NEAR;FLEET_PUSH_PAUSES=400|push 
 ROWS
 timeout_rows=1
 for row in "x|warn" "0|warn" "-1|warn" "10000|warn" "1 2|warn" "5|ok"; do
@@ -82,5 +93,6 @@ timeout_checked() { (( timeout_rows == 1 )); }
 check "FR-1 a push that hangs is cut off after FLEET_PUSH_TIMEOUT, recorded as timed out, and retried" hang_cut
 check "FR-1 a pause that would pass the delivery budget skips the later tries; exit=push-failed is recorded and the bundle saved (also on the deadline path)" budget_spent
 check "FR-1 FLEET_PUSH_TIMEOUT other than 1-9999 whole seconds warns and uses the default" timeout_checked
+check "FR-12 a pod that started late: on time the agent finishes; a little late the agent is stopped early; too late the agent never starts" late_rows
 check "AC4 HEAD on the base branch: no push, no PR, exit code unchanged" base_ok
 finish
