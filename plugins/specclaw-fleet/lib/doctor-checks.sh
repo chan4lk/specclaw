@@ -59,3 +59,19 @@ check_secret() {
   done
   echo "ok secret:$name: $*"
 }
+
+check_bundles() {
+  local c="${FLEET_BUNDLE_CLAIM:-}" state nodes
+  [[ -n "$c" ]] || { echo "ok bundles: off"; return 0; }
+  if ! state="$(dk -n "$D_NS" get pvc "$c" -o jsonpath='{.status.phase} {.metadata.annotations.volume\.kubernetes\.io/selected-node}')"; then
+    absent bundles || return 2
+    echo "missing bundles: claim $c not found; apply plugins/specclaw-fleet/k8s/bundles-pvc.yaml"; return 1
+  fi
+  # A WaitForFirstConsumer class (k3s local-path) leaves the claim Pending, with no selected node, until a pod mounts it.
+  [[ "$state" == Bound* || "$state" == "Pending " ]] \
+    || { echo "missing bundles: claim $c is ${state%% *}, not Bound; check its events, or re-apply plugins/specclaw-fleet/k8s/bundles-pvc.yaml"; return 1; }
+  nodes="$(dk get nodes -o name)" || { echo "skip bundles: could not list nodes: $(head -n1 "$FLEET_TMPDIR/dk.err")"; return 2; }
+  (( $(grep -c . <<<"$nodes") > 1 )) && [[ -z "${FLEET_NODE_LABEL:-}" ]] \
+    && { echo "missing bundles: the cluster has several nodes; set fleet.node_label so every Job lands where $c lives"; return 1; }
+  [[ "$state" == Bound* ]] && echo "ok bundles: $c" || echo "ok bundles: $c (binds on first use)"
+}

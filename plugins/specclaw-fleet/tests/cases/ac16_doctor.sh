@@ -11,6 +11,8 @@ case "$*" in
   *" get ns "*) gone NO_NS; echo ns ;;
   *serviceaccount/fleet-dispatcher*) gone NO_RBAC; echo ok ;;
   *"deploy fleet-egress"*) gone NO_EGRESS_DEPLOY; flag NO_EGRESS && echo 0 || echo 1 ;;
+  *" get pvc "*) gone NO_PVC; echo "${PVC_STATE:-Bound x}" ;;
+  *" get nodes "*) printf "node/a\n"; flag TWO_NODES && echo node/b; true ;;
   *"networkpolicy fleet-pods"*) gone NO_NETPOL; echo ok ;;
   *"secret fleet-azdo"*) gone NO_SECRET; flag PARTIAL_SECRET && echo "{\"data\":{\"AZDO_ORG\":1}}" || echo "{\"data\":{\"AZDO_TOKEN\":1,\"AZDO_ORG\":1,\"AZDO_PROJECT\":1}}" ;;
   *"secret fleet-vault-writer"*) gone NONE; echo "{\"data\":{\"AZURE_TENANT_ID\":1,\"AZURE_CLIENT_ID\":1,\"AZURE_CLIENT_SECRET\":1}}" ;;
@@ -30,8 +32,8 @@ esac'
 
 doctor() { "$FLEET" doctor > "$TMP/out" 2>&1; }
 doctor; clean_rc=$?; clean="$(cat "$TMP/out")"
-all_ok() { (( clean_rc == 0 )) && [[ $(grep -c "^ok " <<<"$clean") == 11 ]] && grep -q "all checks ok" <<<"$clean"; }
-check "AC7 a healthy setup reports 11 ok lines and exits 0" all_ok
+all_ok() { (( clean_rc == 0 )) && [[ $(grep -c "^ok " <<<"$clean") == 12 ]] && grep -q "all checks ok" <<<"$clean"; }
+check "AC7 a healthy setup reports 12 ok lines and exits 0" all_ok
 
 each_fails=1
 for case in "NO_CLUSTER:missing context" "NO_NS:missing namespaces" "NO_RBAC:missing rbac" "NO_EGRESS:wrong egress" \
@@ -62,6 +64,18 @@ PAT_SCOPE=1 "$FLEET" doctor > "$TMP/out" 2>&1
 scope_named() { grep -q "skip pipeline: AZDO_TOKEN lacks the Build (Read) scope" "$TMP/out" && grep -q "skip service-connections: AZDO_TOKEN lacks the Service Connections (Read) scope" "$TMP/out"; }
 unasked_is_skip() { (( skip_rows == 1 )) && scope_named; }
 check "R11 a check that could not ask (network, auth, 5xx) is skip (rc 2), never missing/wrong" unasked_is_skip
+bundles() { env "$@" "$FLEET" doctor 2>&1 | grep "^[a-z]* bundles:" || true; }
+bundle_states() {
+  grep -qx "ok bundles: off" <<<"$clean" \
+    && [[ "$(bundles FLEET_BUNDLE_CLAIM=fleet-bundles)" == "ok bundles: fleet-bundles" ]] \
+    && [[ "$(bundles FLEET_BUNDLE_CLAIM=fleet-bundles "PVC_STATE=Pending ")" == "ok bundles: fleet-bundles (binds on first use)" ]] \
+    && bundles FLEET_BUNDLE_CLAIM=fleet-bundles NO_PVC=1 | grep -q "^missing bundles: .*apply plugins/specclaw-fleet/k8s/bundles-pvc.yaml" \
+    && bundles FLEET_BUNDLE_CLAIM=fleet-bundles "PVC_STATE=Pending n1" | grep -q "^missing bundles: claim fleet-bundles is Pending, not Bound" \
+    && bundles FLEET_BUNDLE_CLAIM=fleet-bundles TWO_NODES=1 | grep -q "^missing bundles: .*set fleet.node_label" \
+    && [[ "$(bundles FLEET_BUNDLE_CLAIM=fleet-bundles TWO_NODES=1 FLEET_NODE_LABEL=fleet=yes)" == "ok bundles: fleet-bundles" ]] \
+    && bundles FLEET_BUNDLE_CLAIM=fleet-bundles KUBE_FLAKY=1 | grep -q "^skip bundles:"
+}
+check "AC-10 bundles line: off, bound, binds on first use, claim missing, not bound, several nodes without node_label, could not ask" bundle_states
 read_only() { ! grep -Eq " (create|apply|delete|patch|update|set|run|label|taint)( |$)|-X (POST|PUT|PATCH|DELETE)" "$CALLS"; }
 check "AC7 doctor made no mutating call across all runs" read_only
 finish
