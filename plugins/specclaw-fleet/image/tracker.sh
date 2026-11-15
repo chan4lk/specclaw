@@ -68,12 +68,13 @@ bundle_held() {
   done <<<"$heads"
 }
 
-# A saved bundle with commits the branch lacks is never overwritten: it moves to kept-<time>-<pid>-<n>.* for the operator, and the record says kept=<name>.
+# A saved bundle with commits the branch lacks is never overwritten: it moves to the first free kept-<n>.* for the operator, and the record says kept=<name>.
 set_bundle_aside() {
-  local k
-  k="$BUNDLE_DIR/kept-$(date -u +%Y%m%dT%H%M%SZ)-$$-$RANDOM"
+  local k n=1
+  while [[ -e "$BUNDLE_DIR/kept-$n.bundle" || -e "$BUNDLE_DIR/kept-$n.base" ]]; do n=$((n + 1)); done
+  k="$BUNDLE_DIR/kept-$n"
   mv -n "$BUNDLE_DIR/work.bundle" "$k.bundle" 2>/dev/null && [[ ! -e "$BUNDLE_DIR/work.bundle" ]] || return 1
-  mv -n "$BUNDLE_DIR/work.base" "$k.base" 2>/dev/null
+  mv -n "$BUNDLE_DIR/work.base" "$k.base" 2>/dev/null || rm -f "$BUNDLE_DIR/work.base"
   echo "WARNING: set aside $k.bundle: it holds commits this branch does not" >&2
   printf '%s' "${k##*/}"
 }
