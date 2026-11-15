@@ -12,6 +12,7 @@ case "$*" in
   *serviceaccount/fleet-dispatcher*) gone NO_RBAC; echo ok ;;
   *"deploy fleet-egress"*) gone NO_EGRESS_DEPLOY; flag NO_EGRESS && echo 0 || echo 1 ;;
   *" get pvc "*) gone NO_PVC; echo "${PVC_STATE:-Bound x}" ;;
+  *" get nodes -l "*) flag LABEL_FLAKY && { echo "Unable to connect to the server" >&2; exit 1; }; for ((i = 0; i < ${LABELED:-1}; i++)); do echo "node/l$i"; done ;;
   *" get nodes "*) printf "node/a\n"; flag TWO_NODES && echo node/b; true ;;
   *"networkpolicy fleet-pods"*) gone NO_NETPOL; echo ok ;;
   *"secret fleet-azdo"*) gone NO_SECRET; flag PARTIAL_SECRET && echo "{\"data\":{\"AZDO_ORG\":1}}" || echo "{\"data\":{\"AZDO_TOKEN\":1,\"AZDO_ORG\":1,\"AZDO_PROJECT\":1}}" ;;
@@ -73,9 +74,16 @@ bundle_states() {
     && bundles FLEET_BUNDLE_CLAIM=fleet-bundles "PVC_STATE=Pending n1" | grep -q "^missing bundles: claim fleet-bundles is Pending, not Bound" \
     && bundles FLEET_BUNDLE_CLAIM=fleet-bundles TWO_NODES=1 | grep -q "^missing bundles: .*set fleet.node_label" \
     && [[ "$(bundles FLEET_BUNDLE_CLAIM=fleet-bundles TWO_NODES=1 FLEET_NODE_LABEL=fleet=yes)" == "ok bundles: fleet-bundles" ]] \
-    && bundles FLEET_BUNDLE_CLAIM=fleet-bundles KUBE_FLAKY=1 | grep -q "^skip bundles:"
+    && bundles FLEET_BUNDLE_CLAIM=fleet-bundles KUBE_FLAKY=1 | grep -q "^skip bundles:" && (( label_rows == 1 ))
 }
-check "AC-10 bundles line: off, bound, binds on first use, claim missing, not bound, several nodes without node_label, could not ask" bundle_states
+label_rows=1
+for row in "TWO_NODES=1 LABELED=0|missing bundles: fleet.node_label fleet=yes matches 0 nodes" "TWO_NODES=1 LABELED=2|missing bundles: fleet.node_label fleet=yes matches 2 nodes" \
+  "LABELED=0|missing bundles: fleet.node_label fleet=yes matches 0 nodes" "TWO_NODES=1 LABEL_FLAKY=1|skip bundles: could not list nodes" "LABELED=1|ok bundles: fleet-bundles"; do
+  # shellcheck disable=SC2086
+  got="$(bundles FLEET_BUNDLE_CLAIM=fleet-bundles FLEET_NODE_LABEL=fleet=yes ${row%%|*})"
+  [[ "$got" == "${row#*|}"* ]] || { label_rows=0; echo "  ${row%%|*}: $got"; }
+done
+check "AC-10 bundles line: off, bound, binds on first use, claim missing, not bound, several nodes without node_label, node_label matching 0 or 2 nodes, could not ask" bundle_states
 read_only() { ! grep -Eq " (create|apply|delete|patch|update|set|run|label|taint)( |$)|-X (POST|PUT|PATCH|DELETE)" "$CALLS"; }
 check "AC7 doctor made no mutating call across all runs" read_only
 finish
