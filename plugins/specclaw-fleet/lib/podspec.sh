@@ -101,18 +101,19 @@ render_pg_volumes() {
   printf '\n        - {name: pgdata, emptyDir: {}}\n        - {name: pgrun, emptyDir: {}}\n        - {name: pgtmp, emptyDir: {}}'
 }
 
-# subPath <org>/<project>/<repo>/<change>: path segments of the repo URL without _git and .git,
-# padded on the left with the host's first label (github.com/o/r gives github/o/r).
+# subPath <host>/<url path>/<change>: the whole host (no user, lower case) and every path segment except _git and a trailing .git.
+# Bytes outside [A-Za-z0-9.-], and _ itself, become _XX, so two repos never share a folder; a dot-only segment gets a _ prefix.
 bundle_subpath() {
-  local host path seg out=""; local -a segs=() keep=()
-  path="${F_REPO#*://}" host="${path%%/*}" path="${path#"$host"}"
+  local LC_ALL=C path seg out="" c i n; local -a segs=()
+  path="${F_REPO#*://}"; while [[ "$path" == */ ]]; do path="${path%/}"; done; [[ "$path" == *.[gG][iI][tT] ]] && path="${path%.*}"
   IFS=/ read -ra segs <<<"$path"
-  for seg in "${segs[@]}"; do [[ -z "$seg" || "$seg" == _git ]] || keep+=("${seg%.git}"); done
-  while (( ${#keep[@]} < 3 )); do keep=("${host%%.*}" "${keep[@]}"); done
-  for seg in "${keep[@]: -3}" "$F_CHANGE"; do
-    seg="$(printf '%s' "$seg" | tr -c 'A-Za-z0-9._-' '_')"
-    [[ "$seg" =~ ^\.*$ ]] && seg="_$seg"
-    out+="${out:+/}$seg"
+  segs[0]="$(printf '%s' "${segs[0]##*@}" | tr '[:upper:]' '[:lower:]')"
+  for seg in "${segs[@]}" "$F_CHANGE"; do
+    [[ -z "$seg" || "$seg" == _git ]] && continue
+    out+="${out:+/}"; [[ "$seg" =~ ^\.*$ ]] && { out+="_$seg"; continue; }
+    for ((i = 0; i < ${#seg}; i++)); do
+      c="${seg:i:1}"; [[ "$c" == [A-Za-z0-9.-] ]] || { printf -v n '%d' "'$c"; printf -v c '_%02X' $(( n & 255 )); }; out+="$c"
+    done
   done
   printf '%s' "$out"
 }
