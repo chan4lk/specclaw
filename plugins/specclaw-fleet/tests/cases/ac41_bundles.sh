@@ -12,7 +12,9 @@ left() { ls "$B" 2>/dev/null | tr '\n' ' '; }
 
 rm -rf "$B"; mkdir -p "$B"; echo stale > "$B/work.bundle"; PUSH_FAILS=9 AGENT_RC=5 run_entry
 saved="$(cat "$CALLS")"; saved_exit="$(cat "$TMP/status/exit")"; saved_log="$(blog)"; saved_base="$(cat "$B/work.base" 2>/dev/null)"; saved_bundle="$(cat "$B/work.bundle" 2>/dev/null)"; saved_left="$(left)"
-rm -rf "$B"; PUSH_FAILS=9 AGENT_RC=5 run_entry; none="$(cat "$CALLS")"; none_exit="$(cat "$TMP/status/exit")"
+rm -rf "$B"; ENTRY_BUNDLES="" PUSH_FAILS=9 AGENT_RC=5 run_entry; none="$(cat "$CALLS")"; none_exit="$(cat "$TMP/status/exit")"
+mkdir -p "$B"; ENTRY_BUNDLES="" PUSH_FAILS=9 AGENT_RC=5 run_entry; off_folder="$(cat "$CALLS")"; off_left="$(ls "$B")"
+rm -rf "$B"; PUSH_FAILS=9 AGENT_RC=5 run_entry; lost="$(cat "$CALLS")"; lost_exit="$(cat "$TMP/status/exit")"
 seed; BUNDLE_CREATE_FAIL=1 PUSH_FAILS=9 AGENT_RC=5 run_entry; keep_old="$(cat "$CALLS")"; keep_old_left="$(left)"
 seed; BUNDLE_CREATE_FAIL=1 BUNDLE_BAD=1 PUSH_FAILS=9 AGENT_RC=5 run_entry; drop_old="$(cat "$CALLS")"; drop_old_left="$(left)"
 seed; AGENT_RC=5 run_entry; ok_out="$(cat "$TMP/out")"; ok_log="$(blog)"; ok_left="$(left)"
@@ -53,6 +55,8 @@ saves() {
 }
 no_folder() {
   [[ "$none_exit" == 4 ]] && grep -q "bundle=off" <<<"$none" && ! grep -q "bundle=saved" <<<"$none" || return 1
+  grep -q "bundle=off" <<<"$off_folder" && [[ -z "$off_left" ]] || return 1
+  [[ "$lost_exit" == 4 ]] && grep -q "bundle=none" <<<"$lost" && ! grep -q "bundle=off" <<<"$lost" || return 1
   [[ "$ro" == skip ]] && { echo "  SKIP: read-only bundle folder (running as root, so the folder stays writable)"; return 0; }
   grep -q "bundle=none" <<<"$ro" && ! grep -q "bundle=saved" <<<"$ro" && grep -q "bundle=none" <<<"$keep_old"
 }
@@ -74,7 +78,7 @@ cleans() {
 }
 
 check "AC7 a fully failed push writes work.bundle (base..branch) and work.base, replacing the old pair, and records bundle=saved, exit 4" saves
-check "AC7 no bundle folder records bundle=off, a read-only one bundle=none (a save that failed), and both still exit 4" no_folder
+check "AC7 bundles not configured records bundle=off (folder or not); a configured claim with a missing or read-only folder records bundle=none; all exit 4" no_folder
 check "AC7 a failed save records bundle=none, keeps an older pair that verifies and removes one that does not" failed_save
 check "AC8 no remote branch and a valid bundle: verify, fetch into the change branch, print resuming from saved bundle" resumes
 check "AC8 a corrupt bundle or a base that is not an ancestor is ignored with a warning and the run starts fresh" corrupt

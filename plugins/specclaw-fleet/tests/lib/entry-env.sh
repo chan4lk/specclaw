@@ -69,7 +69,7 @@ run_entry() {
   mkdir -p "$TMP/status" "$TMP/work" "$TMP/home" "$TMP/seed"
   : > "$CALLS"
   printf 'oat-token' > "$TMP/cred"
-  env FLEET_BUNDLE_DIR="$TMP/bundles" FLEET_STATUS_DIR="$TMP/status" FLEET_WORK="$TMP/work" FLEET_CRED="$TMP/cred" FLEET_SEED="$TMP/seed" \
+  env FLEET_BUNDLE_DIR="$TMP/bundles" FLEET_BUNDLES="${ENTRY_BUNDLES-on}" FLEET_STATUS_DIR="$TMP/status" FLEET_WORK="$TMP/work" FLEET_CRED="$TMP/cred" FLEET_SEED="$TMP/seed" \
     HTTPS_PROXY=http://proxy:3128 FLEET_GATE_TRIES=2 FLEET_GATE_SLEEP=0 AZDO_ORG="${ENTRY_ORG:-o}" AZDO_PROJECT="${ENTRY_PROJECT:-p}" FLEET_WORK_ITEM=42 FLEET_COMMIT=abc123 FLEET_CODEX_HOME="$TMP/codex" FLEET_AZDO_CONFIG=$'azdo:\n  fleet_states:\n    failed: Failed' HOME="$TMP/home" FLEET_AGENT="${ENTRY_AGENT:-claude}" FLEET_CHANGE=049-x FLEET_REF="${ENTRY_REF:-main}" FLEET_PR_TARGET="${ENTRY_PR_TARGET:-}" FLEET_MODE="${ENTRY_MODE:-}" FLEET_MERGE_REF="${ENTRY_MERGE:-}" AZDO_TOKEN=pat-secret \
     FLEET_REPO_URL="${ENTRY_REPO_URL-https://dev.azure.com/o/p/_git/r}" ANTHROPIC_API_KEY=k ANTHROPIC_AUTH_TOKEN=k OPENAI_API_KEY=k CODEX_API_KEY=k \
     bash "$ENTRY" > "$TMP/out" 2>&1

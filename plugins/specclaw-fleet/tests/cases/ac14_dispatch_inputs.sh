@@ -20,14 +20,14 @@ present_when_set() {
     && grep -q 'tolerations: \[{key: "specclaw.fleet/worker", operator: Equal, value: "true", effect: NoSchedule}\]' <<<"$extras" \
     && sed -n '/^kind: Job/,/^---/p' <<<"$extras" | sed '$d' | python3 -c 'import sys,yaml; yaml.safe_load(sys.stdin)'
 }
-claim_absent_by_default() { ! grep -qE "bundles|persistentVolumeClaim|subPath|FLEET_PUSH_ATTEMPTS" <<<"$plain"; }
+claim_absent_by_default() { ! grep -qE "bundles|persistentVolumeClaim|subPath|FLEET_PUSH_ATTEMPTS|FLEET_BUNDLES" <<<"$plain"; }
 claim_present_when_set() {
   local agent writeback
   agent="$(sed -n '/- name: agent/,/- name: writeback/p' <<<"$claimed")" writeback="$(sed -n '/- name: writeback/,/volumes:/p' <<<"$claimed")"
   (( claim_rc == 0 )) && grep -q '{name: bundles, persistentVolumeClaim: {claimName: fleet-bundles}}' <<<"$claimed" \
     && grep -q '{name: bundles, mountPath: /fleet/bundles, subPath: "dev.azure.com/o/p/r/049-x"}' <<<"$agent" \
     && ! grep -q bundles <<<"$writeback" && grep -q 'fsGroup: 1000' <<<"$claimed" \
-    && grep -q 'FLEET_PUSH_ATTEMPTS, value: "3"' <<<"$agent" \
+    && grep -q 'FLEET_PUSH_ATTEMPTS, value: "3"' <<<"$agent" && grep -q 'FLEET_BUNDLES, value: "on"' <<<"$agent" \
     && sed -n '/^kind: Job/,/^---/p' <<<"$claimed" | sed '$d' | python3 -c 'import sys,yaml; yaml.safe_load(sys.stdin)'
 }
 claim_needs_node_label() { (( unpinned_rc != 0 )) && grep -q bundle_claim <<<"$unpinned" && grep -q node_label <<<"$unpinned"; }

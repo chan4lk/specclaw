@@ -46,6 +46,7 @@ render_run_env() {
   [[ -n "$F_MERGE_REF" ]] && printf '            - {name: FLEET_MERGE_REF, value: %s}\n' "$(yaml_str "$F_MERGE_REF")"
   [[ -n "$F_PR_TARGET" ]] && printf '            - {name: FLEET_PR_TARGET, value: %s}\n' "$(yaml_str "$F_PR_TARGET")"
   [[ -n "${F_PUSH_ATTEMPTS:-}" ]] && printf '            - {name: FLEET_PUSH_ATTEMPTS, value: "%s"}\n' "$F_PUSH_ATTEMPTS"
+  [[ -n "${F_BUNDLE_CLAIM:-}" ]] && printf '            - {name: FLEET_BUNDLES, value: "on"}\n'
   return 0
 }
 

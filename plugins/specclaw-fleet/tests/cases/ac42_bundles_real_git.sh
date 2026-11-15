@@ -4,7 +4,7 @@ set -uo pipefail
 # shellcheck source=../lib/harness.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/harness.sh"
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
-export FLEET_BUNDLE_DIR="$TMP/bundles" FLEET_CHANGE=049-x FLEET_PUSH_ATTEMPTS=1 FLEET_PUSH_PAUSES=0
+export FLEET_BUNDLES=on FLEET_BUNDLE_DIR="$TMP/bundles" FLEET_CHANGE=049-x FLEET_PUSH_ATTEMPTS=1 FLEET_PUSH_PAUSES=0
 # shellcheck disable=SC2034 # STATE is read by change_branch
 STATUS="$TMP/status" SEED="$TMP/seed" HOME="$TMP/home" REPO="$TMP/repo" STATE="$TMP/none.json" ORIGIN="$TMP/origin.git"
 mkdir -p "$STATUS" "$SEED" "$HOME" "$FLEET_BUNDLE_DIR"

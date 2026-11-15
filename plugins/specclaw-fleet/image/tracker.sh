@@ -55,7 +55,7 @@ push_change_branch() {
 # Base first, then bundle, each renamed into place. A failed save keeps an older pair only while it still verifies.
 save_bundle() {
   local b d="$BUNDLE_DIR" kept=""
-  [[ -d "$d" ]] || { echo off; return 0; }
+  [[ -n "${FLEET_BUNDLES:-}" ]] || { echo off; return 0; }
   b="$(change_branch)"
   if [[ -f "$d/work.bundle" && -n "$b" ]] && ! bundle_held "refs/heads/$b"; then
     kept="$(set_bundle_aside)" || { echo none; return 0; }
