@@ -11,9 +11,7 @@ parse_pod_inputs() {
   [[ -z "$F_BUNDLE_CLAIM" || "$F_BUNDLE_CLAIM" =~ ^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$ ]] \
     || die "FLEET_BUNDLE_CLAIM is not a valid claim name"
   [[ -z "$F_PUSH_ATTEMPTS" || "$F_PUSH_ATTEMPTS" =~ ^[1-9]$ ]] || die "FLEET_PUSH_ATTEMPTS must be a whole number from 1 to 9"
-  # a ReadWriteOnce claim binds to one node, so every Job must land on the same labelled node
-  [[ -z "$F_BUNDLE_CLAIM" || -n "${FLEET_NODE_LABEL:-}" ]] \
-    || die "fleet.bundle_claim is set but fleet.node_label is not; a ReadWriteOnce claim needs every Job pinned to one node"
+  local p; p="$(bundle_label_problem)"; [[ -z "$p" ]] || die "$p"
   F_MODE="${FLEET_MODE:-}" F_MERGE_REF="${FLEET_MERGE_REF:-}" F_PR_TARGET="${FLEET_PR_TARGET:-}"
   [[ -z "$F_MODE" || "$F_MODE" == integrate ]] || die "FLEET_MODE must be empty or integrate"
   local r; for r in "$F_MERGE_REF" "$F_PR_TARGET"; do
@@ -26,6 +24,12 @@ parse_pod_inputs() {
       || die "FLEET_NODE_LABEL must be key=value"
     F_NODE_KEY="${FLEET_NODE_LABEL%%=*}" F_NODE_VALUE="${FLEET_NODE_LABEL#*=}"
   fi
+}
+
+# One rule for dispatch and doctor: a ReadWriteOnce claim binds to one node, so every Job must land on the same labelled node.
+bundle_label_problem() {
+  [[ -z "${FLEET_BUNDLE_CLAIM:-}" || -n "${FLEET_NODE_LABEL:-}" ]] \
+    || echo "fleet.bundle_claim is set but fleet.node_label is not; set fleet.node_label so every Job lands on the one node where the ReadWriteOnce claim lives"
 }
 
 render_pod_extras() {

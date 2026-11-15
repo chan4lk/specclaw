@@ -11,9 +11,8 @@ case "$*" in
   *" get ns "*) gone NO_NS; echo ns ;;
   *serviceaccount/fleet-dispatcher*) gone NO_RBAC; echo ok ;;
   *"deploy fleet-egress"*) gone NO_EGRESS_DEPLOY; flag NO_EGRESS && echo 0 || echo 1 ;;
-  *" get pvc "*) gone NO_PVC; echo "${PVC_STATE:-Bound x}" ;;
+  *" get pvc "*) gone NO_PVC; echo "${PVC_PHASE:-Bound} ${PVC_NODE-l0}" ;;
   *" get nodes -l "*) flag LABEL_FLAKY && { echo "Unable to connect to the server" >&2; exit 1; }; for ((i = 0; i < ${LABELED:-1}; i++)); do echo "node/l$i"; done ;;
-  *" get nodes "*) printf "node/a\n"; flag TWO_NODES && echo node/b; true ;;
   *"networkpolicy fleet-pods"*) gone NO_NETPOL; echo ok ;;
   *"secret fleet-azdo"*) gone NO_SECRET; flag PARTIAL_SECRET && echo "{\"data\":{\"AZDO_ORG\":1}}" || echo "{\"data\":{\"AZDO_TOKEN\":1,\"AZDO_ORG\":1,\"AZDO_PROJECT\":1}}" ;;
   *"secret fleet-vault-writer"*) gone NONE; echo "{\"data\":{\"AZURE_TENANT_ID\":1,\"AZURE_CLIENT_ID\":1,\"AZURE_CLIENT_SECRET\":1}}" ;;
@@ -66,24 +65,29 @@ scope_named() { grep -q "skip pipeline: AZDO_TOKEN lacks the Build (Read) scope"
 unasked_is_skip() { (( skip_rows == 1 )) && scope_named; }
 check "R11 a check that could not ask (network, auth, 5xx) is skip (rc 2), never missing/wrong" unasked_is_skip
 bundles() { env "$@" "$FLEET" doctor 2>&1 | grep "^[a-z]* bundles:" || true; }
-bundle_states() {
-  grep -qx "ok bundles: off" <<<"$clean" \
-    && [[ "$(bundles FLEET_BUNDLE_CLAIM=fleet-bundles)" == "ok bundles: fleet-bundles" ]] \
-    && [[ "$(bundles FLEET_BUNDLE_CLAIM=fleet-bundles "PVC_STATE=Pending ")" == "ok bundles: fleet-bundles (binds on first use)" ]] \
-    && bundles FLEET_BUNDLE_CLAIM=fleet-bundles NO_PVC=1 | grep -q "^missing bundles: .*apply plugins/specclaw-fleet/k8s/bundles-pvc.yaml" \
-    && bundles FLEET_BUNDLE_CLAIM=fleet-bundles "PVC_STATE=Pending n1" | grep -q "^missing bundles: claim fleet-bundles is Pending, not Bound" \
-    && bundles FLEET_BUNDLE_CLAIM=fleet-bundles TWO_NODES=1 | grep -q "^missing bundles: .*set fleet.node_label" \
-    && [[ "$(bundles FLEET_BUNDLE_CLAIM=fleet-bundles TWO_NODES=1 FLEET_NODE_LABEL=fleet=yes)" == "ok bundles: fleet-bundles" ]] \
-    && bundles FLEET_BUNDLE_CLAIM=fleet-bundles KUBE_FLAKY=1 | grep -q "^skip bundles:" && (( label_rows == 1 ))
-}
+# Rows: env for doctor | the bundles line it must start with. node_label is required on any cluster size, like dispatch.
 label_rows=1
-for row in "TWO_NODES=1 LABELED=0|missing bundles: fleet.node_label fleet=yes matches 0 nodes" "TWO_NODES=1 LABELED=2|missing bundles: fleet.node_label fleet=yes matches 2 nodes" \
-  "LABELED=0|missing bundles: fleet.node_label fleet=yes matches 0 nodes" "TWO_NODES=1 LABEL_FLAKY=1|skip bundles: could not list nodes" "LABELED=1|ok bundles: fleet-bundles"; do
+while IFS='|' read -r vars want; do
   # shellcheck disable=SC2086
-  got="$(bundles FLEET_BUNDLE_CLAIM=fleet-bundles FLEET_NODE_LABEL=fleet=yes ${row%%|*})"
-  [[ "$got" == "${row#*|}"* ]] || { label_rows=0; echo "  ${row%%|*}: $got"; }
-done
-check "AC-10 bundles line: off, bound, binds on first use, claim missing, not bound, several nodes without node_label, node_label matching 0 or 2 nodes, could not ask" bundle_states
+  got="$(bundles FLEET_BUNDLE_CLAIM=fleet-bundles $vars)"
+  [[ "$got" == "$want"* ]] || { label_rows=0; echo "  [$vars]: $got"; }
+done <<'ROWS'
+FLEET_NODE_LABEL=fleet=yes|ok bundles: fleet-bundles
+FLEET_NODE_LABEL=fleet=yes PVC_NODE=|ok bundles: fleet-bundles
+FLEET_NODE_LABEL=fleet=yes PVC_PHASE=Pending PVC_NODE=|ok bundles: fleet-bundles (binds on first use)
+FLEET_NODE_LABEL=fleet=yes PVC_NODE=other|missing bundles: claim fleet-bundles lives on other, fleet.node_label matches l0
+FLEET_NODE_LABEL=fleet=yes PVC_NODE=l1 LABELED=2|missing bundles: fleet.node_label fleet=yes matches 2 nodes
+FLEET_NODE_LABEL=fleet=yes LABELED=0|missing bundles: fleet.node_label fleet=yes matches 0 nodes
+FLEET_NODE_LABEL=fleet=yes LABEL_FLAKY=1|skip bundles: could not list nodes
+FLEET_NODE_LABEL=fleet=yes NO_PVC=1|missing bundles: claim fleet-bundles not found; apply plugins/specclaw-fleet/k8s/bundles-pvc.yaml
+FLEET_NODE_LABEL=fleet=yes PVC_PHASE=Pending PVC_NODE=n1|missing bundles: claim fleet-bundles is Pending, not Bound
+FLEET_NODE_LABEL=fleet=yes KUBE_FLAKY=1|skip bundles:
+LABELED=1|missing bundles: fleet.bundle_claim is set but fleet.node_label is not; set fleet.node_label
+LABELED=2|missing bundles: fleet.bundle_claim is set but fleet.node_label is not; set fleet.node_label
+PVC_PHASE=Pending PVC_NODE=|missing bundles: fleet.bundle_claim is set but fleet.node_label is not; set fleet.node_label
+ROWS
+bundle_states() { grep -qx "ok bundles: off" <<<"$clean" && (( label_rows == 1 )); }
+check "AC-10 bundles line: off, bound, binds on first use, claim missing or not bound, node_label unset on any cluster size, matching 0 or 2 nodes or another node than the claim's, could not ask" bundle_states
 read_only() { ! grep -Eq " (create|apply|delete|patch|update|set|run|label|taint)( |$)|-X (POST|PUT|PATCH|DELETE)" "$CALLS"; }
 check "AC7 doctor made no mutating call across all runs" read_only
 finish

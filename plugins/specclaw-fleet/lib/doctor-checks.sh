@@ -61,7 +61,7 @@ check_secret() {
 }
 
 check_bundles() {
-  local c="${FLEET_BUNDLE_CLAIM:-}" state nodes n
+  local c="${FLEET_BUNDLE_CLAIM:-}" state nodes n p sel
   [[ -n "$c" ]] || { echo "ok bundles: off"; return 0; }
   if ! state="$(dk -n "$D_NS" get pvc "$c" -o jsonpath='{.status.phase} {.metadata.annotations.volume\.kubernetes\.io/selected-node}')"; then
     absent bundles || return 2
@@ -70,13 +70,14 @@ check_bundles() {
   # A WaitForFirstConsumer class (k3s local-path) leaves the claim Pending, with no selected node, until a pod mounts it.
   [[ "$state" == Bound* || "$state" == "Pending " ]] \
     || { echo "missing bundles: claim $c is ${state%% *}, not Bound; check its events, or re-apply plugins/specclaw-fleet/k8s/bundles-pvc.yaml"; return 1; }
-  # With node_label set, exactly one node may match it: the claim lives on one node.
-  nodes="$(dk get nodes ${FLEET_NODE_LABEL:+-l "$FLEET_NODE_LABEL"} -o name)" \
+  p="$(bundle_label_problem)"; [[ -z "$p" ]] || { echo "missing bundles: $p"; return 1; }
+  nodes="$(dk get nodes -l "$FLEET_NODE_LABEL" -o name)" \
     || { echo "skip bundles: could not list nodes: $(head -n1 "$FLEET_TMPDIR/dk.err")"; return 2; }
   n="$(grep -c . <<<"$nodes")"
-  [[ -z "${FLEET_NODE_LABEL:-}" ]] || (( n == 1 )) \
-    || { echo "missing bundles: fleet.node_label $FLEET_NODE_LABEL matches $n nodes; label exactly one node so every Job lands where $c lives"; return 1; }
-  [[ -n "${FLEET_NODE_LABEL:-}" ]] || (( n <= 1 )) \
-    || { echo "missing bundles: the cluster has several nodes; set fleet.node_label so every Job lands where $c lives"; return 1; }
+  (( n == 1 )) || { echo "missing bundles: fleet.node_label $FLEET_NODE_LABEL matches $n nodes; label exactly one node so every Job lands where $c lives"; return 1; }
+  # A claim that has a node (selected-node annotation) can only attach there.
+  sel="${state#* }" nodes="${nodes#node/}"
+  [[ -z "$sel" || "$sel" == "$nodes" ]] \
+    || { echo "missing bundles: claim $c lives on $sel, fleet.node_label matches $nodes; move the label to $sel"; return 1; }
   [[ "$state" == Bound* ]] && echo "ok bundles: $c" || echo "ok bundles: $c (binds on first use)"
 }
