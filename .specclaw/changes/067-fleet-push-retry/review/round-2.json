@@ -1,0 +1,85 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 0
+ },
+ "escalated": [],
+ "files": [
+  ".claude-plugin/marketplace.json",
+  "plugins/specclaw-bf/.claude-plugin/plugin.json",
+  "plugins/specclaw-bf/.codex-plugin/plugin.json",
+  "plugins/specclaw-dash/.claude-plugin/plugin.json",
+  "plugins/specclaw-dash/.codex-plugin/plugin.json",
+  "plugins/specclaw-extras/.claude-plugin/plugin.json",
+  "plugins/specclaw-extras/.codex-plugin/plugin.json",
+  "plugins/specclaw-fleet/.claude-plugin/plugin.json",
+  "plugins/specclaw-fleet/.codex-plugin/plugin.json",
+  "plugins/specclaw-fleet/README.md",
+  "plugins/specclaw-fleet/image/draft-pr.sh",
+  "plugins/specclaw-fleet/image/tracker.sh",
+  "plugins/specclaw-fleet/image/workspace.sh",
+  "plugins/specclaw-fleet/lib/doctor-checks.sh",
+  "plugins/specclaw-fleet/lib/podspec.sh",
+  "plugins/specclaw-fleet/skills/setup/SKILL.md",
+  "plugins/specclaw-fleet/tests/cases/ac14_dispatch_inputs.sh",
+  "plugins/specclaw-fleet/tests/cases/ac16_doctor.sh",
+  "plugins/specclaw-fleet/tests/cases/ac40_push_retry.sh",
+  "plugins/specclaw-fleet/tests/cases/ac41_bundles.sh",
+  "plugins/specclaw-fleet/tests/cases/ac42_bundles_real_git.sh",
+  "plugins/specclaw-fleet/tests/lib/entry-env.sh",
+  "plugins/specclaw-review/.claude-plugin/plugin.json",
+  "plugins/specclaw-review/.codex-plugin/plugin.json",
+  "plugins/specclaw-sync/.claude-plugin/plugin.json",
+  "plugins/specclaw-sync/.codex-plugin/plugin.json",
+  "plugins/specclaw/.claude-plugin/plugin.json",
+  "plugins/specclaw/.codex-plugin/plugin.json"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "class": "data-loss",
+   "file": "plugins/specclaw-fleet/image/tracker.sh",
+   "fp": "587764bcb20f",
+   "in_delta": true,
+   "line": 45,
+   "message": "A diverged bundle is documented as kept (`resume_bundle` warns, `drop_bundle` keeps it), but `save_bundle` still overwrites the pair unconditionally. If the next push also fails, `work.base` and `work.bundle` are replaced by a bundle of `BUNDLE_BASE..branch` built from the remote-based branch. The only copy of the diverged commits is destroyed. Fix: before replacing the pair, check that the existing bundle's tips are contained in the new branch, as `drop_bundle` does. If they are not, keep the old pair or write under a different name, and record that in `bundle=`.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B12",
+   "scenario": "Run 1 push fails, so a bundle holds commits X. The remote change branch then moves to Y, diverged from X. Run 2 resumes the remote branch, warns 'diverged ... keeping the bundle', and its push fails too. `save_bundle` runs `bundle create work.bundle.tmp BUNDLE_BASE..refs/heads/b` on the Y-based branch and renames it over `work.bundle`, so X is gone and the record says `bundle=saved`.",
+   "severity": "major",
+   "unclassified": false
+  }
+ ],
+ "fix_proof": {
+  "base": "7b24de046a5864c32952d88228f831533ed6b81e",
+  "mode": "block",
+  "reason": "6 test file(s) fail on 7b24de046a and pass on HEAD",
+  "status": "proven",
+  "tests": [
+   "plugins/specclaw-fleet/tests/cases/ac14_dispatch_inputs.sh",
+   "plugins/specclaw-fleet/tests/cases/ac16_doctor.sh",
+   "plugins/specclaw-fleet/tests/cases/ac40_push_retry.sh",
+   "plugins/specclaw-fleet/tests/cases/ac41_bundles.sh",
+   "plugins/specclaw-fleet/tests/cases/ac42_bundles_real_git.sh",
+   "plugins/specclaw-fleet/tests/lib/entry-env.sh"
+  ]
+ },
+ "head": "337de845a6ff19be13786a91aa3adcd066810e39",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 68874,
+ "round": 2,
+ "since": "7b24de046a",
+ "status": "open",
+ "system_chars": 9665,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794775048,
+ "ts_start": 1794774938
+}
