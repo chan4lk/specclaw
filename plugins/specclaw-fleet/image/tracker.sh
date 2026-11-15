@@ -47,6 +47,7 @@ push_change_branch() {
 save_bundle() {
   local b d="$BUNDLE_DIR"
   b="$(change_branch)"
+  [[ ! -f "$d/work.bundle" || -z "$b" ]] || bundle_held "refs/heads/$b" || set_bundle_aside || { echo none; return 0; }
   [[ -n "${BUNDLE_BASE:-}" && -n "$b" && -d "$d" && -w "$d" ]] && printf '%s\n' "$BUNDLE_BASE" > "$d/work.base.tmp" \
     && git -C "$REPO" bundle create "$d/work.bundle.tmp" "$BUNDLE_BASE..refs/heads/$b" >/dev/null 2>&1 \
     && mv -f "$d/work.base.tmp" "$d/work.base" && mv -f "$d/work.bundle.tmp" "$d/work.bundle" && { echo saved; return 0; }
@@ -55,15 +56,25 @@ save_bundle() {
   echo none
 }
 
+# True when <ref> holds every tip in the saved bundle, or the file is no bundle at all.
+bundle_held() {
+  local heads tip _
+  heads="$(git -C "$REPO" bundle list-heads "$BUNDLE_DIR/work.bundle" 2>/dev/null)" || return 0
+  while read -r tip _; do
+    [[ -z "$tip" ]] || git -C "$REPO" merge-base --is-ancestor "$tip" "$1" 2>/dev/null || return 1
+  done <<<"$heads"
+}
+
+# A saved bundle with commits the branch lacks is never overwritten: it moves to kept-<time>.* for the operator.
+set_bundle_aside() {
+  local k
+  k="$BUNDLE_DIR/kept-$(date -u +%Y%m%dT%H%M%SZ)"
+  mv -f "$BUNDLE_DIR/work.bundle" "$k.bundle" && { mv -f "$BUNDLE_DIR/work.base" "$k.base" 2>/dev/null; echo "WARNING: set aside $k.bundle: it holds commits this branch does not" >&2; }
+}
+
 # After a good push the pair goes only when HEAD holds every tip in the bundle, or it is no bundle at all; else it is kept.
 drop_bundle() {
-  local heads tip _
   [[ -f "$BUNDLE_DIR/work.bundle" ]] || return 0
-  if heads="$(git -C "$REPO" bundle list-heads "$BUNDLE_DIR/work.bundle" 2>/dev/null)"; then
-    while read -r tip _; do
-      [[ -z "$tip" ]] || git -C "$REPO" merge-base --is-ancestor "$tip" HEAD 2>/dev/null \
-        || { echo "WARNING: kept $BUNDLE_DIR/work.bundle: it holds commits the pushed branch does not" >&2; return 0; }
-    done <<<"$heads"
-  fi
+  bundle_held HEAD || { echo "WARNING: kept $BUNDLE_DIR/work.bundle: it holds commits the pushed branch does not" >&2; return 0; }
   rm -f "$BUNDLE_DIR"/work.{bundle,base}
 }

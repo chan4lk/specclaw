@@ -31,6 +31,9 @@ fresh_clone; r2_out="$(cat "$TMP/out")"; r2_head="$(g rev-parse HEAD)"; pushed_o
 fresh_clone; g checkout -q -B "$BR" "$c1"; c3="$(commit c3)"; BUNDLE_BASE="$(g rev-parse origin/main)" save_bundle >/dev/null
 fresh_clone; c4="$(commit c4)"; pushed_ok
 fresh_clone; dv_out="$(cat "$TMP/out")"; dv_head="$(g rev-parse HEAD)"; : > "$TMP/out"; pushed_ok; dv_push="$(cat "$TMP/out")"; dv_left="$(ls "$B" | tr '\n' ' ')"
+# Still diverged, and this run's own push fails: the diverged bundle is set aside, never overwritten.
+c5="$(commit c5)"; ds_save="$(save_bundle 2>/dev/null)"; ds_kept="$(g bundle list-heads "$B"/kept-*.bundle 2>/dev/null | cut -d' ' -f1)"
+ds_new="$(g bundle list-heads "$B/work.bundle" | cut -d' ' -f1)"; ds_bases="$(cat "$B"/kept-*.base 2>/dev/null)"; rm -f "$B"/kept-*
 # Behind: the bundle tip (c3's branch rebuilt as c2) is already in the remote; no warning, and the push deletes it.
 rm -f "$B"/work.*; g checkout -q -B tmp "$c2"; g branch -q -f "$BR" "$c2"; BUNDLE_BASE="$(g rev-parse origin/main)" save_bundle >/dev/null
 fresh_clone; bh_out="$(cat "$TMP/out")"; bh_head="$(g rev-parse HEAD)"; pushed_ok; bh_left="$(ls "$B")"
@@ -48,12 +51,14 @@ diverged() {
   grep -q "WARNING: saved bundle $B/work.bundle has diverged" <<<"$dv_out" && [[ "$dv_head" == "$c4" && "$dv_left" == "work.base work.bundle " ]] \
     && grep -q "WARNING: kept $B/work.bundle" <<<"$dv_push" && git -C "$ORIGIN" merge-base --is-ancestor "$c2" "$c4" && [[ -n "$c3" ]]
 }
+set_aside() { [[ "$ds_save" == saved && "$ds_kept" == "$c3" && "$ds_new" == "$c5" && -n "$ds_bases" ]]; }
 behind() { [[ "$bh_head" == "$c4" && -z "$bh_left" ]] && ! grep -q "saved bundle" <<<"$bh_out"; }
 not_ancestor() { grep -q "is not a commit id that is an ancestor" <<<"$na_out" && [[ "$na_head" == "$c4" && -z "$junk_left" ]]; }
 
 check "real git: a failed push saves a bundle that verifies, with the clone's base" saves
 check "real git: remote branch behind the bundle fast-forwards to it, and the good push deletes the bundle" fast_forwards
 check "real git: a bundle that diverged from the remote branch is warned about and kept after the push" diverged
+check "real git: a failed push never overwrites a bundle holding commits the branch lacks; it is set aside" set_aside
 check "real git: a bundle already in the remote branch resumes nothing and is deleted after the push" behind
 check "real git: a base outside this history is ignored; a file that is not a bundle is deleted after a good push" not_ancestor
 finish
