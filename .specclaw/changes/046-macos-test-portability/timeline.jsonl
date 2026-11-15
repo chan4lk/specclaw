@@ -1,0 +1,2 @@
+{"ev":"start","span":"verify-1792439511","kind":"phase","label":"verify","at":"2026-10-19T19:51:52Z","ts":1792439512}
+{"ev":"stop","span":"verify","at":"2026-10-19T19:55:46Z","ts":1792439746,"status":"ok"}

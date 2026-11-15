@@ -442,7 +442,13 @@ printf '# spec\n## Acceptance Criteria\n- [ ] AC-1: works\n' > "$gdir/spec.md"
 
 # The critical assertion: collect terminates. `timeout` kills a runaway loop
 # (exit 124) so the hang manifests as a fail, not a stalled suite.
-gout="$(timeout 10 "$VERIFY" collect "$WORK" glob-path 2>/dev/null)"; grc=$?
+# macOS has no `timeout`: fall back to gtimeout, then a perl alarm.
+bounded10() {
+  if command -v timeout >/dev/null 2>&1; then timeout 10 "$@"
+  elif command -v gtimeout >/dev/null 2>&1; then gtimeout 10 "$@"
+  else perl -e 'alarm shift; exec @ARGV' 10 "$@"; fi
+}
+gout="$(bounded10 "$VERIFY" collect "$WORK" glob-path 2>/dev/null)"; grc=$?
 if [[ "$grc" -eq 0 ]]; then
   pass "AC-1/AC-2 verify collect terminates on glob paths (no hang)"
 else

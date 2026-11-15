@@ -1,0 +1,72 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 2
+ },
+ "escalated": [],
+ "files": [
+  ".claude-plugin/marketplace.json",
+  "plugins/specclaw-bf/.claude-plugin/plugin.json",
+  "plugins/specclaw-bf/.codex-plugin/plugin.json",
+  "plugins/specclaw-extras/.claude-plugin/plugin.json",
+  "plugins/specclaw-extras/.codex-plugin/plugin.json",
+  "plugins/specclaw-review/.claude-plugin/plugin.json",
+  "plugins/specclaw-review/.codex-plugin/plugin.json",
+  "plugins/specclaw-sync/.claude-plugin/plugin.json",
+  "plugins/specclaw-sync/.codex-plugin/plugin.json",
+  "plugins/specclaw/.claude-plugin/plugin.json",
+  "plugins/specclaw/.codex-plugin/plugin.json",
+  "plugins/specclaw/bin/specclaw-browser-lock",
+  "plugins/specclaw/bin/specclaw-run-long",
+  "plugins/specclaw/tests/run-change-numbering-tests.sh",
+  "plugins/specclaw/tests/run-long-orchestration-tests.sh",
+  "plugins/specclaw/tests/run-parser-tests.sh",
+  "plugins/specclaw/tests/run-phase-state-tests.sh",
+  "plugins/specclaw/tests/run-synth-agent-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/bin/specclaw-run-long",
+   "fp": "44a9efba5c29",
+   "in_delta": true,
+   "line": 197,
+   "message": "Appending `| tr -d ' '` makes `tr` the pipeline's exit status, so `|| echo 0` can no longer fire when `wc` fails. The fallback is dead code and a failed count comes back as an empty string instead of 0. Same at the `total=` line near 332. Capture `wc` output first and strip the padding with parameter expansion, e.g. `n=$(wc -l < f 2>/dev/null) || n=0; n=${n//[[:space:]]/}`. This only matters if the script does not use `pipefail`, which the diff does not show.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B3",
+   "scenario": "`wc` fails (unreadable log) -> `local_total` is '' rather than '0'. Today `[[ '' -gt N ]]` evaluates as 0, so output looks the same, but the explicit fallback no longer works.",
+   "severity": "minor"
+  },
+  {
+   "file": "plugins/specclaw/tests/run-parser-tests.sh",
+   "fp": "9c4bcbec4526",
+   "in_delta": true,
+   "line": 445,
+   "message": "The timeout/gtimeout/perl-alarm fallback is now written three times: `bounded5` in specclaw-browser-lock, `bounded10` in this test, and the existing one in specclaw-update-status, as the browser-lock comment says. The copies can disagree. For example, `timeout` exits 124 on expiry but the perl alarm path exits via SIGALRM (142), and the parser-test comment still says it detects a hang by exit 124. Put the helper in one shared sourced file and take the seconds as an argument.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B4",
+   "scenario": "On macOS without gtimeout, a hung `verify collect` is killed by the perl alarm and exits 142. Any check for 124 would miss it, while the same hang on Linux reports 124.",
+   "severity": "minor"
+  }
+ ],
+ "head": "41a7c374098051cf1cf338f360576e654f36a758",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 19981,
+ "round": 1,
+ "since": null,
+ "status": "clean",
+ "system_chars": 3314,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1792439668,
+ "ts_start": 1792439647
+}

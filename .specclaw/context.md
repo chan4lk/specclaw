@@ -172,6 +172,11 @@ when `git.merge_on_finalize: true` (default `false`).
 - **Never add an index/cache for filesystem-derived state.** Append-only event ledgers are distinct.
 - **Never silence ShellCheck by appending to `shellcheck-baseline.txt`.**
 - **Never add an unregistered test suite.**
+- **No GNU-only flags in `bin/` or `tests/`.** Avoid `find -printf`, `stat -c`, suffixless `sed -i`, bare
+  `timeout`, and unstripped `wc -l` output (BSD pads it). Use `find … | sed`, `stat -c … || stat -f …`,
+  `sed -i.bak` + `rm`, the `timeout` → `gtimeout` → plain/perl-alarm fallback, and `tr -d ' '` on counts.
+  CI is Linux-only, so macOS breakage is invisible there; the 046 fixes were two real product bugs
+  (`specclaw-run-long`, `specclaw-browser-lock`) plus test bugs.
 - **Never copy canonical assets for Codex.** The installed package points at
   `plugins/specclaw/skills/`; the single checkout-local adapter delegates to that same root.
 - **Never let package validation mutate global Codex configuration.** Installation tests, if
@@ -212,11 +217,11 @@ when `git.merge_on_finalize: true` (default `false`).
    impossible; the command is `/specclaw-pane`.
 2. **2026-11-03 — 047-specclaw-mod:** the gate defaults to `warn` because every specclaw user now gets it;
    it resolves paths through realPath and also holds edits to a change's `state.json`.
-3. **2026-10-20 — 045-project-custom-presets:** projects keep presets in `.specclaw/presets/<name>.md`; a
+3. **2026-10-20 — 046-macos-test-portability:** five suites and two `bin/` scripts made BSD/macOS-portable
+   by reusing existing idioms (timeout fallback, `tr -d ' '` on counts); a macOS CI job is a separate change.
+4. **2026-10-20 — 045-project-custom-presets:** projects keep presets in `.specclaw/presets/<name>.md`; a
    same-name file replaces the built-in, and `extends: <name>` (leading frontmatter only, one level)
    keeps the parent first. `specclaw-presets` is the sole resolver.
-4. **2026-10-20 — 045-project-custom-presets:** unusable preset files (symlink escape, dangling link,
+5. **2026-10-20 — 045-project-custom-presets:** unusable preset files (symlink escape, dangling link,
    directory) are refused, not silently replaced by the built-in. Review majors (shared scalar parser,
    tab-led comments) were deferred to `follow-ups.md`.
-5. **2026-10-16 — 044-fast-review-loop:** PR review runs locally in the `specclaw-review` add-on (review →
-   class fix → delta + impact-set round → Opus final pass → one push); CI only checks the reviewed SHA is HEAD.

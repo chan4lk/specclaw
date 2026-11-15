@@ -102,21 +102,24 @@ if grep -q "Simplicity First" "$WORK/t2.json" && grep -q "Scope fence" "$WORK/t2
 else fail "T2 system_prompt carries guardrails + scope fence"; fi
 echo
 
+# Portable mtime: GNU `stat -c`, else BSD `stat -f`.
+mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1"; }
+
 # ─── Case 3 (AC8): cache reuse + invalidation ──────────────────────────────────
 echo "--- Case 3 (AC8): cache reuse on unchanged task, invalidate on change ---"
 rm -f "$WORK/changes/dyn/agents/"*.json 2>/dev/null || true
 "$BUILD" synth-agent "$WORK" dyn T2 >/dev/null 2>&1
-m1="$(stat -c %Y "$WORK/changes/dyn/agents/T2.json")"
+m1="$(mtime "$WORK/changes/dyn/agents/T2.json")"
 sig1="$(sed -n 's/.*"sig":[[:space:]]*"\([^"]*\)".*/\1/p' "$WORK/changes/dyn/agents/T2.json")"
 sleep 1
 "$BUILD" synth-agent "$WORK" dyn T2 >/dev/null 2>&1
-m2="$(stat -c %Y "$WORK/changes/dyn/agents/T2.json")"
+m2="$(mtime "$WORK/changes/dyn/agents/T2.json")"
 assert_eq "cache reuse: file not rewritten" "$m1" "$m2"
 # Change the task -> signature changes, file regenerates
-sed -i 's|`T2` — implement the big engine|`T2` — implement the big engine (v2)|' "$WORK/changes/dyn/tasks.md"
+sed -i.bak 's|`T2` — implement the big engine|`T2` — implement the big engine (v2)|' "$WORK/changes/dyn/tasks.md" && rm -f "$WORK/changes/dyn/tasks.md.bak"
 sleep 1
 "$BUILD" synth-agent "$WORK" dyn T2 >/dev/null 2>&1
-m3="$(stat -c %Y "$WORK/changes/dyn/agents/T2.json")"
+m3="$(mtime "$WORK/changes/dyn/agents/T2.json")"
 sig3="$(sed -n 's/.*"sig":[[:space:]]*"\([^"]*\)".*/\1/p' "$WORK/changes/dyn/agents/T2.json")"
 if [[ "$m2" != "$m3" && "$sig1" != "$sig3" ]]; then pass "cache invalidated on task change (rewrote + new sig)"
 else fail "cache invalidated on task change (m2=$m2 m3=$m3 sig1=$sig1 sig3=$sig3)"; fi
