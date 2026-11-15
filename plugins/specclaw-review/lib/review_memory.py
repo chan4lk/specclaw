@@ -151,12 +151,12 @@ def compact(mem_dir, root, decay_days=180, max_entries=2000):
     return {"before": before, "after": len(keep)}
 
 
-def mark(mem_dir, fps, status):
+def mark(mem_dir, fps, status, key="status"):
     entries = load(mem_dir)
     hit = 0
     for e in entries:
         if e["fp"] in fps:
-            e["status"] = status
+            e[key] = status
             hit += 1
     save(mem_dir, entries)
     return hit

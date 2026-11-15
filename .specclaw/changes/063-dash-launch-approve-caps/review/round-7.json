@@ -1,0 +1,69 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 2
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw/bin/specclaw-suggest",
+  "plugins/specclaw/tests/run-suggest-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "class": "other",
+   "file": "plugins/specclaw/bin/specclaw-suggest",
+   "fp": "591c6d6cdd80",
+   "in_delta": true,
+   "line": 29,
+   "message": "The previous finding asked for --dismiss to join the failing case list (exit 1). This fix keeps exit 0 and only adds a stderr line. The failure is now visible on stderr, but a caller that keys on the exit code, such as the skill that reports a tip as dismissed, still reads the missing-lib case as success. It also leaves --dismiss and --undismiss inconsistent for the same lib failure, since the dash shows the exit code. Exit 1 here, or confirm that every caller of --dismiss shows stderr. The 059 exit-0 contract is cited only in a comment and a test name, and nothing in the diff shows --dismiss callers honour it.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B3",
+   "scenario": "lib/plugins.sh missing, then `specclaw-suggest <dir> --dismiss fleet` -> exit 0 and nothing written. A caller that checks only the exit code tells the user the tip is dismissed, and it reappears on the next run.",
+   "severity": "minor",
+   "unclassified": false
+  },
+  {
+   "class": "other",
+   "file": "plugins/specclaw/tests/run-suggest-tests.sh",
+   "fp": "dd0da2ceabad",
+   "in_delta": true,
+   "line": 137,
+   "message": "The new row depends on $TMP/nolib and $TMP/ur, which the previous check creates and fills only if all of its earlier steps pass. If that row fails or is reordered, this row fails or passes for the wrong reason. Build the fixture inside this row. It also covers only --dismiss, with no table of the lib-missing behaviour across --dismiss, --dismissed, --undismiss and a plain tip call.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "The earlier row fails before `cp` runs -> $TMP/nolib/bin/specclaw-suggest does not exist, and this row fails with a confusing error instead of reporting the --dismiss behaviour.",
+   "severity": "minor",
+   "unclassified": false
+  }
+ ],
+ "fix_proof": {
+  "base": "36ed32af78bf12b477f5886c53beafe73bff15fb",
+  "mode": "block",
+  "reason": "1 test file(s) fail on 36ed32af78 and pass on HEAD",
+  "status": "proven",
+  "tests": [
+   "plugins/specclaw/tests/run-suggest-tests.sh"
+  ]
+ },
+ "head": "07901936bc69af2ff5876587fc18193b26bce909",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 14069,
+ "round": 7,
+ "since": "36ed32af78",
+ "status": "clean",
+ "system_chars": 9570,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794659210,
+ "ts_start": 1794659190
+}

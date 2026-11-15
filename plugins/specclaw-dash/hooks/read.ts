@@ -1,8 +1,9 @@
-// Every read the pane makes, through $.fs, $.env and one MCP call. It never writes and never runs a command.
+// Every read the pane makes, through $.fs, $.env and one MCP call. It never writes and never runs a command:
+// the actions (063) run commands only through hooks/act.ts.
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface } from 'claude-code'
-import type { BuildData, ChangeRow, DashView, LearningData, LessonRow, ReviewRow, Section, TokenData } from '../types/index.d.ts'
-import { lessons, parseChange, parseFleet, proposedCount, resolveHead, reviewRow } from './core/loops.ts'
+import type { BuildData, ChangeRow, DashView, LearningData, LessonRow, ReviewRow, RuleRow, Section, TokenData } from '../types/index.d.ts'
+import { lessons, parseChange, parseFleet, proposedRules, resolveHead, reviewRow } from './core/loops.ts'
 import { encodeProject, needsRead, scanText, summarize, type FileScan, type Transcript } from './core/scan.ts'
 import { statusText } from './core/view.ts'
 
@@ -39,7 +40,7 @@ type ChangeRead = { row: ChangeRow; rounds: { n: number; text: string }[]; lesso
 async function readChange($: EngineInterface, root: string, name: string): Promise<ChangeRead> {
   const dir = `${root}/${name}`
   const timeline = await text($, `${dir}/timeline.jsonl`)
-  const row = parseChange({ name, state: await text($, `${dir}/state.json`), tasks: await text($, `${dir}/tasks.md`), lean: await text($, `${dir}/change.md`), timeline })
+  const row = parseChange({ name, state: await text($, `${dir}/state.json`), tasks: await text($, `${dir}/tasks.md`), lean: await text($, `${dir}/change.md`), proposal: await text($, `${dir}/proposal.md`), timeline })
   const entries = (await $.fs.exists(`${dir}/review`)) ? await $.fs.list(`${dir}/review`) : []
   const rounds = await Promise.all(entries.flatMap(e => {
     const m = e.kind === 'file' ? ROUND.exec(e.name) : null
@@ -48,7 +49,7 @@ async function readChange($: EngineInterface, root: string, name: string): Promi
   return { row, rounds, lessons: lessons(name, timeline ?? '') }
 }
 
-async function proposed($: EngineInterface): Promise<Section<number>> {
+async function proposed($: EngineInterface): Promise<Section<RuleRow[]>> {
   let answer: string
   try {
     const link = await $.mcp.connect(REVIEW_MCP)
@@ -64,7 +65,7 @@ async function proposed($: EngineInterface): Promise<Section<number>> {
     return { kind: 'error', error: `learn_propose failed: ${message(error)}` }
   }
   try {
-    return { kind: 'ok', data: proposedCount(answer) }
+    return { kind: 'ok', data: proposedRules(answer) }
   } catch (error) {
     return { kind: 'error', error: message(error) }
   }

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { lessons, openSpan, parseChange, parseFleet, proposedCount, resolveHead, reviewRow } from '../hooks/core/loops.ts'
+import { lessons, openSpan, parseChange, parseFleet, proposedCount, proposedRules, resolveHead, reviewRow } from '../hooks/core/loops.ts'
 
 const TIMELINE = [
   '{"ev":"start","span":"plan","kind":"phase","label":"plan","at":"2026-11-14T04:49:49Z","ts":1794631789}',
@@ -10,14 +10,20 @@ const TIMELINE = [
   '{"kind":"lesson","at":"2026-11-14T06:00:00Z","category":"spec_gap","priority":"low","detail":"d2","action":"a"}',
 ].join('\n')
 
-const STATE = JSON.stringify({ change: '062-x', phase: 'build', phases: { verify: { verdict: 'PASS' }, pr: { url: 'https://x/pull/9' } } })
+const STATE = JSON.stringify({ change: '062-x', phase: 'build', phases: { proposal: { status: 'approved' }, verify: { verdict: 'PASS' }, pr: { url: 'https://x/pull/9' } } })
 const TASKS = '- [x] `T1` — a\n- [ ] `T2` — b\n- [!] `T3` — c\n'
 
 test('R062 AC-4 a change row: phase, tasks, verdict, PR and the open span', () => {
   expect(parseChange({ name: '062-x', state: STATE, tasks: TASKS, timeline: TIMELINE })).toEqual({
     name: '062-x', phase: 'build', done: 1, total: 3, failed: 1, verdict: 'PASS', pr: 'https://x/pull/9',
-    span: { label: 'wave 1', since: 1794631843000 },
+    span: { label: 'wave 1', since: 1794631843000 }, approved: true, feature: null,
   })
+})
+
+test('R063 AC-1 approval from state.json; the feature module from the proposal or the lean change', () => {
+  expect(parseChange({ name: 'a', state: '{"phases":{"proposal":{"status":"pending"}}}' }).approved).toBe(false)
+  expect(parseChange({ name: 'a', proposal: '# P\n\n**Feature:** devloop\n' }).feature).toBe('devloop')
+  expect(parseChange({ name: 'a', lean: '**Feature:** cat\n' }).feature).toBe('cat')
 })
 
 test('R062 AC-4 a change with no state is a proposal; unparseable state is "?"', () => {
@@ -77,6 +83,17 @@ test('R062 AC-4 proposed rules from learn_propose, anything else is an error', (
   expect(proposedCount('3 proposed rule(s) for .specclaw/review/rules/learned.md (dry-run…')).toBe(3)
   expect(proposedCount('no recurring lessons (count >= 2) to propose')).toBe(0)
   expect(() => proposedCount('Traceback')).toThrow()
+})
+
+test('R063 AC-1 each proposed rule by fingerprint; a count that does not match its lines is an error', () => {
+  const head = '2 proposed rule(s) for .specclaw/review/rules/learned.md (dry-run; apply with `learn --apply <fp>...` after a human approves):\n\n'
+  const rows = '- fp 0a1b2c3d4e5f [major B3] seen 3x in a.py, b/c.py: guard the null: always\n- fp 99aa88bb77cc [minor S1] seen 4x in x.ts: name it\n'
+  expect(proposedRules(head + rows)).toEqual([
+    { fp: '0a1b2c3d4e5f', seen: 3, lesson: 'guard the null: always' },
+    { fp: '99aa88bb77cc', seen: 4, lesson: 'name it' },
+  ])
+  expect(proposedRules('no recurring lessons (seen 3+ times) to propose')).toEqual([])
+  expect(() => proposedRules(head)).toThrow()
 })
 
 const files = (map: Record<string, string>) => async (p: string) => map[p]

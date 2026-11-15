@@ -41,7 +41,7 @@ const reviewLines = (rows: ReviewRow[]) => rows.length === 0 ? ['  No review rou
 const learningLines = (l: LearningData) => [
   `  ${l.lessons.length} lessons${Object.entries(l.byCategory).map(([k, n]) => ` · ${k} ${n}`).join('')}`,
   ...l.lessons.slice(-3).map(x => `  ${pad(x.change, 28)} ${x.priority} ${x.category}: ${x.detail}`),
-  ...(l.proposed.kind === 'ok' ? [`  ${l.proposed.data} proposed rules awaiting approval${l.proposed.data ? ' (specclaw-review learn)' : ''}`] : other(l.proposed)),
+  ...(l.proposed.kind === 'ok' ? [`  ${l.proposed.data.length} proposed rules awaiting approval${l.proposed.data.length ? ' (approve or reject under ACTIONS)' : ''}`] : other(l.proposed)),
 ]
 
 const tokenLines = (t: TokenData) => [
@@ -54,7 +54,7 @@ const tokenLines = (t: TokenData) => [
 const section = <T>(title: string, s: Section<T>, draw: (d: T) => string[]) => [title, ...(s.kind === 'ok' ? draw(s.data) : other(s))]
 
 export const paneLines = (view: DashView, now: number) => [
-  `dash · read ${hhmm(view.at)} UTC · read only`,
+  `dash · read ${hhmm(view.at)} UTC`,
   '',
   ...section('BUILD', view.build, d => buildLines(d, now)),
   '',
