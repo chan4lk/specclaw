@@ -14,6 +14,7 @@
 | Tasks | ✅ Done |  |
 | Build | ✅ Done | 4/4 tasks |
 | Verify | ⚠️ Partial | PARTIAL |
+| PR | ✅ Raised | https://github.com/chan4lk/specclaw/pull/140 |
 
 ## Task Progress
 

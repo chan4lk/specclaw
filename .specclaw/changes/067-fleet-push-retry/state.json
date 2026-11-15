@@ -1,6 +1,6 @@
 {
   "change": "067-fleet-push-retry",
-  "phase": "verify",
+  "phase": "pr",
   "branch": "specclaw/067-fleet-push-retry",
   "size": "bounded",
   "phases": {
@@ -8,6 +8,7 @@
     "spec": {"status":"done","at":"2026-11-15T19:45:37Z"},
     "tasks": {"status":"done","at":"2026-11-15T19:45:46Z"},
     "build": {"status":"done","at":"2026-11-15T20:04:37Z","tasks":{"done":4,"total":4,"failed":0}},
-    "verify": {"status":"partial","at":"2026-11-15T22:21:46Z","verdict":"PARTIAL"}
+    "verify": {"status":"partial","at":"2026-11-15T22:21:46Z","verdict":"PARTIAL"},
+    "pr": {"status":"raised","at":"2026-11-15T22:22:29Z","url":"https://github.com/chan4lk/specclaw/pull/140"}
   }
 }

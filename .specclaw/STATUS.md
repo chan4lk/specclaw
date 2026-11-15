@@ -1,7 +1,7 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** specclaw
-**Last Updated:** 2026-11-15 11:04 UTC
+**Last Updated:** 2026-11-15 19:45 UTC
 
 _4 unnumbered changes · run `/specclaw-extras:renumber` to order them_
 
@@ -9,6 +9,7 @@ _4 unnumbered changes · run `/specclaw-extras:renumber` to order them_
 
 
 - 🔀 **046-macos-test-portability** ▫ — pr raised | 3/3 tasks (100%) | 0 failed | PR #100 merged | 3m
+- 📝 **067-fleet-push-retry** ▫ — tasks done | 0/4 tasks (0%) | 0 failed | 5m
 
 ## Pending Proposals
 
@@ -90,6 +91,6 @@ _4 unnumbered changes · run `/specclaw-extras:renumber` to order them_
 
 ## Stats
 
-- **Total changes:** 70
-- **Active:** 1
+- **Total changes:** 71
+- **Active:** 2
 - **Completed:** 69
