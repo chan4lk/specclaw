@@ -1,6 +1,6 @@
-# Status: 063-dash-launch-approve-caps
+# Status: 064-sync-clean-status-release-gate
 
-**Change:** 063-dash-launch-approve-caps
+**Change:** 064-sync-clean-status-release-gate
 **Started:** 2026-11-14
 **Last Updated:** 2026-11-14
 
@@ -10,11 +10,11 @@
 |-------|--------|-------|
 | Proposal | ✅ Approved |  |
 | Spec | ✅ Done |  |
-| Design | ⏳ Pending | |
+| Design | ✅ Done |  |
 | Tasks | ✅ Done |  |
-| Build | ✅ Done | 3/3 tasks |
+| Build | ✅ Done |  |
 | Verify | ✅ Passed | PASS |
-| PR | ✅ Raised | https://github.com/chan4lk/specclaw/pull/135 |
+| Archived | ✅ Done |  |
 
 ## Task Progress
 
@@ -28,4 +28,4 @@
 |------|-------|-------|--------|----------|--------|
 
 ## Issues
-**GitHub Issue:** #125
+**GitHub Issue:** #126

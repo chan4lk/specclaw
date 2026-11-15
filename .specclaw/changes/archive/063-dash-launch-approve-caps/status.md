@@ -1,6 +1,6 @@
-# Status: Core records + plugin suggestions at the moment of need
+# Status: 063-dash-launch-approve-caps
 
-**Change:** 059-core-records-suggest
+**Change:** 063-dash-launch-approve-caps
 **Started:** 2026-11-14
 **Last Updated:** 2026-11-14
 
@@ -12,9 +12,10 @@
 | Spec | ✅ Done |  |
 | Design | ⏳ Pending | |
 | Tasks | ✅ Done |  |
-| Build | ✅ Done | 4/4 tasks |
+| Build | ✅ Done | 3/3 tasks |
 | Verify | ✅ Passed | PASS |
-| PR | ✅ Raised | https://github.com/chan4lk/specclaw/pull/129 |
+| PR | ✅ Raised | https://github.com/chan4lk/specclaw/pull/135 |
+| Archived | ✅ Done |  |
 
 ## Task Progress
 
@@ -28,4 +29,4 @@
 |------|-------|-------|--------|----------|--------|
 
 ## Issues
-**GitHub Issue:** #121
+**GitHub Issue:** #125

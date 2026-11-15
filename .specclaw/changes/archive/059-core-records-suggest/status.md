@@ -1,6 +1,6 @@
-# Status: 062-dash-pane
+# Status: Core records + plugin suggestions at the moment of need
 
-**Change:** 062-dash-pane
+**Change:** 059-core-records-suggest
 **Started:** 2026-11-14
 **Last Updated:** 2026-11-14
 
@@ -10,10 +10,12 @@
 |-------|--------|-------|
 | Proposal | ✅ Approved |  |
 | Spec | ✅ Done |  |
-| Design | ✅ Done |  |
+| Design | ⏳ Pending | |
 | Tasks | ✅ Done |  |
-| Build | ✅ Done |  |
-| Verify | ⏳ Pending | |
+| Build | ✅ Done | 4/4 tasks |
+| Verify | ✅ Passed | PASS |
+| PR | ✅ Raised | https://github.com/chan4lk/specclaw/pull/129 |
+| Archived | ✅ Done |  |
 
 ## Task Progress
 
@@ -27,4 +29,4 @@
 |------|-------|-------|--------|----------|--------|
 
 ## Issues
-**GitHub Issue:** #124
+**GitHub Issue:** #121
