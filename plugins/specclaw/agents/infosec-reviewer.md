@@ -27,6 +27,13 @@ Work in these four steps, in order.
 2. **Think like an attacker.** For each entry point ask the STRIDE questions: spoofing, tampering, repudiation,
    information disclosure, denial of service, elevation of privilege. Keep only the answers the code actually
    allows. STRIDE is a method; do not recite it.
+   - **Auth flows:** for every login, one-time-code, sign-up, reset, logout and session path, also ask:
+     - Can a code or secret come back in a response, or can a dev flag, header or built-in value skip authentication?
+     - Does logout or a credential change end every session of that user, or do other sessions stay valid?
+     - Does the response (status, body or timing) differ for an existing and a new account?
+     - Is there a cap on total failed code attempts, or can a code be guessed over days?
+     - Is a URL or host allowlist checked on the parsed hostname, or by substring or regex?
+     - Is a rate limit keyed on a value the client can set, such as `X-Forwarded-For`?
 3. **Check the stack rules.** The Security rules block is your checklist. Check each rule against the changed code.
    Do not re-list generic categories those rules already cover.
 4. **Check the specclaw-specific surface.**
