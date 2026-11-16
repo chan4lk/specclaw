@@ -19,8 +19,10 @@ Future approvals only: no existing `proposal.md` is rewritten.
 - **FR1.** On `specclaw-set-phase … proposal approved` (status compared case-insensitively), the first line of
   `<change>/proposal.md` that starts with `**Status:**` becomes exactly `**Status:** ✅ Approved`.
 - **FR2.** Only that first `**Status:**` line is considered. Later `**Status:**` lines in the body are untouched.
-- **FR3.** If that first line already contains the word `Approved`, the file is left byte-identical (hand-written
-  forms such as `✅ Approved 2026-11-14` or `🟢 Approved (operator, …)` are never overwritten).
+- **FR3.** If that first line already starts with an approved marker (`**Status:**`, optional `✅` or `🟢`, then
+  `Approved`), the file is left byte-identical (hand-written forms such as `✅ Approved 2026-11-14` or
+  `🟢 Approved (operator, …)` are never overwritten). A header that only mentions the word, such as
+  `Not Approved yet`, is not an approved marker and is rewritten.
 - **FR4.** The new text carries no date, so running the same approval again leaves the file byte-identical.
 - **FR5.** A trailing carriage return on the old line is kept, so a CRLF file does not gain an LF-only line.
 - **FR6.** The change is skipped, with no error and no warning, when the phase is not `proposal`, the status is not
@@ -33,8 +35,10 @@ Future approvals only: no existing `proposal.md` is rewritten.
 
 - **NFR1.** A failure to rewrite the header must never fail or roll back the phase transition: at worst it warns on
   stderr and the command still exits 0 (the same rule the `status.md` row write follows).
-- **NFR2.** The rewrite is atomic enough not to leave a truncated file: written to a temp file, checked non-empty,
-  then copied over (the pattern `specclaw-status-row` uses).
+- **NFR2.** The rewrite never leaves a truncated file: the new text goes to a temp file in the same directory
+  (created with `cp -p`, so the mode is kept), every write is checked, and only then is it `mv`'d over
+  `proposal.md`. A read-only `proposal.md` is left alone with a warning, and a failed step warns instead of failing
+  the transition. A final line with no newline stays without one.
 - **NFR3.** No new dependency: bash and awk only, as in the rest of the script.
 - **NFR4.** No existing `proposal.md` in `.specclaw/changes/` or `.specclaw/changes/archive/` is modified.
 
@@ -82,8 +86,10 @@ Each criterion must pass for the change to be considered complete.
 - Add one block to `bin/specclaw-set-phase`, straight after `state.json` is installed (`mv … "$STATE_FILE"`,
   before the status.md section), so a status.md edge case that exits early can never skip it.
 - Guard: `PHASE = proposal`, lowercased `STATUS = approved`, `"$CHANGE_DIR/proposal.md"` is a file.
-- awk to a temp file: change only the first `^\*\*Status:\*\*` line, skip it if it already contains `Approved`,
-  keep a trailing `\r`; then `cat tmp > proposal.md` if the temp file is non-empty. Any failure is a `warn`.
+- Pure bash (`read` loop), not awk: the awk on Windows Git Bash strips `\r` and would rewrite a CRLF file as LF.
+  Change only the first `**Status:**` line, skip it if it already starts with an approved marker, keep a trailing
+  `\r`, write to a same-directory temp file made with `cp -p`, then `mv` it over `proposal.md`. Any failure is a
+  `warn`.
 - File map: `plugins/specclaw/bin/specclaw-set-phase` (the block), `plugins/specclaw/references/full/propose.md`
   (step 10 wording), `plugins/specclaw/tests/run-phase-state-tests.sh` (new cases before the Hermeticity check),
   version files (separate `chore: bump version` commit).

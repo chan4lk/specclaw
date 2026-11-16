@@ -1023,8 +1023,11 @@ write_proposal '**Status:** 🟡 Draft' "$C/proposal.md"
 cp "$C/proposal.md" "$WORK/h6.before"
 run_sp "$SPECCLAW" h6a spec done
 assert_same_file "H6a another phase leaves the header" "$WORK/h6.before" "$C/proposal.md"
-run_sp "$SPECCLAW" h6a proposal pending
-assert_same_file "H6b another status leaves the header" "$WORK/h6.before" "$C/proposal.md"
+C="$(new_change h6b)"
+write_proposal '**Status:** 🟡 Draft' "$C/proposal.md"
+run_sp "$SPECCLAW" h6b proposal pending
+assert_eq "H6b1 a pending status is recorded, not refused" "0" "$RC"
+assert_same_file "H6b2 another status leaves the header" "$WORK/h6.before" "$C/proposal.md"
 C="$(new_change h6c)"
 run_sp "$SPECCLAW" h6c proposal approved
 assert_eq "H6c no proposal.md still records the approval" "approved" "$(json_get "$C/state.json" phases.proposal.status)"
@@ -1035,6 +1038,37 @@ cp "$C/proposal.md" "$WORK/h6e.before"
 run_sp "$SPECCLAW" h6e proposal approved
 assert_eq "H6e a proposal with no Status line exits 0" "0" "$RC"
 assert_same_file "H6f and stays unchanged" "$WORK/h6e.before" "$C/proposal.md"
+
+C="$(new_change h7)"
+printf '# P\n\n**Created:** x\n**Status:** 🟡 Draft\n\nlast' >"$C/proposal.md"
+printf '# P\n\n**Created:** x\n**Status:** ✅ Approved\n\nlast' >"$WORK/h7.expected"
+run_sp "$SPECCLAW" h7 proposal approved
+assert_same_file "H7 a missing final newline stays missing" "$WORK/h7.expected" "$C/proposal.md"
+
+C="$(new_change h8)"
+write_proposal '**Status:** Not Approved yet' "$C/proposal.md"
+run_sp "$SPECCLAW" h8 proposal approved
+assert_eq "H8 a header that merely mentions Approved is still flipped" "**Status:** ✅ Approved" "$(sed -n 4p "$C/proposal.md")"
+
+C="$(new_change 'h9 my change')"
+write_proposal '**Status:** 🟡 Draft' "$C/proposal.md"
+run_sp "$SPECCLAW" 'h9 my change' proposal approved
+assert_eq "H9 a change name with a space is flipped" "**Status:** ✅ Approved" "$(sed -n 4p "$C/proposal.md")"
+
+C="$(new_change h10)"
+write_proposal '**Status:** 🟡 Draft' "$C/proposal.md"
+cp "$C/proposal.md" "$WORK/h10.before"
+chmod 444 "$C/proposal.md"
+if [[ -w "$C/proposal.md" ]]; then
+  pass "H10 skipped: this user can write a read-only file (running as root)"
+else
+  run_sp "$SPECCLAW" h10 proposal approved
+  assert_eq "H10a a read-only proposal still exits 0" "0" "$RC"
+  assert_same_file "H10b and is left as it was" "$WORK/h10.before" "$C/proposal.md"
+  assert_contains "H10c and says so" "read-only" "$(cat "$WORK/last.err")"
+fi
+chmod 644 "$C/proposal.md"
+assert_eq "H11 no temp file is left in the change directory" "0" "$(find "$C" -name '.proposal.md.*' | wc -l | tr -d ' ')"
 
 # ─── Hermeticity: nothing was written outside the temp workdir ───────────────
 assert_eq "Ha every change directory lives under the temp workdir" "0" \
