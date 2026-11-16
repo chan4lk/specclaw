@@ -36,8 +36,8 @@ on purpose: the tests assert the exact bytes the block writes, and splitting the
   - Notes: Step 10 only. Add that `specclaw-set-phase` also flips the proposal's `**Status:**` header, and
     `then run specclaw-update-status .specclaw`. Do not touch step 6.
 
-- [ ] `T3` — Bump the plugin version (AC10)
-  - Files: plugins/specclaw/.claude-plugin/plugin.json, .claude-plugin/marketplace.json
+- [x] `T3` — Bump the plugin version (AC10)
+  - Files: .claude-plugin/marketplace.json, plugins/specclaw/.claude-plugin/plugin.json, plugins/specclaw/.codex-plugin/plugin.json, plugins/specclaw-bf/.claude-plugin/plugin.json, plugins/specclaw-bf/.codex-plugin/plugin.json, plugins/specclaw-dash/.claude-plugin/plugin.json, plugins/specclaw-dash/.codex-plugin/plugin.json, plugins/specclaw-extras/.claude-plugin/plugin.json, plugins/specclaw-extras/.codex-plugin/plugin.json, plugins/specclaw-fleet/.claude-plugin/plugin.json, plugins/specclaw-fleet/.codex-plugin/plugin.json, plugins/specclaw-review/.claude-plugin/plugin.json, plugins/specclaw-review/.codex-plugin/plugin.json, plugins/specclaw-sync/.claude-plugin/plugin.json, plugins/specclaw-sync/.codex-plugin/plugin.json
   - Estimate: small
   - Kind: config
   - Context: 29000
