@@ -10,3 +10,5 @@
 {"ev":"stop","span":"T3","at":"2026-11-16T14:51:59Z","ts":1794840719,"status":"ok"}
 {"ev":"stop","span":"W1","at":"2026-11-16T14:52:08Z","ts":1794840729,"status":"ok"}
 {"ev":"stop","span":"build","at":"2026-11-16T14:52:09Z","ts":1794840729,"status":"ok"}
+{"ev":"start","span":"verify-1794840934","kind":"phase","label":"verify","at":"2026-11-16T14:55:35Z","ts":1794840934}
+{"ev":"stop","span":"verify-1794840934","at":"2026-11-16T16:02:19Z","ts":1794844939,"status":"ok"}
