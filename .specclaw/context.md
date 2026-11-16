@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-11-03 — 048-codex-safe-mod-hooks_
+_Last updated: 2026-11-16 — 067-fleet-push-retry_
 
 ## Architecture Overview
 
@@ -211,17 +211,19 @@ when `git.merge_on_finalize: true` (default `false`).
 
 <!-- Last 5 significant decisions from merged changes. Updated automatically on each PR merge. -->
 
-1. **2026-11-03 — 047-specclaw-mod:** the specclaw plugin ships a Claude Code mod (pane, band, status line,
+1. **2026-11-16 — 067-fleet-push-retry:** a fleet pod retries its push (attempts and pauses bounded by a delivery
+   budget) and a push that fails every time is `exit=push-failed`, exit code 4, never a warning. With
+   `fleet.bundle_claim` set (which requires `fleet.node_label`), unpushed commits are saved as a `git bundle`
+   on a PVC, one `subPath` folder per repository URL and change; a later run resumes from it, and a bundle
+   holding commits the branch lacks is never deleted or overwritten (it is set aside as `kept-<n>`).
+2. **2026-11-16 — 067-fleet-push-retry:** dispatch stamps the Job's wall-clock deadline (`FLEET_HARD_DEADLINE`)
+   into the Job; the pod stops its agent 480 s and its pushes 180 s before it, so a pod that started late
+   still records the run. The dispatcher's clock and the node's must agree to within about a minute.
+3. **2026-11-03 — 047-specclaw-mod:** the specclaw plugin ships a Claude Code mod (pane, band, status line,
    propose gate) in the same plugin, not a sixth one, so the five-plugins-one-version rule holds and
    installing specclaw turns it on. Mod command names allow only `[A-Za-z0-9_-]`, so `/specclaw:pane` is
    impossible; the command is `/specclaw-pane`.
-2. **2026-11-03 — 047-specclaw-mod:** the gate defaults to `warn` because every specclaw user now gets it;
+4. **2026-11-03 — 047-specclaw-mod:** the gate defaults to `warn` because every specclaw user now gets it;
    it resolves paths through realPath and also holds edits to a change's `state.json`.
-3. **2026-10-20 — 046-macos-test-portability:** five suites and two `bin/` scripts made BSD/macOS-portable
+5. **2026-10-20 — 046-macos-test-portability:** five suites and two `bin/` scripts made BSD/macOS-portable
    by reusing existing idioms (timeout fallback, `tr -d ' '` on counts); a macOS CI job is a separate change.
-4. **2026-10-20 — 045-project-custom-presets:** projects keep presets in `.specclaw/presets/<name>.md`; a
-   same-name file replaces the built-in, and `extends: <name>` (leading frontmatter only, one level)
-   keeps the parent first. `specclaw-presets` is the sole resolver.
-5. **2026-10-20 — 045-project-custom-presets:** unusable preset files (symlink escape, dangling link,
-   directory) are refused, not silently replaced by the built-in. Review majors (shared scalar parser,
-   tab-led comments) were deferred to `follow-ups.md`.

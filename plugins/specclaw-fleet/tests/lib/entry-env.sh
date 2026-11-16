@@ -15,10 +15,19 @@ case "$*" in
   *" -x "*) [[ "${GATE:-}" == proxy-down ]] && exit 7; exit 0 ;;
 esac
 echo "{}"'
-stub git '[[ "$1" == -C && "$3" == merge-base ]] && { [[ -z "${NOT_ANCESTOR:-}" ]]; exit; }
+stub git '[[ "$1" == -C && "$3" == merge-base ]] && { case "$5 ${6:-}" in
+  "HEAD FETCH_HEAD") [[ "${BUNDLE_REL:-ahead}" == ahead ]] ;; "FETCH_HEAD HEAD") [[ "${BUNDLE_REL:-}" == behind ]] ;;
+  "tip1 HEAD") [[ -z "${TIP_NOT_PUSHED:-}" ]] ;; *) [[ -z "${NOT_ANCESTOR:-}" && "$5" != "${BUNDLE_NOT_ANCESTOR:-none}" ]] ;; esac; exit; }
+[[ "$1" == -C && "$3" == bundle ]] && { echo "bundle $4 $5 ${6:-}" >> "$TMP/bundle.log"
+  case "$4" in create) [[ -z "${BUNDLE_CREATE_FAIL:-}" ]] && echo bundle > "$5" ;; list-heads) [[ -z "${BUNDLE_BAD:-}" ]] && echo "${BUNDLE_TIP:-}" ;; *) [[ -z "${BUNDLE_BAD:-}" ]] ;; esac; exit; }
+[[ "$1" == -C && "$3" == fetch && "$5" == *.bundle ]] && { echo "fetch $5 $6" >> "$TMP/bundle.log"; exit 0; }
 [[ "$1" == -C && "$3" == rev-parse && "$4" == --abbrev-ref ]] && { [[ -s "$TMP/onbranch" ]] && { cat "$TMP/onbranch"; exit 0; }; echo "${ON_BRANCH-specclaw/049-x}"; exit 0; }
 [[ "$1" == -C && "$3" == rev-parse ]] && { echo deadbeef; exit 0; }
 [[ "$1" == -C && "$3" == rev-list ]] && { echo "${REVLIST-3}"; exit 0; }
+[[ "$1" == -C && "$3" == repack ]] && { echo repack >> "$TMP/pushes"; exit 0; }
+[[ "$1" == -C && "$*" == *" push -q "* ]] && { echo push >> "$TMP/pushes"; [[ "$*" == *http.lowSpeedTime=* ]] || echo no-low-speed >> "$TMP/pushes"
+  (( $(grep -c push "$TMP/pushes") <= ${PUSH_HANGS:-0} )) && { echo "pushing..." >&2; sleep 30; }
+  (( $(grep -c push "$TMP/pushes") > ${PUSH_FAILS:-0} )) && exit 0; printf "%s\n" "${PUSH_ERR:-fatal: push failed}" >&2; exit 1; }
 [[ "$1" == -C && "$3" == ls-remote && -n "${LS_FAIL:-}" ]] && exit 128
 [[ "$1" == -C && "$3" == fetch && -n "${FETCH_FAIL:-}" ]] && exit 128
 [[ "$1" == -C && "$3" == merge ]] && { [[ -n "${MERGE_CONFLICT:-}${MERGE_BROKEN:-}" ]] && exit 1; [[ -n "${MERGE_BRINGS_PASS:-}" ]] && echo pass > "$2/.specclaw/features/049-x/integration-result"; exit 0; }
@@ -56,11 +65,11 @@ stub codex 'sleep "${AGENT_SLEEP:-0}"; exit "${AGENT_RC:-0}"'
 export TMP REAL_AZDO=""
 
 run_entry() {
-  rm -rf "${TMP:?}/status" "${TMP:?}/work" "${TMP:?}/home" "${TMP:?}/onbranch"
+  rm -rf "${TMP:?}/status" "${TMP:?}/work" "${TMP:?}/home" "${TMP:?}/onbranch" "${TMP:?}/pushes" "${TMP:?}/bundle.log"
   mkdir -p "$TMP/status" "$TMP/work" "$TMP/home" "$TMP/seed"
   : > "$CALLS"
   printf 'oat-token' > "$TMP/cred"
-  env FLEET_STATUS_DIR="$TMP/status" FLEET_WORK="$TMP/work" FLEET_CRED="$TMP/cred" FLEET_SEED="$TMP/seed" \
+  env FLEET_BUNDLE_DIR="$TMP/bundles" FLEET_BUNDLES="${ENTRY_BUNDLES-on}" FLEET_STATUS_DIR="$TMP/status" FLEET_WORK="$TMP/work" FLEET_CRED="$TMP/cred" FLEET_SEED="$TMP/seed" \
     HTTPS_PROXY=http://proxy:3128 FLEET_GATE_TRIES=2 FLEET_GATE_SLEEP=0 AZDO_ORG="${ENTRY_ORG:-o}" AZDO_PROJECT="${ENTRY_PROJECT:-p}" FLEET_WORK_ITEM=42 FLEET_COMMIT=abc123 FLEET_CODEX_HOME="$TMP/codex" FLEET_AZDO_CONFIG=$'azdo:\n  fleet_states:\n    failed: Failed' HOME="$TMP/home" FLEET_AGENT="${ENTRY_AGENT:-claude}" FLEET_CHANGE=049-x FLEET_REF="${ENTRY_REF:-main}" FLEET_PR_TARGET="${ENTRY_PR_TARGET:-}" FLEET_MODE="${ENTRY_MODE:-}" FLEET_MERGE_REF="${ENTRY_MERGE:-}" AZDO_TOKEN=pat-secret \
     FLEET_REPO_URL="${ENTRY_REPO_URL-https://dev.azure.com/o/p/_git/r}" ANTHROPIC_API_KEY=k ANTHROPIC_AUTH_TOKEN=k OPENAI_API_KEY=k CODEX_API_KEY=k \
     bash "$ENTRY" > "$TMP/out" 2>&1

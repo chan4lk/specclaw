@@ -1,0 +1,85 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 2
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw-fleet/README.md",
+  "plugins/specclaw-fleet/image/tracker.sh",
+  "plugins/specclaw-fleet/tests/cases/ac42_bundles_real_git.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "class": "other",
+   "file": "plugins/specclaw-fleet/tests/cases/ac42_bundles_real_git.sh",
+   "fp": "e300ed1a0bc7",
+   "in_delta": true,
+   "line": 34,
+   "message": "The fix for the major (save_bundle overwrote a diverged bundle) ships one scenario, a single-tip diverged bundle where the set-aside succeeds. The fix has several variants and they are untested. Add table rows for: (a) a bundle with several heads where only one tip is missing from the branch, (b) a bundle already contained in the branch, which must still be overwritten and not set aside, (c) a file that is not a bundle, which `bundle_held` treats as held and overwrites, (d) a failed `mv` in `set_bundle_aside`, which must keep the old pair and report `none`, and (e) a second set-aside with an existing `kept-*` file, which must not clobber it.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Delete the multi-tip loop or flip the `|| return 0` fallback in `bundle_held`: the single diverged row still passes. A two-head bundle with one unreachable head would be overwritten, or a plain overwrite after a good fast-forward would wrongly produce a kept-* file, and no test would fail.",
+   "severity": "major",
+   "unclassified": false
+  },
+  {
+   "class": "data-loss",
+   "file": "plugins/specclaw-fleet/image/tracker.sh",
+   "fp": "47cf5c81a767",
+   "in_delta": true,
+   "line": 72,
+   "message": "The `kept-<time>` name has one-second resolution and is moved with `mv -f`. A second set-aside in the same second replaces the earlier kept bundle, which breaks the 'never overwritten' promise. Use `mv -n`, or add a unique suffix such as the PID or a counter to the name.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B12",
+   "scenario": "Two failed pushes for the same change land within one second (for example, two concurrent triggers on the shared claim). Both set-asides target `kept-20261116T101500Z.bundle`, and the first diverged bundle is destroyed.",
+   "severity": "minor",
+   "unclassified": false
+  },
+  {
+   "class": "other",
+   "file": "plugins/specclaw-fleet/image/tracker.sh",
+   "fp": "5b0c93a54d39",
+   "in_delta": true,
+   "line": 50,
+   "message": "A set-aside is reported only as a stderr WARNING. The run record still says `bundle=saved`, or `bundle=none` if the new save then fails, so nothing in the record shows that a kept-* bundle now exists. The previous round asked for this to be recorded in `bundle=`. Surface it in the record, for example `bundle=saved,kept=<name>`.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B3",
+   "scenario": "A diverged bundle is set aside and the new save then fails (the BUNDLE_BASE check fails or the directory is unwritable). The record shows `bundle=none`. Nothing in the record tells the operator that kept-*.bundle holds the only copy of the diverged commits.",
+   "severity": "minor",
+   "unclassified": false
+  }
+ ],
+ "fix_proof": {
+  "base": "337de845a6ff19be13786a91aa3adcd066810e39",
+  "mode": "block",
+  "reason": "1 test file(s) fail on 337de845a6 and pass on HEAD",
+  "status": "proven",
+  "tests": [
+   "plugins/specclaw-fleet/tests/cases/ac42_bundles_real_git.sh"
+  ]
+ },
+ "head": "ae44ec1606f7be89d746d479783dbaf5f79ae669",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 20721,
+ "round": 3,
+ "since": "337de845a6",
+ "status": "open",
+ "system_chars": 9680,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794775201,
+ "ts_start": 1794775164
+}

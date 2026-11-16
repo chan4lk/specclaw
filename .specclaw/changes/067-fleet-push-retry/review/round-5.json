@@ -1,0 +1,85 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 3
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw-fleet/README.md",
+  "plugins/specclaw-fleet/image/tracker.sh",
+  "plugins/specclaw-fleet/tests/cases/ac42_bundles_real_git.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "class": "other",
+   "file": "plugins/specclaw-fleet/tests/cases/ac42_bundles_real_git.sh",
+   "fp": "4ef1b9d68d76",
+   "in_delta": true,
+   "line": 44,
+   "message": "The fix is only partly a class fix. The `taken` row pre-creates only `kept-1.bundle`. The new loop in `set_bundle_aside` also skips a name when only `kept-N.base` exists, and no row covers that. The last round asked for an assertion that `kept=<name>` in the record names an existing file. The rows still check only the regex and the count of `kept-*.bundle` files. Add a row with only `kept-1.base` present. For every kept row, assert that `$B/<name>.bundle` exists and is the old bundle's heads.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "`set_bundle_aside` is changed to print `kept-1` while moving the bundle to `kept-3.bundle`. The `rw` rows still pass, because the count is 1 and the regex matches `kept-1`. A leftover `kept-1.base` with no matching bundle is likewise never exercised.",
+   "severity": "minor",
+   "unclassified": false
+  },
+  {
+   "class": "other",
+   "file": "plugins/specclaw-fleet/README.md",
+   "fp": "b1d57b9743f1",
+   "in_delta": true,
+   "line": 72,
+   "message": "The README now documents `bundle=none,kept=<name>` for the case where the set-aside succeeds but the new bundle cannot be written. No row drives that path. The only `none` row is the `ro` row, where the set-aside itself fails, so it records no `kept=`. Add a row for it, for example with a `git bundle` shim that fails, or correct the doc.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "A diverged older bundle is set aside, then `git bundle create` fails. The record should read `bundle=none,kept=kept-1`. A regression that drops `kept=` or leaves a half-written `work.bundle` would pass every current row.",
+   "severity": "minor",
+   "unclassified": false
+  },
+  {
+   "class": "other",
+   "file": "plugins/specclaw-fleet/image/tracker.sh",
+   "fp": "8939de5aaa49",
+   "in_delta": true,
+   "line": 77,
+   "message": "`mv -n work.base kept.base 2>/dev/null || rm -f work.base` swallows a failed move and then deletes the base. The set-aside bundle silently loses the base that explains it, with no warning. Warn when the move fails, or keep `work.base` in place.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B12",
+   "scenario": "The bundle moves to `kept-1.bundle`, then the base `mv` fails (an I/O error, say). `work.base` is removed, `kept-1.bundle` has no `.base`, and the run reports `kept=kept-1` as if the pair were intact.",
+   "severity": "minor",
+   "unclassified": false
+  }
+ ],
+ "fix_proof": {
+  "base": "86d18146d09d97c3af26c82a6d5baec884897b6c",
+  "mode": "block",
+  "reason": "1 test file(s) fail on 86d18146d0 and pass on HEAD",
+  "status": "proven",
+  "tests": [
+   "plugins/specclaw-fleet/tests/cases/ac42_bundles_real_git.sh"
+  ]
+ },
+ "head": "851b84d5d6b0939aeb90a6d943fbfcda2cd83736",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 22291,
+ "round": 5,
+ "since": "86d18146d0",
+ "status": "clean",
+ "system_chars": 9719,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794775507,
+ "ts_start": 1794775472
+}

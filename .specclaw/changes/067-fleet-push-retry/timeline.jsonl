@@ -1,0 +1,10 @@
+{"ev":"start","span":"propose","kind":"phase","label":"propose","at":"2026-11-15T19:39:26Z","ts":1794771566}
+{"ev":"stop","span":"propose","at":"2026-11-15T19:39:47Z","ts":1794771587,"status":"ok"}
+{"ev":"start","span":"plan","kind":"phase","label":"plan","at":"2026-11-15T19:44:33Z","ts":1794771873}
+{"ev":"stop","span":"plan","at":"2026-11-15T19:45:56Z","ts":1794771956,"status":"ok"}
+{"ev":"start","span":"W1","kind":"wave","label":"wave 1","at":"2026-11-15T19:49:30Z","ts":1794772170}
+{"ev":"stop","span":"W1","at":"2026-11-15T19:59:25Z","ts":1794772765,"status":"ok"}
+{"ev":"start","span":"W2","kind":"wave","label":"wave 2","at":"2026-11-15T19:59:25Z","ts":1794772765}
+{"ev":"stop","span":"W2","at":"2026-11-15T20:04:29Z","ts":1794773069,"status":"ok"}
+{"ev":"start","span":"verify-1794773432","kind":"phase","label":"verify","at":"2026-11-15T20:10:32Z","ts":1794773432}
+{"ev":"stop","span":"verify","at":"2026-11-15T22:21:54Z","ts":1794781314,"status":"ok"}

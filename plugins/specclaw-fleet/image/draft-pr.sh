@@ -50,9 +50,12 @@ ensure_pr() {
 deliver() {
   trap '' TERM
   local branch pr draft line
-  local -a stats=()
+  local -a stats=() cause=()
   while IFS= read -r line; do stats+=("$line"); done < <(safe_stats)
-  branch="$(push_change_branch)"
+  # A deadline (not an agent exit code) stays visible as cause= when the push also fails.
+  [[ "$1" =~ ^[0-9]+$ ]] || cause=("cause=$1")
+  branch="$(push_change_branch)" || { show_agent_log
+    record state=failed exit=push-failed "${cause[@]}" "push_error=$(cat "$STATUS/push-error" 2>/dev/null)" "bundle=$(save_bundle)" "${stats[@]}"; finish 4; }
   read -r pr draft < <(ensure_pr "$branch")
   show_agent_log
   record "state=$([[ -n "$pr" ]] && echo pr_open || echo failed)" "exit=$1" "branch=$branch" "pr=${pr:-none}" "draft=${draft:-false}" "${stats[@]}"

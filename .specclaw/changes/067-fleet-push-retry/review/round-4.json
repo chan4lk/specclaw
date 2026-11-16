@@ -1,0 +1,100 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 2,
+  "minor": 2
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw-fleet/README.md",
+  "plugins/specclaw-fleet/image/tracker.sh",
+  "plugins/specclaw-fleet/tests/cases/ac42_bundles_real_git.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "class": "other",
+   "file": "plugins/specclaw-fleet/tests/cases/ac42_bundles_real_git.sh",
+   "fp": "ce6644815b84",
+   "in_delta": true,
+   "line": 51,
+   "message": "Variant (e) from the last round is still untested: a set-aside when a `kept-*` file already exists. The new `mv -n` and the `[[ ! -e work.bundle ]]` guard in `set_bundle_aside` have no row. Add a row that pre-creates the colliding `kept-<time>-<pid>-<n>` name (stub `date` and `RANDOM`, or pre-seed every candidate name). Assert the old kept file is byte-identical and that `kept=<name>` in the record names an existing file. The regex-only check on the record also never confirms that the named file exists.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Change `mv -n` back to `mv -f` in `set_bundle_aside` (or drop the `-e` guard). Every table row still passes, because no row starts with an existing `kept-*` file. A second set-aside that picks the same name then silently overwrites the earlier kept bundle, which is data loss.",
+   "severity": "major",
+   "unclassified": false
+  },
+  {
+   "class": "other",
+   "file": "plugins/specclaw-fleet/tests/cases/ac42_bundles_real_git.sh",
+   "fp": "58b203ce4752",
+   "in_delta": true,
+   "line": 52,
+   "message": "When the tests run as root, the read-only row (variant d, a failed `mv` in `set_bundle_aside`) is skipped. `aside_rows` stays 0, so the `aside_table` check passes and its label still claims 'a set-aside that cannot move it saves nothing'. A skipped row must not count as a pass. Count skipped rows, and fail the check or report it as not run. Alternatively, force the `mv` failure without relying on directory permissions, for example with a shim `mv` earlier on PATH.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B3",
+   "scenario": "CI runs in a container as uid 0. The `diverged none 0 ro` row is skipped with only a SKIP echo. The check is reported green, so the 'failed move keeps the old pair and reports none' behaviour is never exercised, and a regression there goes unnoticed.",
+   "severity": "major",
+   "unclassified": false
+  },
+  {
+   "class": "other",
+   "file": "plugins/specclaw-fleet/image/tracker.sh",
+   "fp": "b5fa1c0a29d1",
+   "in_delta": true,
+   "line": 77,
+   "message": "The result of `mv -n work.base kept.base` is ignored, but the warning is still printed and `kept=` is still recorded. If the base file is missing or cannot be moved, the kept bundle has no matching base. The stale `work.base` also stays behind. If the new save then fails, an orphan `work.base` is left with no `work.bundle`.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B12",
+   "scenario": "A bundle exists without `work.base`, or the base move fails. The bundle is set aside and the record says `kept=kept-...`, but `kept-....base` does not exist. The operator is not told that the base is missing.",
+   "severity": "minor",
+   "unclassified": false
+  },
+  {
+   "class": "other",
+   "file": "plugins/specclaw-fleet/README.md",
+   "fp": "98ec5655a683",
+   "in_delta": true,
+   "line": 72,
+   "message": "The docs say the record is `bundle=saved,kept=<name>` or `bundle=none`. The code can also emit `none,kept=<name>`, which happens when the old bundle was set aside and the new bundle could not be created. That output is undocumented. Document it, or make it consistent. Also check that other readers of the `bundle=` value (doctor, status, trigger --retry) accept the `,kept=` suffix rather than comparing against exactly `saved` or `none`.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B1",
+   "scenario": "The old bundle diverges and is set aside, then `BUNDLE_BASE` is empty or `git bundle create` fails. The record says `bundle=none,kept=kept-...`, a value the README never mentions.",
+   "severity": "minor",
+   "unclassified": false
+  }
+ ],
+ "fix_proof": {
+  "base": "ae44ec1606f7be89d746d479783dbaf5f79ae669",
+  "mode": "block",
+  "reason": "1 test file(s) fail on ae44ec1606 and pass on HEAD",
+  "status": "proven",
+  "tests": [
+   "plugins/specclaw-fleet/tests/cases/ac42_bundles_real_git.sh"
+  ]
+ },
+ "head": "86d18146d09d97c3af26c82a6d5baec884897b6c",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 22773,
+ "round": 4,
+ "since": "ae44ec1606",
+ "status": "open",
+ "system_chars": 9698,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794775401,
+ "ts_start": 1794775354
+}

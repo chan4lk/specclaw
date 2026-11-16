@@ -12,7 +12,7 @@ metadata:
     specclaw.fleet/change: "$F_LABEL"
 spec:
   backoffLimit: 0
-  activeDeadlineSeconds: $((F_DEADLINE + 600))
+  activeDeadlineSeconds: $F_JOB_DEADLINE
   ttlSecondsAfterFinished: 86400
   template:
     metadata:
@@ -37,6 +37,7 @@ $(render_pod_extras)
             - {name: FLEET_REPO_URL, value: $(yaml_str "$F_REPO")}
             - {name: FLEET_WORK_ITEM, value: "$F_WI"}
             - {name: FLEET_AGENT_TIMEOUT, value: "$F_DEADLINE"}
+            - {name: FLEET_HARD_DEADLINE, value: "$(( $(date +%s) + F_JOB_DEADLINE ))"}
             - {name: FLEET_CLAUDE_VERSION, value: $(yaml_str "$F_CLAUDE_VERSION")}
             - {name: FLEET_COMMIT, value: "$F_COMMIT"}
             - {name: FLEET_AZDO_CONFIG, value: $(yaml_str "$F_AZDO_CONFIG")}
@@ -51,7 +52,7 @@ $(render_run_env)
             - {name: status, mountPath: /fleet/status}
             - {name: cred, mountPath: /run/fleet, readOnly: true}
             - {name: codex, mountPath: /fleet/codex}
-            - {name: tmp, mountPath: /tmp}
+            - {name: tmp, mountPath: /tmp}$(render_bundle_mount)
       containers:
         - name: writeback
           image: $F_IMAGE
@@ -75,6 +76,6 @@ $(render_run_env)
         - {name: codex, emptyDir: {}}
         - {name: tmp, emptyDir: {}}
         - {name: wbhome, emptyDir: {}}
-        - {name: cred, secret: {secretName: $F_SECRET_OBJ}}$(render_pg_volumes)
+        - {name: cred, secret: {secretName: $F_SECRET_OBJ}}$(render_pg_volumes)$(render_bundle_volume)
 YAML
 }
