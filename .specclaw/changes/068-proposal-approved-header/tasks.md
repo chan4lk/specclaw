@@ -27,7 +27,7 @@ on purpose: the tests assert the exact bytes the block writes, and splitting the
 
 ### Wave 2 — docs and release
 
-- [ ] `T2` — Say it in the full propose reference (AC7)
+- [x] `T2` — Say it in the full propose reference (AC7)
   - Files: plugins/specclaw/references/full/propose.md
   - Estimate: small
   - Kind: docs
