@@ -288,6 +288,32 @@ chmod 644 "$tmpfile" 2>/dev/null || true
 mv "$tmpfile" "$STATE_FILE" || die "failed to install ${STATE_FILE}"
 trap - EXIT
 
+flip_proposal_header() {
+  local proposal="${CHANGE_DIR}/proposal.md" flipped line seen=0 changed=0 cr
+  [ -f "$proposal" ] || return 0
+  flipped="$(mktemp)" || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    if [ "$seen" -eq 0 ] && [[ "$line" == '**Status:**'* ]]; then
+      seen=1
+      if [[ "$line" != *Approved* ]]; then
+        cr=""
+        [[ "$line" == *$'\r' ]] && cr=$'\r'
+        line="**Status:** ✅ Approved${cr}"
+        changed=1
+      fi
+    fi
+    printf '%s\n' "$line"
+  done <"$proposal" >"$flipped"
+  if [ "$changed" -eq 1 ] && [ -s "$flipped" ]; then
+    cat "$flipped" >"$proposal" || warn "could not update the Status header in ${proposal}"
+  fi
+  rm -f "$flipped"
+}
+
+if [ "$PHASE" = "proposal" ] && [ "$(printf '%s' "$STATUS" | tr '[:upper:]' '[:lower:]')" = "approved" ]; then
+  flip_proposal_header
+fi
+
 # ─── Reflect into status.md (FR2) ────────────────────────────────────────────
 
 # Edge case 4: status.md may not exist yet. Same self-heal as specclaw-verify.

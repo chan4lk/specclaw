@@ -13,7 +13,7 @@ on purpose: the tests assert the exact bytes the block writes, and splitting the
 
 ### Wave 1 — the fix and its proof
 
-- [ ] `T1` — Flip the proposal header in specclaw-set-phase and prove it (AC1–AC6, AC9)
+- [x] `T1` — Flip the proposal header in specclaw-set-phase and prove it (AC1–AC6, AC9)
   - Files: plugins/specclaw/bin/specclaw-set-phase, plugins/specclaw/tests/run-phase-state-tests.sh
   - Estimate: small
   - Kind: backend

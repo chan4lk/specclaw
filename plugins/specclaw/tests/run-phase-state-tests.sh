@@ -991,6 +991,51 @@ assert_contains "E11c and the template title is the name, not the match" \
 assert_lacks "E11d with no unsubstituted placeholder left behind" \
   "{{title}}" "$(cat "$C/status.md" 2>/dev/null)"
 
+write_proposal() {
+  printf '%s\n' '# Proposal: demo' '' '**Created:** 2026-11-16' "$1" '' '## Problem' '' '**Status:** body line' >"$2"
+}
+
+C="$(new_change h1)"
+write_proposal '**Status:** 🟡 Draft' "$C/proposal.md"
+cp "$C/proposal.md" "$WORK/h1.before"
+run_sp "$SPECCLAW" h1 proposal approved
+assert_eq "H1 approval flips the header" "**Status:** ✅ Approved" "$(sed -n 4p "$C/proposal.md")"
+assert_eq "H1b and changes no other line" "1" "$(diff "$WORK/h1.before" "$C/proposal.md" | grep -c '^>')"
+assert_eq "H2 a later Status line in the body is untouched" "**Status:** body line" "$(tail -1 "$C/proposal.md")"
+cp "$C/proposal.md" "$WORK/h1.after"
+run_sp "$SPECCLAW" h1 proposal approved
+assert_same_file "H3 approving again is byte-identical" "$WORK/h1.after" "$C/proposal.md"
+
+C="$(new_change h4)"
+write_proposal '**Status:** ✅ Approved 2026-11-14' "$C/proposal.md"
+cp "$C/proposal.md" "$WORK/h4.before"
+run_sp "$SPECCLAW" h4 proposal approved
+assert_same_file "H4 an already-approved header is never rewritten" "$WORK/h4.before" "$C/proposal.md"
+
+C="$(new_change h5)"
+printf '# Proposal: demo\r\n\r\n**Created:** 2026-11-16\r\n**Status:** 🟡 Draft\r\n\r\n## Problem\r\n' >"$C/proposal.md"
+run_sp "$SPECCLAW" h5 proposal approved
+assert_eq "H5a a CRLF header is flipped" "**Status:** ✅ Approved" "$(sed -n 4p "$C/proposal.md" | tr -d '\r')"
+assert_eq "H5b and every line is still CRLF" "$(wc -l <"$C/proposal.md" | tr -d ' ')" "$(grep -c $'\r$' "$C/proposal.md")"
+
+C="$(new_change h6a)"
+write_proposal '**Status:** 🟡 Draft' "$C/proposal.md"
+cp "$C/proposal.md" "$WORK/h6.before"
+run_sp "$SPECCLAW" h6a spec done
+assert_same_file "H6a another phase leaves the header" "$WORK/h6.before" "$C/proposal.md"
+run_sp "$SPECCLAW" h6a proposal pending
+assert_same_file "H6b another status leaves the header" "$WORK/h6.before" "$C/proposal.md"
+C="$(new_change h6c)"
+run_sp "$SPECCLAW" h6c proposal approved
+assert_eq "H6c no proposal.md still records the approval" "approved" "$(json_get "$C/state.json" phases.proposal.status)"
+assert_eq "H6d and creates no proposal.md" "no" "$([[ -e "$C/proposal.md" ]] && echo yes || echo no)"
+C="$(new_change h6e)"
+printf '# Proposal: demo\n\nno header here\n' >"$C/proposal.md"
+cp "$C/proposal.md" "$WORK/h6e.before"
+run_sp "$SPECCLAW" h6e proposal approved
+assert_eq "H6e a proposal with no Status line exits 0" "0" "$RC"
+assert_same_file "H6f and stays unchanged" "$WORK/h6e.before" "$C/proposal.md"
+
 # ─── Hermeticity: nothing was written outside the temp workdir ───────────────
 assert_eq "Ha every change directory lives under the temp workdir" "0" \
   "$(find "$SPECCLAW" "$RSPEC" ${USPEC:+"$USPEC"} -name state.json -not -path "$WORK/*" | wc -l | tr -d ' ')"
