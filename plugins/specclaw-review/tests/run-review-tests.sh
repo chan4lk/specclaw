@@ -572,8 +572,8 @@ check "064 AC-7 templates are valid YAML (when PyYAML is installed)" 'python3 -c
 
 rules_missing() { local f="$1" id miss=""; shift; for id in "$@"; do grep -q "^- \*\*$id[ *]" "$f" || miss="$miss $id"; done; echo "$miss"; }
 sec_ids() { case "$1" in
-  base) echo "B13 B14 B15" ;; dotnet) echo "DN7 DN8 DN9" ;; python) echo "PY8 PY9 PY10 PY11" ;;
-  node) echo "ND6 ND7 ND8 ND9 ND10" ;; nextjs) echo "NX5 NX6 NX7 NX8" ;; react-spa) echo "RS7 RS8 RS9 RS10" ;; esac; }
+  base) echo "B13 B14 B15 B16 B17 B18 B19 B20" ;; dotnet) echo "DN7 DN8 DN9" ;; python) echo "PY8 PY9 PY10 PY11" ;;
+  node) echo "ND6 ND7 ND8 ND9 ND10 ND11" ;; nextjs) echo "NX5 NX6 NX7 NX8" ;; react-spa) echo "RS7 RS8 RS9 RS10" ;; esac; }
 for pk in base dotnet python node nextjs react-spa; do
   check "Security AC-6 review pack $pk has all its security rules" '[ -z "$(rules_missing "$PLUGIN_DIR/review-rules/$pk.md" $(sec_ids $pk))" ]'
   for id in $(sec_ids $pk); do

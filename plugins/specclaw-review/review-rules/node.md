@@ -14,3 +14,4 @@
   → **blocker**.
 - **ND9** CORS wildcard origin combined with credentials → **major**.
 - **ND10** An auth or login route with no rate limit → **major**.
+- **ND11** `trustProxy: true`, or auth rate limits keyed only on the client IP, so a spoofed `X-Forwarded-For` resets them → **major**.

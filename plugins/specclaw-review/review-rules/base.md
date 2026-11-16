@@ -42,6 +42,15 @@ defects left by a fix that patched only the case the reviewer named.
   **major**. Fail closed with a generic error.
 - **B15 Weak password storage.** Home-made crypto, or a password stored with a plain or fast digest (MD5,
   SHA-1, SHA-256) instead of Argon2id, bcrypt or scrypt, is a **blocker**.
+- **B16 Dev bypass.** An env flag, header or hard-coded value that skips or weakens authentication, or a response
+  that returns a one-time code or secret, is a **blocker**. It must refuse to start in production.
+- **B17 Session lifecycle.** A logout or credential change that leaves the user's other sessions valid is a **major**.
+- **B18 Account enumeration.** A sign-up, sign-in or reset whose status, body or timing differs for an existing and a
+  new account is a **minor**.
+- **B19 Code lockout.** A one-time code check with no cap on total failed attempts, so it can be guessed over time,
+  is a **minor**.
+- **B20 URL allowlist.** A URL or host allowlist checked with a substring or regex on the whole string instead of the
+  parsed hostname (SSRF) is a **major**.
 
 ### Severity calibration
 
