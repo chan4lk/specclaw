@@ -32,6 +32,7 @@ test/
 - **Pollution:** never merge untrusted objects into others; parse with Zod first.
 - **Cors:** list explicit origins.
 - **RateLimit:** rate-limit auth routes.
+- **Proxy:** set `trustProxy` to the trusted proxy addresses, never `true`. Key auth rate limits on the account as well as the IP.
 
 ## Shared
 - `src/lib/` (or `packages/shared/` in a monorepo): base handlers, Zod schemas reused by several routes, HTTP and retry helpers.

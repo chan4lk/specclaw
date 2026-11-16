@@ -23,6 +23,11 @@ Always applies. Listed presets add to it; `preset_overrides` in `config.yaml` ma
 - **Logging:** no secrets, tokens or personal data in logs.
 - **Dependencies:** no new dependency without a reason. Commit the lockfile.
 - **Crypto:** use vetted platform libraries, never home-made crypto. Store passwords with a slow, salted password hash (Argon2id, bcrypt or scrypt), never a plain digest such as MD5 or SHA-256.
+- **Sessions:** logout and any password or credential change end every session of that user, not only the current one.
+- **Enumeration:** sign-up, sign-in and reset answer the same (status, body, timing) whether or not the account exists.
+- **Codes:** deliver a one-time code out-of-band, never in a response or log, and cap total failed attempts so it cannot be guessed over time.
+- **DevFlags:** no flag, header or built-in value may skip or weaken authentication. Refuse to start in production when one is set.
+- **Urls:** check a URL's host by parsing it and comparing the hostname, never with a substring or regex on the whole string.
 
 ## Tests
 - At most one test per acceptance criterion, named after it (`ac1_…`, `AC1 …`).
