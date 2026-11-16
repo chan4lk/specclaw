@@ -145,6 +145,8 @@ jobs:
         run: bash plugins/specclaw/tests/run-timing-tests.sh
       - name: Run staged-files audit tests
         run: bash plugins/specclaw/tests/run-staged-files-tests.sh
+      - name: Run infosec-reviewer tests
+        run: bash plugins/specclaw/tests/run-infosec-reviewer-tests.sh
       - name: Run narration-gate tests
         run: bash plugins/specclaw-bf/tests/run-narration-gate-tests.sh
       - name: Run Codex skill adapter tests
