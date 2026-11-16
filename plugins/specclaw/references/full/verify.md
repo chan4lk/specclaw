@@ -104,6 +104,18 @@ If `true`:
 5. Extract the verdict line from `review-report.md` and append a one-line summary to the verify-report that will be written in Step 4:
    `**Code Review:** <verdict> — <N findings: X BLOCK, Y WARN, Z NOTE>`
 
+## Step 3.52 — InfoSec review (conditional)
+
+Read `workflow.security_review` from `.specclaw/config.yaml`. If `false` or not set, skip this step entirely (no output, no error). It is independent of `workflow.code_review`.
+
+If `true`:
+1. Delete any existing `security-report.md`, then spawn the `infosec-reviewer` agent using the model from `config.yaml` `models.review`. Pass: changed files content (from Step 1), spec content, tasks content, change name, and the security rules: the `## Security` sections from `specclaw-presets` and, when `specclaw-review` is installed, the security rules from `specclaw-review rules`.
+2. The agent writes `.specclaw/changes/<change>/security-report.md` itself. Confirm the file exists and has a `**Verdict:**` line. If the agent errored, or the file or the verdict line is missing, append `**InfoSec Review:** NOT RUN — <reason>` to the verify-report and stop.
+3. Extract the verdict line and append one line to the verify-report that Step 4 writes:
+   `**InfoSec Review:** <verdict> — <N findings: X BLOCK, Y WARN, Z NOTE>`. A `NOT_RUN` verdict is written as `**InfoSec Review:** NOT RUN — <note>`.
+
+It is advisory: the verdict never changes the overall verify verdict, and `specclaw-loop` does not read `security-report.md`.
+
 ## Step 3.55 — Local review loop (specclaw-review add-on, conditional)
 
 Run this only when `command -v specclaw-review` succeeds. Run the loop from the

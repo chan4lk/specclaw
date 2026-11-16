@@ -205,6 +205,7 @@ workflow:
   strict: true                     # Enforce phase prerequisites
   code_review: false               # Spawn code-reviewer agent during verify
   code_review_block: false         # Block PR if review requests changes
+  security_review: false           # Spawn infosec-reviewer during verify (advisory, blocks nothing)
   
   # Staged-files audit — does the branch carry exactly what this change should?
   # PRs shipped the wrong file set in BOTH directions, silently: planning
