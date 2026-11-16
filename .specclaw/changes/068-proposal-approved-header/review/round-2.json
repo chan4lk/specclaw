@@ -1,0 +1,70 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 2,
+  "minor": 0
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw/bin/specclaw-set-phase",
+  "plugins/specclaw/tests/run-phase-state-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "class": "other",
+   "file": "plugins/specclaw/tests/run-phase-state-tests.sh",
+   "fp": "561dfa522fdb",
+   "in_delta": true,
+   "line": 1072,
+   "message": "No test drives the failure path this fix exists for: a failed or partial write to the temp copy must leave the original proposal.md intact and leave no temp file behind. The only failure row is H10, the read-only early return, which exits before `mktemp`. H11 then looks for leftover `.proposal.md.*` files in h10's directory, which never had one, so it passes whether or not the cleanup works. Add rows that make the real path fail after the temp file exists. Examples: a stubbed `mv` or `cp` earlier on PATH, or a full or unwritable temp target. Each should assert that the original bytes survive, a warning is printed, and the exit code is 0. Run the H11 temp-file scan over those same directories and over the success path.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Delete the `ok=0` assignments and the `[ \"$ok\" -eq 1 ]` check, or delete both `rm -f \"$flipped\"` calls, in flip_proposal_header. Every H-test, including H11, still passes. A truncated temp copy could then be installed over proposal.md, or `.proposal.md.XXXXXX` files could pile up in the change directory, with nothing failing.",
+   "severity": "major",
+   "unclassified": false
+  },
+  {
+   "carried": "fix not proven: the changed tests fail on HEAD (exit 1)",
+   "class": "data-loss",
+   "file": "plugins/specclaw/bin/specclaw-set-phase",
+   "fp": "bcec71d07a40",
+   "in_delta": true,
+   "line": 308,
+   "message": "The user's proposal.md is overwritten in place with `cat \"$flipped\" >\"$proposal\"`. Nothing checks that the temp copy is complete. The `while ... done >\"$flipped\"` loop does not check whether `printf` failed, and the `-s` test only proves the file is non-empty. A failed or partial write to the temp file, or a crash during the in-place truncate-and-write, leaves proposal.md truncated. Check the loop's write status (or compare line counts), then install the result with a same-directory temp file and `mv`. If the original's permissions or symlink need preserving, copy them first.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B12",
+   "scenario": "$TMPDIR is a small or full tmpfs. The loop writes half of a 300-line proposal to $flipped and `printf` fails with ENOSPC. The failure is ignored, `changed=1` and the file is non-empty, so `cat` replaces proposal.md with the truncated copy. The approved proposal loses most of its content and exit status is still 0.",
+   "severity": "major",
+   "unclassified": false
+  }
+ ],
+ "fix_proof": {
+  "base": "c68772e66ce665fbc3343ac6b5f71881c852ba47",
+  "mode": "block",
+  "reason": "the changed tests fail on HEAD (exit 1)",
+  "status": "not_proven",
+  "tests": [
+   "plugins/specclaw/tests/run-phase-state-tests.sh"
+  ]
+ },
+ "head": "a16b533b2b1d72e1ade1b4dc475f2adb8bcde9ac",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 16701,
+ "round": 2,
+ "since": "c68772e",
+ "status": "open",
+ "system_chars": 9642,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794841972,
+ "ts_start": 1794841883
+}

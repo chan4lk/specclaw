@@ -1068,7 +1068,33 @@ else
   assert_contains "H10c and says so" "read-only" "$(cat "$WORK/last.err")"
 fi
 chmod 644 "$C/proposal.md"
-assert_eq "H11 no temp file is left in the change directory" "0" "$(find "$C" -name '.proposal.md.*' | wc -l | tr -d ' ')"
+
+STUB_MV="$WORK/stub-mv"
+STUB_CP="$WORK/stub-cp"
+mkdir -p "$STUB_MV" "$STUB_CP"
+printf '#!/bin/sh\ncase "$*" in *proposal.md) exit 1;; esac\nexec "%s" "$@"\n' "$(command -v mv)" >"$STUB_MV/mv"
+printf '#!/bin/sh\ncase "$*" in *.proposal.md.*) exit 1;; esac\nexec "%s" "$@"\n' "$(command -v cp)" >"$STUB_CP/cp"
+chmod +x "$STUB_MV/mv" "$STUB_CP/cp"
+
+C="$(new_change h12)"
+write_proposal '**Status:** 🟡 Draft' "$C/proposal.md"
+cp "$C/proposal.md" "$WORK/h12.before"
+PATH="$STUB_MV:$PATH" run_sp "$SPECCLAW" h12 proposal approved
+assert_eq "H12a a failed install still exits 0" "0" "$RC"
+assert_same_file "H12b and leaves the original bytes" "$WORK/h12.before" "$C/proposal.md"
+assert_contains "H12c and warns" "could not update the Status header" "$(cat "$WORK/last.err")"
+assert_eq "H12d and still records the approval" "approved" "$(json_get "$C/state.json" phases.proposal.status)"
+
+C="$(new_change h13)"
+write_proposal '**Status:** 🟡 Draft' "$C/proposal.md"
+cp "$C/proposal.md" "$WORK/h13.before"
+PATH="$STUB_CP:$PATH" run_sp "$SPECCLAW" h13 proposal approved
+assert_eq "H13a a failed temp copy still exits 0" "0" "$RC"
+assert_same_file "H13b and leaves the original bytes" "$WORK/h13.before" "$C/proposal.md"
+assert_contains "H13c and warns" "could not prepare a temp copy" "$(cat "$WORK/last.err")"
+assert_eq "H13d and still records the approval" "approved" "$(json_get "$C/state.json" phases.proposal.status)"
+
+assert_eq "H11 no temp file is left in any change directory" "0" "$(find "$SPECCLAW" -name '.proposal.md.*' | wc -l | tr -d ' ')"
 
 # ─── Hermeticity: nothing was written outside the temp workdir ───────────────
 assert_eq "Ha every change directory lives under the temp workdir" "0" \
