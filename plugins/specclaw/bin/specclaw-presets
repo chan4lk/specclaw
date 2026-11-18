@@ -141,7 +141,8 @@ def main():
             elif path not in out:
                 out.append(path)
     if out:
-        print("\n".join(out))
+        # Bytes, with "/": text-mode print() writes \r\n and realpath gives C:\... on Windows Python.
+        sys.stdout.buffer.write((chr(10).join(out).replace(os.sep, "/") + chr(10)).encode())
     return 1 if ERRORS else 0
 
 
