@@ -36,11 +36,18 @@ fixture; printf '<Project><ItemGroup><ProjectReference Include="../App.Infrastru
 check "AC-11 Domain→Infrastructure reference exits 1" '[ "$(rc)" = 1 ]'
 
 # Change 045: specclaw-presets resolves project-local presets over built-ins.
-P="$(cd "$PLUGIN_DIR/presets" && pwd -P)"
-proj() { rm -rf "$TMP/p" && mkdir -p "$TMP/p/presets" && printf 'presets: [%s]\n' "$1" > "$TMP/p/config.yaml"; L="$(cd "$TMP/p/presets" && pwd -P)"; }
+# Git Bash: pwd -P gives /c/...; the Windows Python behind specclaw-presets prints C:/... (cygpath -m).
+winpath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s\n' "$1"; fi; }
+P="$(winpath "$(cd "$PLUGIN_DIR/presets" && pwd -P)")"
+proj() { rm -rf "$TMP/p" && mkdir -p "$TMP/p/presets" && printf 'presets: [%s]\n' "$1" > "$TMP/p/config.yaml"; L="$(winpath "$(cd "$TMP/p/presets" && pwd -P)")"; }
 res() { "$BIN/specclaw-presets" "$TMP/p" 2>/dev/null | tr '\n' ' '; }
+# Git Bash's ln -s silently makes a copy; the symlink checks below only mean something with real links.
+SYM=""; : > "$TMP/probe" && ln -s "$TMP/probe" "$TMP/lnk" 2>/dev/null && [ -L "$TMP/lnk" ] && SYM=1
+SKIPS=0
+schk() { if [ -n "$SYM" ]; then check "$@"; else SKIPS=$((SKIPS + 1)); echo "SKIP: $1 (ln -s makes no real symlink here)"; fi; }
 proj dotnet; rmdir "$TMP/p/presets"
 check "AC-1 no local dir prints built-in base then dotnet" '[ "$(res)" = "$P/base.md $P/dotnet.md " ]'
+check "AC-1b output is LF-only with / separators (no CR, no backslash)" '[ "$("$BIN/specclaw-presets" "$TMP/p" | wc -c)" -gt 0 ] && [ "$("$BIN/specclaw-presets" "$TMP/p" | tr -d "\r\\\\" | wc -c)" = "$("$BIN/specclaw-presets" "$TMP/p" | wc -c)" ]'
 proj dotnet; printf '# Preset: dotnet (ours)\n' > "$L/dotnet.md"
 check "AC-2 local dotnet replaces built-in" '[ "$(res)" = "$P/base.md $L/dotnet.md " ]'
 printf -- '---\nextends: dotnet\n---\n# more rules\n' > "$L/dotnet.md"
@@ -119,22 +126,23 @@ cfgcase "path-like names"            'presets: [../x, ../../etc/hosts]\n' ''    
 rm -rf "$TMP/v" && mkdir -p "$TMP/v/presets" && printf 'presets: [dotnet]\n' > "$TMP/v/config.yaml"
 printf 'secret\n' > "$TMP/outside.md" && ln -s "$TMP/outside.md" "$TMP/v/presets/dotnet.md"
 sym1="$("$BIN/specclaw-presets" "$TMP/v" 2>/dev/null | sed -E 's|.*/([^/]+)/presets/([^/]+)\.md$|\1:\2|' | tr '\n' ' ')"
-check "045 variant: refused local file does not fall back to the built-in" '[ "$sym1" = "specclaw:base " ]'
-check "045 variant: symlink out of presets/ is refused" '! "$BIN/specclaw-presets" "$TMP/v" 2>/dev/null | grep -q outside.md && ! "$BIN/specclaw-presets" "$TMP/v" >/dev/null 2>&1'
+schk "045 variant: refused local file does not fall back to the built-in" '[ "$sym1" = "specclaw:base " ]'
+schk "045 variant: symlink out of presets/ is refused" '! "$BIN/specclaw-presets" "$TMP/v" 2>/dev/null | grep -q outside.md && ! "$BIN/specclaw-presets" "$TMP/v" >/dev/null 2>&1'
 rm "$TMP/v/presets/dotnet.md" && printf 'presets: [a]\n' > "$TMP/v/config.yaml" && printf -- '---\nextends: b\n---\n' > "$TMP/v/presets/a.md"
 ln -s "$TMP/outside.md" "$TMP/v/presets/b.md"
 sym="$("$BIN/specclaw-presets" "$TMP/v" 2>/dev/null | sed -E 's|.*/([^/]+)/presets/([^/]+)\.md$|\1:\2|' | tr '\n' ' ')"
-check "045 variant: symlinked extends parent is refused" '[ "$sym" = "specclaw:base v:a " ] && ! "$BIN/specclaw-presets" "$TMP/v" >/dev/null 2>&1'
+schk "045 variant: symlinked extends parent is refused" '[ "$sym" = "specclaw:base v:a " ] && ! "$BIN/specclaw-presets" "$TMP/v" >/dev/null 2>&1'
 for kind in dangling directory; do
   rm -rf "$TMP/v" && mkdir -p "$TMP/v/presets" && printf 'presets: [dotnet]\n' > "$TMP/v/config.yaml"
-  if [ "$kind" = dangling ]; then ln -s "$TMP/no-such.md" "$TMP/v/presets/dotnet.md"; else mkdir "$TMP/v/presets/dotnet.md"; fi
+  if [ "$kind" = dangling ]; then ln -s "$TMP/no-such.md" "$TMP/v/presets/dotnet.md" 2>/dev/null; else mkdir "$TMP/v/presets/dotnet.md"; fi
   out1="$("$BIN/specclaw-presets" "$TMP/v" 2>/dev/null | sed -E 's|.*/([^/]+)/presets/([^/]+)\.md$|\1:\2|' | tr '\n' ' ')"
-  check "045 variant: $kind dotnet.md is refused, no built-in fallback" '[ "$out1" = "specclaw:base " ] && ! "$BIN/specclaw-presets" "$TMP/v" >/dev/null 2>&1'
+  if [ "$kind" = dangling ]; then chk=schk; else chk=check; fi
+  $chk "045 variant: $kind dotnet.md is refused, no built-in fallback" '[ "$out1" = "specclaw:base " ] && ! "$BIN/specclaw-presets" "$TMP/v" >/dev/null 2>&1'
 done
 mkdir -p "$TMP/i" && "$BIN/specclaw-init" "$TMP/i" demo d >/dev/null
 check "AC-6 init scaffolds .specclaw/presets/README.md from the template" 'cmp -s "$TMP/i/.specclaw/presets/README.md" "$PLUGIN_DIR/templates/presets-README.md"'
 check "AC-7 lean build reads presets via specclaw-presets" 'grep -q "specclaw-presets .specclaw" "$PLUGIN_DIR/skills/build/SKILL.md" && ! grep -q "presets/base.md" "$PLUGIN_DIR/skills/build/SKILL.md"'
 
 echo
-[ "$FAILS" -eq 0 ] && echo "All preset-check tests passed." || echo "$FAILS failure(s)."
+[ "$FAILS" -eq 0 ] && echo "All preset-check tests passed (${SKIPS} skipped)." || echo "$FAILS failure(s)."
 exit $((FAILS > 0))
