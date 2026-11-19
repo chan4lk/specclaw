@@ -58,18 +58,34 @@ chmod +x "$TMP/fake0/jscpd" "$TMP/fake0/lizard"
 out="$(cd "$TMP/p0" && PATH="$TMP/fake0:/usr/bin:/bin" "$SCAN" . --gate)"; rc=$?
 check "046 zero clones → jscpd ran, 0 duplicated lines, gate pass" '[ "$rc" = 0 ] && [ "$(jq -r .tools.jscpd <<<"$out")" = ran ] && [ "$(jq -r .totals.duplicated_lines <<<"$out")" = 0 ] && [ "$(jq -r .gate <<<"$out")" = pass ]'
 
-# Change 068 AC-1: a function table larger than the OS argument limit must reach jq by file.
-mkdir -p "$TMP/fakebig"
-for f in jq git mktemp jscpd; do cp -P "$FAKE/$f" "$TMP/fakebig/$f"; done; ln -s "$BASH" "$TMP/fakebig/bash"
+# Change 068 AC-1: each table larger than the OS argument limit must reach jq by file.
+# BIG names the table the fakes inflate: funcs (lizard rows), dup (jscpd summary rows), clones (jscpd pairs).
+mkdir -p "$TMP/fakebig" "$TMP/pbig/src"
+for f in jq git mktemp; do cp -P "$FAKE/$f" "$TMP/fakebig/$f"; done; ln -s "$BASH" "$TMP/fakebig/bash"
 cat > "$TMP/fakebig/lizard" <<'LZ'
 #!/usr/bin/env bash
 echo 'NLOC,CCN,token,PARAM,length,location,file,function,long_name,start,end'
-awk 'BEGIN { for (i = 1; i <= 15000; i++) printf "3,1,9,0,3,\"function_with_a_long_name_%d@%d-%d@./src/a.ts\",\"./src/a.ts\",\"function_with_a_long_name_%d\",\"function_with_a_long_name_%d( )\",%d,%d\n", i, i, i, i, i, i, i }'
+n=1; [ "${BIG:-}" = funcs ] && n=15000
+awk -v n="$n" 'BEGIN { for (i = 1; i <= n; i++) printf "3,1,9,0,3,\"fn_%d@%d-%d@./src/a.ts\",\"./src/a.ts\",\"function_with_a_long_name_%d\",\"function_with_a_long_name_%d( )\",%d,%d\n", i, i, i, i, i, i, i }'
 LZ
-chmod +x "$TMP/fakebig/lizard"
-check "068 the fake function table is larger than ARG_MAX" '[ "$("$TMP/fakebig/lizard" | wc -c)" -gt "$(getconf ARG_MAX)" ]'
-out="$(run "$TMP/fakebig" --gate)"; rc=$?
-check "068 AC-1 oversized function table → report written, gate exit, not 126" '[ "$rc" != 126 ] && [ "$rc" -le 2 ] && [ "$(jq -r .totals.functions <<<"$out")" = 15000 ]'
+cat > "$TMP/fakebig/jscpd" <<'JS'
+#!/usr/bin/env bash
+out=""; while [ $# -gt 0 ]; do [ "$1" = --output ] && out="$2"; shift; done
+mkdir -p "$out"
+ls src | LC_ALL=C sort | jq -R -s --arg big "${BIG:-}" 'split("\n") | map(select(length > 0) | "src/" + .) as $f
+  | {duplicates: (if $big == "clones" then [range(5000) | {lines: 2, fragment: "x", firstFile: {name: $f[0], start: 1, end: 2}, secondFile: {name: $f[1], start: 1, end: 2}}] else [] end),
+     summary: {by: "lines", files: ((if $big == "dup" then $f else $f[0:2] end) | map({path: ., lines: 1}))}}' > "$out/jscpd-report.json"
+JS
+chmod +x "$TMP/fakebig/lizard" "$TMP/fakebig/jscpd"
+long="$(printf 'x%.0s' {1..190})"
+(cd "$TMP/pbig" && git init -q && printf 'export const a = 1\n' > src/a.ts && for i in $(seq 1 5000); do : > "src/f${i}_$long.ts"; done)
+for row in "funcs .totals.functions 15000" "dup .totals.lines 5001" "clones .duplicates|length 5000"; do
+  read -r tab path want <<<"$row"
+  size="$(cd "$TMP/pbig" && BIG="$tab" PATH="$TMP/fakebig:/usr/bin:/bin" bash -c 'lizard; jscpd --output "$0" >/dev/null; cat "$0/jscpd-report.json"' "$TMP/sz-$tab" | wc -c)"
+  out="$(cd "$TMP/pbig" && BIG="$tab" PATH="$TMP/fakebig:/usr/bin:/bin" "$SCAN" . --gate)"; rc=$?
+  check "068 AC-1 oversized $tab table (${size} bytes > ARG_MAX) → report written, gate exit, not 126" \
+    '[ "$size" -gt "$(getconf ARG_MAX)" ] && [ "$rc" != 126 ] && [ "$rc" -le 2 ] && [ "$(jq -r "$path" <<<"$out")" = "$want" ]'
+done
 
 # Edge case: tools absent → not_run (never zero duplicates), --gate exits 2.
 # The bare PATH mirrors /usr/bin and /bin minus every way to reach the tools, so
