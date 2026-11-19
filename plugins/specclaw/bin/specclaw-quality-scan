@@ -80,12 +80,14 @@ mv "$W/clones.in" "$W/clones.tsv"
 tsv_json() { jq -R -s --arg cols "$1" '($cols | split(",")) as $c | split("\n") | map(select(length > 0) | split("\t")
   | . as $r | reduce range(0; $c | length) as $i ({}; .[$c[$i]] = ($r[$i] // "" | (tonumber? // .))))' "$2"; }
 
+tsv_json file,name,ccn,length,params,start,end "$W/funcs.tsv" > "$W/funcs.json"
+tsv_json file,lines,duplicated_lines "$W/dup.tsv" > "$W/dup.json"
+tsv_json a_file,a_start,a_end,b_file,b_start,b_end,lines "$W/clones.tsv" > "$W/clones.json"
 jq -n --arg lz "$lz" --arg jd "$jd" --argjson th "$thresholds" --argjson gate "$gate" \
   --argjson files "$(wc -l < "$W/measurable.txt" | tr -d ' ')" \
-  --argjson funcs "$(tsv_json file,name,ccn,length,params,start,end "$W/funcs.tsv")" \
-  --argjson dup "$(tsv_json file,lines,duplicated_lines "$W/dup.tsv")" \
-  --argjson clones "$(tsv_json a_file,a_start,a_end,b_file,b_start,b_end,lines "$W/clones.tsv")" '
-  ($dup | map(.lines) | add // 0) as $lines
+  --slurpfile funcs "$W/funcs.json" --slurpfile dup "$W/dup.json" --slurpfile clones "$W/clones.json" '
+  $funcs[0] as $funcs | $dup[0] as $dup | $clones[0] as $clones
+  | ($dup | map(.lines) | add // 0) as $lines
   | ($dup | map(.duplicated_lines) | add // 0) as $dl
   | (if $lines > 0 then ($dl * 1000 / $lines | round / 10) else 0 end) as $pct
   | [$funcs[] | select(.ccn > $th.complexity_warn or .length > $th.function_length_warn)

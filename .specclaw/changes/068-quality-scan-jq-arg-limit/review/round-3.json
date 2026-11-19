@@ -1,0 +1,142 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 3,
+  "minor": 1
+ },
+ "escalated": [
+  "7e197aa4ba56",
+  "0dc733530bb1",
+  "695c6106193f"
+ ],
+ "files": [
+  ".claude-plugin/marketplace.json",
+  "plugins/specclaw-bf/.claude-plugin/plugin.json",
+  "plugins/specclaw-bf/.codex-plugin/plugin.json",
+  "plugins/specclaw-dash/.claude-plugin/plugin.json",
+  "plugins/specclaw-dash/.codex-plugin/plugin.json",
+  "plugins/specclaw-extras/.claude-plugin/plugin.json",
+  "plugins/specclaw-extras/.codex-plugin/plugin.json",
+  "plugins/specclaw-fleet/.claude-plugin/plugin.json",
+  "plugins/specclaw-fleet/.codex-plugin/plugin.json",
+  "plugins/specclaw-review/.claude-plugin/plugin.json",
+  "plugins/specclaw-review/.codex-plugin/plugin.json",
+  "plugins/specclaw-sync/.claude-plugin/plugin.json",
+  "plugins/specclaw-sync/.codex-plugin/plugin.json",
+  "plugins/specclaw/.claude-plugin/plugin.json",
+  "plugins/specclaw/.codex-plugin/plugin.json",
+  "plugins/specclaw/bin/specclaw-quality-scan",
+  "plugins/specclaw/tests/run-quality-scan-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "class": "other",
+   "file": "plugins/specclaw/tests/run-quality-scan-tests.sh",
+   "fp": "a510e11d1a5b",
+   "in_delta": true,
+   "line": 90,
+   "message": "The row precondition `$size -gt $(getconf ARG_MAX)` is still a weak proxy. `$size` is the byte count of the fake lizard output plus the jscpd report, not the size of the funcs.json, dup.json or clones.json tables the scan hands to jq. The fixtures clear 2 MiB with roughly 25 to 50 percent margin. On a host where getconf ARG_MAX is larger (Linux with `ulimit -s unlimited` reports up to about 6 MB), the precondition fails and the row reports a false failure, even though the real per-argument limit (MAX_ARG_STRLEN, 128 KiB) is still exceeded. Either drop the ARG_MAX comparison and assert the property directly (for example, run the scan under a small `ulimit -s`), or compare against the size of the table actually produced.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Run the suite in a container or CI runner with unlimited stack. getconf ARG_MAX returns about 6291456, the dup row's roughly 3 MB `size` is below it, and the `[ \"$size\" -gt ... ]` clause fails the row although the scan handled the table correctly.",
+   "severity": "minor",
+   "unclassified": false
+  },
+  {
+   "carried": "fix not proven: the changed tests pass on the pre-fix commit 347ac5dfee, so none proves the fix",
+   "class": "other",
+   "file": "plugins/specclaw/tests/run-quality-scan-tests.sh",
+   "fp": "7e197aa4ba56",
+   "in_delta": true,
+   "line": 85,
+   "message": "The precondition `$size -gt $(getconf ARG_MAX)` is hard-wired into every row, but the dup row's fixture is only about 1.1 MB. That is 5001 files at roughly 205 bytes of path plus JSON each. It clears macOS's 1 MB ARG_MAX but not Linux's usual 2 MB. The size check also measures the raw lizard output plus the jscpd report, not the table actually handed to jq. Make the dup fixture reliably larger than the largest ARG_MAX in use, for example by raising the file count or path length. Alternatively, drop the ARG_MAX comparison from the row and instead assert that the scan passes the table by file, for example by running it with a small `ulimit -s`.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "On a Linux CI runner with ARG_MAX=2097152, the `dup` row computes size of about 1.1 MB. `[ \"$size\" -gt \"$(getconf ARG_MAX)\" ]` is false, so the check fails even though the scan is correct. The dup path then has no passing oversized-table coverage on that platform, and the failure is not a signal about the fix.",
+   "severity": "major",
+   "unclassified": false
+  },
+  {
+   "carried": "fix not proven: the changed tests pass on the pre-fix commit 347ac5dfee, so none proves the fix",
+   "class": "other",
+   "file": "plugins/specclaw/.claude-plugin/plugin.json",
+   "fp": "0dc733530bb1",
+   "in_delta": true,
+   "line": 1,
+   "message": "This diff changes plugin code (plugins/specclaw/bin/specclaw-quality-scan and its test) but bumps no version. Bump every plugins/*/.claude-plugin/plugin.json, every plugins/*/.codex-plugin/plugin.json, and every plugins[] entry in .claude-plugin/marketplace.json to the same new version. If an earlier commit on this branch already did that, this finding does not apply.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "R1",
+   "scenario": "Merge the PR \u2192 plugins/specclaw ships the changed quality-scan under the old version number \u2192 installed users are not offered the ARG_MAX fix, and CI version-sync sees no bump for a plugin-code change.",
+   "severity": "major",
+   "unclassified": false
+  },
+  {
+   "carried": "fix not proven: the changed tests pass on the pre-fix commit 347ac5dfee, so none proves the fix",
+   "class": "other",
+   "file": "plugins/specclaw/tests/run-quality-scan-tests.sh",
+   "fp": "695c6106193f",
+   "in_delta": true,
+   "line": 61,
+   "message": "The fix moves all three tables (funcs, dup, clones) to --slurpfile, but the new test only oversizes the function table. The dup and clones paths have no oversized-table row, and neither does a dup-or-clones-only case. Add table-driven rows that oversize each table separately by driving the real path. For example, a fake jscpd that emits many files or clones, plus a fake lizard that emits many functions.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Revert only the clones change to `--argjson clones \"$(tsv_json ...)\"` \u2192 a repo with tens of thousands of clone pairs hits E2BIG (exit 126) \u2192 the 068 test stays green because its fake lizard only inflates funcs.tsv and clones.tsv stays small.",
+   "severity": "major",
+   "unclassified": false
+  }
+ ],
+ "fix_proof": {
+  "base": "347ac5dfee1d9a739ad47e1bcb3a9a76ad5032ef",
+  "mode": "block",
+  "reason": "the changed tests pass on the pre-fix commit 347ac5dfee, so none proves the fix",
+  "status": "not_proven",
+  "tests": [
+   "plugins/specclaw/tests/run-quality-scan-tests.sh"
+  ]
+ },
+ "head": "4b6badae81ebb6e72baf35bbc5c4cff312b8b757",
+ "impact": [
+  "plugins/specclaw-bf/bin/specclaw-bf-blueprint",
+  "plugins/specclaw-bf/bin/specclaw-bf-clarify",
+  "plugins/specclaw-bf/bin/specclaw-bf-e2e-run",
+  "plugins/specclaw-bf/bin/specclaw-bf-prototype",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-rebuild-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-replay",
+  "plugins/specclaw-bf/bin/specclaw-bf-status",
+  "plugins/specclaw-bf/bin/specclaw-bf-ui",
+  "plugins/specclaw-bf/tests/run-bf-e2e-run-tests.sh",
+  "plugins/specclaw-bf/tests/run-bf-status-tests.sh",
+  "plugins/specclaw-bf/tests/run-blueprint-tests.sh",
+  "plugins/specclaw-bf/tests/run-narration-gate-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-status-machine-tests.sh",
+  "plugins/specclaw-bf/tests/run-quality-tests.sh",
+  "plugins/specclaw-extras/bin/specclaw-party",
+  "plugins/specclaw-fleet/hooks/core/view.ts",
+  "plugins/specclaw-fleet/lib/report.html",
+  "plugins/specclaw-fleet/tests/cases/ac36_report_output.sh",
+  "plugins/specclaw-fleet/tests/cases/ac42_bundles_real_git.sh"
+ ],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 39230,
+ "round": 3,
+ "since": "a05a591",
+ "status": "escalate",
+ "system_chars": 9681,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1795108270,
+ "ts_start": 1795108210
+}

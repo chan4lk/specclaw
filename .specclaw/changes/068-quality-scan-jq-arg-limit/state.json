@@ -1,0 +1,14 @@
+{
+  "change": "068-quality-scan-jq-arg-limit",
+  "phase": "pr",
+  "branch": "specclaw/068-quality-scan-jq-arg-limit",
+  "size": "bounded",
+  "phases": {
+    "proposal": {"status":"approved","at":"2026-11-19T16:40:36Z"},
+    "spec": {"status":"done","at":"2026-11-19T16:41:05Z"},
+    "tasks": {"status":"done","at":"2026-11-19T16:41:05Z"},
+    "build": {"status":"done","at":"2026-11-19T16:42:15Z","tasks":{"done":1,"total":1,"failed":0}},
+    "verify": {"status":"passed","at":"2026-11-19T17:14:25Z","verdict":"PASS"},
+    "pr": {"status":"raised","at":"2026-11-19T17:14:52Z","url":"https://github.com/chan4lk/specclaw/pull/143"}
+  }
+}
