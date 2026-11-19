@@ -58,6 +58,7 @@ chmod +x "$TMP/fake0/jscpd" "$TMP/fake0/lizard"
 out="$(cd "$TMP/p0" && PATH="$TMP/fake0:/usr/bin:/bin" "$SCAN" . --gate)"; rc=$?
 check "046 zero clones → jscpd ran, 0 duplicated lines, gate pass" '[ "$rc" = 0 ] && [ "$(jq -r .tools.jscpd <<<"$out")" = ran ] && [ "$(jq -r .totals.duplicated_lines <<<"$out")" = 0 ] && [ "$(jq -r .gate <<<"$out")" = pass ]'
 
+# 2 MiB is above macOS ARG_MAX (1 MiB), Linux default ARG_MAX (2 MiB) and Linux MAX_ARG_STRLEN (128 KiB), whatever this host reports.
 # Change 068 AC-1: each table larger than the OS argument limit must reach jq by file.
 # BIG names the table the fakes inflate: funcs (lizard rows), dup (jscpd summary rows), clones (jscpd pairs).
 mkdir -p "$TMP/fakebig" "$TMP/pbig/src"
@@ -83,8 +84,8 @@ for row in "funcs .totals.functions 25000" "dup .totals.lines 12001" "clones .du
   read -r tab path want <<<"$row"
   size="$(cd "$TMP/pbig" && BIG="$tab" PATH="$TMP/fakebig:/usr/bin:/bin" bash -c 'lizard; jscpd --output "$0" >/dev/null; cat "$0/jscpd-report.json"' "$TMP/sz-$tab" | wc -c)"
   out="$(cd "$TMP/pbig" && BIG="$tab" PATH="$TMP/fakebig:/usr/bin:/bin" "$SCAN" . --gate)"; rc=$?
-  check "068 AC-1 oversized $tab table (${size} bytes > ARG_MAX) → report written, gate exit, not 126" \
-    '[ "$size" -gt "$(getconf ARG_MAX)" ] && [ "$rc" != 126 ] && [ "$rc" -le 2 ] && [ "$(jq -r "$path" <<<"$out")" = "$want" ]'
+  check "068 AC-1 oversized $tab table (${size} bytes > 2 MiB) → report written, gate exit, not 126" \
+    '[ "$size" -gt 2097152 ] && [ "$rc" != 126 ] && [ "$rc" -le 2 ] && [ "$(jq -r "$path" <<<"$out")" = "$want" ]'
 done
 
 # Edge case: tools absent → not_run (never zero duplicates), --gate exits 2.
