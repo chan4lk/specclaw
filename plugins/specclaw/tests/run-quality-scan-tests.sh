@@ -58,6 +58,19 @@ chmod +x "$TMP/fake0/jscpd" "$TMP/fake0/lizard"
 out="$(cd "$TMP/p0" && PATH="$TMP/fake0:/usr/bin:/bin" "$SCAN" . --gate)"; rc=$?
 check "046 zero clones → jscpd ran, 0 duplicated lines, gate pass" '[ "$rc" = 0 ] && [ "$(jq -r .tools.jscpd <<<"$out")" = ran ] && [ "$(jq -r .totals.duplicated_lines <<<"$out")" = 0 ] && [ "$(jq -r .gate <<<"$out")" = pass ]'
 
+# Change 068 AC-1: a function table larger than the OS argument limit must reach jq by file.
+mkdir -p "$TMP/fakebig"
+for f in jq git mktemp jscpd; do cp -P "$FAKE/$f" "$TMP/fakebig/$f"; done; ln -s "$BASH" "$TMP/fakebig/bash"
+cat > "$TMP/fakebig/lizard" <<'LZ'
+#!/usr/bin/env bash
+echo 'NLOC,CCN,token,PARAM,length,location,file,function,long_name,start,end'
+awk 'BEGIN { for (i = 1; i <= 15000; i++) printf "3,1,9,0,3,\"function_with_a_long_name_%d@%d-%d@./src/a.ts\",\"./src/a.ts\",\"function_with_a_long_name_%d\",\"function_with_a_long_name_%d( )\",%d,%d\n", i, i, i, i, i, i, i }'
+LZ
+chmod +x "$TMP/fakebig/lizard"
+check "068 the fake function table is larger than ARG_MAX" '[ "$("$TMP/fakebig/lizard" | wc -c)" -gt "$(getconf ARG_MAX)" ]'
+out="$(run "$TMP/fakebig" --gate)"; rc=$?
+check "068 AC-1 oversized function table → report written, gate exit, not 126" '[ "$rc" != 126 ] && [ "$rc" -le 2 ] && [ "$(jq -r .totals.functions <<<"$out")" = 15000 ]'
+
 # Edge case: tools absent → not_run (never zero duplicates), --gate exits 2.
 # The bare PATH mirrors /usr/bin and /bin minus every way to reach the tools, so
 # the case holds on a runner whose /usr/bin carries npx or uvx.

@@ -12,7 +12,7 @@ Pass the scan's tables to `jq` by file and prove it with an oversized function t
 
 ### Wave 1 — tables by file
 
-- [ ] `T1` — Tables reach `jq` by `--slurpfile`; oversized-table test (AC-1, AC-2)
+- [x] `T1` — Tables reach `jq` by `--slurpfile`; oversized-table test (AC-1, AC-2)
   - Files: plugins/specclaw/bin/specclaw-quality-scan, plugins/specclaw/tests/run-quality-scan-tests.sh
   - Estimate: small
   - Kind: backend
