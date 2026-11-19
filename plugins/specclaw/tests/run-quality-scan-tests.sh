@@ -65,7 +65,7 @@ for f in jq git mktemp; do cp -P "$FAKE/$f" "$TMP/fakebig/$f"; done; ln -s "$BAS
 cat > "$TMP/fakebig/lizard" <<'LZ'
 #!/usr/bin/env bash
 echo 'NLOC,CCN,token,PARAM,length,location,file,function,long_name,start,end'
-n=1; [ "${BIG:-}" = funcs ] && n=15000
+n=1; [ "${BIG:-}" = funcs ] && n=25000
 awk -v n="$n" 'BEGIN { for (i = 1; i <= n; i++) printf "3,1,9,0,3,\"fn_%d@%d-%d@./src/a.ts\",\"./src/a.ts\",\"function_with_a_long_name_%d\",\"function_with_a_long_name_%d( )\",%d,%d\n", i, i, i, i, i, i, i }'
 LZ
 cat > "$TMP/fakebig/jscpd" <<'JS'
@@ -73,13 +73,13 @@ cat > "$TMP/fakebig/jscpd" <<'JS'
 out=""; while [ $# -gt 0 ]; do [ "$1" = --output ] && out="$2"; shift; done
 mkdir -p "$out"
 ls src | LC_ALL=C sort | jq -R -s --arg big "${BIG:-}" 'split("\n") | map(select(length > 0) | "src/" + .) as $f
-  | {duplicates: (if $big == "clones" then [range(5000) | {lines: 2, fragment: "x", firstFile: {name: $f[0], start: 1, end: 2}, secondFile: {name: $f[1], start: 1, end: 2}}] else [] end),
+  | {duplicates: (if $big == "clones" then [range(8000) | {lines: 2, fragment: "x", firstFile: {name: $f[0], start: 1, end: 2}, secondFile: {name: $f[1], start: 1, end: 2}}] else [] end),
      summary: {by: "lines", files: ((if $big == "dup" then $f else $f[0:2] end) | map({path: ., lines: 1}))}}' > "$out/jscpd-report.json"
 JS
 chmod +x "$TMP/fakebig/lizard" "$TMP/fakebig/jscpd"
 long="$(printf 'x%.0s' {1..190})"
-(cd "$TMP/pbig" && git init -q && printf 'export const a = 1\n' > src/a.ts && for i in $(seq 1 5000); do : > "src/f${i}_$long.ts"; done)
-for row in "funcs .totals.functions 15000" "dup .totals.lines 5001" "clones .duplicates|length 5000"; do
+(cd "$TMP/pbig" && git init -q && printf 'export const a = 1\n' > src/a.ts && for i in $(seq 1 12000); do : > "src/f${i}_$long.ts"; done)
+for row in "funcs .totals.functions 25000" "dup .totals.lines 12001" "clones .duplicates|length 8000"; do
   read -r tab path want <<<"$row"
   size="$(cd "$TMP/pbig" && BIG="$tab" PATH="$TMP/fakebig:/usr/bin:/bin" bash -c 'lizard; jscpd --output "$0" >/dev/null; cat "$0/jscpd-report.json"' "$TMP/sz-$tab" | wc -c)"
   out="$(cd "$TMP/pbig" && BIG="$tab" PATH="$TMP/fakebig:/usr/bin:/bin" "$SCAN" . --gate)"; rc=$?
