@@ -19,8 +19,9 @@
 # cut-off report, never reads as clear.
 import os, re, sys
 
-# A BLOCK-tagged heading: `[BLOCK]` or a bare `BLOCK`, optionally after an emoji.
-BLOCK_HEADING = re.compile(r"^\s*#{2,6}\s+(?:[^\w\s\[]+\s*)?(?:(?i:\[BLOCK\])|BLOCK\b)\s*(.*)$")
+# A BLOCK-tagged heading, any case: `[BLOCK]` or a bare `BLOCK`, after any mix of
+# emoji, punctuation and list numbers (`### 1. [Block]`). Over-matching fails closed.
+BLOCK_HEADING = re.compile(r"^\s*#{2,6}\s+(?:\d+[.)]\s*|[^\w\s\[]+\s*)*(?:\[BLOCK\]|BLOCK\b)\s*(.*)$", re.I)
 # `<path>[:line] <sep> <rule …>`: a path may hold spaces; a separator needs a space after it.
 FIELDS = re.compile(r"^(?P<path>.+?)\s*(?:\u2014|\u2013|--|-|:)\s+(?P<rule>\S.*)$")
 # Only a line that starts with the label: a finding may quote `**Verdict:**` mid-sentence.

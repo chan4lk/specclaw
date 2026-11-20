@@ -81,6 +81,12 @@ check "a BLOCK heading with no separator is unwaived as unreadable (1)" '[ "$rc"
 fixture lowercase '**Verdict:** APPROVED_WITH_NOTES\n\n### [block] src/g.js:2 \xe2\x80\x94 B24 lowercase tag\n'
 run lowercase
 check "a lowercase [block] heading still blocks, whatever the verdict says (1)" '[ "$rc" -eq 1 ]'
+# Each odd shape sits beside a waived normal BLOCK, so "no BLOCK read" cannot be what fails it.
+for shape in '### [Block] src/h.js:1 \xe2\x80\x94 B21 mixed case' '### 1. [BLOCK] src/h.js:1 \xe2\x80\x94 B21 numbered' '### \xf0\x9f\x94\xb4 Block src/h.js:1 \xe2\x80\x94 B21 emoji, bare word'; do
+  fixture oddshape "$HEAD$B1$shape"'\n' '- Waiver: src/api/user.js | Injection | accepted risk | reviewed\n'
+  run oddshape
+  check "odd heading still blocks: $(printf '%b' "$shape" | cut -c5-)" '[ "$rc" -eq 1 ] && grep -q "unwaived: .*src/h.js" <<<"$out"'
+done
 
 fixture boldrule "$HEAD"'### [BLOCK] `src/e.js`:9 \xe2\x80\x94 **B23** bold rule, backticked path\n' '\xef\xbb\xbf- Waiver: `src/e.js` | **B23** | false alarm | test double\n'
 run boldrule
