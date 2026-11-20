@@ -120,6 +120,13 @@ fixture crnoblock '# Security Report: x\n\n**Verdict:** CHANGES_REQUESTED\n\n## 
 run crnoblock
 check "CHANGES_REQUESTED with no readable BLOCK exits 1" '[ "$rc" -eq 1 ] && grep -q "no BLOCK heading could be read" <<<"$out"'
 
+fixture casepath "$HEAD"'### [BLOCK] src/Auth.js:3 \xe2\x80\x94 B13 capital A\n' '- Waiver: src/auth.js | B13 | accepted risk | another file on Linux\n'
+run casepath
+check "a waiver for src/auth.js does not lift a BLOCK on src/Auth.js (1)" '[ "$rc" -eq 1 ]'
+fixture notes '**Verdict:** APPROVED_WITH_NOTES (2 WARN)\n\n### [WARN] src/a.js:1 \xe2\x80\x94 B14 x\n'
+run notes
+check "a verdict followed by notes is still that verdict (0, not 3)" '[ "$rc" -eq 0 ]'
+
 run allwaived --waivers
 check "--waivers lists valid waivers as markdown" '[ "$rc" -eq 0 ] && [ "$(grep -c "^- \`" <<<"$out")" -eq 2 ] && grep -q "^- \`src/api/user.js\` — injection — accepted risk: parameterised upstream | really$" <<<"$out"'
 run emptyreason --waivers

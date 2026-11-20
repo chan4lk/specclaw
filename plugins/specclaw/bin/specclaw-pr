@@ -466,9 +466,15 @@ $(head -20 "$CHANGE_DIR/staged-files-report.md")
   fi
 
   # --- Security waivers (change 072): every accepted BLOCK travels with the PR ---
-  local waiver_section="" waiver_list=""
+  local waiver_section="" waiver_list="" waiver_rc=0
   if [[ -x "${SCRIPT_DIR}/specclaw-security-gate" ]]; then
-    waiver_list="$("${SCRIPT_DIR}/specclaw-security-gate" "$SPECCLAW_DIR" "$CHANGE_NAME" --waivers 2>/dev/null)" || true
+    waiver_list="$("${SCRIPT_DIR}/specclaw-security-gate" "$SPECCLAW_DIR" "$CHANGE_NAME" --waivers 2>/dev/null)" || waiver_rc=$?
+  else
+    waiver_rc=127
+  fi
+  # "Could not list the waivers" must never read as "there are none".
+  if [[ "$waiver_rc" -ne 0 && -f "$CHANGE_DIR/security-waivers.md" ]]; then
+    waiver_list="_The waiver list could not be read (security gate exit ${waiver_rc}); see \`security-waivers.md\` in the change folder._"
   fi
   if [[ -n "$waiver_list" ]]; then
     waiver_section="

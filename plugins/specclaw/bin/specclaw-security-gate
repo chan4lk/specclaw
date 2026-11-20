@@ -38,8 +38,12 @@ def bare(text):
 
 
 def norm_path(p):
-    # Strip `:<line>` only when it ends the path, so `C:\x` / `C:/x` survive.
-    return bare(re.sub(r":\d+$", "", p.strip())).replace("\\", "/").lower()
+    # Strip `:<line>` only when it ends the path, so `C:\x` / `C:/x` survive. Case is folded only
+    # for a Windows path (drive letter or backslash): elsewhere `A.js` and `a.js` are two files.
+    p = bare(re.sub(r":\d+$", "", p.strip()))
+    windows = "\\" in p or re.match(r"^[A-Za-z]:", p)
+    p = p.replace("\\", "/")
+    return p.lower() if windows else p
 
 
 def read(path):
@@ -53,7 +57,10 @@ def verdict_of(lines):
     for line in lines:
         m = VERDICT.search(line)
         if m:
-            seen.add(re.sub(r"\s+", "_", bare(m.group(1)).rstrip(".")).upper())
+            # The verdict word, then optional notes: `APPROVED_WITH_NOTES (2 WARN)`; a spaced
+            # `NOT RUN` still reads as NOT_RUN (and so as not run).
+            value = re.sub(r"^NOT\s+RUN\b", "NOT_RUN", bare(m.group(1)), flags=re.I)
+            seen.add(value.split()[0].strip("`*.,;:").upper() if value.split() else "")
     return seen.pop() if len(seen) == 1 and seen <= VALID_VERDICTS else None
 
 

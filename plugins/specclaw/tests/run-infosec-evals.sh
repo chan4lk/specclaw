@@ -62,10 +62,11 @@ fi
 # A missing CLI is a failure, not a skip: a green eval that measured nothing is the failure this suite guards against.
 command -v claude >/dev/null 2>&1 || { echo "FATAL: the \`claude\` CLI is not on PATH, cannot measure." >&2; exit 2; }
 
-# The agent's instructions without its front matter, and the security rules it is given in a real run.
+# The agent's instructions without its front matter (each sample's rules come from rules_for).
 INSTRUCTIONS="$(awk 'NR==1 && /^---$/ {f=1; next} f && /^---$/ {f=0; next} !f' "$AGENT")"
-RULES="$(cat "$PLUGIN_DIR/presets/base.md" "$PLUGIN_DIR/presets/node.md" \
-  "$REPO_ROOT/plugins/specclaw-review/review-rules/base.md" "$REPO_ROOT/plugins/specclaw-review/review-rules/node.md")"
+# A finding heading, read exactly as bin/specclaw-security-gate's BLOCK_HEADING reads it: ## to ######, any
+# case, after emoji, punctuation or list numbers, tag bracketed or bare. Keep the two in step.
+HEADING='^[[:space:]]*#{2,6}[[:space:]]+(([0-9]+[.)]|[^[:alnum:][:space:]])[[:space:]]*)*'
 
 # review <sample-file> -> the report text; empty when the call failed or exited non-zero (a text error is not a report)
 review() {
@@ -115,14 +116,14 @@ for d in "$CASES"/*/; do
     else
       v_answered=$((v_answered + 1))
       # Only a finding heading counts: the keyword also appears in quoted code and in prose that approves it.
-      if grep -qE "^### \[(BLOCK|WARN|NOTE)\].*\b($want)\b" <<<"$r"; then c_hit=$((c_hit + 1)); fi
+      if grep -qiE "${HEADING}(\[(BLOCK|WARN|NOTE)\]|(BLOCK|WARN|NOTE)\b).*\b($want)\b" <<<"$r"; then c_hit=$((c_hit + 1)); fi
     fi
     r="$(review "$(ls "$d"/fixed.* | head -1)")"
     if [ -z "$r" ]; then
       c_none=$((c_none + 1))
     else
       f_answered=$((f_answered + 1))
-      if grep -qE '^### \[BLOCK\]' <<<"$r"; then c_alarm=$((c_alarm + 1)); fi
+      if grep -qiE "${HEADING}(\[BLOCK\]|BLOCK\b)" <<<"$r"; then c_alarm=$((c_alarm + 1)); fi
     fi
   done
   caught=$((caught + c_hit)); alarms=$((alarms + c_alarm)); no_answer=$((no_answer + c_none))

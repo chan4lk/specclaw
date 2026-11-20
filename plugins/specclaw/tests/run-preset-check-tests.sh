@@ -137,7 +137,7 @@ check "AC-7 lean build reads presets via specclaw-presets" 'grep -q "specclaw-pr
 
 # Security rules, base: base.md carries a Security section with one rule per keyword; a missing one is named.
 security_missing() {
-  local f="$1" k miss="" keys="${2:-Secrets Input Injection Access Errors Logging Dependencies Crypto Sessions Enumeration Codes DevFlags Urls}"
+  local f="$1" k miss="" keys="${2:-Secrets Input Injection Access Errors Logging Dependencies Crypto Sessions Enumeration Codes DevFlags Urls Config Identity Redirects}"
   grep -q '^## Security$' "$f" || miss=" heading"
   for k in $keys; do
     sed -n '/^## Security$/,/^## /p' "$f" | grep -q "^- \*\*$k:\*\* " || miss="$miss $k"
@@ -152,14 +152,14 @@ mutant() {
 }
 mutant "deleted Logging rule"        '/^- \*\*Logging:\*\* /d'                          " Logging"
 mutant "two deleted rules"           '/^- \*\*\(Secrets\|Crypto\):\*\* /d'               " Secrets Crypto"
-mutant "missing Security heading"    '/^## Security$/d'                                  " heading Secrets Input Injection Access Errors Logging Dependencies Crypto Sessions Enumeration Codes DevFlags Urls"
+mutant "missing Security heading"    '/^## Security$/d'                                  " heading Secrets Input Injection Access Errors Logging Dependencies Crypto Sessions Enumeration Codes DevFlags Urls Config Identity Redirects"
 mutant "rule moved under ## Tests"   '/^- \*\*Access:\*\* /{h;d};/^## Tests$/G'          " Access"
 
 # Security rules, stack presets: each stack preset keeps its own stack-specific Security rules; a missing one is named.
 stack_keys() {
   case "$1" in
-    dotnet) echo "Authorization Binding Errors Http Cors" ;;
-    python) echo "Authorization Models Execution Parsing Http" ;;
+    dotnet) echo "Authorization Binding Errors Http Cors RateLimit Proxy" ;;
+    python) echo "Authorization Models Execution Parsing Http RateLimit Proxy" ;;
     node) echo "Authorization Schemas Execution Pollution Cors RateLimit Proxy" ;;
     nextjs) echo "ServerOnly Cookies Redirects Headers Html" ;;
     react-spa) echo "Tokens Redirects Env Html Links" ;;

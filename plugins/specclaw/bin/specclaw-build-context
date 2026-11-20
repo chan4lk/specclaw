@@ -284,7 +284,11 @@ fi
 if [[ -n "$PRESET_PATHS" ]]; then
   while IFS= read -r preset_path; do
     preset_path="${preset_path%$'\r'}"
-    [[ -f "$preset_path" ]] || continue
+    [[ -n "$preset_path" ]] || continue
+    if [[ ! -f "$preset_path" ]]; then
+      echo "WARNING: specclaw-presets resolved '$preset_path', which is not a readable file — its security rules are missing" >&2
+      continue
+    fi
     preset_rules="$(awk '/^## /{on = ($0 ~ /^## Security[[:space:]]*$/)} on' "$preset_path" | tail -n +2)"
     [[ -n "${preset_rules//[[:space:]]/}" ]] || continue
     preset_name="${preset_path##*[\\/]}"

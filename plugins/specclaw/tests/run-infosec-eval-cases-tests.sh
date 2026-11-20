@@ -61,12 +61,13 @@ check "AC-8 a .md sample gets base only" '[ "$(rules a.md)" = "$base " ]'
 check "AC-8 every selected rule file exists" 'for s in a.cs a.py a.js a.ts a.md; do SPECCLAW_INFOSEC_RULES_FOR=$s bash "$RUNNER" | while read -r f; do [ -s "$f" ] || exit 1; done || exit 1; done'
 # A stub `claude` that flags the dev-bypass sample and passes the fixed one, so the scoring is tested without a model.
 mkdir -p "$TMP/bin"
-printf '%s\n' '#!/usr/bin/env bash' '[ "${STUB_FAIL:-}" = 1 ] && exit 0' '[ "${STUB_EXIT1:-}" = 1 ] && { echo "Error: max turns reached"; exit 1; }' '[ "${STUB_PROSE:-}" = 1 ] && { echo "No findings. The codes and DevFlags code looks fine."; exit 0; }' 'if [ "${STUB_ALWAYS_BLOCK:-}" = 1 ] || grep -q "x-dev-user" <<<"$*"; then echo "### [BLOCK] src/handler.js:2 - B16 DevFlags"; else echo "No findings."; fi' > "$TMP/bin/claude"
+printf '%s\n' '#!/usr/bin/env bash' '[ "${STUB_FAIL:-}" = 1 ] && exit 0' '[ "${STUB_EXIT1:-}" = 1 ] && { echo "Error: max turns reached"; exit 1; }' '[ "${STUB_PROSE:-}" = 1 ] && { echo "No findings. The codes and DevFlags code looks fine."; exit 0; }' '[ "${STUB_ODD_BLOCK:-}" = 1 ] && { echo "## 1. 🔴 Block src/handler.js:2 — B16 DevFlags"; exit 0; }' 'if [ "${STUB_ALWAYS_BLOCK:-}" = 1 ] || grep -q "x-dev-user" <<<"$*"; then echo "### [BLOCK] src/handler.js:2 - B16 DevFlags"; else echo "No findings."; fi' > "$TMP/bin/claude"
 chmod +x "$TMP/bin/claude"
 results_before="$(ls -A "$PLUGIN_DIR"/tests/results 2>/dev/null)"
 run_stub() { PATH="$TMP/bin:$PATH" SPECCLAW_INFOSEC_EVALS=1 SPECCLAW_INFOSEC_REPS="${REPS:-1}" SPECCLAW_INFOSEC_CASE=dev-bypass SPECCLAW_INFOSEC_RESULTS_DIR="$TMP/results" bash "$RUNNER" 2>&1; }
 check "AC-12 runner prints catch rate, false-alarm rate and model" 'out="$(run_stub)"; grep -q "Catch rate:\*\* 100%" <<<"$out" && grep -q "False-alarm rate:\*\* 0%" <<<"$out" && grep -q "Model:\*\* " <<<"$out"'
 check "AC-12 a fixed sample that draws a BLOCK counts as a false alarm" 'out="$(STUB_ALWAYS_BLOCK=1 run_stub)"; grep -q "False-alarm rate:\*\* 100%" <<<"$out"'
+check "AC-12 an emoji, list-number, ## Block heading is read as the gate reads it (catch and false alarm)" 'out="$(STUB_ODD_BLOCK=1 run_stub)"; grep -q "Catch rate:\*\* 100%" <<<"$out" && grep -q "False-alarm rate:\*\* 100%" <<<"$out"'
 check "AC-12 calls that give no answer make the rates UNKNOWN and the run fail" 'out="$(STUB_FAIL=1 run_stub)"; rc=$?; [ "$rc" -ne 0 ] && grep -q "Catch rate:\*\* UNKNOWN" <<<"$out" && ! grep -q "False-alarm rate:\*\* 0%" <<<"$out"'
 check "AC-12 a failed call that still prints text is no answer, not a report" 'out="$(STUB_EXIT1=1 run_stub)"; rc=$?; [ "$rc" -ne 0 ] && grep -q "Catch rate:\*\* UNKNOWN" <<<"$out"'
 check "AC-12 a non-integer reps value is refused" 'out="$(REPS=abc run_stub)"; grep -q "must be a positive integer" <<<"$out"'

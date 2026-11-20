@@ -76,6 +76,7 @@ missing|rm -f "\$TMP/plug/bin/specclaw-presets"|specclaw-presets not found|no
 crash, no paths|stub_presets 'exit 3'|specclaw-presets exited 3|no
 crash, some paths|stub_presets "echo '\$BASE_PRESET'; exit 1"|specclaw-presets exited 1|yes
 silent, exit 0|stub_presets 'exit 0'|printed no presets|no
+names a missing file|stub_presets "echo '\$TMP/no-such-preset.md'"|not a readable file|no
 ROWS
 
 if [ "$FAILS" -eq 0 ]; then echo "All build-context security tests passed."; else echo "$FAILS build-context security test(s) failed."; fi
