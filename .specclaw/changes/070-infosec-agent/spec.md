@@ -1,6 +1,6 @@
 # Spec: An InfoSec agent for SpecClaw projects: before, during and after the build, with evals
 
-**Change:** 069-infosec-agent
+**Change:** 070-infosec-agent
 **Size:** bounded
 
 ## Functional Requirements

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# run-infosec-eval-cases-tests.sh — change 069: the infosec eval cases are well formed.
+# run-infosec-eval-cases-tests.sh — change 070: the infosec eval cases are well formed.
 # Cheap, no model calls. The scoring run is run-infosec-evals.sh (opt-in).
 # shellcheck disable=SC2016  # check() evals its single-quoted condition later
 set -uo pipefail

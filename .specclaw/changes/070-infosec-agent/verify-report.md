@@ -1,4 +1,4 @@
-# Verification Report: 069-infosec-agent
+# Verification Report: 070-infosec-agent
 
 **Verdict:** PASS
 
@@ -31,7 +31,7 @@ Not run: `shellcheck` is not installed here, so the shellcheck gate did not run.
 
 ## Scope
 
-The branch adds, on top of 069's first version: the three modes in `agents/infosec-reviewer.md`, Step 3c in `plan.md`, Step 2c and the payload line in `build.md`, the `SR-n` check in `verify.md`, the eval cases, the runner and its structural test, the nightly workflow, and `ci.yml`. The version bump is the existing 0.9.17 one. `code-reviewer.md`, the presets and the loop gates are unchanged.
+The branch adds, on top of 070's first version: the three modes in `agents/infosec-reviewer.md`, Step 3c in `plan.md`, Step 2c and the payload line in `build.md`, the `SR-n` check in `verify.md`, the eval cases, the runner and its structural test, the nightly workflow, and `ci.yml`. The version bump is the existing 0.9.17 one. `code-reviewer.md`, the presets and the loop gates are unchanged.
 
 **Code Review:** APPROVED_WITH_NOTES — 0 BLOCK, 5 WARN, 5 NOTE (see `review-report.md`). The actionable WARNs and NOTEs were fixed: the eval runner no longer reads a failed run as clear, the catch check matches only finding headings, `fixed` samples were corrected, the check for each build and verify path was scoped to its own section, and the results directory can be overridden.
 

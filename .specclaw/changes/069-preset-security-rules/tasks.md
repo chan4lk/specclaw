@@ -1,6 +1,6 @@
 # Tasks: Security rules in the presets
 
-**Change:** 068-preset-security-rules
+**Change:** 069-preset-security-rules
 **Created:** 2026-11-12
 **Total Tasks:** 8
 

@@ -20,7 +20,7 @@ known-vulnerable sample.
 
 Add an `infosec-reviewer` subagent, `plugins/specclaw/agents/infosec-reviewer.md`, that works like an InfoSec
 engineer who knows how SpecClaw works, and runs at three moments, not one. (The change folder is named
-`069-infosec-agent` because the work is now wider than a reviewer.)
+`070-infosec-agent` because the work is now wider than a reviewer.)
 
 1. **Model the threat.** From the spec and the diff it lists the assets (data, credentials, accounts), the entry
    points (routes, forms, files, webhooks, CLI args, env vars) and the trust boundaries the change crosses.

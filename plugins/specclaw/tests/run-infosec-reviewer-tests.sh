@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# run-infosec-reviewer-tests.sh — change 069: the infosec-reviewer agent, its config key and its verify step.
+# run-infosec-reviewer-tests.sh — change 070: the infosec-reviewer agent, its config key and its verify step.
 # shellcheck disable=SC2016  # check() evals its single-quoted condition later
 set -uo pipefail
 

@@ -1,6 +1,6 @@
 # Tasks: An InfoSec agent for SpecClaw projects: before, during and after the build, with evals
 
-**Change:** 069-infosec-agent
+**Change:** 070-infosec-agent
 **Created:** 2026-11-16
 **Total Tasks:** 9
 
@@ -41,7 +41,7 @@ Write the agent, wire it into verify behind an off-by-default flag, guard it wit
   - Estimate: small
   - Kind: config
   - Depends: T3
-  - Notes: all versions stay equal; separate commit `chore: bump version to X.Y.Z`. Shared with change 068 in one PR: its single bump commit covers both.
+  - Notes: all versions stay equal; separate commit `chore: bump version to X.Y.Z`. Shared with change 069 in one PR: its single bump commit covers both.
 
 ### Wave 4 — Auth-flow questions
 
