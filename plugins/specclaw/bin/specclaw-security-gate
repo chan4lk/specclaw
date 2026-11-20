@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+# specclaw-security-gate — does security-report.md leave any unwaived BLOCK?
+#
+# Usage: specclaw-security-gate <specclaw-dir> <change> [--waivers]
+#   Reads <specclaw-dir>/changes/<change>/security-report.md and the optional
+#   security-waivers.md beside it. A finding is a `### [BLOCK] <path>:<line> —
+#   <rule> …` heading anywhere in the report (WARN/NOTE never block). A waiver is
+#   `- Waiver: <path> | <rule> | <accepted risk|false alarm> | <reason>`; it lifts
+#   a BLOCK with the same path (`:line` ignored) whose rule field starts with
+#   <rule>, case-insensitive. Malformed waiver lines are printed as invalid and
+#   waive nothing. Prints each waived and each unwaived BLOCK.
+#   --waivers prints only the valid waivers as a markdown list and exits 0.
+# Exit: 0 no unwaived BLOCK; 1 one or more unwaived BLOCKs; 2 usage error
+# (wrong args, change dir missing); 3 no report, or its verdict is NOT_RUN
+# (the review did not run, which never reads as clear).
+import os, re, sys
+
+HEADING = re.compile(r"^\s*###\s*\[BLOCK\]\s*(\S+)\s*(?:—|--|-)\s*(.*)$", re.I)
+VERDICT_NOT_RUN = re.compile(r"\*\*Verdict:\*\*\s*NOT_RUN\b", re.I)
+WAIVER = re.compile(r"^\s*[-*]\s+(?:\*\*)?Waiver:(?:\*\*)?\s*(.*)$", re.I)
+KINDS = {"accepted risk", "false alarm"}
+
+
+def norm_path(p):
+    # Strip `:<line>` only when it ends the path, so `C:\x` / `C:/x` survive.
+    return re.sub(r":\d+$", "", p.strip()).replace("\\", "/").lower()
+
+
+def read(path):
+    with open(path, encoding="utf-8", errors="replace") as f:
+        return f.read().splitlines()
+
+
+def waivers(path, quiet=False):
+    valid = []
+    if not os.path.isfile(path):
+        return valid
+    for line in read(path):
+        m = WAIVER.match(line)
+        if not m:
+            continue
+        fields = m.group(1).split("|", 3)
+        fields = [x.strip() for x in fields]
+        if len(fields) == 4 and all(fields) and fields[2].lower() in KINDS:
+            valid.append({"path": fields[0], "rule": fields[1], "kind": fields[2].lower(), "reason": fields[3]})
+        elif not quiet:
+            print(f"invalid waiver: {line.strip()}")
+    return valid
+
+
+def main(argv):
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    args = [a for a in argv if a != "--waivers"]
+    if len(args) != 2 or len(argv) - len(args) > 1:
+        print("usage: specclaw-security-gate <specclaw-dir> <change> [--waivers]", file=sys.stderr)
+        return 2
+    folder = os.path.join(args[0], "changes", args[1])
+    if not os.path.isdir(folder):
+        print(f"specclaw-security-gate: no change folder: {folder}", file=sys.stderr)
+        return 2
+    if "--waivers" in argv:
+        valid = waivers(os.path.join(folder, "security-waivers.md"), quiet=True)  # invalid lines stay out of the PR body
+        for w in valid:
+            print(f"- `{w['path']}` — {w['rule']} — {w['kind']}: {w['reason']}")
+        return 0
+
+    report = os.path.join(folder, "security-report.md")
+    lines = read(report) if os.path.isfile(report) else None
+    if lines is None or any(VERDICT_NOT_RUN.search(l) for l in lines):
+        print("security review did not run")
+        return 3
+    valid = waivers(os.path.join(folder, "security-waivers.md"))
+    unwaived = 0
+    for line in lines:
+        m = HEADING.match(line)
+        if not m:
+            continue
+        words = m.group(2).split()
+        rule = words[0].rstrip(".,:;").lower() if words else ""
+        hit = next((w for w in valid if norm_path(w["path"]) == norm_path(m.group(1))
+                    and w["rule"].lower() == rule), None)
+        if hit:
+            print(f"waived ({hit['kind']}: {hit['reason']}): {line.strip()}")
+        else:
+            unwaived += 1
+            print(f"unwaived: {line.strip()}")
+    return 1 if unwaived else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
