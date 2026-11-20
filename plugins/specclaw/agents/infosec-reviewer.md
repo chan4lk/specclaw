@@ -67,6 +67,8 @@ Every finding must have all three:
 - a one-line attack scenario: who does what, and what they get
 - the rule or check it breaks (a rule keyword or id, or one of the five checks above)
 
+The rule field of every finding heading starts with the pack rule id or preset keyword it breaks (for example B13 or Access), so a waiver can name it.
+
 **Never copy a secret into the report.** `security-report.md` is committed to git, so for a leaked token, key or
 password quote the path and line and replace the whole value with `[REDACTED]`.
 

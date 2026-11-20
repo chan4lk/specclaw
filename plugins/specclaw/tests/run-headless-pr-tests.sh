@@ -244,6 +244,45 @@ assert_not_contains "AC-12c PARTIAL reads the Verdict line, not the first PASS w
 assert_contains "AC-12d PARTIAL ticks the MET AC-1" "- [x] **AC-1:** one" "$body"
 assert_contains "AC-12e PARTIAL leaves the pending AC-2 open" "- [ ] **AC-2:** two" "$body"
 
+# ─── 072 AC-4: the security gate in specclaw-pr ─────────────────────────────
+echo "--- 072 AC-4: unwaived BLOCK, block switch, waivers in the PR body ---"
+# sec_proj <dir> <block true|false> — a project whose security-report.md holds one BLOCK.
+sec_proj() {
+  make_proj "$1"
+  sed -i.bak "s/^  security_review_block: false/  security_review_block: $2/" "$1/.specclaw/config.yaml" && rm -f "$1/.specclaw/config.yaml.bak"
+  printf '# Security
+
+**Verdict:** FAIL
+
+## Findings
+
+### [BLOCK] src/a.js:3 — B13 SQL built from input
+'     >"$1/.specclaw/changes/$CH/security-report.md"
+  git -C "$1" commit -qm "security block switch" -- .specclaw/config.yaml >/dev/null || true  # no-op when block stays false; the change folder stays untracked, as make_proj leaves it
+}
+P="$WORK/sec-block"; sec_proj "$P" true
+: >"$GH_LOG"
+run_bounded 30 bash -c "cd '$P' && specclaw-pr .specclaw $CH"
+assert_eq "072-4a block true + unwaived BLOCK exits 1" 1 "$RC"
+assert_contains "072-4b the message names the finding's path" "src/a.js" "$OUT"
+assert_contains "072-4c the message says how to waive" "security-waivers.md" "$OUT"
+assert_not_contains "072-4d gh pr create was never called" "pr create" "$(cat "$GH_LOG")"
+P="$WORK/sec-warn"; sec_proj "$P" false
+: >"$GH_LOG"
+run_bounded 30 bash -c "cd '$P' && specclaw-pr .specclaw $CH"
+assert_eq "072-4e block false: specclaw-pr exits 0" 0 "$RC"
+assert_contains "072-4f … and warns about the BLOCK" "WARNING: security gate: unwaived BLOCK" "$OUT"
+assert_contains "072-4g … and the PR is created" "pr create" "$(cat "$GH_LOG")"
+P="$WORK/sec-waive"; sec_proj "$P" true
+printf -- '- Waiver: src/a.js | B13 | false alarm | input is a fixed enum
+'   >"$P/.specclaw/changes/$CH/security-waivers.md"
+: >"$GH_LOG"
+run_bounded 30 bash -c "cd '$P' && specclaw-pr .specclaw $CH"
+assert_eq "072-4h a waived BLOCK passes even with block true" 0 "$RC"
+body="$(cat "$GH_LOG")"
+assert_contains "072-4i the PR body has a Security waivers section" "## Security waivers" "$body"
+assert_contains "072-4j … carrying the reason" "input is a fixed enum" "$body"
+
 # ─── AC-7: a committed lock is suspicious ───────────────────────────────────
 echo "--- AC-7: check-staged flags lock files ---"
 P="$WORK/sus"; make_proj "$P"

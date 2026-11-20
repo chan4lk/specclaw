@@ -113,8 +113,9 @@ Otherwise:
 2. The agent writes `.specclaw/changes/<change>/security-report.md` itself. Confirm the file exists and has a `**Verdict:**` line. If the agent errored, or the file or the verdict line is missing, append `**InfoSec Review:** NOT RUN — <reason>` to the verify-report and skip the rest of this step.
 3. Extract the verdict line and append one line to the verify-report that Step 4 writes:
    `**InfoSec Review:** <verdict> — <N findings: X BLOCK, Y WARN, Z NOTE>`, adding `; <U> of <S> security requirements unmet` when `security-requirements.md` exists. A `NOT_RUN` verdict is written as `**InfoSec Review:** NOT RUN — <note>`.
+4. Run `specclaw-security-gate .specclaw <change>` and append one line to the verify-report: `**Security gate:** <clear | N unwaived BLOCK | not run>` (exit 0 → clear, exit 1 → count its `unwaived:` lines, exit 3 → not run). Waivers live in `security-waivers.md` beside the report.
 
-It is advisory: the verdict never changes the overall verify verdict, and `specclaw-loop` does not read `security-report.md`.
+It is advisory: the verdict never changes the overall verify verdict, and `specclaw-loop` does not read `security-report.md`. The gate is advisory here too; the block happens in `/specclaw:pr` when `workflow.security_review_block` is `true`.
 
 ## Step 3.55 — Local review loop (specclaw-review add-on, conditional)
 

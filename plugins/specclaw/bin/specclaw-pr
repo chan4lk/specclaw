@@ -465,6 +465,19 @@ $(head -20 "$CHANGE_DIR/staged-files-report.md")
 "
   fi
 
+  # --- Security waivers (change 072): every accepted BLOCK travels with the PR ---
+  local waiver_section="" waiver_list=""
+  if [[ -x "${SCRIPT_DIR}/specclaw-security-gate" ]]; then
+    waiver_list="$("${SCRIPT_DIR}/specclaw-security-gate" "$SPECCLAW_DIR" "$CHANGE_NAME" --waivers 2>/dev/null)" || true
+  fi
+  if [[ -n "$waiver_list" ]]; then
+    waiver_section="
+## Security waivers
+
+${waiver_list}
+"
+  fi
+
   # --- Time accounting (change 028) ---
   # The PR explains its own cost. Absent a ledger the section is omitted
   # entirely — an empty "Time accounting" heading would read as "this took no
@@ -541,7 +554,7 @@ ${ac_text}
 **Verdict:** ${verdict}${review_line}
 
 ${verify_excerpt}
-${test_section}${staged_section}${timing_section}${trigger_section}
+${test_section}${staged_section}${waiver_section}${timing_section}${trigger_section}
 ---
 ${closes_line}
 
@@ -830,6 +843,30 @@ main() {
         die "staged-files audit reported a BLOCK and workflow.staged_files_block is true — fix the file set and re-run. Set it false to make this advisory."
       fi
       echo "WARNING: staged-files audit reported a BLOCK (workflow.staged_files_block is false — continuing)" >&2
+    fi
+  fi
+
+  # Step 7-pre2: the security gate (change 072). An unwaived [BLOCK] in
+  # security-report.md, or no report at all, warns — and stops the PR when
+  # workflow.security_review_block is true. A missing security_review key means on.
+  local sec_gate="${SCRIPT_DIR}/specclaw-security-gate"
+  if [[ -x "$sec_gate" && "$(yaml_val "$CONFIG_FILE" "workflow.security_review")" != "false" ]]; then
+    local sec_block sec_out sec_rc=0 sec_msg
+    sec_block="$(yaml_val "$CONFIG_FILE" "workflow.security_review_block")"
+    sec_out="$("$sec_gate" "$SPECCLAW_DIR" "$CHANGE_NAME" 2>&1)" || sec_rc=$?
+    case "$sec_rc" in
+      0) sec_msg="" ;;
+      1) sec_msg="security gate: unwaived BLOCK finding(s):
+${sec_out}
+Fix the code, or add \`- Waiver: <path> | <rule> | accepted risk|false alarm | <reason>\` to ${SPECCLAW_DIR}/changes/${CHANGE_NAME}/security-waivers.md" ;;
+      3) sec_msg="security gate: no security review on record (${sec_out}) — run /specclaw:verify so the InfoSec review runs" ;;
+      *) sec_msg="security gate failed (exit ${sec_rc}): ${sec_out}" ;;
+    esac
+    if [[ -n "$sec_msg" ]]; then
+      [[ "$sec_block" == "true" ]] && die "${sec_msg}
+(workflow.security_review_block is true — set it false to make this advisory)"
+      warn "${sec_msg}
+(workflow.security_review_block is false — continuing)"
     fi
   fi
 

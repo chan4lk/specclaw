@@ -15,7 +15,8 @@ trap 'rm -rf "$TMP"' EXIT
 
 ITEMS=("**Model the threat.**" "**Think like an attacker.**" "**Check the stack rules.**" "**Check the specclaw-specific surface.**"
   "**Auth flows:**" "**Secrets in records:**" "**Prompt injection:**" "**Credentials:**" "**Shell-outs:**" "**Supply chain:**"
-  "**Mode plan:**" "**Mode build:**" "**Mode verify:**")
+  "**Mode plan:**" "**Mode build:**" "**Mode verify:**"
+  "The rule field of every finding heading starts with the pack rule id or preset keyword it breaks (for example B13 or Access), so a waiver can name it.")
 
 missing() { local f="$1" i out=""; for i in "${ITEMS[@]}"; do grep -qF -- "$i" "$f" || out="$out|$i"; done; echo "$out"; }
 
@@ -37,6 +38,7 @@ build_step="$(sed -n '/2c\. \*\*Per-task security review/,/3\. Close the span/p'
 payload_step="$(sed -n '/Build the agent context payload/,/Pick the agent and its budget/p' "$PLUGIN_DIR/references/full/build.md")"
 check "AC-8 build reviews entry-point tasks unless the flag is false, advisory, and hands builders the requirements" 'grep -q "infosec-reviewer" <<<"$build_step" && grep -qF "unless \`workflow.security_review\` is \`false\`" <<<"$build_step" && grep -q "entry point" <<<"$build_step" && grep -q "build\*\* mode" <<<"$build_step" && grep -qi "advisory" <<<"$build_step" && grep -q "NOT_RUN" <<<"$build_step" && grep -q "security-requirements.md" <<<"$payload_step"'
 check "AC-9 verify passes the requirements and counts unmet ones" 'grep -q "security-requirements.md" <<<"$step" && grep -q "security/" <<<"$step" && grep -q "unmet" <<<"$step"'
+check "072 AC-5 verify Step 3.52 runs specclaw-security-gate and records its line" 'grep -q "specclaw-security-gate" <<<"$step" && grep -qF "**Security gate:**" <<<"$step"'
 check "AC-5 CI registers this suite" 'grep -q "run-infosec-reviewer-tests.sh" "$PLUGIN_DIR/../../.github/workflows/ci.yml"'
 
 echo
