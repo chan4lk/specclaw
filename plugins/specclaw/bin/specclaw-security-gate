@@ -3,6 +3,7 @@
 #
 # Usage: specclaw-security-gate <specclaw-dir> <change> [--waivers]
 #        specclaw-security-gate --headings <report-file>
+#        specclaw-security-gate --verdict <report-file>
 #   Reads <specclaw-dir>/changes/<change>/security-report.md and the optional
 #   security-waivers.md beside it. Every heading that carries a BLOCK tag
 #   (`### [BLOCK] <path>:<line> — <rule> …`, ## to ######, any case, any dash or
@@ -17,6 +18,7 @@
 #   --waivers prints only the valid waivers as a markdown list and exits 0.
 #   --headings prints `<SEVERITY>\t<heading>` for every BLOCK/WARN/NOTE finding
 #   heading in any file, read by the same definition the gate uses (for the evals).
+#   --verdict prints a report's one valid verdict (exit 0), or exits 3 when it has none.
 # Exit: 0 no unwaived BLOCK; 1 one or more unwaived BLOCKs, or a
 # CHANGES_REQUESTED verdict with no readable BLOCK; 2 usage error (wrong args,
 # change dir missing); 3 no report, or no single valid verdict (APPROVED,
@@ -50,8 +52,14 @@ def bare(text):
 
 
 def norm_path(p):
-    # Strip `:<line>` only when it ends the path, so `C:\x` / `C:/x` survive.
-    return bare(re.sub(r":\d+$", "", p.strip())).replace("\\", "/")
+    # Strip a trailing `:line`, `:line-line` or `:line:col` only, so `C:\x` / `C:/x` survive.
+    return bare(re.sub(r":\d+(?:[-:]\d+)?$", "", bare(p))).replace("\\", "/")
+
+
+def rule_token(text):
+    # The first word, with backticks, bold, brackets and punctuation stripped from both ends.
+    words = bare(text).split()
+    return re.sub(r"^\W+|\W+$", "", words[0]).lower() if words else ""
 
 
 def windows_path(p):
@@ -102,6 +110,17 @@ def waivers(path, quiet=False):
 def main(argv):
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
+    if argv[:1] == ["--verdict"]:
+        # The one verdict reading, exported for the evals: prints it and exits 0, or exits 3.
+        if len(argv) != 2 or not os.path.isfile(argv[1]):
+            print("usage: specclaw-security-gate --verdict <report-file>", file=sys.stderr)
+            return 2
+        verdict = verdict_of(read(argv[1]))
+        if verdict is None:
+            print("no single valid verdict")
+            return 3
+        print(verdict)
+        return 0
     if argv[:1] == ["--headings"]:
         if len(argv) != 2 or not os.path.isfile(argv[1]):
             print("usage: specclaw-security-gate --headings <report-file>", file=sys.stderr)
@@ -143,9 +162,9 @@ def main(argv):
             unwaived += 1
             print(f"unwaived (path or rule unreadable): {line.strip()}")
             continue
-        rule = bare(f.group("rule").split()[0]).rstrip(".,:;").lower()
+        rule = rule_token(f.group("rule"))
         hit = next((w for w in valid if same_path(w["path"], f.group("path"))
-                    and w["rule"].lower() == rule), None)
+                    and rule_token(w["rule"]) == rule), None)
         if hit:
             print(f"waived ({hit['kind']}: {hit['reason']}): {line.strip()}")
         else:

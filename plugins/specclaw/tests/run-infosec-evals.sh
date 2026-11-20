@@ -69,8 +69,12 @@ INSTRUCTIONS="$(awk 'NR==1 && /^---$/ {f=1; next} f && /^---$/ {f=0; next} !f' "
 GATE="${SPECCLAW_INFOSEC_GATE:-$PLUGIN_DIR/bin/specclaw-security-gate}"  # override: tests only
 REPORT_TMP="$(mktemp)"
 trap 'rm -f "$REPORT_TMP"' EXIT
-# headings <report-text> -> `<SEVERITY>\t<heading>` lines for every finding heading
-headings() { printf '%s\n' "$1" > "$REPORT_TMP"; "$GATE" --headings "$REPORT_TMP"; }
+# read_report <report-text>: fails unless the gate reads one valid verdict from it (a refusal, an error printed
+# on stdout or cut-off prose is no answer, never "no finding"); otherwise prints `<SEVERITY>\t<heading>` lines.
+read_report() {
+  printf '%s\n' "$1" > "$REPORT_TMP"
+  "$GATE" --verdict "$REPORT_TMP" >/dev/null && "$GATE" --headings "$REPORT_TMP"
+}
 
 # review <sample-file> -> the report text; empty when the call failed or exited non-zero (a text error is not a report)
 review() {
@@ -78,7 +82,8 @@ review() {
   ext="${sample##*.}"
   # A neutral path, so the file name never says "vulnerable" or "fixed".
   if [ "$ext" = md ]; then path=".specclaw/changes/eval/reports/T3.md"; else path="src/handler.$ext"; fi
-  # The security rules a real run gives for this sample's stack.
+  # The preset and review-pack files for this sample's stack, whole. A real run passes only their security
+  # rules, so the measured prompt is larger than the shipped one (a known difference, kept for simplicity).
   local rules out
   mapfile -t rules < <(rules_for "$sample")
   out="$(timeout "$TIMEOUT" claude -p "$INSTRUCTIONS
@@ -116,7 +121,7 @@ for d in "$CASES"/*/; do
   for _ in $(seq 1 "$REPS"); do
     # A report the gate could not read (gate missing, crashed) is no answer, never "no finding".
     r="$(review "$(ls "$d"/vulnerable.* | head -1)")"
-    if [ -z "$r" ] || ! h="$(headings "$r")"; then
+    if [ -z "$r" ] || ! h="$(read_report "$r")"; then
       c_none=$((c_none + 1))
     else
       v_answered=$((v_answered + 1))
@@ -124,7 +129,7 @@ for d in "$CASES"/*/; do
       if grep -qE "\b($want)\b" <<<"$h"; then c_hit=$((c_hit + 1)); fi
     fi
     r="$(review "$(ls "$d"/fixed.* | head -1)")"
-    if [ -z "$r" ] || ! h="$(headings "$r")"; then
+    if [ -z "$r" ] || ! h="$(read_report "$r")"; then
       c_none=$((c_none + 1))
     else
       f_answered=$((f_answered + 1))

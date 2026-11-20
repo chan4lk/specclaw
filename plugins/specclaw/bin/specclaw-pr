@@ -859,6 +859,14 @@ main() {
   if [[ "$(yaml_val "$CONFIG_FILE" "workflow.security_review")" != "false" ]]; then
     local sec_block sec_out sec_rc=0 sec_msg
     sec_block="$(yaml_val "$CONFIG_FILE" "workflow.security_review_block")"
+    # Any YAML spelling of true blocks; a value that is neither true nor false is a config error, never a
+    # silent fall back to warn-only (a security control must not default open).
+    sec_block="$(printf '%s' "$sec_block" | tr -d "\"'" | tr '[:upper:]' '[:lower:]')"
+    case "$sec_block" in
+      true|yes|on) sec_block=true ;;
+      false|no|off|"") sec_block=false ;;
+      *) die "workflow.security_review_block is '${sec_block}', which is neither true nor false — fix .specclaw/config.yaml" ;;
+    esac
     # A gate that cannot run is a gate failure, never a skipped check.
     if [[ -x "$sec_gate" ]]; then
       sec_out="$("$sec_gate" "$SPECCLAW_DIR" "$CHANGE_NAME" 2>&1)" || sec_rc=$?

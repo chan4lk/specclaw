@@ -310,6 +310,22 @@ crashing|crash|yes|could not be read
 missing, nothing to list|missing|no|none
 ROWS
 
+# The block switch: every YAML spelling of true blocks; an unrecognised value is an error, never warn-only.
+# row: <security_review_block value> | <expected message>
+while IFS='|' read -r value want; do
+  P="$WORK/sec-switch-$value"; sec_proj "$P" "$value"
+  : >"$GH_LOG"
+  run_bounded 30 bash -c "cd '$P' && specclaw-pr .specclaw $CH"
+  assert_eq "072-4l security_review_block: $value stops the PR" 1 "$RC"
+  assert_contains "072-4l … saying why ($value)" "$want" "$OUT"
+  assert_not_contains "072-4l … before any PR is created ($value)" "pr create" "$(cat "$GH_LOG")"
+done <<'ROWS'
+True|unwaived BLOCK
+yes|unwaived BLOCK
+"on"|unwaived BLOCK
+bogus|neither true nor false
+ROWS
+
 # ─── AC-7: a committed lock is suspicious ───────────────────────────────────
 echo "--- AC-7: check-staged flags lock files ---"
 P="$WORK/sus"; make_proj "$P"

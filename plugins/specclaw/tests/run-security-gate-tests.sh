@@ -135,6 +135,20 @@ src\\Lib\\X.cs|src/lib/x.cs|0
 src/lib/x.cs|src\\Lib\\X.cs|0
 ROWS
 
+# Heading location and rule spellings, table-driven: <heading path and suffix> | <heading rule> | <waiver rule> | <exit>.
+while IFS='|' read -r hloc hrule wrule want; do
+  fixture shapes2 "$HEAD"'### [BLOCK] '"$hloc"' \xe2\x80\x94 '"$hrule"' x\n' "- Waiver: src/a.js | $wrule | accepted risk | ok\n"
+  run shapes2
+  check "heading '$hloc — $hrule' vs waiver rule '$wrule' exits $want" '[ "$rc" -eq "$want" ]'
+done <<'ROWS'
+src/a.js:3-7|B13|B13|0
+src/a.js:42:5|B13|B13|0
+src/a.js|`B13`,|B13|0
+src/a.js:9|(B13)|`b13`|0
+src/a.js:9|B13.1|B13|1
+src/a.js:9|B13|B14|1
+ROWS
+
 # Verdict reading, table-driven: <verdict line value> | <expected exit> (no findings in the report).
 while IFS='|' read -r value want; do
   fixture verdicts "**Verdict:** $value\n\n## Findings\n\nNo findings.\n"
@@ -161,6 +175,14 @@ out="$("$GATE" --headings "$TMP/headings.md")"; rc=$?
 check "--headings prints every finding heading with its severity, nothing else" '[ "$rc" -eq 0 ] && [ "$(cut -f1 <<<"$out" | tr "\n" " ")" = "BLOCK WARN NOTE " ]'
 out="$("$GATE" --headings "$TMP/no-such-file.md" 2>&1)"; rc=$?
 check "--headings with a missing file is a usage error (2)" '[ "$rc" -eq 2 ]'
+
+# --verdict: the one verdict reading, exported for the eval runner.
+printf '%b' 'Some prose.\n**Verdict:** APPROVED WITH NOTES (1 WARN)\n' > "$TMP/v-ok.md"
+printf '%b' 'I cannot review this file. No findings to report.\n' > "$TMP/v-none.md"
+out="$("$GATE" --verdict "$TMP/v-ok.md")"; rc=$?
+check "--verdict prints the normalised verdict (0)" '[ "$rc" -eq 0 ] && [ "$out" = APPROVED_WITH_NOTES ]'
+out="$("$GATE" --verdict "$TMP/v-none.md")"; rc=$?
+check "--verdict on prose with no verdict exits 3" '[ "$rc" -eq 3 ]'
 
 run allwaived --waivers
 check "--waivers lists valid waivers as markdown" '[ "$rc" -eq 0 ] && [ "$(grep -c "^- \`" <<<"$out")" -eq 2 ] && grep -q "^- \`src/api/user.js\` — injection — accepted risk: parameterised upstream | really$" <<<"$out"'
