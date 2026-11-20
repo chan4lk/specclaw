@@ -24,6 +24,8 @@ Turn an approved proposal into an executable plan.
    - **Promoted spec knowledge:** read `.specclaw/knowledge/spec-guidelines.md` if it exists — it holds spec/design guidance promoted from earlier build learnings; apply it when writing `spec.md` and `design.md`.
 3b. If `proposal.md` has a `## Dependency Bypass`, `## Item Split` or `## Resumes Split` section, the specclaw-bf plugin's `references/carry-through.md` (Plan) applies here.
 
+3c. **Security requirements (conditional).** Read `workflow.security_review` from `.specclaw/config.yaml`. If `false` or not set, or the change is a spike (`specclaw-validate-change .specclaw <change> status` prints `Size: spike`), skip this step entirely (no output, no error). If `true`, before writing `spec.md`: spawn the `infosec-reviewer` agent in **plan** mode on `models.review`, passing `proposal.md`, the change name and the security rules (the `## Security` sections from `specclaw-presets` and, when `specclaw-review` is installed, the security rules from `specclaw-review rules`). It writes `.specclaw/changes/<change>/security-requirements.md`. Then turn each `SR-n` into an acceptance criterion in `spec.md` (cite the `SR-n` in it) and into a task where one is needed. If the agent errors or the file is missing, say `Security requirements: NOT RUN — <reason>` in the plan summary and continue; this step blocks nothing.
+
 4. **Read the change's size first** — `specclaw-validate-change .specclaw <change> status` prints
    `Size: <spike|bounded|architectural>`. It decides what this step writes:
 

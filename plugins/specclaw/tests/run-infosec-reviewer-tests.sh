@@ -14,7 +14,8 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
 ITEMS=("**Model the threat.**" "**Think like an attacker.**" "**Check the stack rules.**" "**Check the specclaw-specific surface.**"
-  "**Auth flows:**" "**Secrets in records:**" "**Prompt injection:**" "**Credentials:**" "**Shell-outs:**" "**Supply chain:**")
+  "**Auth flows:**" "**Secrets in records:**" "**Prompt injection:**" "**Credentials:**" "**Shell-outs:**" "**Supply chain:**"
+  "**Mode plan:**" "**Mode build:**" "**Mode verify:**")
 
 missing() { local f="$1" i out=""; for i in "${ITEMS[@]}"; do grep -qF -- "$i" "$f" || out="$out|$i"; done; echo "$out"; }
 
@@ -27,6 +28,14 @@ for i in "${ITEMS[@]}"; do
   grep -vF -- "$i" "$AGENT" > "$TMP/mutant.md"
   check "AC-4 agent without $i is reported by name" '[ "$(missing "$TMP/mutant.md")" = "|$i" ]'
 done
+agent_out="$(sed -n '/^# Output/,$p' "$AGENT")"
+check "AC-6 agent output section names what each mode writes" 'grep -q "security-requirements.md" <<<"$agent_out" && grep -q "security/<T>.md" <<<"$agent_out" && grep -q "security-report.md" <<<"$agent_out" && grep -qF "**SR-1**" <<<"$agent_out"'
+plan_step="$(sed -n '/^3c\./,/^4\. /p' "$PLUGIN_DIR/references/full/plan.md")"
+check "AC-7 plan spawns the agent in plan mode only when the flag is on, and turns SR-n into criteria" 'grep -q "infosec-reviewer" <<<"$plan_step" && grep -q "plan\*\* mode" <<<"$plan_step" && grep -qF "If \`false\` or not set" <<<"$plan_step" && grep -q "acceptance criterion" <<<"$plan_step" && grep -q "SR-n" <<<"$plan_step"'
+build_step="$(sed -n '/2c\. \*\*Per-task security review/,/3\. Close the span/p' "$PLUGIN_DIR/references/full/build.md")"
+payload_step="$(sed -n '/Build the agent context payload/,/Pick the agent and its budget/p' "$PLUGIN_DIR/references/full/build.md")"
+check "AC-8 build reviews entry-point tasks only, advisory, and hands builders the requirements" 'grep -q "infosec-reviewer" <<<"$build_step" && grep -q "entry point" <<<"$build_step" && grep -q "build\*\* mode" <<<"$build_step" && grep -qi "advisory" <<<"$build_step" && grep -q "NOT_RUN" <<<"$build_step" && grep -q "security-requirements.md" <<<"$payload_step"'
+check "AC-9 verify passes the requirements and counts unmet ones" 'grep -q "security-requirements.md" <<<"$step" && grep -q "security/" <<<"$step" && grep -q "unmet" <<<"$step"'
 check "AC-5 CI registers this suite" 'grep -q "run-infosec-reviewer-tests.sh" "$PLUGIN_DIR/../../.github/workflows/ci.yml"'
 
 echo

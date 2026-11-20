@@ -1,6 +1,6 @@
-# Status: 069-infosec-reviewer-agent
+# Status: 069-infosec-agent
 
-**Change:** 069-infosec-reviewer-agent
+**Change:** 069-infosec-agent
 **Started:** 2026-11-16
 **Last Updated:** 2026-11-16
 
@@ -12,8 +12,8 @@
 | Spec | ✅ Done |  |
 | Design | - | - |
 | Tasks | ✅ Done |  |
-| Build | ✅ Done | 5/5 tasks |
-| Verify | ✅ Passed | PASS |
+| Build | ✅ Done | 9/9 tasks |
+| Verify | ✅ Done | PASS |
 
 ## Task Progress
 

@@ -72,6 +72,7 @@ Prints one integer — `min(parallel_tasks, memory_budget)`. Use it as the concu
    ```bash
    specclaw-build-context .specclaw <change> <TASK_ID>
    ```
+   When `.specclaw/changes/<change>/security-requirements.md` exists, add it to the payload: the agent must meet every `SR-n` that applies to its task.
 3. **Pick the agent and its budget (change 065):** `specclaw-budget brief .specclaw <change> <TASK_ID>`
    prints `subagent_type: <agent>` (from the task's `Kind` through `budget.routing`: Sonnet's
    `builder-frontend` or Opus's `builder-backend`) and a `specclaw budget: role=<role> context=<n>`
@@ -160,6 +161,7 @@ every 60s is never "no reply for 13 min" — which is the teardown this exists t
       **A `BLOCK` retry shares the task's normal retry budget.** It does not get one of its own — a
       task that fails review and a task that fails its tests are both "this task is not done", and
       two counters would let a task alternate between them and exhaust neither.
+   2c. **Per-task security review — only when `workflow.security_review` is `true`** and the task touches an entry point: a route, form, file upload, webhook, CLI argument or env var read, or an auth flow (judge it from the task's `Files:` and diff). Any other task, or the flag off: skip this entirely. Otherwise run `specclaw-build review-package .specclaw <change> <TASK_ID>` and spawn the `infosec-reviewer` agent in **build** mode on `models.review`, passing the package, `security-requirements.md` when it exists, and the security rules (as in verify Step 3.52). It writes `.specclaw/changes/<change>/security/<TASK_ID>.md`. On `CHANGES_REQUESTED`, send the findings back to the task's agent once; if it is still `CHANGES_REQUESTED`, append the findings to `follow-ups.md` and continue. If the agent errors, or `security/<TASK_ID>.md` is missing or has no `**Verdict:**` line, write that file with `**Verdict:** NOT_RUN` and the reason, so verify can tell "not reviewed" from "not an entry point". It is advisory: it never marks a task failed.
    3. Close the span: `specclaw-timer stop .specclaw <change> <TASK_ID> --status ok || true`.
    4. Notify: `✅ Task Complete: <TASK_ID> — <title>`.
 

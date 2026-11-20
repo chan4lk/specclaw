@@ -1,0 +1,63 @@
+name: InfoSec agent evals
+
+# Does the infosec-reviewer agent catch the flaws pen tests keep finding, and stay quiet on the fixed versions?
+#
+# THIS WORKFLOW SPENDS API CALLS, so it is not on every push: nightly and on demand. The cheap structural half
+# (tests/run-infosec-eval-cases-tests.sh) runs in ci.yml on every push instead.
+
+on:
+  schedule:
+    - cron: '41 3 * * *'
+  workflow_dispatch:
+    inputs:
+      reps:
+        description: 'Reps per sample'
+        required: false
+        default: '3'
+      model:
+        description: 'Model to measure'
+        required: false
+        default: 'claude-sonnet-5-5'
+
+jobs:
+  infosec:
+    name: Catch rate and false-alarm rate
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      # Without a key there is nothing to measure, so the workflow skips and says so (same as trigger-evals.yml).
+      # The runner itself fails loudly when `claude` is missing: skipping is decided here, never by the runner.
+      - name: Is the eval key configured?
+        id: key
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::ANTHROPIC_API_KEY is not configured for this repository, so the InfoSec evals are skipped."
+          fi
+
+      - name: Install the Claude Code CLI
+        if: steps.key.outputs.present == 'true'
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Run the InfoSec evals
+        if: steps.key.outputs.present == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SPECCLAW_INFOSEC_EVALS: '1'
+          SPECCLAW_INFOSEC_REPS: ${{ github.event.inputs.reps || '3' }}
+          SPECCLAW_INFOSEC_MODEL: ${{ github.event.inputs.model || 'claude-sonnet-5-5' }}
+        run: bash plugins/specclaw/tests/run-infosec-evals.sh
+
+      - name: Upload the result
+        if: always() && steps.key.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: infosec-evals
+          path: plugins/specclaw/tests/results/infosec-*.md
+          if-no-files-found: ignore
