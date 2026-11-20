@@ -106,9 +106,9 @@ If `true`:
 
 ## Step 3.52 — InfoSec review (conditional)
 
-Read `workflow.security_review` from `.specclaw/config.yaml`. If `false` or not set, skip this step entirely (no output, no error). It is independent of `workflow.code_review`.
+Read `workflow.security_review` from `.specclaw/config.yaml`. If it is explicitly `false`, skip this step entirely (no output, no error); a missing key means on. It is independent of `workflow.code_review`.
 
-If `true`:
+Otherwise:
 1. Delete any existing `security-report.md`, then spawn the `infosec-reviewer` agent using the model from `config.yaml` `models.review`. Pass: the mode `verify`, changed files content (from Step 1), spec content, tasks content, `security-requirements.md` and the `security/` notes when they exist, change name, and the security rules: the `## Security` sections from `specclaw-presets` and, when `specclaw-review` is installed, the security rules from `specclaw-review rules`.
 2. The agent writes `.specclaw/changes/<change>/security-report.md` itself. Confirm the file exists and has a `**Verdict:**` line. If the agent errored, or the file or the verdict line is missing, append `**InfoSec Review:** NOT RUN — <reason>` to the verify-report and skip the rest of this step.
 3. Extract the verdict line and append one line to the verify-report that Step 4 writes:
