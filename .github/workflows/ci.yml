@@ -149,6 +149,10 @@ jobs:
         run: bash plugins/specclaw/tests/run-infosec-reviewer-tests.sh
       - name: Run infosec eval case tests
         run: bash plugins/specclaw/tests/run-infosec-eval-cases-tests.sh
+      - name: Run build-context security rules tests
+        run: bash plugins/specclaw/tests/run-build-context-security-tests.sh
+      - name: Run security gate tests
+        run: bash plugins/specclaw/tests/run-security-gate-tests.sh
       - name: Run narration-gate tests
         run: bash plugins/specclaw-bf/tests/run-narration-gate-tests.sh
       - name: Run Codex skill adapter tests
