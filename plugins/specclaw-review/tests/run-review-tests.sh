@@ -569,7 +569,7 @@ for t in github-actions.yml azure-pipelines.yml; do
 done
 check "064 AC-7 templates are valid YAML (when PyYAML is installed)" 'python3 -c "import yaml" 2>/dev/null || exit 0; for t in "$PLUGIN_DIR"/ci/*.yml; do python3 -c "import sys,yaml; yaml.safe_load(open(sys.argv[1]))" "$t" || exit 1; done'
 
-# Change 070: git helpers decode UTF-8 (Windows text=True would use cp1252: crash on 0x8f, mojibake on é).
+# Change 071: git helpers decode UTF-8 (Windows text=True would use cp1252: crash on 0x8f, mojibake on é).
 cat > "$TMP/dec.py" <<'PY'
 import os, subprocess, sys
 sys.path.insert(0, os.path.join(sys.argv[1], "lib"))
@@ -598,7 +598,7 @@ subprocess.run(["git", "-C", d, "add", "t.py"], check=True)
 subprocess.run(["git", "-C", d, "-c", "user.email=a@b", "-c", "user.name=n", "commit", "-q", "-m", "t"], check=True)
 assert rc._run_tests(Cfg(), rc.head(d), ["t.py"], "python3") == (0, None)
 PY
-check "070 AC-4 git helpers decode non-ASCII diff and repo path as UTF-8 (bad bytes replaced, no crash)" 'python3 "$TMP/dec.py" "$PLUGIN_DIR" "$TMP"'
+check "071 AC-4 git helpers decode non-ASCII diff and repo path as UTF-8 (bad bytes replaced, no crash)" 'python3 "$TMP/dec.py" "$PLUGIN_DIR" "$TMP"'
 
 echo
 [ "$FAILS" -eq 0 ] && echo "All specclaw-review tests passed." || echo "$FAILS failure(s)."
