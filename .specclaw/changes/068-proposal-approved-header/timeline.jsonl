@@ -1,0 +1,14 @@
+{"ev":"start","span":"propose","kind":"phase","label":"propose","at":"2026-11-16T14:26:10Z","ts":1794839170}
+{"ev":"stop","span":"propose","at":"2026-11-16T14:26:28Z","ts":1794839188,"status":"ok"}
+{"ev":"start","span":"build","kind":"phase","label":"build","at":"2026-11-16T14:36:51Z","ts":1794839811}
+{"ev":"start","span":"W1","kind":"wave","label":"wave 1","at":"2026-11-16T14:36:57Z","ts":1794839816}
+{"ev":"start","span":"T1","kind":"task","label":"Flip the proposal header in specclaw-set-phase","parent":"W1","model":"opus","attempt":"1","at":"2026-11-16T14:36:57Z","ts":1794839817}
+{"ev":"stop","span":"T1","at":"2026-11-16T14:51:03Z","ts":1794840663,"status":"ok"}
+{"ev":"start","span":"T2","kind":"task","label":"Say it in the full propose reference","parent":"W1","model":"sonnet","attempt":"1","at":"2026-11-16T14:51:32Z","ts":1794840692}
+{"ev":"stop","span":"T2","at":"2026-11-16T14:51:33Z","ts":1794840693,"status":"ok"}
+{"ev":"start","span":"T3","kind":"task","label":"Bump the plugin version","parent":"W1","model":"sonnet","attempt":"1","at":"2026-11-16T14:51:40Z","ts":1794840700}
+{"ev":"stop","span":"T3","at":"2026-11-16T14:51:59Z","ts":1794840719,"status":"ok"}
+{"ev":"stop","span":"W1","at":"2026-11-16T14:52:08Z","ts":1794840729,"status":"ok"}
+{"ev":"stop","span":"build","at":"2026-11-16T14:52:09Z","ts":1794840729,"status":"ok"}
+{"ev":"start","span":"verify-1794840934","kind":"phase","label":"verify","at":"2026-11-16T14:55:35Z","ts":1794840934}
+{"ev":"stop","span":"verify-1794840934","at":"2026-11-16T16:02:19Z","ts":1794844939,"status":"ok"}

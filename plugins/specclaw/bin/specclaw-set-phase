@@ -288,6 +288,43 @@ chmod 644 "$tmpfile" 2>/dev/null || true
 mv "$tmpfile" "$STATE_FILE" || die "failed to install ${STATE_FILE}"
 trap - EXIT
 
+flip_proposal_header() {
+  local proposal="${CHANGE_DIR}/proposal.md" flipped line cr
+  local seen=0 changed=0 last=0 ok=1
+  local approved_re='^\*\*Status:\*\*[[:space:]]*(✅|🟢)?[[:space:]]*Approved'
+  [ -f "$proposal" ] || return 0
+  [ -w "$proposal" ] || { warn "${proposal} is read-only; its Status header was left as it was"; return 0; }
+  flipped="$(mktemp "${CHANGE_DIR}/.proposal.md.XXXXXX")" || { warn "could not create a temp file next to ${proposal}"; return 0; }
+  if ! cp -p "$proposal" "$flipped" || ! chmod u+w "$flipped"; then
+    warn "could not prepare a temp copy of ${proposal}"
+    rm -f "$flipped"
+    return 0
+  fi
+  while IFS= read -r line || { last=1; [ -n "$line" ]; }; do
+    if [ "$seen" -eq 0 ] && [[ "$line" == '**Status:**'* ]]; then
+      seen=1
+      if ! [[ "$line" =~ $approved_re ]]; then
+        cr=""
+        [[ "$line" == *$'\r' ]] && cr=$'\r'
+        line="**Status:** ✅ Approved${cr}"
+        changed=1
+      fi
+    fi
+    if [ "$last" -eq 1 ]; then printf '%s' "$line" || ok=0; else printf '%s\n' "$line" || ok=0; fi
+  done <"$proposal" >"$flipped" || ok=0
+  if [ "$changed" -eq 1 ] && [ "$ok" -eq 1 ] && [ -s "$flipped" ]; then
+    mv "$flipped" "$proposal" || { warn "could not update the Status header in ${proposal}"; rm -f "$flipped"; }
+  else
+    [ "$changed" -eq 1 ] && warn "could not write the new Status header for ${proposal}; it was left as it was"
+    rm -f "$flipped"
+  fi
+  return 0
+}
+
+if [ "$PHASE" = "proposal" ] && [ "$(printf '%s' "$STATUS" | tr '[:upper:]' '[:lower:]')" = "approved" ]; then
+  flip_proposal_header
+fi
+
 # ─── Reflect into status.md (FR2) ────────────────────────────────────────────
 
 # Edge case 4: status.md may not exist yet. Same self-heal as specclaw-verify.
