@@ -50,6 +50,15 @@ done
 
 RUNNER="$PLUGIN_DIR/tests/run-infosec-evals.sh"
 check "AC-12 runner skips with exit 0 unless the opt-in is set" 'out="$(env -u SPECCLAW_INFOSEC_EVALS bash "$RUNNER" 2>&1)"; rc=$?; [ "$rc" -eq 0 ] && grep -q SKIPPED <<<"$out"'
+# rules <sample>: the rule file names the runner picks for that sample, offline.
+rules() { SPECCLAW_INFOSEC_RULES_FOR="$1" bash "$RUNNER" | sed 's#.*/plugins/##' | tr '
+' ' '; }
+base="specclaw/presets/base.md specclaw-review/review-rules/base.md"
+check "AC-8 a .cs sample gets the dotnet rules plus base" '[ "$(rules a.cs)" = "specclaw/presets/base.md specclaw/presets/dotnet.md specclaw-review/review-rules/base.md specclaw-review/review-rules/dotnet.md " ]'
+check "AC-8 a .py sample gets the python rules plus base" '[ "$(rules a.py)" = "specclaw/presets/base.md specclaw/presets/python.md specclaw-review/review-rules/base.md specclaw-review/review-rules/python.md " ]'
+check "AC-8 a .js sample gets the node rules plus base" '[ "$(rules a.js)" = "specclaw/presets/base.md specclaw/presets/node.md specclaw-review/review-rules/base.md specclaw-review/review-rules/node.md " ]'
+check "AC-8 a .md sample gets base only" '[ "$(rules a.md)" = "$base " ]'
+check "AC-8 every selected rule file exists" 'for s in a.cs a.py a.js a.ts a.md; do SPECCLAW_INFOSEC_RULES_FOR=$s bash "$RUNNER" | while read -r f; do [ -s "$f" ] || exit 1; done || exit 1; done'
 # A stub `claude` that flags the dev-bypass sample and passes the fixed one, so the scoring is tested without a model.
 mkdir -p "$TMP/bin"
 printf '%s\n' '#!/usr/bin/env bash' '[ "${STUB_FAIL:-}" = 1 ] && exit 0' '[ "${STUB_EXIT1:-}" = 1 ] && { echo "Error: max turns reached"; exit 1; }' '[ "${STUB_PROSE:-}" = 1 ] && { echo "No findings. The codes and DevFlags code looks fine."; exit 0; }' 'if [ "${STUB_ALWAYS_BLOCK:-}" = 1 ] || grep -q "x-dev-user" <<<"$*"; then echo "### [BLOCK] src/handler.js:2 - B16 DevFlags"; else echo "No findings."; fi' > "$TMP/bin/claude"

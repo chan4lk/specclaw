@@ -19,6 +19,7 @@
 #   SPECCLAW_INFOSEC_CASE=<name>     run one case only
 #   SPECCLAW_INFOSEC_TIMEOUT=300     seconds before one call is given up (counts as no answer)
 #   SPECCLAW_INFOSEC_RESULTS_DIR=<d> where the result file goes (default tests/results)
+#   SPECCLAW_INFOSEC_RULES_FOR=<f>   print the rule files a sample named <f> is reviewed with, and exit (no model call)
 
 set -uo pipefail
 
@@ -32,6 +33,23 @@ REPS="${SPECCLAW_INFOSEC_REPS:-3}"
 MODEL="${SPECCLAW_INFOSEC_MODEL:-claude-sonnet-5-5}"
 ONLY="${SPECCLAW_INFOSEC_CASE:-}"
 TIMEOUT="${SPECCLAW_INFOSEC_TIMEOUT:-300}"
+
+# rules_for <sample> -> the preset and pack files for its stack, one per line; base is always included.
+rules_for() {
+  local stack
+  case "${1##*.}" in
+    cs) stack=dotnet ;;
+    py) stack=python ;;
+    js|ts) stack=node ;;
+    *) stack= ;;
+  esac
+  echo "$PLUGIN_DIR/presets/base.md"
+  [ -z "$stack" ] || echo "$PLUGIN_DIR/presets/$stack.md"
+  echo "$REPO_ROOT/plugins/specclaw-review/review-rules/base.md"
+  [ -z "$stack" ] || echo "$REPO_ROOT/plugins/specclaw-review/review-rules/$stack.md"
+}
+
+if [ -n "${SPECCLAW_INFOSEC_RULES_FOR:-}" ]; then rules_for "$SPECCLAW_INFOSEC_RULES_FOR"; exit 0; fi
 
 if [ "${SPECCLAW_INFOSEC_EVALS:-}" != "1" ]; then
   echo "run-infosec-evals.sh: SKIPPED. It drives a real model and costs API calls." >&2
@@ -55,7 +73,9 @@ review() {
   ext="${sample##*.}"
   # A neutral path, so the file name never says "vulnerable" or "fixed".
   if [ "$ext" = md ]; then path=".specclaw/changes/eval/reports/T3.md"; else path="src/handler.$ext"; fi
-  local out
+  # The security rules a real run gives for this sample's stack.
+  local rules out
+  mapfile -t rules < <(rules_for "$sample")
   out="$(timeout "$TIMEOUT" claude -p "$INSTRUCTIONS
 
 Mode: verify
@@ -70,7 +90,7 @@ $(cat "$sample")
 (none)
 
 ## Security rules
-$RULES" --model "$MODEL" --max-turns 1 2>/dev/null)" || return 0
+$(cat "${rules[@]}")" --model "$MODEL" --max-turns 1 2>/dev/null)" || return 0
   printf '%s' "$out"
 }
 
