@@ -11,3 +11,7 @@
 - **DN8** An endpoint with no authorization policy where the app has no fallback policy, or an anonymous route
   not intended to be public → **blocker** (B13).
 - **DN9** CORS with `AllowAnyOrigin` combined with credentials → **major**.
+- **DN10** A sign-in, code or token endpoint with no rate limiter, or one that becomes a no-limit partition when its
+  setting is missing → **major** (B22).
+- **DN11** Forwarded headers trusted from any source (no `KnownProxies`/`KnownNetworks`, or `X-Forwarded-For` read
+  directly), so a client-set header picks its own rate-limit bucket → **major**.

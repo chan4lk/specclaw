@@ -31,6 +31,8 @@ tests/<App>.Tests/
 - **Errors:** one exception handler returns `ProblemDetails`.
 - **Http:** outbound calls use `IHttpClientFactory`, never a new `HttpClient` per call.
 - **Cors:** list explicit origins; never `AllowAnyOrigin` together with credentials.
+- **RateLimit:** rate-limit sign-in, code and token endpoints, keyed on the account as well as the client, with a limit that is required config.
+- **Proxy:** take the client IP from `ForwardedHeaders` with `KnownProxies`/`KnownNetworks` set to your real proxies; never read `X-Forwarded-For` directly.
 
 ## Shared
 - `src/<App>.Common/` (a class library) for code reused across layers: base entities, generic repositories and handlers, guards, result types.

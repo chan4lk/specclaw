@@ -22,8 +22,8 @@ defects left by a fix that patched only the case the reviewer named.
 - **B7 Concurrency claims need a real race test.** A lock, claim or "exactly once" guarantee needs a test
   that runs two real workers/sessions. A single-session test that stays green with the lock deleted
   proves nothing → **major**.
-- **B8 Secrets and untrusted input.** Hard-coded credentials, unescaped input into shell, SQL, HTML or
-  paths, and user-controlled data written to logs are **blockers**.
+- **B8 Secrets and untrusted input.** Hard-coded credentials, unescaped input into shell, SQL, HTML,
+  paths or outbound URLs, and user-controlled data written to logs are **blockers**.
 - **B9 Merge and rebase damage.** Conflict resolutions that drop rows, duplicate instructions or revert
   a sibling change are **majors**. Compare against both parents.
 - **B10 Scope.** Do not ask for features, refactors or renames outside the diff. Anything pre-existing
@@ -46,11 +46,19 @@ defects left by a fix that patched only the case the reviewer named.
   that returns a one-time code or secret, is a **blocker**. It must refuse to start in production.
 - **B17 Session lifecycle.** A logout or credential change that leaves the user's other sessions valid is a **major**.
 - **B18 Account enumeration.** A sign-up, sign-in or reset whose status, body or timing differs for an existing and a
-  new account is a **minor**.
+  new account, or a lookup that answers differently for a missing and a forbidden resource, is a **minor**.
 - **B19 Code lockout.** A one-time code check with no cap on total failed attempts, so it can be guessed over time,
   is a **minor**.
 - **B20 URL allowlist.** A URL or host allowlist checked with a substring or regex on the whole string instead of the
   parsed hostname (SSRF) is a **major**.
+- **B21 Fail-open access check.** An ownership or role check that is skipped when the caller's identity is missing
+  (e.g. `if (user && user.id !== owner)`), or that tests the target's role instead of the caller's, is a **blocker**.
+- **B22 Security setting falls back.** A security control (rate limit, token or origin check) that turns off or falls
+  back to a permissive default when its setting is missing is a **major**. It must refuse to start instead.
+- **B23 Identity from request data.** An identity, token or credential read from a header, body field or tool
+  argument and used in place of the authenticated caller's identity is a **blocker**.
+- **B24 Open redirect.** A redirect target taken from the request without checking it against local paths or
+  targets registered for the client is a **major**.
 
 ### Severity calibration
 

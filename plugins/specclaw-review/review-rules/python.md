@@ -15,3 +15,6 @@
 - **PY9** `pickle`, `eval`, `exec` or `yaml.load` on external data → **blocker** (B8).
 - **PY10** `httpx`/`requests` with no timeout, or `verify=False` → **major**.
 - **PY11** A Pydantic request model without `extra="forbid"` that feeds a write → **major**; otherwise **minor**.
+- **PY12** A sign-in, code or token route with no rate limit → **major**.
+- **PY13** A rate limit or IP check keyed on a raw `X-Forwarded-For`, or forwarded headers trusted from any source
+  (`--forwarded-allow-ips '*'`) → **major**.
