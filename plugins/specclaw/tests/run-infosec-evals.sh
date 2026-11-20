@@ -66,7 +66,7 @@ command -v claude >/dev/null 2>&1 || { echo "FATAL: the \`claude\` CLI is not on
 INSTRUCTIONS="$(awk 'NR==1 && /^---$/ {f=1; next} f && /^---$/ {f=0; next} !f' "$AGENT")"
 # Finding headings are read by the gate itself (`--headings`), so the false-alarm rate measures exactly
 # what blocks a PR: one definition, no copy here to drift.
-GATE="$PLUGIN_DIR/bin/specclaw-security-gate"
+GATE="${SPECCLAW_INFOSEC_GATE:-$PLUGIN_DIR/bin/specclaw-security-gate}"  # override: tests only
 REPORT_TMP="$(mktemp)"
 trap 'rm -f "$REPORT_TMP"' EXIT
 # headings <report-text> -> `<SEVERITY>\t<heading>` lines for every finding heading
@@ -114,20 +114,21 @@ for d in "$CASES"/*/; do
   [ -n "$want" ] || { echo "FATAL: case $c has no 'rule:' line in expect." >&2; exit 2; }
   c_hit=0; c_alarm=0; c_none=0
   for _ in $(seq 1 "$REPS"); do
+    # A report the gate could not read (gate missing, crashed) is no answer, never "no finding".
     r="$(review "$(ls "$d"/vulnerable.* | head -1)")"
-    if [ -z "$r" ]; then
+    if [ -z "$r" ] || ! h="$(headings "$r")"; then
       c_none=$((c_none + 1))
     else
       v_answered=$((v_answered + 1))
       # Only a finding heading counts: the keyword also appears in quoted code and in prose that approves it.
-      if grep -qE "\b($want)\b" <<<"$(headings "$r")"; then c_hit=$((c_hit + 1)); fi
+      if grep -qE "\b($want)\b" <<<"$h"; then c_hit=$((c_hit + 1)); fi
     fi
     r="$(review "$(ls "$d"/fixed.* | head -1)")"
-    if [ -z "$r" ]; then
+    if [ -z "$r" ] || ! h="$(headings "$r")"; then
       c_none=$((c_none + 1))
     else
       f_answered=$((f_answered + 1))
-      if grep -q '^BLOCK' <<<"$(headings "$r")"; then c_alarm=$((c_alarm + 1)); fi
+      if grep -q '^BLOCK' <<<"$h"; then c_alarm=$((c_alarm + 1)); fi
     fi
   done
   caught=$((caught + c_hit)); alarms=$((alarms + c_alarm)); no_answer=$((no_answer + c_none))

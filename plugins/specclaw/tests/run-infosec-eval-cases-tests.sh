@@ -69,6 +69,11 @@ check "AC-12 runner prints catch rate, false-alarm rate and model" 'out="$(run_s
 check "AC-12 a fixed sample that draws a BLOCK counts as a false alarm" 'out="$(STUB_ALWAYS_BLOCK=1 run_stub)"; grep -q "False-alarm rate:\*\* 100%" <<<"$out"'
 check "AC-12 an emoji, list-number, ## Block heading is read as the gate reads it (catch and false alarm)" 'out="$(STUB_ODD_BLOCK=1 run_stub)"; grep -q "Catch rate:\*\* 100%" <<<"$out" && grep -q "False-alarm rate:\*\* 100%" <<<"$out"'
 check "AC-12 the runner reads finding headings only through the gate (no second copy of the pattern)" 'grep -q -- "--headings" "$RUNNER" && ! grep -qF -e "#{2,6}" -e "\[BLOCK" "$RUNNER"'
+# A gate that cannot read the report is no answer: the rates go UNKNOWN and the run fails, never 0%.
+printf '#!/usr/bin/env bash\necho boom >&2\nexit 3\n' > "$TMP/bin/crashing-gate"; chmod +x "$TMP/bin/crashing-gate"
+for broken in "$TMP/no-such-gate" "$TMP/bin/crashing-gate"; do
+  check "AC-12 a broken gate ($(basename "$broken")) makes the rates UNKNOWN and the run fail" 'out="$(STUB_ALWAYS_BLOCK=1 SPECCLAW_INFOSEC_GATE="$broken" run_stub)"; rc=$?; [ "$rc" -ne 0 ] && grep -q "False-alarm rate:\*\* UNKNOWN" <<<"$out"'
+done
 check "AC-12 calls that give no answer make the rates UNKNOWN and the run fail" 'out="$(STUB_FAIL=1 run_stub)"; rc=$?; [ "$rc" -ne 0 ] && grep -q "Catch rate:\*\* UNKNOWN" <<<"$out" && ! grep -q "False-alarm rate:\*\* 0%" <<<"$out"'
 check "AC-12 a failed call that still prints text is no answer, not a report" 'out="$(STUB_EXIT1=1 run_stub)"; rc=$?; [ "$rc" -ne 0 ] && grep -q "Catch rate:\*\* UNKNOWN" <<<"$out"'
 check "AC-12 a non-integer reps value is refused" 'out="$(REPS=abc run_stub)"; grep -q "must be a positive integer" <<<"$out"'
