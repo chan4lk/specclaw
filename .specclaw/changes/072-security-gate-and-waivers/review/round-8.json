@@ -1,0 +1,28 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 0
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw/tests/run-infosec-eval-cases-tests.sh"
+ ],
+ "final": false,
+ "findings": [],
+ "head": "3e5d107327e319a8218a7dfc8d77581655705eba",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 12255,
+ "round": 8,
+ "since": "187e29d",
+ "status": "clean",
+ "system_chars": 8987,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1795190322,
+ "ts_start": 1795190313
+}

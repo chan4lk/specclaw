@@ -1,0 +1,13 @@
+{
+  "change": "072-security-gate-and-waivers",
+  "phase": "verify",
+  "branch": "specclaw/security",
+  "size": "bounded",
+  "phases": {
+    "proposal": {"status":"approved","at":"2026-11-20T13:20:29Z"},
+    "spec": {"status":"done","at":"2026-11-20T13:37:28Z"},
+    "tasks": {"status":"done","at":"2026-11-20T13:38:04Z"},
+    "build": {"status":"done","at":"2026-11-20T14:19:58Z","tasks":{"done":7,"total":7,"failed":0}},
+    "verify": {"status":"passed","at":"2026-11-20T16:49:25Z","verdict":"PASS"}
+  }
+}

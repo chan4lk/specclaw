@@ -1,0 +1,43 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 1
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw/bin/specclaw-build-context",
+  "plugins/specclaw/tests/run-build-context-security-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/tests/run-build-context-security-tests.sh",
+   "fp": "7e529843d7fc",
+   "in_delta": true,
+   "line": 77,
+   "message": "The previous finding named a resolver that is present but not executable as a variant to cover. The new table has rows for missing, crash with no paths, crash with some paths and silent exit 0, but none for a non-executable resolver. The code handles it through the same non-zero-rc branch (bash returns 126), so the gap is in the test rather than the fix. Add a row such as `not executable|chmod -x \"$TMP/plug/bin/specclaw-presets\"|specclaw-presets exited 126|no`. The stub must exist first, or the row should write the stub and then chmod it. Guard the row if the platform ignores chmod, such as Git Bash on NTFS.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "A refactor changes the invocation to `bash \"$SCRIPT_DIR/specclaw-presets\"` or tests `-x` first and silently skips the call. A present but non-executable resolver then yields no warning, and no row in the table fails.",
+   "severity": "minor"
+  }
+ ],
+ "head": "91ca664659c10daedf16df8282945d270034bfbd",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 14562,
+ "round": 3,
+ "since": "f056ee0",
+ "status": "clean",
+ "system_chars": 8965,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1795187015,
+ "ts_start": 1795187000
+}

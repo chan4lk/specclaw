@@ -1,0 +1,44 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 1
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw/bin/specclaw-pr",
+  "plugins/specclaw/templates/config.yaml",
+  "plugins/specclaw/tests/run-headless-pr-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/tests/run-headless-pr-tests.sh",
+   "fp": "6ff505c71bd1",
+   "in_delta": true,
+   "line": 343,
+   "message": "The new security_review table only covers false spellings and one invalid value. It has no row for a true spelling (`True`, `yes`, `on`, `\"true\"`) that must still run the gate, and none for an absent `security_review` key, which the template documents as on. The unset default is now a literal argument (`sec_bool workflow.security_review true`) and the true-side case arms are untested here. Add rows for those spellings and one with the key deleted. Each should assert that the gate runs, e.g. exit 1 under block true with an unwaived BLOCK.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Someone changes the default argument to `false`, or drops `yes|on` from the true arm. Config with `security_review: yes`, or no `security_review` key, then skips the InfoSec gate and the PR opens despite an unwaived BLOCK. Every row in this table still passes.",
+   "severity": "minor"
+  }
+ ],
+ "head": "6fbf7248cbe92ad2d3dac80118db3208faafcaed",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 15734,
+ "round": 12,
+ "since": "ea95ba1",
+ "status": "clean",
+ "system_chars": 8929,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1795192386,
+ "ts_start": 1795192368
+}
