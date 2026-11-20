@@ -71,6 +71,35 @@ fixture windows "$HEAD"'### [BLOCK] C:\\repo\\src\\app.cs:12 — Access no auth\
 run windows
 check "Windows drive-letter path waiver matches (0)" '[ "$rc" -eq 0 ]'
 
+# Fail closed (review findings on 072): every BLOCK-shaped heading counts, an unreadable one stays unwaived.
+fixture shapes "$HEAD"'### [BLOCK] src/my dir/a.js:3 \xe2\x80\x93 B13 en dash, space in path\n### \xf0\x9f\x94\xb4 [BLOCK] src/b.js:4 \xe2\x80\x94 B21 emoji first\n### BLOCK src/c.js:5 \xe2\x80\x94 B22 no brackets\n### [BLOCK] src/d.js:6 B8 no separator\n' \
+  '- Waiver: src/my dir/a.js | B13 | accepted risk | ok\n- Waiver: src/b.js | B21 | accepted risk | ok\n- Waiver: src/c.js | B22 | accepted risk | ok\n'
+run shapes
+check "en dash, space in path, emoji, bare BLOCK are all read and waivable" '! grep -q "unwaived: .*src/\(my dir/a\|b\|c\)\.js" <<<"$out" && [ "$(grep -c "^waived" <<<"$out")" -eq 3 ]'
+check "a BLOCK heading with no separator is unwaived as unreadable (1)" '[ "$rc" -eq 1 ] && grep -q "unwaived (path or rule unreadable): .*src/d.js" <<<"$out"'
+
+fixture boldrule "$HEAD"'### [BLOCK] `src/e.js`:9 \xe2\x80\x94 **B23** bold rule, backticked path\n' '\xef\xbb\xbf- Waiver: `src/e.js` | **B23** | false alarm | test double\n'
+run boldrule
+check "bold rule, backticked path and a BOM-led waiver still match (0)" '[ "$rc" -eq 0 ]'
+
+fixture empty ''
+run empty
+check "an empty report exits 3" '[ "$rc" -eq 3 ]'
+fixture noverdict '# Security Report: x\n\n## Findings\n\nNo findings.\n'
+run noverdict
+check "a report with no verdict line exits 3" '[ "$rc" -eq 3 ]'
+fixture notrunspace '# Security Report: x\n\n**Verdict:** NOT RUN\n'
+run notrunspace
+check "NOT RUN with a space exits 3" '[ "$rc" -eq 3 ]'
+fixture twoverdicts '**Verdict:** APPROVED\n\n**Verdict:** CHANGES_REQUESTED\n'
+run twoverdicts
+check "conflicting verdict lines exit 3" '[ "$rc" -eq 3 ]'
+fixture quoted '**Verdict:** APPROVED_WITH_NOTES\n\n### [WARN] src/f.js:1 \xe2\x80\x94 B3 Fix: require one `**Verdict:**` line\n'
+run quoted
+check "a finding that quotes **Verdict:** mid-line is not a second verdict (0)" '[ "$rc" -eq 0 ]'
+fixture crnoblock '# Security Report: x\n\n**Verdict:** CHANGES_REQUESTED\n\n## Findings\n\nSomething is wrong but no heading.\n'
+run crnoblock
+check "CHANGES_REQUESTED with no readable BLOCK exits 1" '[ "$rc" -eq 1 ] && grep -q "no BLOCK heading could be read" <<<"$out"'
 
 run allwaived --waivers
 check "--waivers lists valid waivers as markdown" '[ "$rc" -eq 0 ] && [ "$(grep -c "^- \`" <<<"$out")" -eq 2 ] && grep -q "^- \`src/api/user.js\` — injection — accepted risk: parameterised upstream | really$" <<<"$out"'

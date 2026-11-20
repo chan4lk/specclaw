@@ -850,10 +850,15 @@ main() {
   # security-report.md, or no report at all, warns — and stops the PR when
   # workflow.security_review_block is true. A missing security_review key means on.
   local sec_gate="${SCRIPT_DIR}/specclaw-security-gate"
-  if [[ -x "$sec_gate" && "$(yaml_val "$CONFIG_FILE" "workflow.security_review")" != "false" ]]; then
+  if [[ "$(yaml_val "$CONFIG_FILE" "workflow.security_review")" != "false" ]]; then
     local sec_block sec_out sec_rc=0 sec_msg
     sec_block="$(yaml_val "$CONFIG_FILE" "workflow.security_review_block")"
-    sec_out="$("$sec_gate" "$SPECCLAW_DIR" "$CHANGE_NAME" 2>&1)" || sec_rc=$?
+    # A gate that cannot run is a gate failure, never a skipped check.
+    if [[ -x "$sec_gate" ]]; then
+      sec_out="$("$sec_gate" "$SPECCLAW_DIR" "$CHANGE_NAME" 2>&1)" || sec_rc=$?
+    else
+      sec_rc=127 sec_out="${sec_gate} is missing or not executable"
+    fi
     case "$sec_rc" in
       0) sec_msg="" ;;
       1) sec_msg="security gate: unwaived BLOCK finding(s):
