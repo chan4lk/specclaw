@@ -88,6 +88,15 @@ for shape in '### [Block] src/h.js:1 \xe2\x80\x94 B21 mixed case' '### 1. [BLOCK
   check "odd heading still blocks: $(printf '%b' "$shape" | cut -c5-)" '[ "$rc" -eq 1 ] && grep -q "unwaived: .*src/h.js" <<<"$out"'
 done
 
+# No catastrophic backtracking: long punctuation-only headings that never reach a tag finish fast.
+# perl alarm bounds the run, so a regression fails here instead of hanging CI.
+for run_ in '!' '.-' '1.!'; do
+  long="$(printf "%0.s$run_" $(seq 1 400))"
+  fixture redos "**Verdict:** APPROVED\n\n### $long tail\n## $long\n"
+  out="$(perl -e 'alarm 10; exec @ARGV' "$GATE" "$TMP/sc" redos 2>&1)"; rc=$?
+  check "a 400-run '$run_' heading is scanned in under 10s (no ReDoS)" '[ "$rc" -eq 0 ]'
+done
+
 fixture boldrule "$HEAD"'### [BLOCK] `src/e.js`:9 \xe2\x80\x94 **B23** bold rule, backticked path\n' '\xef\xbb\xbf- Waiver: `src/e.js` | **B23** | false alarm | test double\n'
 run boldrule
 check "bold rule, backticked path and a BOM-led waiver still match (0)" '[ "$rc" -eq 0 ]'

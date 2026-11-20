@@ -3,5 +3,5 @@ router.post('/login', async (req, res) => {
   if (!user) return res.status(401).render('login');
   req.session.userId = user.id;
   const next = String(req.body.returnTo || '/');
-  res.redirect(next.startsWith('/') && !next.startsWith('//') && !next.includes('\') ? next : '/');
+  res.redirect(next.startsWith('/') && !next.startsWith('//') && !next.includes('\\') ? next : '/');
 });

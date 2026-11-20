@@ -8,8 +8,8 @@
 #   without brackets) is a finding; WARN/NOTE never block. A heading whose path or
 #   rule cannot be read is unwaived: the gate fails closed. A waiver is
 #   `- Waiver: <path> | <rule> | <accepted risk|false alarm> | <reason>`; it lifts
-#   a BLOCK with the same path (`:line` ignored) whose rule field starts with
-#   <rule>, case-insensitive. Malformed waiver lines are printed as invalid and
+#   a BLOCK with the same path (`:line` ignored) whose rule field's first word
+#   equals <rule>, case-insensitive (so `B13` does not waive `B13.1`). Malformed waiver lines are printed as invalid and
 #   waive nothing. Prints each waived and each unwaived BLOCK.
 #   --waivers prints only the valid waivers as a markdown list and exits 0.
 # Exit: 0 no unwaived BLOCK; 1 one or more unwaived BLOCKs, or a
@@ -21,7 +21,8 @@ import os, re, sys
 
 # A BLOCK-tagged heading, any case: `[BLOCK]` or a bare `BLOCK`, after any mix of
 # emoji, punctuation and list numbers (`### 1. [Block]`). Over-matching fails closed.
-BLOCK_HEADING = re.compile(r"^\s*#{2,6}\s+(?:\d+[.)]\s*|[^\w\s\[]+\s*)*(?:\[BLOCK\]|BLOCK\b)\s*(.*)$", re.I)
+# Each prefix alternative consumes one token, so a long run has one parse (no ReDoS).
+BLOCK_HEADING = re.compile(r"^\s*#{2,6}\s+(?:(?:\d+[.)]|[^\w\s\[])\s*)*(?:\[BLOCK\]|BLOCK\b)\s*(.*)$", re.I)
 # `<path>[:line] <sep> <rule …>`: a path may hold spaces; a separator needs a space after it.
 FIELDS = re.compile(r"^(?P<path>.+?)\s*(?:\u2014|\u2013|--|-|:)\s+(?P<rule>\S.*)$")
 # Only a line that starts with the label: a finding may quote `**Verdict:**` mid-sentence.

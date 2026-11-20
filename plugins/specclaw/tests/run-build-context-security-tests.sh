@@ -49,5 +49,13 @@ P="$(payload "$TMP/c")"
 check "AC-1 payload still built" 'printf "%s" "$P" | grep -q "^## Specification Context$"'
 check "AC-1 no section without ## Security" '! printf "%s" "$P" | grep -q "Stack Security Rules"'
 
+# 4: a resolver failure is loud, never silent; what it did resolve is still used.
+project "$TMP/d"
+sed -i.bak 's/^presets: \[node\]/presets: [nosuchstack, node]/' "$TMP/d/.specclaw/config.yaml" && rm -f "$TMP/d/.specclaw/config.yaml.bak"
+ERR="$( ( cd "$TMP/d" && "$BUILD_CONTEXT" .specclaw demo T1 2>&1 >/dev/null ) )"
+P="$(payload "$TMP/d")"
+check "AC-1 a failing preset resolver warns on stderr" 'printf "%s" "$ERR" | grep -q "WARNING: specclaw-presets exited"'
+check "AC-1 … and the presets it resolved are still injected" 'printf "%s" "$P" | grep -q "^### base$" && printf "%s" "$P" | grep -q "^### node$"'
+
 if [ "$FAILS" -eq 0 ]; then echo "All build-context security tests passed."; else echo "$FAILS build-context security test(s) failed."; fi
 [ "$FAILS" -eq 0 ]

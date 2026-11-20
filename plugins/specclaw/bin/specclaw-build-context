@@ -264,10 +264,19 @@ fi
 # --- Stack security rules ---
 # The `## Security` section of every preset specclaw-presets resolves (base,
 # configured stacks, project overrides). A non-zero exit still prints every
-# resolvable path, so those are used. No section qualifies → nothing emitted.
+# resolvable path, so those are used, but loudly: a resolver failure must never
+# read like "no preset has security rules". No section qualifies → nothing emitted.
 SECURITY_SECTION=""
 SECURITY_RULES=""
+PRESET_PATHS=""
+presets_rc=0
 if [[ -f "$SCRIPT_DIR/specclaw-presets" ]]; then
+  PRESET_PATHS="$("$SCRIPT_DIR/specclaw-presets" "$SPECCLAW_DIR" 2>/dev/null)" || presets_rc=$?
+  [[ "$presets_rc" -eq 0 ]] || echo "WARNING: specclaw-presets exited $presets_rc — stack security rules may be incomplete (run: specclaw-presets $SPECCLAW_DIR)" >&2
+else
+  echo "WARNING: specclaw-presets not found at $SCRIPT_DIR — builders get no stack security rules" >&2
+fi
+if [[ -n "$PRESET_PATHS" ]]; then
   while IFS= read -r preset_path; do
     preset_path="${preset_path%$'\r'}"
     [[ -f "$preset_path" ]] || continue
@@ -278,7 +287,7 @@ if [[ -f "$SCRIPT_DIR/specclaw-presets" ]]; then
 ${preset_rules}
 
 "
-  done < <("$SCRIPT_DIR/specclaw-presets" "$SPECCLAW_DIR" 2>/dev/null || true)
+  done <<<"$PRESET_PATHS"
 fi
 if [[ -n "$SECURITY_RULES" ]]; then
   SECURITY_SECTION="## Stack Security Rules
