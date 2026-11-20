@@ -49,13 +49,34 @@ P="$(payload "$TMP/c")"
 check "AC-1 payload still built" 'printf "%s" "$P" | grep -q "^## Specification Context$"'
 check "AC-1 no section without ## Security" '! printf "%s" "$P" | grep -q "Stack Security Rules"'
 
-# 4: a resolver failure is loud, never silent; what it did resolve is still used.
+# 4: every way the preset resolver can fail is loud, never silent (table-driven).
+# A copy of the plugin's bin/ and references/ gets a stub specclaw-presets per row.
+copy_plugin() {
+  rm -rf "$TMP/plug"; mkdir -p "$TMP/plug"
+  cp -R "$PLUGIN_DIR/bin" "$PLUGIN_DIR/references" "$TMP/plug/"
+}
+stub_presets() { printf '#!/usr/bin/env bash\n%s\n' "$1" > "$TMP/plug/bin/specclaw-presets"; chmod +x "$TMP/plug/bin/specclaw-presets"; }
 project "$TMP/d"
-sed -i.bak 's/^presets: \[node\]/presets: [nosuchstack, node]/' "$TMP/d/.specclaw/config.yaml" && rm -f "$TMP/d/.specclaw/config.yaml.bak"
-ERR="$( ( cd "$TMP/d" && "$BUILD_CONTEXT" .specclaw demo T1 2>&1 >/dev/null ) )"
-P="$(payload "$TMP/d")"
-check "AC-1 a failing preset resolver warns on stderr" 'printf "%s" "$ERR" | grep -q "WARNING: specclaw-presets exited"'
-check "AC-1 … and the presets it resolved are still injected" 'printf "%s" "$P" | grep -q "^### base$" && printf "%s" "$P" | grep -q "^### node$"'
+BASE_PRESET="$PLUGIN_DIR/presets/base.md"
+# row: <name> | <setup command> | <expected WARNING text> | <base rules still injected? yes|no>
+while IFS='|' read -r name setup expect injected; do
+  copy_plugin
+  eval "$setup"
+  ERR="$( ( cd "$TMP/d" && "$TMP/plug/bin/specclaw-build-context" .specclaw demo T1 2>&1 >/dev/null ) )"
+  P="$( ( cd "$TMP/d" && "$TMP/plug/bin/specclaw-build-context" .specclaw demo T1 2>/dev/null ) )"
+  check "AC-1 resolver $name: warns ($expect)" 'printf "%s" "$ERR" | grep -qF "$expect"'
+  check "AC-1 resolver $name: payload still built" 'printf "%s" "$P" | grep -q "^## Specification Context$"'
+  if [ "$injected" = yes ]; then
+    check "AC-1 resolver $name: the paths it printed are still injected" 'printf "%s" "$P" | grep -q "^### base$"'
+  else
+    check "AC-1 resolver $name: no section from nothing" '! printf "%s" "$P" | grep -q "Stack Security Rules"'
+  fi
+done <<ROWS
+missing|rm -f "\$TMP/plug/bin/specclaw-presets"|specclaw-presets not found|no
+crash, no paths|stub_presets 'exit 3'|specclaw-presets exited 3|no
+crash, some paths|stub_presets "echo '\$BASE_PRESET'; exit 1"|specclaw-presets exited 1|yes
+silent, exit 0|stub_presets 'exit 0'|printed no presets|no
+ROWS
 
 if [ "$FAILS" -eq 0 ]; then echo "All build-context security tests passed."; else echo "$FAILS build-context security test(s) failed."; fi
 [ "$FAILS" -eq 0 ]

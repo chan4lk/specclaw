@@ -272,7 +272,12 @@ PRESET_PATHS=""
 presets_rc=0
 if [[ -f "$SCRIPT_DIR/specclaw-presets" ]]; then
   PRESET_PATHS="$("$SCRIPT_DIR/specclaw-presets" "$SPECCLAW_DIR" 2>/dev/null)" || presets_rc=$?
-  [[ "$presets_rc" -eq 0 ]] || echo "WARNING: specclaw-presets exited $presets_rc — stack security rules may be incomplete (run: specclaw-presets $SPECCLAW_DIR)" >&2
+  if [[ "$presets_rc" -ne 0 ]]; then
+    echo "WARNING: specclaw-presets exited $presets_rc — stack security rules may be incomplete (run: specclaw-presets $SPECCLAW_DIR)" >&2
+  elif [[ -z "${PRESET_PATHS//[[:space:]]/}" ]]; then
+    # base always resolves, so an empty answer means the resolver did not really run.
+    echo "WARNING: specclaw-presets printed no presets — builders get no stack security rules" >&2
+  fi
 else
   echo "WARNING: specclaw-presets not found at $SCRIPT_DIR — builders get no stack security rules" >&2
 fi
