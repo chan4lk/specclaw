@@ -72,7 +72,7 @@ check "AC-12 the runner reads finding headings only through the gate (no second 
 # A gate that cannot read the report is no answer: the rates go UNKNOWN and the run fails, never 0%.
 printf '#!/usr/bin/env bash\necho boom >&2\nexit 3\n' > "$TMP/bin/crashing-gate"; chmod +x "$TMP/bin/crashing-gate"
 for broken in "$TMP/no-such-gate" "$TMP/bin/crashing-gate"; do
-  check "AC-12 a broken gate ($(basename "$broken")) makes the rates UNKNOWN and the run fail" 'out="$(STUB_ALWAYS_BLOCK=1 SPECCLAW_INFOSEC_GATE="$broken" run_stub)"; rc=$?; [ "$rc" -ne 0 ] && grep -q "False-alarm rate:\*\* UNKNOWN" <<<"$out"'
+  check "AC-12 a broken gate ($(basename "$broken")) makes the rates UNKNOWN and the run fail" 'out="$(STUB_ALWAYS_BLOCK=1 SPECCLAW_INFOSEC_GATE="$broken" run_stub)"; rc=$?; [ "$rc" -ne 0 ] && grep -q "False-alarm rate:\*\* UNKNOWN" <<<"$out" && grep -q "Catch rate:\*\* UNKNOWN" <<<"$out" && grep -qE "dev-bypass +caught 0  false alarms 0  no answer 2 " <<<"$out"'  # both samples, each site proved
 done
 check "AC-12 calls that give no answer make the rates UNKNOWN and the run fail" 'out="$(STUB_FAIL=1 run_stub)"; rc=$?; [ "$rc" -ne 0 ] && grep -q "Catch rate:\*\* UNKNOWN" <<<"$out" && ! grep -q "False-alarm rate:\*\* 0%" <<<"$out"'
 check "AC-12 a failed call that still prints text is no answer, not a report" 'out="$(STUB_EXIT1=1 run_stub)"; rc=$?; [ "$rc" -ne 0 ] && grep -q "Catch rate:\*\* UNKNOWN" <<<"$out"'
