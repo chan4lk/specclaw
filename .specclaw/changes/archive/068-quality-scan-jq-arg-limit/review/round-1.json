@@ -1,0 +1,81 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 2,
+  "minor": 0
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw/bin/specclaw-quality-scan",
+  "plugins/specclaw/tests/run-quality-scan-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "class": "other",
+   "file": "plugins/specclaw/.claude-plugin/plugin.json",
+   "fp": "0dc733530bb1",
+   "in_delta": true,
+   "line": 1,
+   "message": "This diff changes plugin code (plugins/specclaw/bin/specclaw-quality-scan and its test) but bumps no version. Bump every plugins/*/.claude-plugin/plugin.json, every plugins/*/.codex-plugin/plugin.json, and every plugins[] entry in .claude-plugin/marketplace.json to the same new version. If an earlier commit on this branch already did that, this finding does not apply.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "R1",
+   "scenario": "Merge the PR \u2192 plugins/specclaw ships the changed quality-scan under the old version number \u2192 installed users are not offered the ARG_MAX fix, and CI version-sync sees no bump for a plugin-code change.",
+   "severity": "major",
+   "unclassified": false
+  },
+  {
+   "class": "other",
+   "file": "plugins/specclaw/tests/run-quality-scan-tests.sh",
+   "fp": "695c6106193f",
+   "in_delta": true,
+   "line": 61,
+   "message": "The fix moves all three tables (funcs, dup, clones) to --slurpfile, but the new test only oversizes the function table. The dup and clones paths have no oversized-table row, and neither does a dup-or-clones-only case. Add table-driven rows that oversize each table separately by driving the real path. For example, a fake jscpd that emits many files or clones, plus a fake lizard that emits many functions.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Revert only the clones change to `--argjson clones \"$(tsv_json ...)\"` \u2192 a repo with tens of thousands of clone pairs hits E2BIG (exit 126) \u2192 the 068 test stays green because its fake lizard only inflates funcs.tsv and clones.tsv stays small.",
+   "severity": "major",
+   "unclassified": false
+  }
+ ],
+ "head": "347ac5dfee1d9a739ad47e1bcb3a9a76ad5032ef",
+ "impact": [
+  "plugins/specclaw-bf/bin/specclaw-bf-blueprint",
+  "plugins/specclaw-bf/bin/specclaw-bf-clarify",
+  "plugins/specclaw-bf/bin/specclaw-bf-e2e-run",
+  "plugins/specclaw-bf/bin/specclaw-bf-prototype",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-rebuild-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-replay",
+  "plugins/specclaw-bf/bin/specclaw-bf-status",
+  "plugins/specclaw-bf/bin/specclaw-bf-ui",
+  "plugins/specclaw-bf/tests/run-bf-e2e-run-tests.sh",
+  "plugins/specclaw-bf/tests/run-bf-status-tests.sh",
+  "plugins/specclaw-bf/tests/run-blueprint-tests.sh",
+  "plugins/specclaw-bf/tests/run-narration-gate-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-status-machine-tests.sh",
+  "plugins/specclaw-bf/tests/run-quality-tests.sh",
+  "plugins/specclaw-extras/bin/specclaw-party",
+  "plugins/specclaw-fleet/hooks/core/view.ts",
+  "plugins/specclaw-fleet/lib/report.html",
+  "plugins/specclaw-fleet/tests/cases/ac36_report_output.sh",
+  "plugins/specclaw-fleet/tests/cases/ac42_bundles_real_git.sh"
+ ],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 20310,
+ "round": 1,
+ "since": null,
+ "status": "open",
+ "system_chars": 9639,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1795108041,
+ "ts_start": 1795108019
+}

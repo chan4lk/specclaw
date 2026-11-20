@@ -1,7 +1,7 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** specclaw
-**Last Updated:** 2026-11-15 19:45 UTC
+**Last Updated:** 2026-11-19 17:31 UTC
 
 _4 unnumbered changes · run `/specclaw-extras:renumber` to order them_
 
@@ -9,7 +9,7 @@ _4 unnumbered changes · run `/specclaw-extras:renumber` to order them_
 
 
 - 🔀 **046-macos-test-portability** ▫ — pr raised | 3/3 tasks (100%) | 0 failed | PR #100 merged | 3m
-- 📝 **067-fleet-push-retry** ▫ — tasks done | 0/4 tasks (0%) | 0 failed | 5m
+- 🔀 **067-fleet-push-retry** ▫ — pr raised | 4/4 tasks (100%) | 0 failed | PR #140 merged | 2h42m
 
 ## Pending Proposals
 
@@ -84,6 +84,7 @@ _4 unnumbered changes · run `/specclaw-extras:renumber` to order them_
 - ✅ **063-dash-launch-approve-caps**
 - ✅ **064-sync-clean-status-release-gate**
 - ✅ **065-core-context-gate-task-sizing**
+- ✅ **068-quality-scan-jq-arg-limit**
 - ✅ **analyze-command**
 - ✅ **architecture-command**
 - ✅ **domain-command**
@@ -91,6 +92,6 @@ _4 unnumbered changes · run `/specclaw-extras:renumber` to order them_
 
 ## Stats
 
-- **Total changes:** 71
+- **Total changes:** 72
 - **Active:** 2
-- **Completed:** 69
+- **Completed:** 70
