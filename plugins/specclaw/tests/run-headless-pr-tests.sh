@@ -252,7 +252,7 @@ sec_proj() {
   sed -i.bak "s/^  security_review_block: false/  security_review_block: $2/" "$1/.specclaw/config.yaml" && rm -f "$1/.specclaw/config.yaml.bak"
   printf '# Security
 
-**Verdict:** FAIL
+**Verdict:** CHANGES_REQUESTED
 
 ## Findings
 
