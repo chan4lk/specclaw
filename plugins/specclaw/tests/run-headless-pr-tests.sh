@@ -313,7 +313,7 @@ ROWS
 # The block switch: every YAML spelling of true blocks; an unrecognised value is an error, never warn-only.
 # row: <security_review_block value> | <expected message>
 while IFS='|' read -r value want; do
-  P="$WORK/sec-switch-$value"; sec_proj "$P" "$value"
+  P="$WORK/sec-switch-${value//\"/}"; sec_proj "$P" "$value"  # no quotes in the dir: Windows rejects them
   : >"$GH_LOG"
   run_bounded 30 bash -c "cd '$P' && specclaw-pr .specclaw $CH"
   assert_eq "072-4l security_review_block: $value stops the PR" 1 "$RC"
@@ -324,6 +324,28 @@ True|unwaived BLOCK
 yes|unwaived BLOCK
 "on"|unwaived BLOCK
 bogus|neither true nor false
+ROWS
+
+# security_review goes through the same reader: every false spelling switches the gate off (the PR opens
+# despite an unwaived BLOCK under block true); an unrecognised value stops the PR.
+# row: <security_review value> | <expected exit>
+while IFS='|' read -r value want; do
+  P="$WORK/sec-review-${value//\"/}"; sec_proj "$P" true
+  sed -i.bak "s/^  security_review: true/  security_review: $value/" "$P/.specclaw/config.yaml" && rm -f "$P/.specclaw/config.yaml.bak"
+  : >"$GH_LOG"
+  run_bounded 30 bash -c "cd '$P' && specclaw-pr .specclaw $CH"
+  assert_eq "072-4m security_review: $value exits $want" "$want" "$RC"
+  if [ "$want" = 0 ]; then
+    assert_not_contains "072-4m … and runs no gate ($value)" "security gate" "$OUT"
+  else
+    assert_contains "072-4m … naming the bad value ($value)" "neither true nor false" "$OUT"
+  fi
+done <<'ROWS'
+False|0
+no|0
+off|0
+"false"|0
+maybe|1
 ROWS
 
 # ─── AC-7: a committed lock is suspicious ───────────────────────────────────
