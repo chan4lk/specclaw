@@ -78,6 +78,10 @@ run shapes
 check "en dash, space in path, emoji, bare BLOCK are all read and waivable" '! grep -q "unwaived: .*src/\(my dir/a\|b\|c\)\.js" <<<"$out" && [ "$(grep -c "^waived" <<<"$out")" -eq 3 ]'
 check "a BLOCK heading with no separator is unwaived as unreadable (1)" '[ "$rc" -eq 1 ] && grep -q "unwaived (path or rule unreadable): .*src/d.js" <<<"$out"'
 
+fixture lowercase '**Verdict:** APPROVED_WITH_NOTES\n\n### [block] src/g.js:2 \xe2\x80\x94 B24 lowercase tag\n'
+run lowercase
+check "a lowercase [block] heading still blocks, whatever the verdict says (1)" '[ "$rc" -eq 1 ]'
+
 fixture boldrule "$HEAD"'### [BLOCK] `src/e.js`:9 \xe2\x80\x94 **B23** bold rule, backticked path\n' '\xef\xbb\xbf- Waiver: `src/e.js` | **B23** | false alarm | test double\n'
 run boldrule
 check "bold rule, backticked path and a BOM-led waiver still match (0)" '[ "$rc" -eq 0 ]'
