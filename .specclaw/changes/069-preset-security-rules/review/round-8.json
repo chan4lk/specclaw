@@ -1,0 +1,58 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 1
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw/presets/dotnet.md",
+  "plugins/specclaw/presets/node.md",
+  "plugins/specclaw/presets/react-spa.md",
+  "plugins/specclaw/tests/run-preset-check-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/.claude-plugin/plugin.json",
+   "fp": "9542d1cfa600",
+   "in_delta": true,
+   "line": 1,
+   "message": "The commit changes shipped plugin content under plugins/specclaw/ (dotnet.md, node.md, react-spa.md and the test script), and the diff touches no version file. The last bump on the branch is ac0c6e2 (0.9.6), which comes before all the 059/060 commits. Bump every plugins/*/.claude-plugin/plugin.json, every plugins/*/.codex-plugin/plugin.json and every plugins[] entry in .claude-plugin/marketplace.json together to the same new version.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "R1",
+   "scenario": "A user already on 0.9.6 updates the plugin. The preset changes (new RateLimit rule, reworded Tokens and Errors rules) ship under an unchanged 0.9.6, so version-keyed update and cache checks see no change and the user keeps the old presets.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw/presets/dotnet.md",
+   "fp": "a43cdeefe73a",
+   "in_delta": true,
+   "line": 31,
+   "message": "The Errors rule loses its 'no stack trace outside Development' requirement. This is a content weakening of a security rule. The test only checks that each rule's key exists, so it cannot see this kind of change. If the removal is intended, record why. Otherwise restore the sentence, and consider asserting a key phrase for each rule.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "A future edit shortens the Errors rule to an empty or meaningless body: the '- **Errors:** ' key is still present, so AC-1 and AC-3 stay green while the stack-trace guidance is gone, as it already is in this diff.",
+   "severity": "minor"
+  }
+ ],
+ "head": "69debdea0a3d9255b8dccff3a8078db6a3ac3bec",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 13361,
+ "round": 8,
+ "since": "c030de41d0",
+ "status": "open",
+ "system_chars": 8979,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794481903,
+ "ts_start": 1794481883
+}

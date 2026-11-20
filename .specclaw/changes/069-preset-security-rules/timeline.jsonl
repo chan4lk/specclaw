@@ -1,0 +1,21 @@
+{"ev":"start","span":"propose","kind":"phase","label":"propose","at":"2026-11-12T07:28:04Z","ts":1794468484}
+{"ev":"stop","span":"propose","at":"2026-11-12T07:28:20Z","ts":1794468500,"status":"ok"}
+{"ev":"start","span":"plan","kind":"phase","label":"plan","at":"2026-11-12T07:38:46Z","ts":1794469126}
+{"ev":"stop","span":"plan","at":"2026-11-12T07:42:56Z","ts":1794469376,"status":"ok"}
+{"ev":"start","span":"W1","kind":"wave","label":"wave 1","at":"2026-11-12T07:49:31Z","ts":1794469771}
+{"ev":"start","span":"T1","kind":"task","label":"Security section","parent":"W1","at":"2026-11-12T07:49:32Z","ts":1794469772}
+{"ev":"stop","span":"T1","at":"2026-11-12T07:51:41Z","ts":1794469901,"status":"ok"}
+{"ev":"stop","span":"W1","at":"2026-11-12T07:51:42Z","ts":1794469902,"status":"ok"}
+{"ev":"start","span":"verify-1794470285","kind":"phase","label":"verify","at":"2026-11-12T07:58:06Z","ts":1794470286}
+{"ev":"stop","span":"verify","at":"2026-11-12T08:31:43Z","ts":1794472304,"status":"ok"}
+{"ev":"start","span":"propose","kind":"phase","label":"propose","at":"2026-11-12T09:53:27Z","ts":1794477206}
+{"ev":"stop","span":"propose","at":"2026-11-12T09:53:27Z","ts":1794477207,"status":"ok"}
+{"ev":"start","span":"plan","kind":"phase","label":"plan","at":"2026-11-12T10:00:14Z","ts":1794477614}
+{"ev":"stop","span":"plan","at":"2026-11-12T10:00:59Z","ts":1794477659,"status":"ok"}
+{"ev":"start","span":"W3","kind":"wave","label":"wave 1","at":"2026-11-12T10:15:40Z","ts":1794478540}
+{"ev":"start","span":"T3","kind":"task","label":"presets","parent":"W3","at":"2026-11-12T10:15:41Z","ts":1794478540}
+{"ev":"stop","span":"T3","at":"2026-11-12T10:16:00Z","ts":1794478560,"status":"ok"}
+{"ev":"stop","span":"T4","at":"2026-11-12T10:17:54Z","ts":1794478674,"status":"ok"}
+{"ev":"stop","span":"W3","at":"2026-11-12T10:17:54Z","ts":1794478675,"status":"ok"}
+{"ev":"start","span":"verify-1794479541","kind":"phase","label":"verify","at":"2026-11-12T10:32:21Z","ts":1794479541}
+{"ev":"stop","span":"verify","at":"2026-11-12T10:36:39Z","ts":1794479799,"status":"ok"}

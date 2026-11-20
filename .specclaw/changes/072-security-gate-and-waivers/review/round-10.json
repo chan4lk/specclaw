@@ -1,0 +1,68 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 1
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw/bin/specclaw-pr",
+  "plugins/specclaw/bin/specclaw-security-gate",
+  "plugins/specclaw/tests/run-headless-pr-tests.sh",
+  "plugins/specclaw/tests/run-infosec-eval-cases-tests.sh",
+  "plugins/specclaw/tests/run-infosec-evals.sh",
+  "plugins/specclaw/tests/run-security-gate-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/bin/specclaw-security-gate",
+   "fp": "69928564ce4b",
+   "in_delta": true,
+   "line": 58,
+   "message": "rule_token strips every non-word character from both ends of the first word. A rule that is all punctuation becomes the empty string. The old code kept such a rule as written and raised on an empty one, which the 'unreadable' guard caught. Now two unrelated punctuation-only rules compare equal, and so do two empty ones. Fix: treat an empty rule_token on either side as unreadable (unwaived) rather than comparing it.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B6",
+   "scenario": "Heading `### [BLOCK] src/a.js:9 \u2014 ( x` and waiver `src/a.js | * | accepted | ok`. Both rule tokens are '', so the BLOCK is waived and the gate exits 0 instead of 1.",
+   "severity": "minor"
+  }
+ ],
+ "head": "c6fe2cd7269c4a0846f6d116da15d3d487d5cde5",
+ "impact": [
+  "plugins/specclaw-bf/bin/specclaw-bf-analyze-codebase",
+  "plugins/specclaw-bf/bin/specclaw-bf-baseline",
+  "plugins/specclaw-bf/bin/specclaw-bf-blueprint",
+  "plugins/specclaw-bf/bin/specclaw-bf-clarify",
+  "plugins/specclaw-bf/bin/specclaw-bf-domain-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-prototype",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-render",
+  "plugins/specclaw-bf/bin/specclaw-bf-rebuild-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-replay",
+  "plugins/specclaw-bf/bin/specclaw-bf-status",
+  "plugins/specclaw-bf/tests/run-bf-collect-tests.sh",
+  "plugins/specclaw-bf/tests/run-bf-e2e-run-tests.sh",
+  "plugins/specclaw-bf/tests/run-bf-status-tests.sh",
+  "plugins/specclaw-bf/tests/run-blueprint-tests.sh",
+  "plugins/specclaw-bf/tests/run-replay-classification-tests.sh",
+  "plugins/specclaw-dash/hooks/core/actions.ts",
+  "plugins/specclaw-extras/bin/specclaw-party",
+  "plugins/specclaw-extras/tests/run-debug-protocol-tests.sh",
+  "plugins/specclaw-extras/tests/run-party-tests.sh"
+ ],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 31034,
+ "round": 10,
+ "since": "3e5d107",
+ "status": "clean",
+ "system_chars": 8947,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1795191170,
+ "ts_start": 1795191140
+}

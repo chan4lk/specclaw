@@ -25,6 +25,15 @@ tests/<App>.Tests/
 - Use `Result` types or domain exceptions mapped in one exception handler.
 - Async with `CancellationToken` through every I/O call.
 
+## Security
+- **Authorization:** endpoints require authorization by default (a fallback policy or `RequireAuthorization()` on the group). Anonymous routes are listed.
+- **Binding:** bind requests to DTOs, never to entities (over-posting).
+- **Errors:** one exception handler returns `ProblemDetails`.
+- **Http:** outbound calls use `IHttpClientFactory`, never a new `HttpClient` per call.
+- **Cors:** list explicit origins; never `AllowAnyOrigin` together with credentials.
+- **RateLimit:** rate-limit sign-in, code and token endpoints, keyed on the account as well as the client, with a limit that is required config.
+- **Proxy:** take the client IP from `ForwardedHeaders` with `KnownProxies`/`KnownNetworks` set to your real proxies; never read `X-Forwarded-For` directly.
+
 ## Shared
 - `src/<App>.Common/` (a class library) for code reused across layers: base entities, generic repositories and handlers, guards, result types.
 - Keep `Common` free of Infrastructure dependencies.

@@ -28,6 +28,13 @@ lib/               shared code: auth, db, schemas
 - No secrets in client components or `NEXT_PUBLIC_*`.
 - One component per file.
 
+## Security
+- **ServerOnly:** import `server-only` in modules that hold secrets or DB clients.
+- **Cookies:** auth cookies are `httpOnly`, `secure` and `sameSite`.
+- **Redirects:** redirect only to local paths, never to a user-supplied URL.
+- **Headers:** set a Content-Security-Policy and security headers in `next.config`.
+- **Html:** no `dangerouslySetInnerHTML` with unsanitised data.
+
 ## Shared
 - `lib/` for server code (auth, db client, schemas); `components/ui/` for shared UI primitives.
 

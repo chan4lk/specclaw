@@ -135,6 +135,46 @@ mkdir -p "$TMP/i" && "$BIN/specclaw-init" "$TMP/i" demo d >/dev/null
 check "AC-6 init scaffolds .specclaw/presets/README.md from the template" 'cmp -s "$TMP/i/.specclaw/presets/README.md" "$PLUGIN_DIR/templates/presets-README.md"'
 check "AC-7 lean build reads presets via specclaw-presets" 'grep -q "specclaw-presets .specclaw" "$PLUGIN_DIR/skills/build/SKILL.md" && ! grep -q "presets/base.md" "$PLUGIN_DIR/skills/build/SKILL.md"'
 
+# Security rules, base: base.md carries a Security section with one rule per keyword; a missing one is named.
+# The list is kept by hand on purpose: a guard derived from base.md itself could never catch a deletion.
+BASE_SEC_KEYS="Secrets Input Injection Access Errors Logging Dependencies Crypto Sessions Enumeration Codes DevFlags Urls Config Identity Redirects"
+security_missing() {
+  local f="$1" k miss="" keys="${2:-$BASE_SEC_KEYS}"
+  grep -q '^## Security$' "$f" || miss=" heading"
+  for k in $keys; do
+    sed -n '/^## Security$/,/^## /p' "$f" | grep -q "^- \*\*$k:\*\* " || miss="$miss $k"
+  done
+  echo "$miss"
+}
+check "Security AC-1 base.md has a Security rule for all its keywords" '[ -z "$(security_missing "$PLUGIN_DIR/presets/base.md")" ]'
+mutant() {
+  local label="$1" script="$2" want="$3"
+  sed "$script" "$PLUGIN_DIR/presets/base.md" > "$TMP/base-mutant.md"
+  check "Security AC-3 $label is reported" '[ "$(security_missing "$TMP/base-mutant.md")" = "$want" ]'
+}
+mutant "deleted Logging rule"        '/^- \*\*Logging:\*\* /d'                          " Logging"
+mutant "two deleted rules"           '/^- \*\*\(Secrets\|Crypto\):\*\* /d'               " Secrets Crypto"
+mutant "missing Security heading"    '/^## Security$/d'                                  " heading $BASE_SEC_KEYS"
+mutant "rule moved under ## Tests"   '/^- \*\*Access:\*\* /{h;d};/^## Tests$/G'          " Access"
+
+# Security rules, stack presets: each stack preset keeps its own stack-specific Security rules; a missing one is named.
+stack_keys() {
+  case "$1" in
+    dotnet) echo "Authorization Binding Errors Http Cors RateLimit Proxy" ;;
+    python) echo "Authorization Models Execution Parsing Http RateLimit Proxy" ;;
+    node) echo "Authorization Schemas Execution Pollution Cors RateLimit Proxy" ;;
+    nextjs) echo "ServerOnly Cookies Redirects Headers Html" ;;
+    react-spa) echo "Tokens Redirects Env Html Links" ;;
+  esac
+}
+for st in dotnet python node nextjs react-spa; do
+  check "Security AC-4 $st has all its Security rules" '[ -z "$(security_missing "$PLUGIN_DIR/presets/$st.md" "$(stack_keys $st)")" ]'
+  for key in $(stack_keys $st); do
+    sed "/^- \*\*$key:\*\* /d" "$PLUGIN_DIR/presets/$st.md" > "$TMP/stack-mutant.md"
+    check "Security AC-5 $st with the $key rule deleted is reported by name" '[ "$(security_missing "$TMP/stack-mutant.md" "$(stack_keys $st)")" = " $key" ]'
+  done
+done
+
 echo
 [ "$FAILS" -eq 0 ] && echo "All preset-check tests passed." || echo "$FAILS failure(s)."
 exit $((FAILS > 0))
