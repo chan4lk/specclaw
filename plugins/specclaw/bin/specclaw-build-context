@@ -261,6 +261,32 @@ else
   echo "WARNING: agent-guardrails.md not found at $GUARDRAILS_FILE — proceeding without guardrails" >&2
 fi
 
+# --- Stack security rules ---
+# The `## Security` section of every preset specclaw-presets resolves (base,
+# configured stacks, project overrides). A non-zero exit still prints every
+# resolvable path, so those are used. No section qualifies → nothing emitted.
+SECURITY_SECTION=""
+SECURITY_RULES=""
+if [[ -f "$SCRIPT_DIR/specclaw-presets" ]]; then
+  while IFS= read -r preset_path; do
+    preset_path="${preset_path%$'\r'}"
+    [[ -f "$preset_path" ]] || continue
+    preset_rules="$(awk '/^## /{on = ($0 ~ /^## Security[[:space:]]*$/)} on' "$preset_path" | tail -n +2)"
+    [[ -n "${preset_rules//[[:space:]]/}" ]] || continue
+    preset_name="${preset_path##*[\\/]}"
+    SECURITY_RULES+="### ${preset_name%.md}
+${preset_rules}
+
+"
+  done < <("$SCRIPT_DIR/specclaw-presets" "$SPECCLAW_DIR" 2>/dev/null || true)
+fi
+if [[ -n "$SECURITY_RULES" ]]; then
+  SECURITY_SECTION="## Stack Security Rules
+These rules apply to every file you write in this task.
+
+${SECURITY_RULES}"
+fi
+
 # --- Repo knowledge base ---
 # Accumulated hints from promoted learnings and patterns — repo-local, never plugin.
 KNOWLEDGE_HINTS_FILE="$SPECCLAW_DIR/knowledge/agent-hints.md"
@@ -505,7 +531,7 @@ fi
 cat <<PROMPT
 You are a coding agent implementing a specific task in the project "${PROJECT_NAME}".
 
-${GUARDRAILS_SECTION}${KNOWLEDGE_SECTION}${CONTEXT_SECTION}${DISCOVERED_SECTION}
+${GUARDRAILS_SECTION}${SECURITY_SECTION}${KNOWLEDGE_SECTION}${CONTEXT_SECTION}${DISCOVERED_SECTION}
 ## Specification Context
 ${SPEC_CONTENT}
 
