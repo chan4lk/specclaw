@@ -64,9 +64,13 @@ command -v claude >/dev/null 2>&1 || { echo "FATAL: the \`claude\` CLI is not on
 
 # The agent's instructions without its front matter (each sample's rules come from rules_for).
 INSTRUCTIONS="$(awk 'NR==1 && /^---$/ {f=1; next} f && /^---$/ {f=0; next} !f' "$AGENT")"
-# A finding heading, read exactly as bin/specclaw-security-gate's BLOCK_HEADING reads it: ## to ######, any
-# case, after emoji, punctuation or list numbers, tag bracketed or bare. Keep the two in step.
-HEADING='^[[:space:]]*#{2,6}[[:space:]]+(([0-9]+[.)]|[^[:alnum:][:space:]])[[:space:]]*)*'
+# Finding headings are read by the gate itself (`--headings`), so the false-alarm rate measures exactly
+# what blocks a PR: one definition, no copy here to drift.
+GATE="$PLUGIN_DIR/bin/specclaw-security-gate"
+REPORT_TMP="$(mktemp)"
+trap 'rm -f "$REPORT_TMP"' EXIT
+# headings <report-text> -> `<SEVERITY>\t<heading>` lines for every finding heading
+headings() { printf '%s\n' "$1" > "$REPORT_TMP"; "$GATE" --headings "$REPORT_TMP"; }
 
 # review <sample-file> -> the report text; empty when the call failed or exited non-zero (a text error is not a report)
 review() {
@@ -116,14 +120,14 @@ for d in "$CASES"/*/; do
     else
       v_answered=$((v_answered + 1))
       # Only a finding heading counts: the keyword also appears in quoted code and in prose that approves it.
-      if grep -qiE "${HEADING}(\[(BLOCK|WARN|NOTE)\]|(BLOCK|WARN|NOTE)\b).*\b($want)\b" <<<"$r"; then c_hit=$((c_hit + 1)); fi
+      if grep -qE "\b($want)\b" <<<"$(headings "$r")"; then c_hit=$((c_hit + 1)); fi
     fi
     r="$(review "$(ls "$d"/fixed.* | head -1)")"
     if [ -z "$r" ]; then
       c_none=$((c_none + 1))
     else
       f_answered=$((f_answered + 1))
-      if grep -qiE "${HEADING}(\[BLOCK\]|BLOCK\b)" <<<"$r"; then c_alarm=$((c_alarm + 1)); fi
+      if grep -q '^BLOCK' <<<"$(headings "$r")"; then c_alarm=$((c_alarm + 1)); fi
     fi
   done
   caught=$((caught + c_hit)); alarms=$((alarms + c_alarm)); no_answer=$((no_answer + c_none))

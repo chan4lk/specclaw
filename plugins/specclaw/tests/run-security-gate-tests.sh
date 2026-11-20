@@ -120,12 +120,47 @@ fixture crnoblock '# Security Report: x\n\n**Verdict:** CHANGES_REQUESTED\n\n## 
 run crnoblock
 check "CHANGES_REQUESTED with no readable BLOCK exits 1" '[ "$rc" -eq 1 ] && grep -q "no BLOCK heading could be read" <<<"$out"'
 
-fixture casepath "$HEAD"'### [BLOCK] src/Auth.js:3 \xe2\x80\x94 B13 capital A\n' '- Waiver: src/auth.js | B13 | accepted risk | another file on Linux\n'
-run casepath
-check "a waiver for src/auth.js does not lift a BLOCK on src/Auth.js (1)" '[ "$rc" -eq 1 ]'
-fixture notes '**Verdict:** APPROVED_WITH_NOTES (2 WARN)\n\n### [WARN] src/a.js:1 \xe2\x80\x94 B14 x\n'
-run notes
-check "a verdict followed by notes is still that verdict (0, not 3)" '[ "$rc" -eq 0 ]'
+# Path matching, table-driven: <heading path> | <waiver path> | <expected exit>.
+# POSIX paths are case-sensitive; a Windows spelling on either side folds case for the pair.
+while IFS='|' read -r hpath wpath want; do
+  fixture pathcase "$HEAD"'### [BLOCK] '"$hpath"':3 \xe2\x80\x94 B13 x\n' "- Waiver: $wpath | B13 | accepted risk | ok\n"
+  run pathcase
+  check "path '$hpath' vs waiver '$wpath' exits $want" '[ "$rc" -eq "$want" ]'
+done <<'ROWS'
+src/Auth.js|src/auth.js|1
+src/auth.js|src/auth.js|0
+C:\\Src\\A.js|c:/src/a.js|0
+C:/Src/A.js|c:\\src\\a.js|0
+src\\Lib\\X.cs|src/lib/x.cs|0
+src/lib/x.cs|src\\Lib\\X.cs|0
+ROWS
+
+# Verdict reading, table-driven: <verdict line value> | <expected exit> (no findings in the report).
+while IFS='|' read -r value want; do
+  fixture verdicts "**Verdict:** $value\n\n## Findings\n\nNo findings.\n"
+  run verdicts
+  check "verdict '$value' exits $want" '[ "$rc" -eq "$want" ]'
+done <<'ROWS'
+APPROVED|0
+APPROVED_WITH_NOTES|0
+APPROVED WITH NOTES|0
+APPROVED_WITH_NOTES (2 WARN)|0
+approved with notes|0
+CHANGES REQUESTED|1
+CHANGES_REQUESTED|1
+NOT_RUN|3
+NOT RUN (timeout)|3
+not run|3
+CHANGES|3
+|3
+ROWS
+
+# --headings: the one heading definition, exported for the eval runner (every severity, any file).
+printf '%b' '## 1. \xf0\x9f\x94\xb4 Block src/a.js:1 \xe2\x80\x94 B16 x\n### [warn] src/b.js:2 - B14 y\n#### NOTE src/c.js:3 - B10 z\nplain line with [BLOCK] in it\n' > "$TMP/headings.md"
+out="$("$GATE" --headings "$TMP/headings.md")"; rc=$?
+check "--headings prints every finding heading with its severity, nothing else" '[ "$rc" -eq 0 ] && [ "$(cut -f1 <<<"$out" | tr "\n" " ")" = "BLOCK WARN NOTE " ]'
+out="$("$GATE" --headings "$TMP/no-such-file.md" 2>&1)"; rc=$?
+check "--headings with a missing file is a usage error (2)" '[ "$rc" -eq 2 ]'
 
 run allwaived --waivers
 check "--waivers lists valid waivers as markdown" '[ "$rc" -eq 0 ] && [ "$(grep -c "^- \`" <<<"$out")" -eq 2 ] && grep -q "^- \`src/api/user.js\` — injection — accepted risk: parameterised upstream | really$" <<<"$out"'

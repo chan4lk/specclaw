@@ -2,31 +2,43 @@
 # specclaw-security-gate — does security-report.md leave any unwaived BLOCK?
 #
 # Usage: specclaw-security-gate <specclaw-dir> <change> [--waivers]
+#        specclaw-security-gate --headings <report-file>
 #   Reads <specclaw-dir>/changes/<change>/security-report.md and the optional
 #   security-waivers.md beside it. Every heading that carries a BLOCK tag
-#   (`### [BLOCK] <path>:<line> — <rule> …`, any dash or `:`, after an emoji, or
-#   without brackets) is a finding; WARN/NOTE never block. A heading whose path or
-#   rule cannot be read is unwaived: the gate fails closed. A waiver is
+#   (`### [BLOCK] <path>:<line> — <rule> …`, ## to ######, any case, any dash or
+#   `:`, after emoji, punctuation or list numbers, bracketed or bare) is a finding;
+#   WARN/NOTE never block. A heading whose path or rule cannot be read is
+#   unwaived: the gate fails closed. A waiver is
 #   `- Waiver: <path> | <rule> | <accepted risk|false alarm> | <reason>`; it lifts
-#   a BLOCK with the same path (`:line` ignored) whose rule field's first word
-#   equals <rule>, case-insensitive (so `B13` does not waive `B13.1`). Malformed waiver lines are printed as invalid and
-#   waive nothing. Prints each waived and each unwaived BLOCK.
+#   a BLOCK with the same path (`:line` ignored; case folded when either side is a
+#   Windows path) whose rule field's first word equals <rule>, case-insensitive
+#   (so `B13` does not waive `B13.1`). Malformed waiver lines are printed as
+#   invalid and waive nothing. Prints each waived and each unwaived BLOCK.
 #   --waivers prints only the valid waivers as a markdown list and exits 0.
+#   --headings prints `<SEVERITY>\t<heading>` for every BLOCK/WARN/NOTE finding
+#   heading in any file, read by the same definition the gate uses (for the evals).
 # Exit: 0 no unwaived BLOCK; 1 one or more unwaived BLOCKs, or a
 # CHANGES_REQUESTED verdict with no readable BLOCK; 2 usage error (wrong args,
 # change dir missing); 3 no report, or no single valid verdict (APPROVED,
-# APPROVED_WITH_NOTES, CHANGES_REQUESTED). A review that did not run, or a
-# cut-off report, never reads as clear.
+# APPROVED_WITH_NOTES, CHANGES_REQUESTED at the start of a line). A review that
+# did not run, or a cut-off report, never reads as clear.
 import os, re, sys
 
-# A BLOCK-tagged heading, any case: `[BLOCK]` or a bare `BLOCK`, after any mix of
-# emoji, punctuation and list numbers (`### 1. [Block]`). Over-matching fails closed.
-# Each prefix alternative consumes one token, so a long run has one parse (no ReDoS).
-BLOCK_HEADING = re.compile(r"^\s*#{2,6}\s+(?:(?:\d+[.)]|[^\w\s\[])\s*)*(?:\[BLOCK\]|BLOCK\b)\s*(.*)$", re.I)
+
+def heading_re(tags):
+    # One finding-heading definition. Each prefix alternative consumes one token,
+    # so a long run of punctuation has one parse (no catastrophic backtracking).
+    return re.compile(r"^\s*#{2,6}\s+(?:(?:\d+[.)]|[^\w\s\[])\s*)*(?:\[(%s)\]|(%s)\b)\s*(.*)$" % (tags, tags), re.I)
+
+
+BLOCK_HEADING = heading_re("BLOCK")
+FINDING_HEADING = heading_re("BLOCK|WARN|NOTE")
 # `<path>[:line] <sep> <rule …>`: a path may hold spaces; a separator needs a space after it.
 FIELDS = re.compile(r"^(?P<path>.+?)\s*(?:\u2014|\u2013|--|-|:)\s+(?P<rule>\S.*)$")
 # Only a line that starts with the label: a finding may quote `**Verdict:**` mid-sentence.
 VERDICT = re.compile(r"^\s*\*\*Verdict:\*\*\s*(.*)$")
+# The longest known verdict word(s) at the start of the value; trailing notes are ignored.
+VERDICT_WORDS = re.compile(r"^(APPROVED[ _]+WITH[ _]+NOTES|CHANGES[ _]+REQUESTED|APPROVED|NOT[ _]+RUN)\b", re.I)
 VALID_VERDICTS = {"APPROVED", "APPROVED_WITH_NOTES", "CHANGES_REQUESTED"}
 WAIVER = re.compile(r"^\s*[-*]\s+(?:\*\*)?Waiver:(?:\*\*)?\s*(.*)$", re.I)
 KINDS = {"accepted risk", "false alarm"}
@@ -38,12 +50,20 @@ def bare(text):
 
 
 def norm_path(p):
-    # Strip `:<line>` only when it ends the path, so `C:\x` / `C:/x` survive. Case is folded only
-    # for a Windows path (drive letter or backslash): elsewhere `A.js` and `a.js` are two files.
-    p = bare(re.sub(r":\d+$", "", p.strip()))
-    windows = "\\" in p or re.match(r"^[A-Za-z]:", p)
-    p = p.replace("\\", "/")
-    return p.lower() if windows else p
+    # Strip `:<line>` only when it ends the path, so `C:\x` / `C:/x` survive.
+    return bare(re.sub(r":\d+$", "", p.strip())).replace("\\", "/")
+
+
+def windows_path(p):
+    return "\\" in p or re.match(r"^\s*`?[A-Za-z]:", p) is not None
+
+
+def same_path(a, b):
+    # Case-sensitivity is decided once for the pair: folded when either side is a Windows path.
+    na, nb = norm_path(a), norm_path(b)
+    if windows_path(a) or windows_path(b):
+        return na.lower() == nb.lower()
+    return na == nb
 
 
 def read(path):
@@ -57,10 +77,8 @@ def verdict_of(lines):
     for line in lines:
         m = VERDICT.search(line)
         if m:
-            # The verdict word, then optional notes: `APPROVED_WITH_NOTES (2 WARN)`; a spaced
-            # `NOT RUN` still reads as NOT_RUN (and so as not run).
-            value = re.sub(r"^NOT\s+RUN\b", "NOT_RUN", bare(m.group(1)), flags=re.I)
-            seen.add(value.split()[0].strip("`*.,;:").upper() if value.split() else "")
+            w = VERDICT_WORDS.match(bare(m.group(1)))
+            seen.add(re.sub(r"[ _]+", "_", w.group(1)).upper() if w else "?")
     return seen.pop() if len(seen) == 1 and seen <= VALID_VERDICTS else None
 
 
@@ -84,6 +102,15 @@ def waivers(path, quiet=False):
 def main(argv):
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
+    if argv[:1] == ["--headings"]:
+        if len(argv) != 2 or not os.path.isfile(argv[1]):
+            print("usage: specclaw-security-gate --headings <report-file>", file=sys.stderr)
+            return 2
+        for line in read(argv[1]):
+            m = FINDING_HEADING.match(line)
+            if m:
+                print(f"{(m.group(1) or m.group(2)).upper()}\t{line.strip()}")
+        return 0
     args = [a for a in argv if a != "--waivers"]
     if len(args) != 2 or len(argv) - len(args) > 1:
         print("usage: specclaw-security-gate <specclaw-dir> <change> [--waivers]", file=sys.stderr)
@@ -111,13 +138,13 @@ def main(argv):
         if not m:
             continue
         blocks += 1
-        f = FIELDS.match(m.group(1).strip())
+        f = FIELDS.match(m.group(3).strip())
         if not f:
             unwaived += 1
             print(f"unwaived (path or rule unreadable): {line.strip()}")
             continue
         rule = bare(f.group("rule").split()[0]).rstrip(".,:;").lower()
-        hit = next((w for w in valid if norm_path(w["path"]) == norm_path(f.group("path"))
+        hit = next((w for w in valid if same_path(w["path"], f.group("path"))
                     and w["rule"].lower() == rule), None)
         if hit:
             print(f"waived ({hit['kind']}: {hit['reason']}): {line.strip()}")

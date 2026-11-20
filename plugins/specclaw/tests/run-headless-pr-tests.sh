@@ -283,6 +283,33 @@ body="$(cat "$GH_LOG")"
 assert_contains "072-4i the PR body has a Security waivers section" "## Security waivers" "$body"
 assert_contains "072-4j … carrying the reason" "input is a fixed enum" "$body"
 
+# A gate that cannot list the waivers must never read as "there are none" (table-driven).
+# Each row runs specclaw-pr from a copy of the plugin whose gate is replaced; block stays false so the PR opens.
+PLUG="$WORK/plug-gate"
+# row: <name> | <how the gate is broken> | <waivers file? yes|no> | <expected in the PR body>
+while IFS='|' read -r name gate waivers want; do
+  rm -rf "$PLUG"; mkdir -p "$PLUG"
+  cp -R "$PLUGIN_DIR/bin" "$PLUGIN_DIR/lib" "$PLUGIN_DIR/references" "$PLUGIN_DIR/templates" "$PLUG/"
+  case "$gate" in
+    missing) rm -f "$PLUG/bin/specclaw-security-gate" ;;
+    crash) printf '#!/usr/bin/env bash\necho boom >&2\nexit 3\n' >"$PLUG/bin/specclaw-security-gate"; chmod +x "$PLUG/bin/specclaw-security-gate" ;;
+  esac
+  P="$WORK/sec-list-$gate-$waivers"; sec_proj "$P" false
+  [ "$waivers" = yes ] && printf -- '- Waiver: src/a.js | B13 | false alarm | listed elsewhere\n' >"$P/.specclaw/changes/$CH/security-waivers.md"
+  : >"$GH_LOG"
+  run_bounded 30 bash -c "cd '$P' && PATH='$PLUG/bin:$PATH' specclaw-pr .specclaw $CH"
+  body="$(cat "$GH_LOG")"
+  if [ "$want" = none ]; then
+    assert_not_contains "072-4k gate $name, waivers $waivers: no waiver section" "## Security waivers" "$body"
+  else
+    assert_contains "072-4k gate $name, waivers $waivers: the PR body says the list could not be read" "$want" "$body"
+  fi
+done <<'ROWS'
+missing|missing|yes|could not be read
+crashing|crash|yes|could not be read
+missing, nothing to list|missing|no|none
+ROWS
+
 # ─── AC-7: a committed lock is suspicious ───────────────────────────────────
 echo "--- AC-7: check-staged flags lock files ---"
 P="$WORK/sus"; make_proj "$P"

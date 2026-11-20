@@ -68,6 +68,7 @@ run_stub() { PATH="$TMP/bin:$PATH" SPECCLAW_INFOSEC_EVALS=1 SPECCLAW_INFOSEC_REP
 check "AC-12 runner prints catch rate, false-alarm rate and model" 'out="$(run_stub)"; grep -q "Catch rate:\*\* 100%" <<<"$out" && grep -q "False-alarm rate:\*\* 0%" <<<"$out" && grep -q "Model:\*\* " <<<"$out"'
 check "AC-12 a fixed sample that draws a BLOCK counts as a false alarm" 'out="$(STUB_ALWAYS_BLOCK=1 run_stub)"; grep -q "False-alarm rate:\*\* 100%" <<<"$out"'
 check "AC-12 an emoji, list-number, ## Block heading is read as the gate reads it (catch and false alarm)" 'out="$(STUB_ODD_BLOCK=1 run_stub)"; grep -q "Catch rate:\*\* 100%" <<<"$out" && grep -q "False-alarm rate:\*\* 100%" <<<"$out"'
+check "AC-12 the runner reads finding headings only through the gate (no second copy of the pattern)" 'grep -q -- "--headings" "$RUNNER" && ! grep -qF -e "#{2,6}" -e "\[BLOCK" "$RUNNER"'
 check "AC-12 calls that give no answer make the rates UNKNOWN and the run fail" 'out="$(STUB_FAIL=1 run_stub)"; rc=$?; [ "$rc" -ne 0 ] && grep -q "Catch rate:\*\* UNKNOWN" <<<"$out" && ! grep -q "False-alarm rate:\*\* 0%" <<<"$out"'
 check "AC-12 a failed call that still prints text is no answer, not a report" 'out="$(STUB_EXIT1=1 run_stub)"; rc=$?; [ "$rc" -ne 0 ] && grep -q "Catch rate:\*\* UNKNOWN" <<<"$out"'
 check "AC-12 a non-integer reps value is refused" 'out="$(REPS=abc run_stub)"; grep -q "must be a positive integer" <<<"$out"'
