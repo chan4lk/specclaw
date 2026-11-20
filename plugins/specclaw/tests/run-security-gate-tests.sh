@@ -147,6 +147,8 @@ src/a.js|`B13`,|B13|0
 src/a.js:9|(B13)|`b13`|0
 src/a.js:9|B13.1|B13|1
 src/a.js:9|B13|B14|1
+src/a.js:9|---|***|1
+src/a.js:9|(?)|(!)|1
 ROWS
 
 # Verdict reading, table-driven: <verdict line value> | <expected exit> (no findings in the report).

@@ -163,6 +163,11 @@ def main(argv):
             print(f"unwaived (path or rule unreadable): {line.strip()}")
             continue
         rule = rule_token(f.group("rule"))
+        if not rule:
+            unwaived += 1
+            print(f"unwaived (path or rule unreadable): {line.strip()}")
+            continue
+        # An empty waiver rule (punctuation only) never matches: two empty tokens are not the same rule.
         hit = next((w for w in valid if same_path(w["path"], f.group("path"))
                     and rule_token(w["rule"]) == rule), None)
         if hit:
