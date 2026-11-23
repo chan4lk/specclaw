@@ -569,6 +569,37 @@ for t in github-actions.yml azure-pipelines.yml; do
 done
 check "064 AC-7 templates are valid YAML (when PyYAML is installed)" 'python3 -c "import yaml" 2>/dev/null || exit 0; for t in "$PLUGIN_DIR"/ci/*.yml; do python3 -c "import sys,yaml; yaml.safe_load(open(sys.argv[1]))" "$t" || exit 1; done'
 
+# Change 071: git helpers decode UTF-8 (Windows text=True would use cp1252: crash on 0x8f, mojibake on é).
+cat > "$TMP/dec.py" <<'PY'
+import os, subprocess, sys
+sys.path.insert(0, os.path.join(sys.argv[1], "lib"))
+import review_core as rc
+d = os.path.join(sys.argv[2], "café")
+os.makedirs(d)
+subprocess.run(["git", "-C", d, "init", "-q"], check=True)
+with open(os.path.join(d, "f.txt"), "wb") as fh:
+    fh.write("café\n".encode() + b"\x8f\n")  # valid UTF-8, then a byte undefined in cp1252 and invalid UTF-8
+subprocess.run(["git", "-C", d, "add", "f.txt"], check=True)
+diff = rc.git(d, "diff", "--cached")
+assert isinstance(diff, str) and "café" in diff and "�" in diff, diff
+assert os.path.basename(rc.find_root(d)) == "café"
+
+class Cfg:  # stands in for the loaded config: just what call_backend and _run_tests read
+    root = d
+    def get(self, k, default=None):  # a backend that echoes stdin, then one raw 0x8f byte
+        return {"backend": 'python3 -c "import sys; sys.stdout.buffer.write(sys.stdin.buffer.read() + bytes([143]))"'}.get(k, default)
+    def num(self, k, default):
+        return default
+out = rc.call_backend(Cfg(), "m", "sys", "café 日本")  # U+65E5 is not in cp1252: encoding it raised
+assert "日本" in out and out.endswith("�"), out
+with open(os.path.join(d, "t.py"), "w") as fh:
+    fh.write("import sys; sys.stdout.buffer.write(bytes([143]))\n")
+subprocess.run(["git", "-C", d, "add", "t.py"], check=True)
+subprocess.run(["git", "-C", d, "-c", "user.email=a@b", "-c", "user.name=n", "commit", "-q", "-m", "t"], check=True)
+assert rc._run_tests(Cfg(), rc.head(d), ["t.py"], "python3") == (0, None)
+PY
+check "071 AC-4 git helpers decode non-ASCII diff and repo path as UTF-8 (bad bytes replaced, no crash)" 'python3 "$TMP/dec.py" "$PLUGIN_DIR" "$TMP"'
+
 echo
 [ "$FAILS" -eq 0 ] && echo "All specclaw-review tests passed." || echo "$FAILS failure(s)."
 exit $((FAILS > 0))

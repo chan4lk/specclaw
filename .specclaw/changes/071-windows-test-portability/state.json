@@ -1,0 +1,13 @@
+{
+  "change": "071-windows-test-portability",
+  "phase": "verify",
+  "branch": "specclaw/windows-test-portability",
+  "size": "bounded",
+  "phases": {
+    "proposal": {"status":"approved","at":"2026-11-18T07:19:29Z"},
+    "spec": {"status":"done","at":"2026-11-18T07:23:38Z"},
+    "tasks": {"status":"done","at":"2026-11-18T07:23:39Z"},
+    "build": {"status":"done","at":"2026-11-18T07:34:29Z"},
+    "verify": {"status":"partial","at":"2026-11-18T08:45:10Z","verdict":"PARTIAL"}
+  }
+}

@@ -199,14 +199,15 @@ class Config:
 # ─── git ─────────────────────────────────────────────────────────────────────
 
 def git(root, *args, check=True):
-    r = subprocess.run(["git", "-C", root, *args], capture_output=True, text=True)
+    # utf-8 explicitly: on Windows text=True decodes as cp1252 and a non-ASCII diff leaves stdout None.
+    r = subprocess.run(["git", "-C", root, *args], capture_output=True, text=True, encoding="utf-8", errors="replace")
     if check and r.returncode != 0:
         raise ReviewError(f"git {' '.join(args)}: {r.stderr.strip()}")
     return r.stdout
 
 
 def find_root(start="."):
-    r = subprocess.run(["git", "-C", start, "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+    r = subprocess.run(["git", "-C", start, "rev-parse", "--show-toplevel"], capture_output=True, text=True, encoding="utf-8", errors="surrogateescape")  # a path must round-trip, not turn into U+FFFD
     if r.returncode != 0:
         raise ReviewError("not inside a git repository")
     return r.stdout.strip()
@@ -529,7 +530,7 @@ def call_backend(cfg, model, system, prompt):
         prompt = system + "\n\n" + prompt
     try:
         r = subprocess.run(argv, input=prompt, capture_output=True, text=True, cwd=cfg.root,
-                           timeout=cfg.num("timeout_seconds", 900))
+                           encoding="utf-8", errors="replace", timeout=cfg.num("timeout_seconds", 900))
     except (OSError, subprocess.TimeoutExpired) as e:
         raise ReviewError(f"backend did not run: {e}", 3)
     finally:
@@ -710,7 +711,7 @@ def _run_tests(cfg, sha, tests, cmd):
         if sha != now:
             git(wt, "checkout", now, "--", *tests)
         r = subprocess.run(_test_argv(cmd, tests), cwd=wt, capture_output=True, text=True,
-                           timeout=cfg.num("timeout_seconds", 900))
+                           encoding="utf-8", errors="replace", timeout=cfg.num("timeout_seconds", 900))
         return r.returncode, None
     except ReviewError as e:
         return None, f"could not check out {sha[:10]}: {e}"
