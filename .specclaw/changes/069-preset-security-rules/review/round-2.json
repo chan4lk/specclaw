@@ -1,0 +1,41 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 0
+ },
+ "error": "backend exited 1: ge (https://www.anthropic.com/legal/aup). This sometimes happens with safe, normal conversations. Claude Code can't respond to this message with Opus 5.5.\n\nTry rephrasing the request in a new session or change your model.\n\nLearn more: https://support.claude.com/en/articles/8106465\n\nDetails: `[reasoning_extraction]`\n\nRequest ID: req_011CgxhenzhtA6ktj44FDGzk\n\nMessage ID: msg_011CgxheoELb9nAgZ9xCpa4z",
+ "files": [
+  ".claude-plugin/marketplace.json",
+  "plugins/specclaw-bf/.claude-plugin/plugin.json",
+  "plugins/specclaw-bf/.codex-plugin/plugin.json",
+  "plugins/specclaw-extras/.claude-plugin/plugin.json",
+  "plugins/specclaw-extras/.codex-plugin/plugin.json",
+  "plugins/specclaw-fleet/.claude-plugin/plugin.json",
+  "plugins/specclaw-fleet/.codex-plugin/plugin.json",
+  "plugins/specclaw-review/.claude-plugin/plugin.json",
+  "plugins/specclaw-review/.codex-plugin/plugin.json",
+  "plugins/specclaw-sync/.claude-plugin/plugin.json",
+  "plugins/specclaw-sync/.codex-plugin/plugin.json",
+  "plugins/specclaw/.claude-plugin/plugin.json",
+  "plugins/specclaw/.codex-plugin/plugin.json",
+  "plugins/specclaw/presets/base.md",
+  "plugins/specclaw/tests/run-preset-check-tests.sh"
+ ],
+ "final": true,
+ "findings": [],
+ "head": "ac0c6e2a5c71cfe8fce281f3d9106b80d95ed714",
+ "impact": [],
+ "model": "opus",
+ "passes": [
+  "review"
+ ],
+ "round": 2,
+ "since": null,
+ "status": "not_run",
+ "system_chars": 9002,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794471340,
+ "ts_start": 1794470391
+}

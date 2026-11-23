@@ -1,0 +1,42 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 0
+ },
+ "escalated": [],
+ "files": [
+  ".claude-plugin/marketplace.json",
+  "plugins/specclaw-bf/.claude-plugin/plugin.json",
+  "plugins/specclaw-bf/.codex-plugin/plugin.json",
+  "plugins/specclaw-extras/.claude-plugin/plugin.json",
+  "plugins/specclaw-extras/.codex-plugin/plugin.json",
+  "plugins/specclaw-fleet/.claude-plugin/plugin.json",
+  "plugins/specclaw-fleet/.codex-plugin/plugin.json",
+  "plugins/specclaw-review/.claude-plugin/plugin.json",
+  "plugins/specclaw-review/.codex-plugin/plugin.json",
+  "plugins/specclaw-sync/.claude-plugin/plugin.json",
+  "plugins/specclaw-sync/.codex-plugin/plugin.json",
+  "plugins/specclaw/.claude-plugin/plugin.json",
+  "plugins/specclaw/.codex-plugin/plugin.json",
+  "plugins/specclaw/presets/base.md",
+  "plugins/specclaw/tests/run-preset-check-tests.sh"
+ ],
+ "final": false,
+ "findings": [],
+ "head": "ac0c6e2a5c71cfe8fce281f3d9106b80d95ed714",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 21229,
+ "round": 1,
+ "since": null,
+ "status": "clean",
+ "system_chars": 9002,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794470382,
+ "ts_start": 1794470369
+}

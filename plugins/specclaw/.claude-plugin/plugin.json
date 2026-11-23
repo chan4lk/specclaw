@@ -1,6 +1,6 @@
 {
   "name": "specclaw",
-  "version": "0.9.17",
+  "version": "0.9.19",
   "description": "Lean, output-first spec-driven builds: mock first, then propose, plan, build, verify, pr.",
   "author": {
     "name": "Chandima Ranaweera",

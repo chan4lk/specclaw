@@ -1,0 +1,68 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 0
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw/bin/specclaw-security-gate",
+  "plugins/specclaw/tests/run-headless-pr-tests.sh",
+  "plugins/specclaw/tests/run-infosec-eval-cases-tests.sh",
+  "plugins/specclaw/tests/run-infosec-evals.sh",
+  "plugins/specclaw/tests/run-preset-check-tests.sh",
+  "plugins/specclaw/tests/run-security-gate-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/tests/run-infosec-evals.sh",
+   "fp": "94c255d313d0",
+   "in_delta": true,
+   "line": 74,
+   "message": "The runner now reads every heading through `headings()`, which calls the gate inside `$(...)` inside `<<<`. The gate's exit status is thrown away. A gate that fails to run (not executable, python missing, crash, mktemp failure) prints nothing, and nothing is the same as 'no BLOCK heading'. The old code did its own grep and could not fail this way. For the fixed sample, `grep -q '^BLOCK'` then finds nothing, so `c_alarm` stays 0. 'Did not run' reads as clear, and the false-alarm rate can show 0%. Capture the gate's status. When it is non-zero, count the sample as no answer (`c_none`), so the rates go UNKNOWN and the run fails, as it already does for an empty review.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B3",
+   "scenario": "`bin/specclaw-security-gate` is missing or not executable, or `python3` is absent, and the model returns a report with `### [BLOCK] ...` for a fixed sample. `headings` outputs nothing, so the sample counts as answered with no alarm. The run prints 'False-alarm rate: 0%' and exits 0 instead of reporting UNKNOWN.",
+   "severity": "major"
+  }
+ ],
+ "head": "3790df7133a4d3cf3ade1aed217478a326c2d63d",
+ "impact": [
+  "plugins/specclaw-bf/bin/specclaw-bf-analyze-codebase",
+  "plugins/specclaw-bf/bin/specclaw-bf-baseline",
+  "plugins/specclaw-bf/bin/specclaw-bf-blueprint",
+  "plugins/specclaw-bf/bin/specclaw-bf-clarify",
+  "plugins/specclaw-bf/bin/specclaw-bf-domain-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-prototype",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-render",
+  "plugins/specclaw-bf/bin/specclaw-bf-rebuild-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-replay",
+  "plugins/specclaw-bf/bin/specclaw-bf-status",
+  "plugins/specclaw-bf/tests/run-bf-collect-tests.sh",
+  "plugins/specclaw-bf/tests/run-bf-e2e-run-tests.sh",
+  "plugins/specclaw-bf/tests/run-bf-status-tests.sh",
+  "plugins/specclaw-bf/tests/run-blueprint-tests.sh",
+  "plugins/specclaw-bf/tests/run-replay-classification-tests.sh",
+  "plugins/specclaw-dash/hooks/core/actions.ts",
+  "plugins/specclaw-extras/bin/specclaw-party",
+  "plugins/specclaw-extras/tests/run-debug-protocol-tests.sh",
+  "plugins/specclaw-extras/tests/run-party-tests.sh"
+ ],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 37668,
+ "round": 6,
+ "since": "4de7d14",
+ "status": "open",
+ "system_chars": 8988,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1795189953,
+ "ts_start": 1795189910
+}

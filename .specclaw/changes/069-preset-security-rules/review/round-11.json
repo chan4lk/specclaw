@@ -1,0 +1,49 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 0
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw-review/review-rules/base.md",
+  "plugins/specclaw-review/review-rules/node.md",
+  "plugins/specclaw-review/tests/run-review-tests.sh",
+  "plugins/specclaw/presets/base.md",
+  "plugins/specclaw/presets/node.md",
+  "plugins/specclaw/tests/run-preset-check-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "class": "other",
+   "file": "plugins/specclaw/.claude-plugin/plugin.json",
+   "fp": "f08b262fbbe0",
+   "in_delta": true,
+   "line": 1,
+   "message": "This diff changes plugin code under plugins/specclaw (presets/base.md, presets/node.md and the tests) and plugins/specclaw-review (review-rules/base.md, review-rules/node.md and the tests). It touches no plugin.json (.claude-plugin or .codex-plugin) and no .claude-plugin/marketplace.json entry. Bump every plugin to one new shared version in a single commit, or have the bump land in the same change.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "R1",
+   "scenario": "The two commits add presets and review rules (Sessions, Enumeration, Codes, DevFlags, Urls, Proxy and B16-B20, ND11) and ship them with the version still at 0.9.17, the version of the earlier bump commit 338ff8b. Installed plugins at 0.9.17 and the new 0.9.17 content cannot be told apart, so users do not pick up the new rules.",
+   "severity": "major",
+   "unclassified": false
+  }
+ ],
+ "head": "8fbfcaeafcfb836c10bab37bc055e69f5a3ca862",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 19633,
+ "round": 11,
+ "since": "338ff8b",
+ "status": "open",
+ "system_chars": 10993,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794831931,
+ "ts_start": 1794831915
+}

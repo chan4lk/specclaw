@@ -244,6 +244,110 @@ assert_not_contains "AC-12c PARTIAL reads the Verdict line, not the first PASS w
 assert_contains "AC-12d PARTIAL ticks the MET AC-1" "- [x] **AC-1:** one" "$body"
 assert_contains "AC-12e PARTIAL leaves the pending AC-2 open" "- [ ] **AC-2:** two" "$body"
 
+# ─── 072 AC-4: the security gate in specclaw-pr ─────────────────────────────
+echo "--- 072 AC-4: unwaived BLOCK, block switch, waivers in the PR body ---"
+# sec_proj <dir> <block true|false> — a project whose security-report.md holds one BLOCK.
+sec_proj() {
+  make_proj "$1"
+  sed -i.bak "s/^  security_review_block: false/  security_review_block: $2/" "$1/.specclaw/config.yaml" && rm -f "$1/.specclaw/config.yaml.bak"
+  printf '# Security
+
+**Verdict:** CHANGES_REQUESTED
+
+## Findings
+
+### [BLOCK] src/a.js:3 — B13 SQL built from input
+'     >"$1/.specclaw/changes/$CH/security-report.md"
+  git -C "$1" commit -qm "security block switch" -- .specclaw/config.yaml >/dev/null || true  # no-op when block stays false; the change folder stays untracked, as make_proj leaves it
+}
+P="$WORK/sec-block"; sec_proj "$P" true
+: >"$GH_LOG"
+run_bounded 30 bash -c "cd '$P' && specclaw-pr .specclaw $CH"
+assert_eq "072-4a block true + unwaived BLOCK exits 1" 1 "$RC"
+assert_contains "072-4b the message names the finding's path" "src/a.js" "$OUT"
+assert_contains "072-4c the message says how to waive" "security-waivers.md" "$OUT"
+assert_not_contains "072-4d gh pr create was never called" "pr create" "$(cat "$GH_LOG")"
+P="$WORK/sec-warn"; sec_proj "$P" false
+: >"$GH_LOG"
+run_bounded 30 bash -c "cd '$P' && specclaw-pr .specclaw $CH"
+assert_eq "072-4e block false: specclaw-pr exits 0" 0 "$RC"
+assert_contains "072-4f … and warns about the BLOCK" "WARNING: security gate: unwaived BLOCK" "$OUT"
+assert_contains "072-4g … and the PR is created" "pr create" "$(cat "$GH_LOG")"
+P="$WORK/sec-waive"; sec_proj "$P" true
+printf -- '- Waiver: src/a.js | B13 | false alarm | input is a fixed enum
+'   >"$P/.specclaw/changes/$CH/security-waivers.md"
+: >"$GH_LOG"
+run_bounded 30 bash -c "cd '$P' && specclaw-pr .specclaw $CH"
+assert_eq "072-4h a waived BLOCK passes even with block true" 0 "$RC"
+body="$(cat "$GH_LOG")"
+assert_contains "072-4i the PR body has a Security waivers section" "## Security waivers" "$body"
+assert_contains "072-4j … carrying the reason" "input is a fixed enum" "$body"
+
+# A gate that cannot list the waivers must never read as "there are none" (table-driven).
+# Each row runs specclaw-pr from a copy of the plugin whose gate is replaced; block stays false so the PR opens.
+PLUG="$WORK/plug-gate"
+# row: <name> | <how the gate is broken> | <waivers file? yes|no> | <expected in the PR body>
+while IFS='|' read -r name gate waivers want; do
+  rm -rf "$PLUG"; mkdir -p "$PLUG"
+  cp -R "$PLUGIN_DIR/bin" "$PLUGIN_DIR/lib" "$PLUGIN_DIR/references" "$PLUGIN_DIR/templates" "$PLUG/"
+  case "$gate" in
+    missing) rm -f "$PLUG/bin/specclaw-security-gate" ;;
+    crash) printf '#!/usr/bin/env bash\necho boom >&2\nexit 3\n' >"$PLUG/bin/specclaw-security-gate"; chmod +x "$PLUG/bin/specclaw-security-gate" ;;
+  esac
+  P="$WORK/sec-list-$gate-$waivers"; sec_proj "$P" false
+  [ "$waivers" = yes ] && printf -- '- Waiver: src/a.js | B13 | false alarm | listed elsewhere\n' >"$P/.specclaw/changes/$CH/security-waivers.md"
+  : >"$GH_LOG"
+  run_bounded 30 bash -c "cd '$P' && PATH='$PLUG/bin:$PATH' specclaw-pr .specclaw $CH"
+  body="$(cat "$GH_LOG")"
+  if [ "$want" = none ]; then
+    assert_not_contains "072-4k gate $name, waivers $waivers: no waiver section" "## Security waivers" "$body"
+  else
+    assert_contains "072-4k gate $name, waivers $waivers: the PR body says the list could not be read" "$want" "$body"
+  fi
+done <<'ROWS'
+missing|missing|yes|could not be read
+crashing|crash|yes|could not be read
+missing, nothing to list|missing|no|none
+ROWS
+
+# The block switch: every YAML spelling of true blocks; an unrecognised value is an error, never warn-only.
+# row: <security_review_block value> | <expected message>
+while IFS='|' read -r value want; do
+  P="$WORK/sec-switch-${value//\"/}"; sec_proj "$P" "$value"  # no quotes in the dir: Windows rejects them
+  : >"$GH_LOG"
+  run_bounded 30 bash -c "cd '$P' && specclaw-pr .specclaw $CH"
+  assert_eq "072-4l security_review_block: $value stops the PR" 1 "$RC"
+  assert_contains "072-4l … saying why ($value)" "$want" "$OUT"
+  assert_not_contains "072-4l … before any PR is created ($value)" "pr create" "$(cat "$GH_LOG")"
+done <<'ROWS'
+True|unwaived BLOCK
+yes|unwaived BLOCK
+"on"|unwaived BLOCK
+bogus|neither true nor false
+ROWS
+
+# security_review goes through the same reader: every false spelling switches the gate off (the PR opens
+# despite an unwaived BLOCK under block true); an unrecognised value stops the PR.
+# row: <security_review value> | <expected exit>
+while IFS='|' read -r value want; do
+  P="$WORK/sec-review-${value//\"/}"; sec_proj "$P" true
+  sed -i.bak "s/^  security_review: true/  security_review: $value/" "$P/.specclaw/config.yaml" && rm -f "$P/.specclaw/config.yaml.bak"
+  : >"$GH_LOG"
+  run_bounded 30 bash -c "cd '$P' && specclaw-pr .specclaw $CH"
+  assert_eq "072-4m security_review: $value exits $want" "$want" "$RC"
+  if [ "$want" = 0 ]; then
+    assert_not_contains "072-4m … and runs no gate ($value)" "security gate" "$OUT"
+  else
+    assert_contains "072-4m … naming the bad value ($value)" "neither true nor false" "$OUT"
+  fi
+done <<'ROWS'
+False|0
+no|0
+off|0
+"false"|0
+maybe|1
+ROWS
+
 # ─── AC-7: a committed lock is suspicious ───────────────────────────────────
 echo "--- AC-7: check-staged flags lock files ---"
 P="$WORK/sus"; make_proj "$P"

@@ -1,0 +1,22 @@
+{"ev":"start","span":"propose","kind":"phase","label":"propose","at":"2026-11-20T12:53:23Z","ts":1795179203}
+{"ev":"stop","span":"propose","at":"2026-11-20T12:54:16Z","ts":1795179256,"status":"ok"}
+{"ev":"start","span":"plan","kind":"phase","label":"plan","at":"2026-11-20T13:35:21Z","ts":1795181721}
+{"ev":"stop","span":"plan","at":"2026-11-20T13:38:05Z","ts":1795181885,"status":"ok"}
+{"ev":"start","span":"W1","kind":"wave","label":"wave 1","at":"2026-11-20T13:52:56Z","ts":1795182776}
+{"ev":"start","span":"T1","kind":"task","label":"T1","parent":"W1","at":"2026-11-20T13:52:57Z","ts":1795182777}
+{"ev":"start","span":"T2","kind":"task","label":"T2","parent":"W1","at":"2026-11-20T13:52:58Z","ts":1795182778}
+{"ev":"start","span":"T3","kind":"task","label":"T3","parent":"W1","at":"2026-11-20T13:52:58Z","ts":1795182778}
+{"ev":"start","span":"T5","kind":"task","label":"T5","parent":"W1","at":"2026-11-20T13:52:59Z","ts":1795182779}
+{"ev":"stop","span":"T2","at":"2026-11-20T13:56:42Z","ts":1795183002,"status":"ok"}
+{"ev":"stop","span":"T3","at":"2026-11-20T13:57:15Z","ts":1795183035,"status":"ok"}
+{"ev":"stop","span":"T1","at":"2026-11-20T13:57:43Z","ts":1795183063,"status":"ok"}
+{"ev":"start","span":"W2","kind":"wave","label":"wave 2","at":"2026-11-20T14:00:44Z","ts":1795183244}
+{"ev":"start","span":"T4","kind":"task","label":"T4","parent":"W2","at":"2026-11-20T14:00:45Z","ts":1795183244}
+{"ev":"start","span":"T6","kind":"task","label":"T6","parent":"W2","at":"2026-11-20T14:01:34Z","ts":1795183294}
+{"ev":"stop","span":"T5","at":"2026-11-20T14:07:32Z","ts":1795183652,"status":"ok"}
+{"ev":"stop","span":"T6","at":"2026-11-20T14:07:34Z","ts":1795183654,"status":"ok"}
+{"ev":"stop","span":"T4","at":"2026-11-20T14:19:47Z","ts":1795184387,"status":"ok"}
+{"ev":"stop","span":"W2","at":"2026-11-20T14:19:48Z","ts":1795184388,"status":"ok"}
+{"ev":"start","span":"T7","kind":"task","label":"T7","at":"2026-11-20T14:19:48Z","ts":1795184388}
+{"ev":"stop","span":"T7","at":"2026-11-20T14:19:51Z","ts":1795184391,"status":"ok"}
+{"ev":"start","span":"verify-1795185124","kind":"phase","label":"verify","at":"2026-11-20T14:32:12Z","ts":1795185131}

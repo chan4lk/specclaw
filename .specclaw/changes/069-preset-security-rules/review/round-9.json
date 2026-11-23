@@ -1,0 +1,69 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 0
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw-review/review-rules/base.md",
+  "plugins/specclaw-review/review-rules/dotnet.md",
+  "plugins/specclaw-review/review-rules/nextjs.md",
+  "plugins/specclaw-review/review-rules/node.md",
+  "plugins/specclaw-review/review-rules/python.md",
+  "plugins/specclaw-review/review-rules/react-spa.md",
+  "plugins/specclaw-review/tests/run-review-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw-review/.claude-plugin/plugin.json",
+   "fp": "4826dc983266",
+   "in_delta": true,
+   "line": 1,
+   "message": "The previous round's R1 finding is not fixed. This diff changes shipped plugin content under plugins/specclaw-review/ (review-rules/base.md, dotnet.md, nextjs.md, node.md, python.md, react-spa.md, tests/run-review-tests.sh) and touches no version file. Bump every plugins/*/.claude-plugin/plugin.json, every plugins/*/.codex-plugin/plugin.json and every plugins[] entry's \"version\" in .claude-plugin/marketplace.json together to the same new version (above 0.9.6). Do not bump only specclaw-review.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "R1",
+   "scenario": "A user on 0.9.6 runs a plugin update after this change merges. The plugin version is unchanged, so the updater sees nothing new and never installs the new B11-B13, DN7-DN9, ND6-ND10, NX5-NX8, PY8-PY11 and RS7-RS10 rules. The reviewer keeps running the old packs.",
+   "severity": "major"
+  }
+ ],
+ "head": "af48e9d6f02881ef28d68edee04d44a755598bdc",
+ "impact": [
+  "plugins/specclaw-bf/bin/specclaw-bf-analyze-codebase",
+  "plugins/specclaw-bf/bin/specclaw-bf-baseline",
+  "plugins/specclaw-bf/bin/specclaw-bf-blueprint",
+  "plugins/specclaw-bf/bin/specclaw-bf-bootstrap",
+  "plugins/specclaw-bf/bin/specclaw-bf-clarify",
+  "plugins/specclaw-bf/bin/specclaw-bf-domain-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-e2e-run",
+  "plugins/specclaw-bf/bin/specclaw-bf-prototype",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-rebuild-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-replay",
+  "plugins/specclaw-bf/bin/specclaw-bf-status",
+  "plugins/specclaw-bf/bin/specclaw-bf-ui",
+  "plugins/specclaw-bf/tests/run-baseline-collect-tests.sh",
+  "plugins/specclaw-bf/tests/run-bf-collect-tests.sh",
+  "plugins/specclaw-bf/tests/run-bf-e2e-run-tests.sh",
+  "plugins/specclaw-bf/tests/run-bf-status-tests.sh",
+  "plugins/specclaw-bf/tests/run-blueprint-tests.sh",
+  "plugins/specclaw-bf/tests/run-bootstrap-gate-tests.sh",
+  "plugins/specclaw-bf/tests/run-item-split-tests.sh"
+ ],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 24906,
+ "round": 9,
+ "since": "ca8add6",
+ "status": "open",
+ "system_chars": 9476,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794550167,
+ "ts_start": 1794550152
+}

@@ -569,6 +569,18 @@ for t in github-actions.yml azure-pipelines.yml; do
 done
 check "064 AC-7 templates are valid YAML (when PyYAML is installed)" 'python3 -c "import yaml" 2>/dev/null || exit 0; for t in "$PLUGIN_DIR"/ci/*.yml; do python3 -c "import sys,yaml; yaml.safe_load(open(sys.argv[1]))" "$t" || exit 1; done'
 
+
+rules_missing() { local f="$1" id miss=""; shift; for id in "$@"; do grep -q "^- \*\*$id[ *]" "$f" || miss="$miss $id"; done; echo "$miss"; }
+sec_ids() { case "$1" in
+  base) echo "B13 B14 B15 B16 B17 B18 B19 B20 B21 B22 B23 B24" ;; dotnet) echo "DN7 DN8 DN9 DN10 DN11" ;; python) echo "PY8 PY9 PY10 PY11 PY12 PY13" ;;
+  node) echo "ND6 ND7 ND8 ND9 ND10 ND11" ;; nextjs) echo "NX5 NX6 NX7 NX8" ;; react-spa) echo "RS7 RS8 RS9 RS10" ;; esac; }
+for pk in base dotnet python node nextjs react-spa; do
+  check "Security AC-6 review pack $pk has all its security rules" '[ -z "$(rules_missing "$PLUGIN_DIR/review-rules/$pk.md" $(sec_ids $pk))" ]'
+  for id in $(sec_ids $pk); do
+    sed "/^- \*\*$id[ *]/d" "$PLUGIN_DIR/review-rules/$pk.md" > "$TMP/pack-mutant.md"
+    check "Security AC-7 pack $pk with $id deleted is reported by id" '[ "$(rules_missing "$TMP/pack-mutant.md" $(sec_ids $pk))" = " $id" ]'
+  done
+done
 echo
 [ "$FAILS" -eq 0 ] && echo "All specclaw-review tests passed." || echo "$FAILS failure(s)."
 exit $((FAILS > 0))

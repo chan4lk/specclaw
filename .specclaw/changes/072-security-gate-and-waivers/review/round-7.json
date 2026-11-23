@@ -1,0 +1,43 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 0
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw/tests/run-infosec-eval-cases-tests.sh",
+  "plugins/specclaw/tests/run-infosec-evals.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/tests/run-infosec-eval-cases-tests.sh",
+   "fp": "713d8186fce3",
+   "in_delta": true,
+   "line": 76,
+   "message": "The broken-gate rows assert only `False-alarm rate:** UNKNOWN` and a non-zero exit. The fix was applied at two call sites, the vulnerable-sample catch path and the fixed-sample false-alarm path, but only the fixed-sample site is proved. If the `|| ! h=\"$(headings \"$r\")\"` guard is removed from the vulnerable-sample site, both rows stay green: the fixed-sample site alone still gives UNKNOWN and a non-zero exit. Add an assertion that the catch rate is also UNKNOWN, e.g. `grep -q \"Catch rate:\\*\\* UNKNOWN\"` and `! grep -q \"Catch rate:\\*\\* 0%\"`, for each broken gate.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Remove the gate-status guard from the vulnerable-sample branch (`if [ -z \"$r\" ]; then`), then run with SPECCLAW_INFOSEC_GATE=$TMP/bin/crashing-gate. The gate crash is read as no heading, so v_answered is incremented and the run reports `Catch rate:** 0%` instead of UNKNOWN. The new test still passes because it checks only the false-alarm line and the exit code, so the class fix at the second call site is unproven.",
+   "severity": "major"
+  }
+ ],
+ "head": "187e29d9e41fb5bb64869e0457ab523cd5198091",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 14789,
+ "round": 7,
+ "since": "3790df7",
+ "status": "open",
+ "system_chars": 8971,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1795190056,
+ "ts_start": 1795190040
+}

@@ -8,3 +8,7 @@
   **major** with a scenario.
 - **NX4** A `redirect()`/`notFound()` inside `try/catch` that swallows the thrown control-flow error →
   **major**.
+- **NX5** An auth cookie set without `httpOnly`, `secure` or `sameSite` → **major**.
+- **NX6** A redirect to a user-supplied URL instead of a local path → **major**.
+- **NX7** No Content-Security-Policy or security headers configured in `next.config` → **minor**.
+- **NX8** `dangerouslySetInnerHTML` with non-sanitised data → **blocker** (B8).

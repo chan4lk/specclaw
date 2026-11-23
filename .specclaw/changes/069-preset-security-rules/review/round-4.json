@@ -1,0 +1,29 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 0,
+  "minor": 0
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw/presets/base.md",
+  "plugins/specclaw/tests/run-preset-check-tests.sh"
+ ],
+ "final": false,
+ "findings": [],
+ "head": "4af96f67c965e88c3b5e959449e0debc42a9b3bf",
+ "impact": [],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 12033,
+ "round": 4,
+ "since": "ac0c6e2a5c",
+ "status": "clean",
+ "system_chars": 8979,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1794474617,
+ "ts_start": 1794474604
+}

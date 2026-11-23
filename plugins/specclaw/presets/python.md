@@ -25,6 +25,15 @@ tests/
 - Settings come from one `pydantic-settings` class.
 - Async all the way through an async route; no blocking calls inside it.
 
+## Security
+- **Authorization:** every route has an auth `Depends`. Public routes are listed.
+- **Models:** request models set `extra="forbid"`.
+- **Execution:** no `shell=True`, `eval` or `pickle` on external data.
+- **Parsing:** `yaml.safe_load` only.
+- **Http:** `httpx` calls set a timeout and keep TLS verification on (never `verify=False`).
+- **RateLimit:** rate-limit sign-in, code and token routes, keyed on the account as well as the client.
+- **Proxy:** trust forwarded headers only from your proxy (`--forwarded-allow-ips` set to it, or `ProxyFix` with the real hop count); never read `X-Forwarded-For` directly.
+
 ## Shared
 - `src/<package>/common/`: base adapters, shared Pydantic models, error types, retry helpers.
 

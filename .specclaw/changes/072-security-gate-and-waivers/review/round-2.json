@@ -1,0 +1,81 @@
+{
+ "counts": {
+  "blocker": 0,
+  "major": 1,
+  "minor": 1
+ },
+ "escalated": [],
+ "files": [
+  "plugins/specclaw/bin/specclaw-build-context",
+  "plugins/specclaw/bin/specclaw-security-gate",
+  "plugins/specclaw/references/full/verify.md",
+  "plugins/specclaw/tests/evals/infosec/open-redirect/fixed.js",
+  "plugins/specclaw/tests/run-build-context-security-tests.sh",
+  "plugins/specclaw/tests/run-security-gate-tests.sh"
+ ],
+ "final": false,
+ "findings": [
+  {
+   "file": "plugins/specclaw/tests/run-build-context-security-tests.sh",
+   "fp": "bbead41d6e2c",
+   "in_delta": true,
+   "line": 52,
+   "message": "The B3 fix covers three failure shapes: resolver missing, resolver crash, and resolver silent. The test drives only one, an unknown preset name that makes specclaw-presets exit non-zero. It adds no row for the new `else` branch (script absent) and none for a resolver that is present but unusable (not executable, or exits non-zero with no paths). Make this a table-driven check over those variants. Each row should assert the stderr WARNING and, where there are paths, that they are still injected.",
+   "original_severity": "major",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B2",
+   "scenario": "Delete the `else echo \"WARNING: specclaw-presets not found ...\"` branch, or break the resolver so it exits 127 with no output. Every test in this file stays green, but builders silently get no stack security rules, which is the original defect.",
+   "severity": "major"
+  },
+  {
+   "file": "plugins/specclaw/bin/specclaw-build-context",
+   "fp": "4baa02204d05",
+   "in_delta": true,
+   "line": 275,
+   "message": "A resolver that exits 0 with empty output is still silent. The previous finding named 'no output' as one of the unwarned failure shapes. Only the non-zero exit and missing-script cases now warn. Because the base preset always resolves, empty output with rc 0 means the resolver did not really run, so it should warn too.",
+   "original_severity": "minor",
+   "pass": "review",
+   "pre_existing": false,
+   "rule": "B3",
+   "scenario": "A stub or truncated specclaw-presets that exits 0 and prints nothing makes PRESET_PATHS empty. The `-n` guard skips the loop, nothing is emitted, and there is no warning. This looks the same as 'no preset has a Security section'.",
+   "severity": "minor"
+  }
+ ],
+ "head": "f056ee0198a6300f22ff7ff462c35bbc407df877",
+ "impact": [
+  "plugins/specclaw-bf/bin/specclaw-bf-analyze-codebase",
+  "plugins/specclaw-bf/bin/specclaw-bf-baseline",
+  "plugins/specclaw-bf/bin/specclaw-bf-blueprint",
+  "plugins/specclaw-bf/bin/specclaw-bf-bootstrap",
+  "plugins/specclaw-bf/bin/specclaw-bf-clarify",
+  "plugins/specclaw-bf/bin/specclaw-bf-domain-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-e2e-run",
+  "plugins/specclaw-bf/bin/specclaw-bf-prototype",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-quality-render",
+  "plugins/specclaw-bf/bin/specclaw-bf-rebuild-collect",
+  "plugins/specclaw-bf/bin/specclaw-bf-replay",
+  "plugins/specclaw-bf/bin/specclaw-bf-status",
+  "plugins/specclaw-bf/bin/specclaw-bf-ui",
+  "plugins/specclaw-bf/tests/run-baseline-collect-tests.sh",
+  "plugins/specclaw-bf/tests/run-bf-e2e-run-tests.sh",
+  "plugins/specclaw-bf/tests/run-bf-status-tests.sh",
+  "plugins/specclaw-bf/tests/run-item-split-tests.sh",
+  "plugins/specclaw-bf/tests/run-narration-gate-tests.sh",
+  "plugins/specclaw-bf/tests/run-prototype-id-permanence-tests.sh"
+ ],
+ "model": "sonnet",
+ "passes": [
+  "review"
+ ],
+ "prompt_chars": 25238,
+ "round": 2,
+ "since": "af23c3f",
+ "status": "open",
+ "system_chars": 8950,
+ "tier": "review",
+ "tools": "",
+ "ts_end": 1795186926,
+ "ts_start": 1795186886
+}
