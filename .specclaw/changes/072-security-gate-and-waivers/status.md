@@ -2,7 +2,7 @@
 
 **Change:** 072-security-gate-and-waivers
 **Started:** 2026-11-20
-**Last Updated:** 2026-11-20
+**Last Updated:** 2026-11-23
 
 ## Progress
 
@@ -14,6 +14,7 @@
 | Tasks | ✅ Done |  |
 | Build | ✅ Done | 7/7 tasks |
 | Verify | ✅ Passed | PASS |
+| PR | ✅ Raised | https://github.com/chan4lk/specclaw/pull/136 |
 
 ## Task Progress
 

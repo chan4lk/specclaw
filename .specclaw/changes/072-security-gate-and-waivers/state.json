@@ -1,6 +1,6 @@
 {
   "change": "072-security-gate-and-waivers",
-  "phase": "verify",
+  "phase": "pr",
   "branch": "specclaw/security",
   "size": "bounded",
   "phases": {
@@ -8,6 +8,7 @@
     "spec": {"status":"done","at":"2026-11-20T13:37:28Z"},
     "tasks": {"status":"done","at":"2026-11-20T13:38:04Z"},
     "build": {"status":"done","at":"2026-11-20T14:19:58Z","tasks":{"done":7,"total":7,"failed":0}},
-    "verify": {"status":"passed","at":"2026-11-20T16:49:25Z","verdict":"PASS"}
+    "verify": {"status":"passed","at":"2026-11-20T16:49:25Z","verdict":"PASS"},
+    "pr": {"status":"raised","at":"2026-11-23T16:40:41Z","url":"https://github.com/chan4lk/specclaw/pull/136"}
   }
 }
